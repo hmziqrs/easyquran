@@ -31,6 +31,8 @@
 
   const logout = createLogoutFlow();
   const passkey = createPasskeyFlow();
+  // Passkey membership changes flip the connected-accounts last-method gate.
+  const passkeyKey = $derived(passkey.passkeys.map((pk) => pk.id).join(","));
 
   let sessions = $state<SessionInfo[]>([]);
   let sessionsLoading = $state(false);
@@ -125,6 +127,16 @@
   async function doLogout(): Promise<void> {
     const ok = await logout.run();
     if (ok) await goto(ANONYMOUS_CTA_HREF);
+  }
+
+  function sessionActionLabel(session: SessionInfo, pendingId: string | null): string {
+    if (pendingId === session.id) return "Ending…";
+    if (session.isCurrent) return "Sign out";
+    return "Revoke";
+  }
+
+  async function handleAnonymous(): Promise<void> {
+    await goto(ANONYMOUS_CTA_HREF);
   }
 </script>
 
@@ -249,7 +261,7 @@
                 disabled={terminatePendingId === s.id}
                 onclick={() => terminate(s.id, s.isCurrent)}
               >
-                {terminatePendingId === s.id ? "Ending…" : s.isCurrent ? "Sign out" : "Revoke"}
+                {sessionActionLabel(s, terminatePendingId)}
               </Button>
             </li>
           {/each}
@@ -308,6 +320,6 @@
       </div>
     </section>
 
-    <ConnectedAccounts />
+    <ConnectedAccounts refreshKey={passkeyKey} onAnonymous={handleAnonymous} />
   </div>
 {/if}

@@ -51,6 +51,9 @@ import {
   auth_connected_cancelled_error,
   auth_connected_failed_error,
   auth_connected_unlink_error,
+  auth_connected_retry,
+  auth_connected_loading,
+  auth_connected_session_expired_error,
 } from "#lib/i18n/m/auth.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
 
@@ -108,6 +111,9 @@ export interface AuthCopy {
   connectedCancelledError: string;
   connectedFailedError: string;
   connectedUnlinkError: string;
+  connectedRetry: string;
+  connectedLoading: string;
+  connectedSessionExpiredError: string;
 }
 
 // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.
@@ -170,5 +176,8 @@ export function getAuthCopy(locale: UiLocale = getLocale() as UiLocale): AuthCop
     connectedCancelledError: auth_connected_cancelled_error(undefined, { locale }),
     connectedFailedError: auth_connected_failed_error(undefined, { locale }),
     connectedUnlinkError: auth_connected_unlink_error(undefined, { locale }),
+    connectedRetry: auth_connected_retry(undefined, { locale }),
+    connectedLoading: auth_connected_loading(undefined, { locale }),
+    connectedSessionExpiredError: auth_connected_session_expired_error(undefined, { locale }),
   };
 }

@@ -62,5 +62,8 @@
   "auth_connected_already_linked_error": "حساب {provider} هذا مرتبط بالفعل بحساب مختلف.",
   "auth_connected_cancelled_error": "أُلغي الربط.",
   "auth_connected_failed_error": "تعذّر ربط هذا الحساب. حاول مرة أخرى.",
-  "auth_connected_unlink_error": "تعذّر إلغاء ربط هذا الحساب. حاول مرة أخرى."
+  "auth_connected_unlink_error": "تعذّر إلغاء ربط هذا الحساب. حاول مرة أخرى.",
+  "auth_connected_retry": "إعادة المحاولة",
+  "auth_connected_loading": "جارٍ تحميل الحسابات المرتبطة…",
+  "auth_connected_session_expired_error": "انتهت جلستك. سجّل الدخول مرة أخرى."
 }

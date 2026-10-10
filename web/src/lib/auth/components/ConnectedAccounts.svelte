@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { tick } from "svelte";
   import { Button } from "#lib/components/ui/button/index.js";
   import {
     accountClient,
@@ -17,22 +17,34 @@
     client?: AccountClient;
     navigate?: (url: string) => void;
     onAnonymous?: () => void | Promise<void>;
+    // Bump when other account surfaces change the sign-in methods (e.g. the
+    // Passkeys card) so the last-method gate reloads instead of going stale.
+    refreshKey?: string;
   }
 
   function defaultNavigate(url: string): void {
     window.location.assign(url);
   }
 
-  let { client = accountClient, navigate = defaultNavigate, onAnonymous }: Props = $props();
+  let {
+    client = accountClient,
+    navigate = defaultNavigate,
+    onAnonymous,
+    refreshKey,
+  }: Props = $props();
 
   const copy = getAuthCopy();
 
+  let root = $state<HTMLElement | null>(null);
+  let confirmButton = $state<HTMLElement | null>(null);
   let summary = $state<IdentitySummary | null>(null);
   let loading = $state(true);
   let loadError = $state<string | null>(null);
   let pendingProvider = $state<IdentityProvider | null>(null);
   let confirmingProvider = $state<IdentityProvider | null>(null);
   let unlinkError = $state<string | null>(null);
+  let lastRefreshKey: string | undefined;
+  let refreshKeySeen = false;
 
   const canUnlink = $derived(summary ? canUnlinkIdentity(summary) : false);
   const linkableProviders = $derived.by((): IdentityProvider[] => {
@@ -41,7 +53,11 @@
     return summary.linkableProviders.filter((provider) => !linked.has(provider));
   });
 
-  onMount(() => {
+  $effect(() => {
+    const key = refreshKey;
+    if (refreshKeySeen && key === lastRefreshKey) return;
+    refreshKeySeen = true;
+    lastRefreshKey = key;
     void load();
   });
 
@@ -55,7 +71,11 @@
       return;
     }
     if (res.status === "anonymous") {
-      await onAnonymous?.();
+      if (onAnonymous) {
+        await onAnonymous();
+        return;
+      }
+      loadError = copy.connectedSessionExpiredError;
       return;
     }
     loadError = GENERIC_TRY_AGAIN;
@@ -78,11 +98,36 @@
       else await load();
       return;
     }
+    await tick();
+    focusUnlinkButton(provider);
     if (res.status === "anonymous") {
-      await onAnonymous?.();
+      if (onAnonymous) {
+        await onAnonymous();
+        return;
+      }
+      unlinkError = copy.connectedSessionExpiredError;
       return;
     }
     unlinkError = res.error?.message ?? copy.connectedUnlinkError;
+  }
+
+  async function openConfirm(provider: IdentityProvider): Promise<void> {
+    confirmingProvider = provider;
+    await tick();
+    confirmButton?.focus();
+  }
+
+  async function cancelConfirm(): Promise<void> {
+    const provider = confirmingProvider;
+    confirmingProvider = null;
+    await tick();
+    if (provider === null) return;
+    focusUnlinkButton(provider);
+  }
+
+  function focusUnlinkButton(provider: IdentityProvider): void {
+    const el = root?.querySelector<HTMLButtonElement>(`[data-unlink-provider="${provider}"]`);
+    el?.focus();
   }
 
   function linkedOn(createdAt: string): string {
@@ -92,7 +137,7 @@
   }
 </script>
 
-<section class="flex flex-col gap-4">
+<section bind:this={root} class="flex flex-col gap-4">
   <div class="flex flex-col gap-1">
     <h2 class="text-lg font-medium">{copy.connectedAccountsHeading}</h2>
     <p class="text-sm text-fg-2">{copy.connectedAccountsDescription}</p>
@@ -100,9 +145,11 @@
 
   {#if loadError}
     <p role="alert" aria-live="assertive" class="text-sm text-destructive">{loadError}</p>
-    <Button variant="ghost" size="sm" class="self-start" onclick={() => void load()}>Retry</Button>
+    <Button variant="ghost" size="sm" class="self-start" onclick={() => void load()}>
+      {copy.connectedRetry}
+    </Button>
   {:else if loading && !summary}
-    <p class="text-sm text-fg-2" role="status" aria-live="polite">Loading connected accounts…</p>
+    <p class="text-sm text-fg-2" role="status" aria-live="polite">{copy.connectedLoading}</p>
   {:else if summary}
     {#if summary.identities.length > 0}
       <ul class="flex flex-col gap-2">
@@ -123,8 +170,12 @@
                 <Button
                   variant="ghost"
                   size="sm"
+                  bind:ref={confirmButton}
+                  aria-label="{copy.connectedUnlinkConfirm} {identityProviderLabel(
+                    identity.provider,
+                  )}"
                   disabled={pendingProvider !== null}
-                  onclick={() => unlink(identity.provider)}
+                  onclick={() => void unlink(identity.provider)}
                 >
                   {pendingProvider === identity.provider
                     ? copy.pleaseWait
@@ -133,10 +184,9 @@
                 <Button
                   variant="ghost"
                   size="sm"
+                  aria-label="{copy.connectedUnlinkCancel} {identityProviderLabel(identity.provider)}"
                   disabled={pendingProvider !== null}
-                  onclick={() => {
-                    confirmingProvider = null;
-                  }}
+                  onclick={() => void cancelConfirm()}
                 >
                   {copy.connectedUnlinkCancel}
                 </Button>
@@ -145,10 +195,10 @@
               <Button
                 variant="ghost"
                 size="sm"
+                data-unlink-provider={identity.provider}
+                aria-label="{copy.connectedUnlink} {identityProviderLabel(identity.provider)}"
                 disabled={!canUnlink || pendingProvider !== null}
-                onclick={() => {
-                  confirmingProvider = identity.provider;
-                }}
+                onclick={() => void openConfirm(identity.provider)}
               >
                 {copy.connectedUnlink}
               </Button>

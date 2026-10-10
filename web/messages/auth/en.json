@@ -62,5 +62,8 @@
   "auth_connected_already_linked_error": "That {provider} account is already linked to a different account.",
   "auth_connected_cancelled_error": "Link cancelled.",
   "auth_connected_failed_error": "Couldn't link that account. Please try again.",
-  "auth_connected_unlink_error": "Couldn't unlink that account. Please try again."
+  "auth_connected_unlink_error": "Couldn't unlink that account. Please try again.",
+  "auth_connected_retry": "Retry",
+  "auth_connected_loading": "Loading connected accounts…",
+  "auth_connected_session_expired_error": "Your session has expired. Sign in again."
 }

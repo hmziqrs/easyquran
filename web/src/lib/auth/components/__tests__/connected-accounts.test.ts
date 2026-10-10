@@ -15,9 +15,12 @@ import type {
   IdentitySummary,
   LinkedIdentity,
 } from "#lib/auth/account-client.js";
+import { getAuthCopy } from "#lib/i18n/auth-copy.js";
 
 import ConnectedAccounts from "../ConnectedAccounts.svelte";
+import RefreshHarness from "./connected-accounts-refresh-harness.svelte";
 
+const copy = getAuthCopy("en");
 const API_BASE = "https://eq.test/api";
 
 function identity(provider: IdentityProvider): LinkedIdentity {
@@ -39,6 +42,10 @@ function ok<T>(data: T): AccountResult<T> {
   return { status: "ok", httpStatus: 200, data, error: null };
 }
 
+function anonymous<T>(): AccountResult<T> {
+  return { status: "anonymous", httpStatus: 401, data: null, error: null };
+}
+
 function conflict(message: string): AccountResult<never> {
   return { status: "error", httpStatus: 409, data: null, error: { message } };
 }
@@ -53,6 +60,12 @@ function mockClient(
     getIdentities,
     unlinkIdentity,
   } as never;
+}
+
+interface MountProps {
+  navigate?: (url: string) => void;
+  onAnonymous?: () => void | Promise<void>;
+  refreshKey?: string;
 }
 
 let target: HTMLElement;
@@ -77,6 +90,24 @@ function errorTexts(): Array<string> {
   return [...target.querySelectorAll("[role='alert']")].map((el) => el.textContent?.trim() ?? "");
 }
 
+function focusedUnlinkProvider(): string | null {
+  return document.activeElement?.getAttribute("data-unlink-provider") ?? null;
+}
+
+async function mountWith(
+  getIdentities: ReturnType<typeof vi.fn>,
+  unlinkIdentity: ReturnType<typeof vi.fn>,
+  props: MountProps = {},
+) {
+  const client = mockClient(getIdentities, unlinkIdentity);
+  const instance = mount(ConnectedAccounts, { target, props: { client, ...props } });
+  unmountComponent = () => {
+    void unmount(instance);
+  };
+  await settle();
+  return { getIdentities, unlinkIdentity };
+}
+
 async function mountComponent(
   data: IdentitySummary,
   navigate = vi.fn(),
@@ -85,13 +116,8 @@ async function mountComponent(
   const getIdentities = vi.fn().mockResolvedValue(ok(data));
   const unlinkIdentity = vi.fn();
   if (unlinkResponse !== undefined) unlinkIdentity.mockResolvedValue(unlinkResponse);
-  const client = mockClient(getIdentities, unlinkIdentity);
-  const instance = mount(ConnectedAccounts, { target, props: { client, navigate } });
-  unmountComponent = () => {
-    void unmount(instance);
-  };
-  await settle();
-  return { getIdentities, unlinkIdentity, navigate };
+  const mounted = await mountWith(getIdentities, unlinkIdentity, { navigate });
+  return { ...mounted, navigate };
 }
 
 beforeEach(() => {
@@ -128,6 +154,33 @@ describe("ConnectedAccounts list + last-method protection", () => {
     await mountComponent(summary({ identities: [identity("github")], passkeyCount: 1 }));
     expect(button("Unlink").disabled).toBe(false);
   });
+
+  it("names the provider in the row action aria-labels", async () => {
+    await mountComponent(summary({ identities: [identity("github")], hasPassword: true }));
+    expect(button("Unlink").getAttribute("aria-label")).toBe("Unlink GitHub");
+    button("Unlink").click();
+    await settle();
+    expect(button("Confirm unlink").getAttribute("aria-label")).toBe("Confirm unlink GitHub");
+    expect(button("Cancel").getAttribute("aria-label")).toBe("Cancel GitHub");
+  });
+
+  it("reloads the summary when refreshKey changes (passkey add/remove elsewhere)", async () => {
+    const getIdentities = vi
+      .fn()
+      .mockResolvedValue(ok(summary({ identities: [identity("github")] })));
+    const unlinkIdentity = vi.fn();
+    const client = mockClient(getIdentities, unlinkIdentity);
+    const instance = mount(RefreshHarness, { target, props: { client } });
+    unmountComponent = () => {
+      void unmount(instance);
+    };
+    await settle();
+    expect(getIdentities).toHaveBeenCalledTimes(1);
+
+    button("bump").click();
+    await settle();
+    expect(getIdentities).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("ConnectedAccounts unlink flow", () => {
@@ -151,6 +204,22 @@ describe("ConnectedAccounts unlink flow", () => {
     expect(target.textContent).toContain("Google");
   });
 
+  it("moves focus to the confirm button on open and back to the row button on cancel", async () => {
+    await mountComponent(
+      summary({ identities: [identity("github"), identity("google")] }),
+      vi.fn(),
+      ok(summary({ identities: [identity("google")], hasPassword: true })),
+    );
+
+    button("Unlink").click();
+    await settle();
+    expect(document.activeElement).toBe(button("Confirm unlink"));
+
+    button("Cancel").click();
+    await settle();
+    expect(focusedUnlinkProvider()).toBe("github");
+  });
+
   it("cancelling the confirm step leaves the identity linked", async () => {
     const { unlinkIdentity } = await mountComponent(
       summary({ identities: [identity("github"), identity("google")] }),
@@ -163,7 +232,7 @@ describe("ConnectedAccounts unlink flow", () => {
     expect(button("Unlink").disabled).toBe(false);
   });
 
-  it("shows the server 409 message inline", async () => {
+  it("shows the server 409 message inline and restores focus to the row button", async () => {
     const { unlinkIdentity } = await mountComponent(
       summary({ identities: [identity("github"), identity("google")] }),
       vi.fn(),
@@ -175,6 +244,53 @@ describe("ConnectedAccounts unlink flow", () => {
     await settle();
     expect(unlinkIdentity).toHaveBeenCalled();
     expect(errorTexts()).toContain("Add a password or another sign-in method first");
+    expect(focusedUnlinkProvider()).toBe("github");
+  });
+
+  it("fires onAnonymous on an unlink 401", async () => {
+    const onAnonymous = vi.fn();
+    const getIdentities = vi
+      .fn()
+      .mockResolvedValue(ok(summary({ identities: [identity("github"), identity("google")] })));
+    const unlinkIdentity = vi.fn().mockResolvedValue(anonymous<IdentitySummary>());
+    await mountWith(getIdentities, unlinkIdentity, { onAnonymous });
+
+    button("Unlink").click();
+    await settle();
+    button("Confirm unlink").click();
+    await settle();
+    expect(unlinkIdentity).toHaveBeenCalledWith("github");
+    expect(onAnonymous).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ConnectedAccounts anonymous sessions", () => {
+  it("fires onAnonymous on a load 401", async () => {
+    const onAnonymous = vi.fn();
+    const getIdentities = vi.fn().mockResolvedValue(anonymous<IdentitySummary>());
+    await mountWith(getIdentities, vi.fn(), { onAnonymous });
+    expect(onAnonymous).toHaveBeenCalledTimes(1);
+    expect(errorTexts()).toEqual([]);
+  });
+
+  it("surfaces session-expired copy on a load 401 without a handler", async () => {
+    const getIdentities = vi.fn().mockResolvedValue(anonymous<IdentitySummary>());
+    await mountWith(getIdentities, vi.fn());
+    expect(errorTexts()).toContain(copy.connectedSessionExpiredError);
+  });
+
+  it("surfaces session-expired copy on an unlink 401 without a handler", async () => {
+    const getIdentities = vi
+      .fn()
+      .mockResolvedValue(ok(summary({ identities: [identity("github"), identity("google")] })));
+    const unlinkIdentity = vi.fn().mockResolvedValue(anonymous<IdentitySummary>());
+    await mountWith(getIdentities, unlinkIdentity);
+
+    button("Unlink").click();
+    await settle();
+    button("Confirm unlink").click();
+    await settle();
+    expect(errorTexts()).toContain(copy.connectedSessionExpiredError);
   });
 });
 
