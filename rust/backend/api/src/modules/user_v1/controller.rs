@@ -5,6 +5,7 @@ use axum::{
     Json,
 };
 use axum_macros::debug_handler;
+use sea_orm::{EntityTrait, TransactionError, TransactionTrait};
 use serde_json::json;
 use tracing::{error, info, instrument, warn};
 
@@ -18,7 +19,10 @@ use crate::{
     },
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
-    services::auth::AuthSession,
+    services::{
+        account_methods::{can_unlink, total_sign_in_methods},
+        auth::AuthSession,
+    },
     AppState,
 };
 
@@ -28,17 +32,6 @@ const SUPPORTED_IDENTITY_PROVIDERS: [&str; 3] = ["github", "discord", "google"];
 
 fn is_supported_identity_provider(provider: &str) -> bool {
     SUPPORTED_IDENTITY_PROVIDERS.contains(&provider)
-}
-
-/// Every method that can sign the user in: each linked OAuth identity, a
-/// password, and (at most) one passkey credit however many credentials exist.
-fn total_sign_in_methods(identity_count: usize, has_password: bool, passkey_count: u64) -> usize {
-    identity_count + usize::from(has_password) + usize::from(passkey_count > 0)
-}
-
-/// A user must keep at least one sign-in method; unlinking the last one is refused.
-fn can_unlink(total_methods: usize) -> bool {
-    total_methods.saturating_sub(1) >= 1
 }
 
 fn linkable_providers(configured: &[ProviderStatus], linked: &[&str]) -> Vec<String> {
@@ -121,27 +114,54 @@ pub async fn unlink_identity(
             .with_message("Unsupported sign-in provider"));
     }
 
-    let identities = user_oauth_identity::Entity::list_for_user(&state.sea_db, user.id).await?;
-    if !identities
-        .iter()
-        .any(|identity| identity.provider == provider)
-    {
-        return Err(ErrorResponse::new(ErrorCode::RecordNotFound)
-            .with_message("This sign-in method is not linked to your account"));
-    }
+    let user_id = user.id;
+    // Guard reads + delete in ONE transaction: separate pool checkouts let two
+    // concurrent unlinks each pass the count guard and both delete, leaving the
+    // account with zero sign-in methods (permanent lockout).
+    let removed = state
+        .sea_db
+        .transaction::<_, u64, ErrorResponse>(|txn| {
+            let provider = provider.clone();
+            Box::pin(async move {
+                // Re-read inside the txn: password presence can change concurrently.
+                let Some(fresh_user) = User::find_by_id(user_id).one(txn).await? else {
+                    return Err(ErrorResponse::new(ErrorCode::Unauthorized)
+                        .with_message("You must be logged in to access this resource"));
+                };
 
-    let passkey_count = passkey_credential::Entity::count_for_user(&state.sea_db, user.id).await?;
-    let total = total_sign_in_methods(identities.len(), user.password.is_some(), passkey_count);
-    if !can_unlink(total) {
-        warn!(user_id = user.id, provider = %provider, "Refused to unlink the last sign-in method");
-        // 409 (BIZ_004): the request conflicts with the "keep one method" invariant.
-        return Err(ErrorResponse::new(ErrorCode::DependencyExists)
-            .with_message("Add a password or another sign-in method first"));
-    }
+                let identities =
+                    user_oauth_identity::Entity::list_for_user(txn, user_id).await?;
+                if !identities
+                    .iter()
+                    .any(|identity| identity.provider == provider)
+                {
+                    return Err(ErrorResponse::new(ErrorCode::RecordNotFound)
+                        .with_message("This sign-in method is not linked to your account"));
+                }
 
-    let removed =
-        user_oauth_identity::Entity::delete_for_user_provider(&state.sea_db, user.id, &provider)
-            .await?;
+                let passkey_count =
+                    passkey_credential::Entity::count_for_user(txn, user_id).await?;
+                let total = total_sign_in_methods(
+                    identities.len(),
+                    fresh_user.password.is_some(),
+                    passkey_count,
+                );
+                if !can_unlink(total) {
+                    warn!(user_id, provider = %provider, "Refused to unlink the last sign-in method");
+                    // 409 (BIZ_004): the request conflicts with the "keep one method" invariant.
+                    return Err(ErrorResponse::new(ErrorCode::DependencyExists)
+                        .with_message("Add a password or another sign-in method first"));
+                }
+
+                user_oauth_identity::Entity::delete_for_user_provider(txn, user_id, &provider).await
+            })
+        })
+        .await
+        .map_err(|err| match err {
+            TransactionError::Connection(err) => ErrorResponse::from(err),
+            TransactionError::Transaction(err) => err,
+        })?;
+
     if removed == 0 {
         // Lost a race with a concurrent unlink; the method is already gone.
         return Err(ErrorResponse::new(ErrorCode::RecordNotFound)
@@ -427,30 +447,6 @@ pub async fn admin_view(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn can_unlink_requires_a_surviving_method() {
-        assert!(
-            !can_unlink(0),
-            "an account with no methods has none to unlink"
-        );
-        assert!(!can_unlink(1), "removing the last method must be refused");
-        assert!(can_unlink(2));
-        assert!(can_unlink(3));
-    }
-
-    #[test]
-    fn total_sign_in_methods_counts_a_passkey_once() {
-        assert_eq!(total_sign_in_methods(0, false, 0), 0);
-        assert_eq!(total_sign_in_methods(1, false, 0), 1);
-        assert_eq!(total_sign_in_methods(0, true, 0), 1);
-        assert_eq!(
-            total_sign_in_methods(0, false, 3),
-            1,
-            "any number of passkeys is one method"
-        );
-        assert_eq!(total_sign_in_methods(1, true, 1), 3);
-    }
 
     #[test]
     fn supported_identity_providers_are_the_three_linkable_ones() {

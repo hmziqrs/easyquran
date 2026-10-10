@@ -104,7 +104,13 @@ pub fn router(state: AppState) -> Router<AppState> {
             );
     }
 
-    router = router.nest("/user/v1", user_v1::routes());
+    // Matched-route keying: each /user/v1 endpoint (including each /admin
+    // sub-route) gets its own per-IP 60/min bucket, so admin pages never share
+    // or exhaust the identities budget.
+    router = router.nest(
+        "/user/v1",
+        user_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+    );
 
     router = router.nest(
         "/post/v1",

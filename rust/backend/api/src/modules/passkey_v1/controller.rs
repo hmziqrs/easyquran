@@ -1,16 +1,18 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use axum_macros::debug_handler;
 use rux_auth::AuthBackend as AuthBackendTrait;
+use sea_orm::{TransactionError, TransactionTrait};
 use serde_json::json;
 use tracing::{info, instrument, warn};
 
-use crate::db::sea_models::passkey_credential;
+use crate::db::sea_models::{passkey_credential, user_oauth_identity};
 use crate::error::{ErrorCode, ErrorResponse};
 use crate::extractors::ValidatedJson;
 use crate::modules::auth_v1::controller::{create_bound_session, session_rotated_headers};
 use crate::modules::passkey_v1::validator::{
     V1LoginFinishPayload, V1RegisterFinishPayload, V1RemovePasskeyPayload,
 };
+use crate::services::account_methods::{can_unlink, total_sign_in_methods};
 use crate::services::auth::AuthSession;
 use crate::AppState;
 
@@ -108,12 +110,41 @@ pub async fn remove(
     tracing::Span::current().record("user_id", user.id);
     let payload = payload.0;
 
-    let removed = passkey_credential::Entity::delete_by_credential_id_for_user(
-        &state.sea_db,
-        &payload.credential_id,
-        user.id,
-    )
-    .await?;
+    let user_id = user.id;
+    let has_password = user.password.is_some();
+    let credential_id = payload.credential_id.clone();
+
+    // Guard + delete in ONE transaction: a concurrent identity unlink cannot slip
+    // between the method count and the delete and leave the account with zero
+    // sign-in methods (permanent lockout). Same guard semantics as unlink.
+    let removed = state
+        .sea_db
+        .transaction::<_, u64, ErrorResponse>(|txn| {
+            Box::pin(async move {
+                let identities = user_oauth_identity::Entity::list_for_user(txn, user_id).await?;
+                let passkey_count =
+                    passkey_credential::Entity::count_for_user(txn, user_id).await?;
+                let total = total_sign_in_methods(identities.len(), has_password, passkey_count);
+                if !can_unlink(total) {
+                    warn!(user_id, "Refused to remove the last sign-in method");
+                    // 409 (BIZ_004): the request conflicts with the "keep one method" invariant.
+                    return Err(ErrorResponse::new(ErrorCode::DependencyExists)
+                        .with_message("Add a password or another sign-in method first"));
+                }
+
+                passkey_credential::Entity::delete_by_credential_id_for_user(
+                    txn,
+                    &credential_id,
+                    user_id,
+                )
+                .await
+            })
+        })
+        .await
+        .map_err(|err| match err {
+            TransactionError::Connection(err) => ErrorResponse::from(err),
+            TransactionError::Transaction(err) => err,
+        })?;
 
     if removed == 0 {
         return Err(ErrorResponse::new(ErrorCode::RecordNotFound)
@@ -461,6 +492,23 @@ mod tests {
             body.get("data").is_none(),
             "remove envelope is a message, not a list"
         );
+    }
+
+    #[test]
+    fn remove_refuses_the_last_sign_in_method() {
+        // One passkey, no identities, no password: total = 1 -> removing it must
+        // be refused with the shared 409 guard, not silently lock the user out.
+        let only_passkey = total_sign_in_methods(0, false, 1);
+        assert!(!can_unlink(only_passkey));
+
+        // Passkey + one linked identity: removing the passkey leaves the identity.
+        assert!(can_unlink(total_sign_in_methods(1, false, 1)));
+        // Passkey + password: same.
+        assert!(can_unlink(total_sign_in_methods(0, true, 1)));
+        // Two passkeys count as one method: removing one still leaves a passkey,
+        // but the guard treats "passkey" as a single method, so both removals
+        // are refused while it is the only method class present.
+        assert!(!can_unlink(total_sign_in_methods(0, false, 2)));
     }
 
     #[test]

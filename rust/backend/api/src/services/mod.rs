@@ -1,4 +1,5 @@
 pub mod abuse_limiter;
+pub mod account_methods;
 pub mod acl_service;
 pub mod auth;
 pub mod billing;

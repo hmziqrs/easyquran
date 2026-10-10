@@ -9,17 +9,22 @@ pub struct Migration;
 // a user who registered as "Foo@X.com" could never be found by the normalized
 // lookup.
 //
-// Collision-safe: two accounts can legitimately coexist as "Foo@x.com" and
-// "foo@x.com" today (the UNIQUE index is BINARY/case-sensitive). Lowercasing
-// both would violate it, so any row whose normalized form already belongs to a
-// DIFFERENT row is left untouched. Those are unreachable duplicates awaiting a
-// human decision; every other row is normalized.
+// Contract after this migration: exactly ONE reachable normalized row per
+// mailbox. For each distinct LOWER(TRIM(email)) value the LOWEST id is
+// normalized, but only when no row already holds that normalized value — so a
+// pair like 'FOO@X.com' + 'Foo@x.com' can never both UPDATE into the same
+// value (which would violate UNIQUE and panic the migrator). Any other
+// case-variant row stays exactly as it was and is unreachable by normalized
+// lookups: a known limitation awaiting a human decision, never a crash.
 const LOWERCASE_EMAILS: &str = "UPDATE users SET email = LOWER(TRIM(email)) \
-     WHERE email <> LOWER(TRIM(email)) \
-     AND NOT EXISTS ( \
-         SELECT 1 FROM users AS other \
-         WHERE other.id <> users.id AND other.email = LOWER(TRIM(users.email)) \
-     )";
+     WHERE id IN ( \
+         SELECT MIN(u.id) FROM users AS u \
+         WHERE NOT EXISTS ( \
+             SELECT 1 FROM users AS n WHERE n.email = LOWER(TRIM(u.email)) \
+         ) \
+         GROUP BY LOWER(TRIM(u.email)) \
+     ) \
+     AND email <> LOWER(TRIM(email))";
 
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
@@ -63,7 +68,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn lowercases_mixed_case_rows_and_skips_collisions() {
+    async fn singles_are_normalized() {
         let db = mem_db().await;
         db.execute_unprepared(
             "CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, \
@@ -71,10 +76,62 @@ mod tests {
         )
         .await
         .unwrap();
-        // 1: plain mixed case -> normalized. 2+3: collision pair -> both stay.
         db.execute_unprepared(
             "INSERT INTO users (id, name, email) VALUES \
              (1, 'a', ' Foo@Example.COM '), \
+             (4, 'd', 'MiXeD@Y.com')",
+        )
+        .await
+        .unwrap();
+
+        let mgr = SchemaManager::new(&db);
+        Migration.up(&mgr).await.unwrap();
+
+        assert_eq!(email_of(&db, 1).await, "foo@example.com");
+        assert_eq!(email_of(&db, 4).await, "mixed@y.com");
+    }
+
+    #[tokio::test]
+    async fn both_non_normalized_pair_normalizes_lowest_id_only() {
+        let db = mem_db().await;
+        db.execute_unprepared(
+            "CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, \
+             name TEXT NOT NULL, email TEXT NOT NULL UNIQUE)",
+        )
+        .await
+        .unwrap();
+        // Neither row is normalized; the old statement updated both and crashed
+        // on the UNIQUE index. Exactly the lowest id must be normalized.
+        db.execute_unprepared(
+            "INSERT INTO users (id, name, email) VALUES \
+             (2, 'b', 'FOO@X.com'), \
+             (3, 'c', 'Foo@x.com')",
+        )
+        .await
+        .unwrap();
+
+        let mgr = SchemaManager::new(&db);
+        Migration.up(&mgr).await.unwrap();
+
+        assert_eq!(email_of(&db, 2).await, "foo@x.com");
+        assert_eq!(
+            email_of(&db, 3).await,
+            "Foo@x.com",
+            "non-lowest case-variant stays untouched (unreachable, known limitation)"
+        );
+    }
+
+    #[tokio::test]
+    async fn existing_lowercase_row_leaves_mixed_untouched() {
+        let db = mem_db().await;
+        db.execute_unprepared(
+            "CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, \
+             name TEXT NOT NULL, email TEXT NOT NULL UNIQUE)",
+        )
+        .await
+        .unwrap();
+        db.execute_unprepared(
+            "INSERT INTO users (id, name, email) VALUES \
              (2, 'b', 'Dup@X.com'), \
              (3, 'c', 'dup@x.com')",
         )
@@ -84,13 +141,59 @@ mod tests {
         let mgr = SchemaManager::new(&db);
         Migration.up(&mgr).await.unwrap();
 
-        assert_eq!(email_of(&db, 1).await, "foo@example.com");
         assert_eq!(
             email_of(&db, 2).await,
             "Dup@X.com",
-            "collision left for a human"
+            "normalized form already owned by another row"
         );
         assert_eq!(email_of(&db, 3).await, "dup@x.com");
+    }
+
+    #[tokio::test]
+    async fn rerun_is_idempotent() {
+        let db = mem_db().await;
+        db.execute_unprepared(
+            "CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, \
+             name TEXT NOT NULL, email TEXT NOT NULL UNIQUE)",
+        )
+        .await
+        .unwrap();
+        db.execute_unprepared(
+            "INSERT INTO users (id, name, email) VALUES \
+             (1, 'a', ' Foo@Example.COM '), \
+             (2, 'b', 'FOO@X.com'), \
+             (3, 'c', 'Foo@x.com'), \
+             (4, 'd', 'Dup@X.com'), \
+             (5, 'e', 'dup@x.com')",
+        )
+        .await
+        .unwrap();
+
+        let mgr = SchemaManager::new(&db);
+        Migration.up(&mgr).await.unwrap();
+        let after_first = [
+            email_of(&db, 1).await,
+            email_of(&db, 2).await,
+            email_of(&db, 3).await,
+            email_of(&db, 4).await,
+            email_of(&db, 5).await,
+        ];
+
+        Migration.up(&mgr).await.unwrap();
+        let after_second = [
+            email_of(&db, 1).await,
+            email_of(&db, 2).await,
+            email_of(&db, 3).await,
+            email_of(&db, 4).await,
+            email_of(&db, 5).await,
+        ];
+
+        assert_eq!(after_first, after_second, "second run must be a no-op");
+        assert_eq!(after_first[0], "foo@example.com");
+        assert_eq!(after_first[1], "foo@x.com");
+        assert_eq!(after_first[2], "Foo@x.com");
+        assert_eq!(after_first[3], "Dup@X.com");
+        assert_eq!(after_first[4], "dup@x.com");
     }
 
     #[tokio::test]
