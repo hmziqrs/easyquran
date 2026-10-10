@@ -102,7 +102,7 @@ that root.
 ## Restricted and clearance
 
 Restricted entries stay in the repository as audit references with `productionEnabled = false`.
-No application code references them; their raw files share the static-bundle presence described
+No production code path references them; their raw files share the static-bundle presence described
 under Purpose. Clearing a licence requires a written basis recorded here; until then the entry
 stays disabled.
 
