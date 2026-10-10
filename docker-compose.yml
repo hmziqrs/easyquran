@@ -138,23 +138,12 @@ services:
       # If the api ever receives Cloudflare connections directly (no Traefik hop),
       # replace with the published ranges: https://www.cloudflare.com/ips/
       TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fd00::/8}
-      # Media storage + MAIL=none satisfy the unconditional boot gate
-      # (ObjectStorageConfig::from_env .expect()s on bucket + credentials).
-      # The API shares the publisher's R2_* token; the endpoint derives from
-      # R2_ACCOUNT_ID (region is always "auto"). Values come from .env (Dokploy
-      # env tab); empty = "not set". No devkey/devsecret defaults on purpose —
-      # shipping public credentials here silently booted production once.
+      # Media storage defaults. Credentials + account id come from .env via
+      # env_file; the endpoint derives from CLOUDFLARE_ACCOUNT_ID (region is
+      # always "auto"). No devkey/devsecret defaults — public credentials here
+      # once booted production.
       S3_BUCKET: ${S3_BUCKET:-easyquran-assets}
       S3_PUBLIC_URL: ${S3_PUBLIC_URL:-https://r2.easyquran.fyi}
-      S3_ENDPOINT: ${S3_ENDPOINT:-}
-      S3_ACCOUNT_ID: ${S3_ACCOUNT_ID:-}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
-      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
-      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
-      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
-      R2_PUBLIC_BASE: ${R2_PUBLIC_BASE:-}
-      R2_ENDPOINT: ${R2_ENDPOINT:-}
       MAIL_PROVIDER: ${MAIL_PROVIDER:-none}
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-no-reply@easyquran.fyi}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-EasyQuran}

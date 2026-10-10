@@ -454,7 +454,7 @@ mailbox or a throwaway you can read), never a real user.
    at the _same_ mail config production will use:
    - `MAIL_PROVIDER=smtp` (or `cloudflare`) + the real credentials
      (`SMTP_HOST`/`SMTP_USERNAME`/`SMTP_PASSWORD`, or
-     `CLOUDFLARE_EMAIL_ACCOUNT_ID`/`CLOUDFLARE_EMAIL_API_TOKEN`).
+     `CLOUDFLARE_ACCOUNT_ID`/`CLOUDFLARE_EMAIL_API_TOKEN`).
    - The real `MAIL_FROM_ADDRESS` + `MAIL_FROM_NAME`.
    - `WEB_AUTH_ENABLED=true` — under a non-production env class the prod boot
      gate is skipped, so the auth router mounts and the MailRouter runs the

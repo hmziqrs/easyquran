@@ -89,7 +89,10 @@ impl ObjectStorageConfig {
             None,
         )
         .expect("S3_SECRET_KEY or R2_SECRET_ACCESS_KEY must be set");
-        let account_id = env_with_fallback(&["S3_ACCOUNT_ID", "R2_ACCOUNT_ID"], None);
+        let account_id = env_with_fallback(
+            &["CLOUDFLARE_ACCOUNT_ID", "S3_ACCOUNT_ID", "R2_ACCOUNT_ID"],
+            None,
+        );
         // Endpoint: explicit override wins, else derive Cloudflare R2's from the
         // account id, else fall back to the local MinIO dummy (a reader-only
         // deploy never touches storage; media deployments set R2_ACCOUNT_ID or
@@ -578,6 +581,18 @@ impl WebAuthSettings {
                     ));
                 }
             }
+            // Cloudflare mail shares the one account id with storage/publishing.
+            if mail.trim() == "cloudflare" {
+                let canonical = std::env::var("CLOUDFLARE_ACCOUNT_ID").unwrap_or_default();
+                let legacy = std::env::var("CLOUDFLARE_EMAIL_ACCOUNT_ID").unwrap_or_default();
+                if canonical.trim().is_empty() && legacy.trim().is_empty() {
+                    return Err(
+                        "Production with WEB_AUTH_ENABLED=true: MAIL_PROVIDER='cloudflare' is \
+                         missing CLOUDFLARE_ACCOUNT_ID (or CLOUDFLARE_EMAIL_ACCOUNT_ID)"
+                            .to_string(),
+                    );
+                }
+            }
             for p in &oauth_providers {
                 if provider_required_keys(p).is_empty() {
                     return Err(format!(
@@ -689,10 +704,11 @@ fn provider_required_keys(p: &str) -> &'static [&'static str] {
 
 /// Required env vars for the selected mail transport (mirrors the keys
 /// build_mail_router / smtp::create_connection / CloudflareMailProvider read).
-/// Used only for presence checks at boot — values never logged.
+/// Used only for presence checks at boot — values never logged. Cloudflare's
+/// account id is checked separately (CLOUDFLARE_ACCOUNT_ID, shared with storage).
 fn mail_provider_required_keys(provider: &str) -> &'static [&'static str] {
     match provider.trim() {
-        "cloudflare" => &["CLOUDFLARE_EMAIL_ACCOUNT_ID", "CLOUDFLARE_EMAIL_API_TOKEN"],
+        "cloudflare" => &["CLOUDFLARE_EMAIL_API_TOKEN"],
         // build_mail_router's catch-all `_` arm constructs SMTP for every value
         // that is not 'none' (rejected upstream) or 'cloudflare' — including
         // typos like 'smptp' and unknown providers like 'postmark'. Mirror that
@@ -922,12 +938,13 @@ mod tests {
         }
     }
 
-    const STORAGE_KEYS: [&str; 10] = [
+    const STORAGE_KEYS: [&str; 11] = [
         "S3_BUCKET",
         "S3_ACCESS_KEY",
         "S3_SECRET_KEY",
         "S3_ENDPOINT",
         "S3_ACCOUNT_ID",
+        "CLOUDFLARE_ACCOUNT_ID",
         "R2_ACCOUNT_ID",
         "R2_ACCESS_KEY_ID",
         "R2_SECRET_ACCESS_KEY",
@@ -960,7 +977,7 @@ mod tests {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let prev = clear_storage_env();
         std::env::set_var("S3_BUCKET", "easyquran-assets");
-        std::env::set_var("R2_ACCOUNT_ID", "acct123");
+        std::env::set_var("CLOUDFLARE_ACCOUNT_ID", "acct123");
         std::env::set_var("R2_ACCESS_KEY_ID", "r2-key");
         std::env::set_var("R2_SECRET_ACCESS_KEY", "r2-secret");
         std::env::set_var("R2_PUBLIC_BASE", "https://cdn.example.test");
@@ -972,6 +989,21 @@ mod tests {
         assert_eq!(cfg.access_key, "r2-key");
         assert_eq!(cfg.secret_key, "r2-secret");
         assert_eq!(cfg.account_id, "acct123");
+        restore_storage_env(prev);
+    }
+
+    #[test]
+    fn object_storage_accepts_legacy_r2_account_id() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let prev = clear_storage_env();
+        std::env::set_var("S3_BUCKET", "easyquran-assets");
+        std::env::set_var("R2_ACCOUNT_ID", "legacy123");
+        std::env::set_var("R2_ACCESS_KEY_ID", "r2-key");
+        std::env::set_var("R2_SECRET_ACCESS_KEY", "r2-secret");
+
+        let cfg = ObjectStorageConfig::from_env();
+        assert_eq!(cfg.endpoint, "https://legacy123.r2.cloudflarestorage.com");
+        assert_eq!(cfg.account_id, "legacy123");
         restore_storage_env(prev);
     }
 
@@ -1538,6 +1570,7 @@ mod tests {
             "SMTP_HOST",
             "SMTP_USERNAME",
             "SMTP_PASSWORD",
+            "CLOUDFLARE_ACCOUNT_ID",
             "CLOUDFLARE_EMAIL_ACCOUNT_ID",
             "CLOUDFLARE_EMAIL_API_TOKEN",
             "FRONTEND_URL",
@@ -1908,7 +1941,7 @@ mod tests {
         std::env::set_var("MAIL_FROM_NAME", "EasyQuran");
         // CLOUDFLARE_EMAIL_* creds intentionally unset.
         let err = WebAuthSettings::from_env().expect_err("missing CF creds must fail");
-        assert!(err.contains("CLOUDFLARE_EMAIL_ACCOUNT_ID"), "got: {err}");
+        assert!(err.contains("CLOUDFLARE_EMAIL_API_TOKEN"), "got: {err}");
         restore_env(snap);
     }
 
@@ -1948,11 +1981,30 @@ mod tests {
         std::env::set_var("MAIL_PROVIDER", "cloudflare");
         std::env::set_var("MAIL_FROM_ADDRESS", "no-reply@example.com");
         std::env::set_var("MAIL_FROM_NAME", "EasyQuran");
-        std::env::set_var("CLOUDFLARE_EMAIL_ACCOUNT_ID", "acc");
+        std::env::set_var("CLOUDFLARE_ACCOUNT_ID", "acc");
         std::env::set_var("CLOUDFLARE_EMAIL_API_TOKEN", "tok");
         std::env::set_var("FRONTEND_URL", "https://easyquran.fyi");
         // No oauth providers configured → oauth loop is a no-op → boot succeeds.
         let cfg = WebAuthSettings::from_env().expect("cloudflare with creds must boot");
+        assert!(cfg.enabled);
+        restore_env(snap);
+    }
+
+    #[test]
+    fn prod_accepts_cloudflare_with_legacy_email_account_id() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        clear_web_auth_env();
+        std::env::set_var("APP_ENV", "production");
+        std::env::set_var("WEB_AUTH_ENABLED", "true");
+        std::env::set_var("MAIL_PROVIDER", "cloudflare");
+        std::env::set_var("MAIL_FROM_ADDRESS", "no-reply@example.com");
+        std::env::set_var("MAIL_FROM_NAME", "EasyQuran");
+        std::env::set_var("CLOUDFLARE_EMAIL_ACCOUNT_ID", "acc");
+        std::env::set_var("CLOUDFLARE_EMAIL_API_TOKEN", "tok");
+        std::env::set_var("FRONTEND_URL", "https://easyquran.fyi");
+        let cfg = WebAuthSettings::from_env().expect("legacy account var must still boot");
         assert!(cfg.enabled);
         restore_env(snap);
     }

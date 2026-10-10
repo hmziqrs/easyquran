@@ -42,5 +42,5 @@ only after every immutable artifact succeeds.
 catalogue from `web/src/lib/data/translations.json`; a downloaded catalogue is never its input.
 
 Required environment variables: `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, plus
-`R2_ACCOUNT_ID` or `R2_ENDPOINT`. Optional: `R2_BUCKET` (default `easyquran`) and
-`R2_PUBLIC_BASE`.
+`CLOUDFLARE_ACCOUNT_ID` (or legacy `R2_ACCOUNT_ID`) or `R2_ENDPOINT`. Optional: `R2_BUCKET`
+(default `easyquran`) and `R2_PUBLIC_BASE`.

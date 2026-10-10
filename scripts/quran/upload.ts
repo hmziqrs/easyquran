@@ -329,7 +329,7 @@ async function main(): Promise<void> {
   }
 
   const endpoint = process.env.R2_ENDPOINT ?? resolveAccountEndpoint();
-  if (!endpoint) throw new Error("set R2_ACCOUNT_ID or R2_ENDPOINT");
+  if (!endpoint) throw new Error("set CLOUDFLARE_ACCOUNT_ID or R2_ENDPOINT");
   const { S3Client } = await import("@aws-sdk/client-s3");
   const client = new S3Client({
     region: "auto",
@@ -361,7 +361,7 @@ async function main(): Promise<void> {
 }
 
 function resolveAccountEndpoint(): string | undefined {
-  const accountId = process.env.R2_ACCOUNT_ID;
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID ?? process.env.R2_ACCOUNT_ID;
   if (!accountId) return undefined;
   return `https://${accountId}.r2.cloudflarestorage.com`;
 }

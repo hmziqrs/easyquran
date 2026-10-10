@@ -63,8 +63,12 @@ async fn build_mail_router(
             use ruxlog::services::mail::cloudflare::CloudflareMailProvider;
             use secrecy::SecretString;
 
-            let account_id = env::var("CLOUDFLARE_EMAIL_ACCOUNT_ID")
-                .expect("MAIL_PROVIDER=cloudflare requires CLOUDFLARE_EMAIL_ACCOUNT_ID");
+            let account_id = env::var("CLOUDFLARE_ACCOUNT_ID")
+                .or_else(|_| env::var("CLOUDFLARE_EMAIL_ACCOUNT_ID"))
+                .expect(
+                    "MAIL_PROVIDER=cloudflare requires CLOUDFLARE_ACCOUNT_ID \
+                     (or CLOUDFLARE_EMAIL_ACCOUNT_ID)",
+                );
             let api_token = SecretString::from(
                 env::var("CLOUDFLARE_EMAIL_API_TOKEN")
                     .expect("MAIL_PROVIDER=cloudflare requires CLOUDFLARE_EMAIL_API_TOKEN"),
