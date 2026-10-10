@@ -55,6 +55,17 @@ impl Entity {
         }
     }
 
+    pub async fn count_for_user<T: ConnectionTrait>(conn: &T, user_id: i32) -> DbResult<u64> {
+        match Self::find()
+            .filter(Column::UserId.eq(user_id))
+            .count(conn)
+            .await
+        {
+            Ok(count) => Ok(count),
+            Err(err) => Err(err.into()),
+        }
+    }
+
     pub async fn find_by_credential_id<T: ConnectionTrait>(
         conn: &T,
         credential_id: &str,
@@ -108,5 +119,57 @@ impl Entity {
             Ok(res) => Ok(res.rows_affected),
             Err(err) => Err(err.into()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sea_orm::{ConnectOptions, Database, DatabaseConnection};
+
+    // passkey_credentials has no migration yet (same pre-existing gap as the
+    // device/notification/OAuth tables before m000005); create it here to match
+    // the sea-orm model so the count path is testable.
+    async fn mem_db() -> DatabaseConnection {
+        let mut opt = ConnectOptions::new("sqlite::memory:".to_string());
+        opt.max_connections(1);
+        let db = Database::connect(opt).await.unwrap();
+        db.execute_unprepared(
+            "CREATE TABLE passkey_credentials (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                credential_id TEXT NOT NULL,
+                public_key BLOB NOT NULL,
+                counter INTEGER NOT NULL DEFAULT 0,
+                device_type TEXT,
+                transports TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_used_at TEXT
+            )",
+        )
+        .await
+        .unwrap();
+        db
+    }
+
+    async fn insert_credential(db: &DatabaseConnection, user_id: i32, credential_id: &str) {
+        db.execute_unprepared(&format!(
+            "INSERT INTO passkey_credentials (user_id, credential_id, public_key, counter, created_at) \
+             VALUES ({user_id}, '{credential_id}', X'00', 0, '2026-01-01T00:00:00+00:00')"
+        ))
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn count_for_user_counts_only_that_users_credentials() {
+        let db = mem_db().await;
+        insert_credential(&db, 1, "cred-a").await;
+        insert_credential(&db, 1, "cred-b").await;
+        insert_credential(&db, 2, "cred-c").await;
+
+        assert_eq!(Entity::count_for_user(&db, 1).await.unwrap(), 2);
+        assert_eq!(Entity::count_for_user(&db, 2).await.unwrap(), 1);
+        assert_eq!(Entity::count_for_user(&db, 3).await.unwrap(), 0);
     }
 }

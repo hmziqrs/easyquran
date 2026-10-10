@@ -16,6 +16,8 @@ pub fn routes() -> Router<AppState> {
         .merge(
             Router::<AppState>::new()
                 .route("/get", get(controller::get_profile))
+                .route("/identities", get(controller::list_identities))
+                .route("/identities/unlink", post(controller::unlink_identity))
                 .route_layer(middleware::from_fn(auth_guard::authenticated)),
         );
 

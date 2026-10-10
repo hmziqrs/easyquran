@@ -10,12 +10,148 @@ use tracing::{error, info, instrument, warn};
 
 use super::validator::*;
 use crate::{
-    db::sea_models::user::{Entity as User, UserRole},
+    config::settings::{web_auth, ProviderStatus},
+    db::sea_models::{
+        passkey_credential,
+        user::{Entity as User, Model as UserModel, UserRole},
+        user_oauth_identity,
+    },
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
     services::auth::AuthSession,
     AppState,
 };
+
+/// Providers a signed-in user may link/unlink from the account UI. Narrower than
+/// `OAuthProvider`: only these three are currently offered as sign-in methods.
+const SUPPORTED_IDENTITY_PROVIDERS: [&str; 3] = ["github", "discord", "google"];
+
+fn is_supported_identity_provider(provider: &str) -> bool {
+    SUPPORTED_IDENTITY_PROVIDERS.contains(&provider)
+}
+
+/// Every method that can sign the user in: each linked OAuth identity, a
+/// password, and (at most) one passkey credit however many credentials exist.
+fn total_sign_in_methods(identity_count: usize, has_password: bool, passkey_count: u64) -> usize {
+    identity_count + usize::from(has_password) + usize::from(passkey_count > 0)
+}
+
+/// A user must keep at least one sign-in method; unlinking the last one is refused.
+fn can_unlink(total_methods: usize) -> bool {
+    total_methods.saturating_sub(1) >= 1
+}
+
+fn linkable_providers(configured: &[ProviderStatus], linked: &[&str]) -> Vec<String> {
+    configured
+        .iter()
+        .filter(|status| {
+            status.ready
+                && is_supported_identity_provider(&status.name)
+                && !linked.contains(&status.name.as_str())
+        })
+        .map(|status| status.name.clone())
+        .collect()
+}
+
+async fn identity_snapshot(
+    state: &AppState,
+    user: &UserModel,
+) -> Result<serde_json::Value, ErrorResponse> {
+    let identities = user_oauth_identity::Entity::list_for_user(&state.sea_db, user.id).await?;
+    let passkey_count = passkey_credential::Entity::count_for_user(&state.sea_db, user.id).await?;
+    let has_password = user.password.is_some();
+    let linked: Vec<&str> = identities
+        .iter()
+        .map(|identity| identity.provider.as_str())
+        .collect();
+    let views: Vec<serde_json::Value> = identities
+        .iter()
+        .map(|identity| {
+            json!({
+                "provider": identity.provider,
+                "provider_user_id": identity.provider_user_id,
+                "created_at": identity.created_at,
+            })
+        })
+        .collect();
+
+    Ok(json!({
+        "identities": views,
+        "has_password": has_password,
+        "passkey_count": passkey_count,
+        "can_unlink_any": can_unlink(total_sign_in_methods(
+            identities.len(),
+            has_password,
+            passkey_count,
+        )),
+        "linkable_providers": linkable_providers(&web_auth().providers_status, &linked),
+    }))
+}
+
+#[debug_handler]
+#[instrument(skip(auth, state), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
+pub async fn list_identities(
+    auth: AuthSession,
+    state: State<AppState>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let user = auth.user.ok_or_else(|| {
+        ErrorResponse::new(ErrorCode::Unauthorized)
+            .with_message("You must be logged in to access this resource")
+    })?;
+
+    let body = identity_snapshot(&state, &user).await?;
+    info!(user_id = user.id, "Sign-in identities listed");
+    Ok((StatusCode::OK, Json(body)))
+}
+
+#[debug_handler]
+#[instrument(skip(auth, state, payload), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
+pub async fn unlink_identity(
+    auth: AuthSession,
+    state: State<AppState>,
+    payload: ValidatedJson<V1UnlinkIdentityPayload>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let user = auth.user.ok_or_else(|| {
+        ErrorResponse::new(ErrorCode::Unauthorized)
+            .with_message("You must be logged in to access this resource")
+    })?;
+    let provider = payload.0.provider.trim().to_lowercase();
+    if !is_supported_identity_provider(&provider) {
+        return Err(ErrorResponse::new(ErrorCode::InvalidInput)
+            .with_message("Unsupported sign-in provider"));
+    }
+
+    let identities = user_oauth_identity::Entity::list_for_user(&state.sea_db, user.id).await?;
+    if !identities
+        .iter()
+        .any(|identity| identity.provider == provider)
+    {
+        return Err(ErrorResponse::new(ErrorCode::RecordNotFound)
+            .with_message("This sign-in method is not linked to your account"));
+    }
+
+    let passkey_count = passkey_credential::Entity::count_for_user(&state.sea_db, user.id).await?;
+    let total = total_sign_in_methods(identities.len(), user.password.is_some(), passkey_count);
+    if !can_unlink(total) {
+        warn!(user_id = user.id, provider = %provider, "Refused to unlink the last sign-in method");
+        // 409 (BIZ_004): the request conflicts with the "keep one method" invariant.
+        return Err(ErrorResponse::new(ErrorCode::DependencyExists)
+            .with_message("Add a password or another sign-in method first"));
+    }
+
+    let removed =
+        user_oauth_identity::Entity::delete_for_user_provider(&state.sea_db, user.id, &provider)
+            .await?;
+    if removed == 0 {
+        // Lost a race with a concurrent unlink; the method is already gone.
+        return Err(ErrorResponse::new(ErrorCode::RecordNotFound)
+            .with_message("This sign-in method is not linked to your account"));
+    }
+
+    info!(user_id = user.id, provider = %provider, "Unlinked OAuth sign-in method");
+    let body = identity_snapshot(&state, &user).await?;
+    Ok((StatusCode::OK, Json(body)))
+}
 
 #[debug_handler(state = AppState)]
 #[instrument(skip(auth), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
@@ -285,5 +421,77 @@ pub async fn admin_view(
             error!(user_id, "Admin failed to view user: {}", err);
             Err(err)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn can_unlink_requires_a_surviving_method() {
+        assert!(
+            !can_unlink(0),
+            "an account with no methods has none to unlink"
+        );
+        assert!(!can_unlink(1), "removing the last method must be refused");
+        assert!(can_unlink(2));
+        assert!(can_unlink(3));
+    }
+
+    #[test]
+    fn total_sign_in_methods_counts_a_passkey_once() {
+        assert_eq!(total_sign_in_methods(0, false, 0), 0);
+        assert_eq!(total_sign_in_methods(1, false, 0), 1);
+        assert_eq!(total_sign_in_methods(0, true, 0), 1);
+        assert_eq!(
+            total_sign_in_methods(0, false, 3),
+            1,
+            "any number of passkeys is one method"
+        );
+        assert_eq!(total_sign_in_methods(1, true, 1), 3);
+    }
+
+    #[test]
+    fn supported_identity_providers_are_the_three_linkable_ones() {
+        assert!(is_supported_identity_provider("github"));
+        assert!(is_supported_identity_provider("discord"));
+        assert!(is_supported_identity_provider("google"));
+        assert!(!is_supported_identity_provider("facebook"));
+        assert!(!is_supported_identity_provider("apple"));
+        assert!(!is_supported_identity_provider(""));
+    }
+
+    #[test]
+    fn linkable_providers_are_ready_supported_and_unlinked() {
+        let configured = vec![
+            ProviderStatus {
+                name: "github".to_string(),
+                ready: true,
+            },
+            ProviderStatus {
+                name: "discord".to_string(),
+                ready: false,
+            },
+            ProviderStatus {
+                name: "google".to_string(),
+                ready: true,
+            },
+            ProviderStatus {
+                name: "facebook".to_string(),
+                ready: true,
+            },
+            ProviderStatus {
+                name: "apple".to_string(),
+                ready: true,
+            },
+        ];
+
+        let linkable = linkable_providers(&configured, &["github"]);
+        assert_eq!(
+            linkable,
+            vec!["google"],
+            "only ready, supported, not-yet-linked providers are offered"
+        );
     }
 }

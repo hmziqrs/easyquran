@@ -115,6 +115,12 @@ pub struct AdminChangePassword {
     pub password: String,
 }
 
+#[derive(Debug, Deserialize, Validate)]
+pub struct V1UnlinkIdentityPayload {
+    #[validate(length(min = 1, max = 32))]
+    pub provider: String,
+}
+
 #[derive(Debug, Deserialize, Serialize, Validate, Clone)]
 pub struct V1AdminUserQueryParams {
     pub page: Option<u64>,
