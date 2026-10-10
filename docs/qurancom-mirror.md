@@ -8,9 +8,10 @@ their reader pages load — under committed `web/static/qurancom/`. Parity check
 databases and rendering against these exact files, so the inventory answers one question
 directly: are we missing anything quran.com ships at script level?
 
-Nothing in the mirror is app-referenced. Every catalogue entry in
-`scripts/quran/qurancom-assets.ts` has `productionEnabled = false`; no application code loads
-these files. They live under `web/static/`, so the raw files do ship inside the static bundle
+Nothing in the mirror is app-referenced in production. Every catalogue entry in
+`scripts/quran/qurancom-assets.ts` has `productionEnabled = false`; no production code path
+loads these files (the dev-only `/design/qurancom` specimen reads them). They live under
+`web/static/`, so the raw files do ship inside the static bundle
 and remain fetchable by direct URL — that presence is accepted by campaign decision (gating is
 env-var only; no middleware or build-exclusion machinery). `pnpm quran:mirror` proves the
 on-disk mirror matches the catalogue by id + byte size.
@@ -23,11 +24,13 @@ on-disk mirror matches the catalogue by id + byte size.
 - Every mirror entry is reference/audit-only today (`productionEnabled = false`), including
   cleared ones — nothing here is wired into the app yet. Enabling any entry in production
   requires its licence to clear first (see Restricted and clearance).
-- The mirror is never referenced by application code. The raw files do sit in the static
-  bundle (see Purpose); remove or exclude them from the build if a stricter posture is wanted
-  later. It does not contradict `docs/indopak-v4-verification-plan.md` R12 (no restricted font
-  asset in the reader-compat build): that rule governs the app build, this lane is a
-  repository-level audit reference.
+- No production code path references the mirror (the dev-only `/design/qurancom` specimen
+  reads it). The raw files do sit in the static bundle (see Purpose); remove or exclude them
+  from the build if a stricter posture is wanted later. R12 (`docs/indopak-v4-verification-plan.md`:
+  no restricted font asset in repo or build) is explicitly amended for this lane by campaign
+  decision — committed audit references, production-disabled — while the build/app side keeps
+  the Uthmani-only production policy. `uthmanic-hafs-v22.ttf` was already shipped pre-campaign
+  (`9781438f`); this lane neither introduced nor widened that.
 
 ## Scope
 
@@ -123,12 +126,8 @@ stays disabled.
 
 ## Manual digests
 
-Optional and human-run only, never automated. Example:
-
-```bash
-shasum -a 256 web/static/qurancom/scripts/uthmani.json
-```
-
-Digests exist for manual audits. No build, boot, runtime, ETag, cache, or catalogue path may
+If a digest is ever needed, it follows the AGENTS.MD manual-audit rule — a human runs it by
+hand, never a script; no command is prescribed here so the three-command manual-audit list
+stays exact. No build, boot, runtime, ETag, cache, or catalogue path may
 compute SHA-256 over these assets (AGENTS.MD hard rule; a DB's identity is its id, and a mirror
 asset's identity is id + byte size).

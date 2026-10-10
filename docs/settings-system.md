@@ -139,7 +139,7 @@ and viewport preservation. Arabic Quran fonts remain gated to Arabic source cont
 
 Persisted reader schema v4 includes:
 
-- `arabicFont`, allowlisted by registry; default `amiri`.
+- `arabicFont`, allowlisted by registry; default `kfgqpc-hafs`.
 - `arabicScript`, the mushaf script variant (`uthmani-annotated`, `uthmani`, `simple-clean`,
   `indopak`, `tajweed`), allowlisted against the Arabic source registry; default
   `uthmani-annotated`. Selected in the Reading section above the font pills. It changes which
