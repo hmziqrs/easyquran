@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
   import { Button } from "#lib/components/ui/button/index.js";
   import KeyIcon from "phosphor-svelte/lib/KeyIcon";
+  import { authModal } from "#lib/auth/auth-modal.svelte.js";
   import { createOAuthFlows } from "#lib/auth/flows.svelte.js";
   import { createPasskeyFlow } from "#lib/auth/passkey-flow.svelte.js";
   import type { OAuthProvider } from "#lib/auth/oauth-flow.svelte.js";
@@ -34,7 +36,18 @@
   );
 
   async function begin(provider: OAuthProvider): Promise<void> {
-    await oauth[provider].begin();
+    if (provider !== "google") {
+      await oauth[provider].begin();
+      return;
+    }
+    const outcome = await oauth.google.beginPopup();
+    if (outcome === "completed") {
+      authModal.close();
+      await goto(`/auth/${provider}/success`);
+      return;
+    }
+    // Popup blocked, cancelled, or failed → classic full-page redirect fallback.
+    await oauth.google.begin();
   }
 
   async function passkeyLogin(): Promise<void> {

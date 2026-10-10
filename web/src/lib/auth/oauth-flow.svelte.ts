@@ -9,6 +9,11 @@ import {
 import type { SessionProbeResult } from "#lib/auth/auth-client.js";
 import { authState } from "#lib/auth/auth-state.svelte.js";
 import type { AuthTransitionContext } from "#lib/auth/auth-state.svelte.js";
+import {
+  awaitOAuthPopup,
+  type OAuthPopupOpen,
+  type OAuthPopupOutcome,
+} from "#lib/auth/oauth-popup.js";
 import { consumeReturnTarget, setReturnTarget } from "#lib/auth/return-target.js";
 
 export type OAuthProvider = "google" | "github" | "discord";
@@ -37,6 +42,7 @@ export interface OAuthFlowDeps {
   readonly client?: AuthClient;
   readonly state?: OAuthFlowStateLike;
   readonly navigate?: OAuthNavigator;
+  readonly openPopup?: OAuthPopupOpen;
 }
 
 export const OAUTH_START_FAILED = "oauth_start_failed";
@@ -51,6 +57,7 @@ export class OAuthFlow {
   readonly state: OAuthFlowStateLike;
   readonly provider: OAuthProvider;
   readonly #navigate: OAuthNavigator;
+  readonly #openPopup: OAuthPopupOpen | undefined;
   pending = $state(false);
   lastErrorCode = $state<string | null>(null);
 
@@ -59,6 +66,7 @@ export class OAuthFlow {
     client: AuthClient,
     state: OAuthFlowStateLike,
     navigate: OAuthNavigator = defaultNavigate,
+    openPopup?: OAuthPopupOpen,
   ) {
     if (!isOAuthProvider(provider)) {
       throw new Error(`unsupported oauth provider: ${String(provider)}`);
@@ -67,6 +75,7 @@ export class OAuthFlow {
     this.client = client;
     this.state = state;
     this.#navigate = navigate;
+    this.#openPopup = openPopup;
   }
 
   get loginUrl(): string {
@@ -90,6 +99,32 @@ export class OAuthFlow {
     } catch {
       this.lastErrorCode = OAUTH_START_FAILED;
       return false;
+    } finally {
+      this.pending = false;
+    }
+  }
+
+  /**
+   * Popup variant of begin(): same session bootstrap + return-target handling,
+   * then the provider page opens in a popup instead of a full-page navigation.
+   * Resolves with the popup outcome; callers fall back to begin() on anything
+   * but "completed".
+   */
+  async beginPopup(returnTarget?: string): Promise<OAuthPopupOutcome> {
+    if (this.pending) return "blocked";
+    if (!browser) return "unavailable";
+    this.pending = true;
+    this.lastErrorCode = null;
+    try {
+      await this.client.ensureAnonymousSession();
+      if (returnTarget) setReturnTarget(returnTarget);
+      return await awaitOAuthPopup({
+        provider: this.provider,
+        url: this.loginUrl,
+        open: this.#openPopup,
+      });
+    } catch {
+      return "unavailable";
     } finally {
       this.pending = false;
     }
@@ -153,5 +188,11 @@ export class OAuthFlow {
 }
 
 export function createOAuthFlow(provider: OAuthProvider, deps: OAuthFlowDeps = {}): OAuthFlow {
-  return new OAuthFlow(provider, deps.client ?? authClient, deps.state ?? authState, deps.navigate);
+  return new OAuthFlow(
+    provider,
+    deps.client ?? authClient,
+    deps.state ?? authState,
+    deps.navigate,
+    deps.openPopup,
+  );
 }

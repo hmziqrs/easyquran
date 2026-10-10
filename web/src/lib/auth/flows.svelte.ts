@@ -959,6 +959,7 @@ export function createFlows(deps: FlowsDeps = {}): AllFlows {
       client: deps.oauth?.client ?? client,
       state: deps.oauth?.state ?? state,
       navigate: deps.oauth?.navigate,
+      openPopup: deps.oauth?.openPopup,
     }),
     passkey: createPasskeyFlow({
       client: deps.passkey?.client ?? client,

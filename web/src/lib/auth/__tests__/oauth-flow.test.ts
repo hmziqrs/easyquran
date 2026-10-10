@@ -14,6 +14,7 @@ import {
   type OAuthFlowStateLike,
   type OAuthProvider,
 } from "#lib/auth/oauth-flow.svelte.js";
+import { OAUTH_POPUP_SOURCE, type OAuthPopupHandle } from "#lib/auth/oauth-popup.js";
 import { consumeReturnTarget, getReturnTarget } from "#lib/auth/return-target.js";
 
 const PROFILE: UserProfile = {
@@ -117,6 +118,76 @@ describe("OAuthFlow.begin bootstrap-before-navigate", () => {
     expect(res).toBe(false);
     expect(navigate).not.toHaveBeenCalled();
     expect(flow.lastErrorCode).toBe(OAUTH_START_FAILED);
+  });
+});
+
+describe("OAuthFlow.beginPopup", () => {
+  class FakePopup implements OAuthPopupHandle {
+    closed = false;
+    focus = vi.fn();
+    close(): void {
+      this.closed = true;
+    }
+  }
+
+  it("bootstraps, stores the return target, opens the login URL, and resolves completed", async () => {
+    const client = mockClient();
+    const popup = new FakePopup();
+    const openPopup = vi.fn().mockReturnValue(popup);
+    const flow = createOAuthFlow("google", {
+      client,
+      state: mockState(),
+      navigate: vi.fn(),
+      openPopup,
+    });
+
+    const outcome = flow.beginPopup("/account");
+    await vi.waitFor(() => expect(openPopup).toHaveBeenCalledTimes(1));
+
+    expect(client.ensureAnonymousSession).toHaveBeenCalledTimes(1);
+    expect(getReturnTarget()).toBe("/account");
+    expect(openPopup).toHaveBeenCalledWith(
+      "https://eq.test/api/auth/google/v1/login",
+      "eq-oauth-google",
+      expect.any(String),
+    );
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: { source: OAUTH_POPUP_SOURCE, provider: "google", outcome: "success" },
+        origin: window.location.origin,
+      }),
+    );
+    await expect(outcome).resolves.toBe("completed");
+    expect(flow.pending).toBe(false);
+  });
+
+  it("returns unavailable without opening when the session bootstrap fails", async () => {
+    const client = mockClient();
+    client.ensureAnonymousSession.mockRejectedValueOnce(new Error("csrf down"));
+    const openPopup = vi.fn();
+    const flow = createOAuthFlow("google", {
+      client,
+      state: mockState(),
+      navigate: vi.fn(),
+      openPopup,
+    });
+
+    await expect(flow.beginPopup()).resolves.toBe("unavailable");
+    expect(openPopup).not.toHaveBeenCalled();
+    expect(flow.pending).toBe(false);
+  });
+
+  it("returns blocked when the browser refuses the popup", async () => {
+    const client = mockClient();
+    const flow = createOAuthFlow("google", {
+      client,
+      state: mockState(),
+      navigate: vi.fn(),
+      openPopup: () => null,
+    });
+
+    await expect(flow.beginPopup()).resolves.toBe("blocked");
   });
 });
 

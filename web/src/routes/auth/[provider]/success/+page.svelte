@@ -3,6 +3,7 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { createOAuthFlow, isOAuthProvider } from "#lib/auth/oauth-flow.svelte.js";
+  import { notifyOAuthPopupOpener } from "#lib/auth/oauth-popup.js";
   import { authState } from "#lib/auth/auth-state.svelte.js";
   import { successDestination } from "./success-destination";
 
@@ -12,6 +13,12 @@
   onMount(() => {
     if (started) return;
     started = true;
+    const provider = page.params.provider;
+    // Popup flow: the opener owns finish() + destination navigation; this window
+    // only signals completion and closes itself.
+    if (provider && isOAuthProvider(provider) && notifyOAuthPopupOpener(provider, "success")) {
+      return;
+    }
     void complete();
   });
 
