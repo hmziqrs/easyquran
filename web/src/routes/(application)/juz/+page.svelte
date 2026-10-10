@@ -6,6 +6,7 @@
   import { readerCanonicalEntryPath } from "#lib/i18n/seo.js";
   import { publicHref } from "#lib/i18n/public-href.js";
   import ReaderShell from "../_reader/ReaderShell.svelte";
+  import IndexTabs from "../_reader/IndexTabs.svelte";
   import { reader } from "#lib/stores/reader.svelte.js";
   import { HUE_LEGIBLE, HUE_SOFT, hueSlotFor } from "../_reader/hue-slot";
   import type { JuzBound, JuzSajdaRef } from "./+page";
@@ -50,7 +51,8 @@
 
 <ReaderShell textTools={false}>
   {#snippet header()}
-    <h1 class="text-sm font-medium text-foreground-secondary">{copy.index.juzTitle}</h1>
+    <h1 class="sr-only">{copy.index.juzTitle}</h1>
+    <IndexTabs active="juz" />
     <span class="ms-auto text-[12.5px] text-muted"
       >{copy.range.juzCount(data.ajzur.length)}</span
     >

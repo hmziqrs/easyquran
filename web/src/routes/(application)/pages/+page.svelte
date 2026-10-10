@@ -8,6 +8,7 @@
   import { publicHref } from "#lib/i18n/public-href.js";
   import type { PageIndexRow } from "./+page";
   import ReaderShell from "../_reader/ReaderShell.svelte";
+  import IndexTabs from "../_reader/IndexTabs.svelte";
   import { reader } from "#lib/stores/reader.svelte.js";
 
   let { data } = $props();
@@ -68,7 +69,8 @@
 
 <ReaderShell textTools={false}>
   {#snippet header()}
-    <h1 class="text-sm font-medium text-foreground-secondary">{copy.index.pagesTitle}</h1>
+    <h1 class="sr-only">{copy.index.pagesTitle}</h1>
+    <IndexTabs active="pages" />
     <span class="ms-auto text-[12.5px] text-muted"
       >{copy.index.pageCount(data.rows.length)}</span
     >
