@@ -42,6 +42,16 @@ pub fn is_production() -> Result<bool, String> {
     }
 }
 
+/// Whether plus-tagged account emails (`user+tag@domain`) are accepted when an
+/// account email is created or changed. Explicit `EMAIL_ALIASES_ENABLED` wins;
+/// otherwise aliases are allowed outside production and rejected in production.
+pub fn email_aliases_enabled() -> bool {
+    env_bool(
+        "EMAIL_ALIASES_ENABLED",
+        !matches!(env_class(), EnvClass::Production),
+    )
+}
+
 #[cfg(test)]
 pub static TEST_ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -1158,6 +1168,37 @@ mod tests {
             std::env::set_var("APP_ENV", v);
             assert_eq!(env_class(), EnvClass::NonProduction, "value: {v}");
             assert!(!is_production().unwrap(), "value: {v}");
+        }
+        restore_env(snap);
+    }
+
+    #[test]
+    fn email_aliases_default_follows_environment_and_explicit_override_wins() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        let alias_snap = std::env::var("EMAIL_ALIASES_ENABLED").ok();
+
+        clear_env_vars();
+        std::env::set_var("APP_ENV", "production");
+        std::env::remove_var("EMAIL_ALIASES_ENABLED");
+        assert!(!email_aliases_enabled(), "production default must be off");
+
+        std::env::set_var("EMAIL_ALIASES_ENABLED", "true");
+        assert!(
+            email_aliases_enabled(),
+            "explicit true must win in production"
+        );
+
+        std::env::set_var("APP_ENV", "development");
+        std::env::set_var("EMAIL_ALIASES_ENABLED", "false");
+        assert!(!email_aliases_enabled(), "explicit false must win in dev");
+
+        std::env::remove_var("EMAIL_ALIASES_ENABLED");
+        assert!(email_aliases_enabled(), "dev default must be on");
+
+        match alias_snap {
+            Some(v) => std::env::set_var("EMAIL_ALIASES_ENABLED", v),
+            None => std::env::remove_var("EMAIL_ALIASES_ENABLED"),
         }
         restore_env(snap);
     }

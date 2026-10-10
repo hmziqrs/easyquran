@@ -11,11 +11,17 @@ use crate::utils::SortParam;
 const PASSWORD_MIN: u64 = 12;
 const PASSWORD_MAX: u64 = 256;
 
+// Plus-tag policy (EMAIL_ALIASES_ENABLED): see utils::email_alias. Local wrapper
+// so the derive's custom(function = "...") can resolve it by name.
+fn validate_email_alias(email: &str) -> Result<(), ValidationError> {
+    crate::utils::email_alias::validate_email_alias(email)
+}
+
 #[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct V1UpdateProfilePayload {
     #[validate(length(min = 1))]
     pub name: Option<String>,
-    #[validate(email)]
+    #[validate(email, custom(function = "validate_email_alias"))]
     pub email: Option<String>,
     #[validate(length(min = PASSWORD_MIN, max = PASSWORD_MAX))]
     pub password: Option<String>,
@@ -35,7 +41,7 @@ impl V1UpdateProfilePayload {
 pub struct V1AdminCreateUserPayload {
     #[validate(length(min = 1))]
     pub name: String,
-    #[validate(email)]
+    #[validate(email, custom(function = "validate_email_alias"))]
     pub email: String,
     #[validate(length(min = PASSWORD_MIN, max = PASSWORD_MAX))]
     pub password: String,
@@ -75,7 +81,7 @@ impl V1AdminCreateUserPayload {
 pub struct V1AdminUpdateUserPayload {
     #[validate(length(min = 1))]
     pub name: Option<String>,
-    #[validate(email)]
+    #[validate(email, custom(function = "validate_email_alias"))]
     pub email: Option<String>,
     pub avatar_id: Option<i32>,
     #[validate(length(min = PASSWORD_MIN, max = PASSWORD_MAX))]

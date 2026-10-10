@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use validator::{Validate, ValidationError};
 
 use crate::db::sea_models::user::{NewUser, UserRole};
+use crate::utils::email_alias::validate_email_alias;
 
 const PASSWORD_MIN: u64 = 12;
 const PASSWORD_MAX: u64 = 256;
@@ -10,7 +11,7 @@ const PASSWORD_MAX: u64 = 256;
 fn validate_email(email: &str) -> Result<(), ValidationError> {
     let email_regex = Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{1,}$").unwrap();
     if email_regex.is_match(email) {
-        Ok(())
+        validate_email_alias(email)
     } else {
         Err(ValidationError::new("Invalid email format"))
     }
