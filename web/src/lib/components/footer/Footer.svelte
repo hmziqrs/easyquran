@@ -21,8 +21,9 @@
 
   const brand = SITE.name.toLowerCase();
 
-  const colHeading = "text-micro text-muted";
-  const link = "text-[15px] text-foreground-secondary transition-colors hover:text-foreground";
+  const colHeading = "text-body font-medium text-foreground";
+  const link =
+    "text-body text-muted transition-colors hover:text-foreground";
 </script>
 
 <footer class="border-t border-border bg-surface">
@@ -46,9 +47,9 @@
       </div>
 
       {#snippet linkColumn(heading: string, ariaLabel: string, items: FooterLink[])}
-        <nav aria-label={ariaLabel} class="flex flex-col gap-2.5">
+        <nav aria-label={ariaLabel} class="flex flex-col gap-3">
           <h2 class={colHeading}>{heading}</h2>
-          <ul class="grid gap-2.5">
+          <ul class="grid gap-3">
             {#each items as p (p.id)}
               <li><a class={link} href={publicHref(p.href)}>{p.label}</a></li>
             {/each}
