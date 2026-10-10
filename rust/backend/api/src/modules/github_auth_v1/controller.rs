@@ -18,6 +18,7 @@ use crate::{
     extractors::ValidatedJson,
     extractors::ValidatedQuery,
     modules::auth_v1::controller::session_rotated_headers,
+    services::oauth::login::{link_identity_to_user, CallbackFailure, CallbackOutcome},
     services::{auth::AuthSession, oauth},
     AppState,
 };
@@ -92,9 +93,49 @@ pub async fn github_login(
         csrf_token.secret(),
         pkce_verifier.secret(),
         None,
+        None,
     )?;
 
     info!("Generated GitHub auth URL with PKCE + session-bound CSRF state");
+    tracing::Span::current().record("result", "success");
+
+    Ok(Redirect::temporary(auth_url.as_str()))
+}
+
+#[debug_handler]
+#[instrument(skip(_state, auth), fields(user_id, result))]
+pub async fn github_link(
+    State(_state): State<AppState>,
+    auth: AuthSession,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    info!("Initiating GitHub OAuth link");
+
+    let user = auth.user.as_ref().ok_or_else(|| {
+        warn!("GitHub link attempted without an authenticated session");
+        ErrorResponse::new(ErrorCode::Unauthorized).with_message("No active session")
+    })?;
+    let link_user_id = user.id;
+
+    let client = get_github_oauth_client()?;
+    let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
+
+    let (auth_url, csrf_token) = client
+        .authorize_url(CsrfToken::new_random)
+        .add_scope(Scope::new("user:email".to_string()))
+        .set_pkce_challenge(pkce_challenge)
+        .url();
+
+    let session_id = oauth::oauth_session_id(auth.session())?;
+    oauth::store_oauth_state(
+        &session_id,
+        csrf_token.secret(),
+        pkce_verifier.secret(),
+        None,
+        Some(link_user_id),
+    )?;
+
+    tracing::Span::current().record("user_id", link_user_id);
+    info!("Generated GitHub link URL with PKCE + session-bound CSRF state");
     tracing::Span::current().record("result", "success");
 
     Ok(Redirect::temporary(auth_url.as_str()))
@@ -112,6 +153,15 @@ pub async fn github_callback(
     // Provider cancellation/error (?error=access_denied, …) — never attempt an exchange.
     if query.is_error() {
         tracing::Span::current().record("result", "cancelled");
+        if oauth::state::link_user_id_from_cancelled_state(auth.session(), query.state.as_deref())
+            .is_some()
+        {
+            tracing::Span::current().record("result", "link_cancelled");
+            let url = oauth::redirect::build_link_failure_redirect(
+                oauth::redirect::LINK_FAILURE_CANCELLED,
+            )?;
+            return Ok(Redirect::temporary(&url));
+        }
         let url = oauth::redirect::build_failure_redirect(
             oauth::OAuthProvider::Github,
             oauth::redirect::FAILURE_CANCELLED,
@@ -120,19 +170,46 @@ pub async fn github_callback(
     }
 
     match run_github_callback(&state, &mut auth, query).await {
-        Ok(user) => {
-            tracing::Span::current().record("user_id", user.id);
-            info!(user_id = user.id, "GitHub login successful");
+        Ok(CallbackOutcome::Login(user_id)) => {
+            tracing::Span::current().record("user_id", user_id);
+            info!(user_id, "GitHub login successful");
             tracing::Span::current().record("result", "success");
             let url = oauth::redirect::build_success_redirect(oauth::OAuthProvider::Github)?;
             Ok(Redirect::temporary(&url))
         }
-        Err(err) => {
-            warn!(code = %err.code, "GitHub callback failed; redirecting to opaque failure path");
+        Ok(CallbackOutcome::Linked) => {
+            tracing::Span::current().record("result", "linked");
+            info!("GitHub identity linked to the current account");
+            let url = oauth::redirect::build_link_success_redirect(oauth::OAuthProvider::Github)?;
+            Ok(Redirect::temporary(&url))
+        }
+        Ok(CallbackOutcome::AlreadyLinkedOtherUser) => {
+            tracing::Span::current().record("result", "already_linked");
+            warn!("GitHub identity already belongs to another account");
+            let url = oauth::redirect::build_link_failure_redirect(
+                oauth::redirect::LINK_FAILURE_ALREADY_LINKED,
+            )?;
+            Ok(Redirect::temporary(&url))
+        }
+        Err(CallbackFailure {
+            link_mode: true,
+            error,
+        }) => {
+            warn!(code = %error.code, "GitHub link callback failed; redirecting to account link error");
+            tracing::Span::current().record("result", "link_error");
+            let url =
+                oauth::redirect::build_link_failure_redirect(oauth::redirect::LINK_FAILURE_FAILED)?;
+            Ok(Redirect::temporary(&url))
+        }
+        Err(CallbackFailure {
+            link_mode: false,
+            error,
+        }) => {
+            warn!(code = %error.code, "GitHub callback failed; redirecting to opaque failure path");
             tracing::Span::current().record("result", "error");
             let url = oauth::redirect::build_failure_redirect(
                 oauth::OAuthProvider::Github,
-                oauth::redirect::error_to_failure_code(&err),
+                oauth::redirect::error_to_failure_code(&error),
             )?;
             Ok(Redirect::temporary(&url))
         }
@@ -144,29 +221,75 @@ async fn run_github_callback(
     state: &AppState,
     auth: &mut AuthSession,
     query: GitHubCallbackQuery,
-) -> Result<crate::db::sea_models::user::Model, ErrorResponse> {
-    let session_id = oauth::oauth_session_id(auth.session())?;
-    let oauth_state = oauth::consume_oauth_state(&session_id, &query.state()?)?;
+) -> Result<CallbackOutcome, CallbackFailure> {
+    let session_id = oauth::oauth_session_id(auth.session()).map_err(CallbackFailure::login)?;
+    let state_secret = query.state().map_err(CallbackFailure::login)?;
+    let oauth_state =
+        oauth::consume_oauth_state(&session_id, &state_secret).map_err(CallbackFailure::login)?;
+    let link_user_id = oauth_state.link_user_id;
+    let link_mode = link_user_id.is_some();
+    let fail = move |error: ErrorResponse| CallbackFailure { link_mode, error };
 
-    let client = get_github_oauth_client()?;
-    let mut exchange = client.exchange_code(AuthorizationCode::new(query.code()?));
+    let client = get_github_oauth_client().map_err(fail)?;
+    let mut exchange = client.exchange_code(AuthorizationCode::new(query.code().map_err(fail)?));
     if let Some(verifier) = oauth_state.pkce_verifier {
         exchange = exchange.set_pkce_verifier(verifier);
     }
     let token_result = exchange
-        .request_async(oauth::token_exchange_http_client()?)
+        .request_async(oauth::token_exchange_http_client().map_err(fail)?)
         .await
         .map_err(|e| {
             error!(error = ?e, "Failed to exchange GitHub authorization code");
-            ErrorResponse::new(ErrorCode::ExternalServiceError)
-                .with_message("Failed to exchange authorization code")
-                .with_details(e.to_string())
+            fail(
+                ErrorResponse::new(ErrorCode::ExternalServiceError)
+                    .with_message("Failed to exchange authorization code")
+                    .with_details(e.to_string()),
+            )
         })?;
 
     let access_token = token_result.access_token().secret();
-    let user_info = fetch_github_user_info(access_token).await?;
-    let result = finish_github_login(state, auth, user_info, access_token).await?;
-    Ok(result.user)
+    let user_info = fetch_github_user_info(access_token).await.map_err(fail)?;
+
+    if let Some(target_user_id) = link_user_id {
+        let outcome = link_github_identity(
+            &state.sea_db,
+            auth.user.as_ref().map(|user| user.id),
+            target_user_id,
+            &user_info,
+        )
+        .await
+        .map_err(fail)?;
+        return Ok(outcome);
+    }
+
+    let result = finish_github_login(state, auth, user_info, access_token)
+        .await
+        .map_err(fail)?;
+    Ok(CallbackOutcome::Login(result.user.id))
+}
+
+/// Completes the link branch of a GitHub callback: verify the flow belongs to the current session
+/// user, then attach the provider identity. Never logs in, creates users, or rotates the session.
+async fn link_github_identity(
+    db: &sea_orm::DatabaseConnection,
+    session_user_id: Option<i32>,
+    target_user_id: i32,
+    user_info: &GitHubUserInfo,
+) -> Result<CallbackOutcome, ErrorResponse> {
+    if session_user_id != Some(target_user_id) {
+        warn!("GitHub link callback session does not match the state link target");
+        return Err(ErrorResponse::new(ErrorCode::Unauthorized)
+            .with_message("Link session does not match the link target"));
+    }
+
+    let outcome = link_identity_to_user(
+        db,
+        target_user_id,
+        oauth::OAuthProvider::Github,
+        &user_info.id.to_string(),
+    )
+    .await?;
+    Ok(CallbackOutcome::from(outcome))
 }
 
 #[debug_handler]
@@ -180,6 +303,11 @@ pub async fn github_exchange(
 
     let session_id = oauth::oauth_session_id(auth.session())?;
     let oauth_state = oauth::consume_oauth_state(&session_id, &payload.state)?;
+    if oauth_state.link_user_id.is_some() {
+        warn!("Rejecting account-link state on the GitHub exchange endpoint");
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("Account linking must complete through the OAuth callback"));
+    }
 
     let client = get_github_oauth_client()?;
     let mut exchange = client.exchange_code(AuthorizationCode::new(payload.code));
@@ -576,6 +704,39 @@ mod tests {
         }
     }
 
+    async fn mem_db() -> sea_orm::DatabaseConnection {
+        use migration::{Migrator, MigratorTrait};
+        use sea_orm::{ConnectOptions, Database, DatabaseConnection};
+
+        let mut opt = ConnectOptions::new("sqlite::memory:".to_string());
+        opt.max_connections(1);
+        let db: DatabaseConnection = Database::connect(opt).await.unwrap();
+        Migrator::up(&db, None).await.unwrap();
+        db
+    }
+
+    async fn insert_user(
+        db: &sea_orm::DatabaseConnection,
+        email: &str,
+    ) -> crate::db::sea_models::user::Model {
+        use sea_orm::{ActiveModelTrait, Set};
+
+        let now = chrono::Utc::now().fixed_offset();
+        crate::db::sea_models::user::ActiveModel {
+            name: Set("Test User".to_string()),
+            email: Set(email.to_string()),
+            password: Set(Some("password-hash".to_string())),
+            role: Set(crate::db::sea_models::user::UserRole::User),
+            is_verified: Set(true),
+            created_at: Set(now),
+            updated_at: Set(now),
+            ..Default::default()
+        }
+        .insert(db)
+        .await
+        .unwrap()
+    }
+
     #[test]
     fn token_inspection_rejects_token_from_different_app() {
         let result = validate_github_token_inspection(valid_token_inspection(), "other-github-app");
@@ -821,5 +982,103 @@ mod tests {
         let headers = session_rotated_headers(true);
 
         assert_eq!(headers.get(SESSION_ROTATED).unwrap(), "1");
+    }
+
+    #[tokio::test]
+    async fn link_mode_links_identity_without_creating_or_logging_in() {
+        use sea_orm::EntityTrait;
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/user"))
+            .and(header("authorization", "Bearer github-user-token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": 12345,
+                "login": "aisha",
+                "name": "Aisha Khan",
+                "email": "public@example.com",
+                "avatar_url": "https://avatars.github.test/aisha.png"
+            })))
+            .mount(&server)
+            .await;
+        // Link mode reads the identity id from /user only — the login path's email fetch never runs.
+        Mock::given(method("GET"))
+            .and(path("/user/emails"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+            .expect(0)
+            .mount(&server)
+            .await;
+
+        let db = mem_db().await;
+        let user = insert_user(&db, "linker@example.com").await;
+        let profile = fetch_github_user_info_from_url(
+            &test_http_client(),
+            &format!("{}/user", server.uri()),
+            "github-user-token",
+        )
+        .await
+        .unwrap();
+
+        let outcome = link_github_identity(&db, Some(user.id), user.id, &profile)
+            .await
+            .unwrap();
+
+        assert!(matches!(outcome, CallbackOutcome::Linked));
+        let identity = crate::db::sea_models::user_oauth_identity::Entity::find_by_provider(
+            &db, "github", "12345",
+        )
+        .await
+        .unwrap()
+        .expect("provider identity linked");
+        assert_eq!(identity.user_id, user.id);
+        let users = crate::db::sea_models::user::Entity::find()
+            .all(&db)
+            .await
+            .unwrap();
+        assert_eq!(users.len(), 1, "link mode must not create or log in a user");
+    }
+
+    #[tokio::test]
+    async fn link_mode_rejects_session_target_mismatch() {
+        let db = mem_db().await;
+        let session_user = insert_user(&db, "session@example.com").await;
+        let target = insert_user(&db, "target@example.com").await;
+
+        let error = link_github_identity(
+            &db,
+            Some(session_user.id),
+            target.id,
+            &github_profile(12345),
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(error.code, ErrorCode::Unauthorized);
+        assert!(
+            crate::db::sea_models::user_oauth_identity::Entity::find_by_provider(
+                &db, "github", "12345",
+            )
+            .await
+            .unwrap()
+            .is_none(),
+            "mismatched link session must not attach any identity"
+        );
+    }
+
+    #[tokio::test]
+    async fn link_mode_reports_identity_owned_by_another_user() {
+        let db = mem_db().await;
+        let owner = insert_user(&db, "owner@example.com").await;
+        let target = insert_user(&db, "target@example.com").await;
+        let profile = github_profile(12345);
+        link_github_identity(&db, Some(owner.id), owner.id, &profile)
+            .await
+            .unwrap();
+
+        let outcome = link_github_identity(&db, Some(target.id), target.id, &profile)
+            .await
+            .unwrap();
+
+        assert!(matches!(outcome, CallbackOutcome::AlreadyLinkedOtherUser));
     }
 }

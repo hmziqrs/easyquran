@@ -48,6 +48,7 @@ pub async fn apple_login(
         csrf.secret(),
         pkce_verifier.secret(),
         Some(&nonce),
+        None,
     )?;
 
     info!("Generated Apple auth URL with PKCE + session-bound CSRF state + OIDC nonce");

@@ -18,6 +18,7 @@ use crate::{
     extractors::ValidatedJson,
     extractors::ValidatedQuery,
     modules::auth_v1::controller::session_rotated_headers,
+    services::oauth::login::{link_identity_to_user, CallbackFailure, CallbackOutcome},
     services::{auth::AuthSession, oauth},
     AppState,
 };
@@ -75,9 +76,56 @@ pub async fn google_login(
         csrf_token.secret(),
         pkce_verifier.secret(),
         Some(&nonce),
+        None,
     )?;
 
     info!("Generated auth URL with PKCE + session-bound CSRF state + OIDC nonce");
+    tracing::Span::current().record("result", "success");
+
+    Ok(Redirect::temporary(auth_url.as_str()))
+}
+
+#[debug_handler]
+#[instrument(skip(_state, auth), fields(user_id, result))]
+pub async fn google_link(
+    State(_state): State<AppState>,
+    auth: AuthSession,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    info!("Initiating Google OAuth link");
+
+    let user = auth.user.as_ref().ok_or_else(|| {
+        warn!("Google link attempted without an authenticated session");
+        ErrorResponse::new(ErrorCode::Unauthorized).with_message("No active session")
+    })?;
+    let link_user_id = user.id;
+
+    let client = get_google_oauth_client()?;
+
+    let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
+
+    // OIDC nonce binds this flow to the signed id_token checked at callback; defeats token-injection/replay. (oauth2 5 has no nonce builder.)
+    let nonce = oauth::generate_oauth_nonce();
+
+    let (auth_url, csrf_token) = client
+        .authorize_url(CsrfToken::new_random)
+        .add_scope(Scope::new("openid".to_string()))
+        .add_scope(Scope::new("email".to_string()))
+        .add_scope(Scope::new("profile".to_string()))
+        .add_extra_param("nonce", nonce.clone())
+        .set_pkce_challenge(pkce_challenge)
+        .url();
+
+    let session_id = oauth::oauth_session_id(auth.session())?;
+    oauth::store_oauth_state(
+        &session_id,
+        csrf_token.secret(),
+        pkce_verifier.secret(),
+        Some(&nonce),
+        Some(link_user_id),
+    )?;
+
+    tracing::Span::current().record("user_id", link_user_id);
+    info!("Generated Google link URL with PKCE + session-bound CSRF state + OIDC nonce");
     tracing::Span::current().record("result", "success");
 
     Ok(Redirect::temporary(auth_url.as_str()))
@@ -95,6 +143,15 @@ pub async fn google_callback(
     // Provider cancellation/error redirect (?error=access_denied, …) — never attempt an exchange.
     if query.is_error() {
         tracing::Span::current().record("result", "cancelled");
+        if oauth::state::link_user_id_from_cancelled_state(auth.session(), query.state.as_deref())
+            .is_some()
+        {
+            tracing::Span::current().record("result", "link_cancelled");
+            let url = oauth::redirect::build_link_failure_redirect(
+                oauth::redirect::LINK_FAILURE_CANCELLED,
+            )?;
+            return Ok(Redirect::temporary(&url));
+        }
         let url = oauth::redirect::build_failure_redirect(
             oauth::OAuthProvider::Google,
             oauth::redirect::FAILURE_CANCELLED,
@@ -103,20 +160,47 @@ pub async fn google_callback(
     }
 
     match run_google_callback(&state, &mut auth, query).await {
-        Ok(user) => {
-            tracing::Span::current().record("user_id", user.id);
-            info!(user_id = user.id, "Google login successful");
+        Ok(CallbackOutcome::Login(user_id)) => {
+            tracing::Span::current().record("user_id", user_id);
+            info!(user_id, "Google login successful");
             tracing::Span::current().record("result", "success");
             let url = oauth::redirect::build_success_redirect(oauth::OAuthProvider::Google)?;
             Ok(Redirect::temporary(&url))
         }
-        Err(err) => {
+        Ok(CallbackOutcome::Linked) => {
+            tracing::Span::current().record("result", "linked");
+            info!("Google identity linked to the current account");
+            let url = oauth::redirect::build_link_success_redirect(oauth::OAuthProvider::Google)?;
+            Ok(Redirect::temporary(&url))
+        }
+        Ok(CallbackOutcome::AlreadyLinkedOtherUser) => {
+            tracing::Span::current().record("result", "already_linked");
+            warn!("Google identity already belongs to another account");
+            let url = oauth::redirect::build_link_failure_redirect(
+                oauth::redirect::LINK_FAILURE_ALREADY_LINKED,
+            )?;
+            Ok(Redirect::temporary(&url))
+        }
+        Err(CallbackFailure {
+            link_mode: true,
+            error,
+        }) => {
+            warn!(code = %error.code, "Google link callback failed; redirecting to account link error");
+            tracing::Span::current().record("result", "link_error");
+            let url =
+                oauth::redirect::build_link_failure_redirect(oauth::redirect::LINK_FAILURE_FAILED)?;
+            Ok(Redirect::temporary(&url))
+        }
+        Err(CallbackFailure {
+            link_mode: false,
+            error,
+        }) => {
             // Any post-validator failure → opaque failure redirect (no payload/code/state in URL).
-            warn!(code = %err.code, "Google callback failed; redirecting to opaque failure path");
+            warn!(code = %error.code, "Google callback failed; redirecting to opaque failure path");
             tracing::Span::current().record("result", "error");
             let url = oauth::redirect::build_failure_redirect(
                 oauth::OAuthProvider::Google,
-                oauth::redirect::error_to_failure_code(&err),
+                oauth::redirect::error_to_failure_code(&error),
             )?;
             Ok(Redirect::temporary(&url))
         }
@@ -129,26 +213,74 @@ async fn run_google_callback(
     state: &AppState,
     auth: &mut AuthSession,
     query: GoogleCallbackQuery,
-) -> Result<user::Model, ErrorResponse> {
-    let session_id = oauth::oauth_session_id(auth.session())?;
-    let oauth_state = oauth::consume_oauth_state(&session_id, &query.state()?)?;
+) -> Result<CallbackOutcome, CallbackFailure> {
+    let session_id = oauth::oauth_session_id(auth.session()).map_err(CallbackFailure::login)?;
+    let state_secret = query.state().map_err(CallbackFailure::login)?;
+    let oauth_state =
+        oauth::consume_oauth_state(&session_id, &state_secret).map_err(CallbackFailure::login)?;
+    let link_user_id = oauth_state.link_user_id;
+    let link_mode = link_user_id.is_some();
+    let fail = move |error: ErrorResponse| CallbackFailure { link_mode, error };
 
-    let client = get_google_oauth_client()?;
-    let mut exchange = client.exchange_code(AuthorizationCode::new(query.code()?));
+    let client = get_google_oauth_client().map_err(fail)?;
+    let mut exchange = client.exchange_code(AuthorizationCode::new(query.code().map_err(fail)?));
     if let Some(verifier) = oauth_state.pkce_verifier {
         exchange = exchange.set_pkce_verifier(verifier);
     }
     let token_result = exchange
-        .request_async(oauth::token_exchange_http_client()?)
+        .request_async(oauth::token_exchange_http_client().map_err(fail)?)
         .await
         .map_err(|e| {
             error!(error = ?e, "Failed to exchange authorization code");
-            ErrorResponse::new(ErrorCode::ExternalServiceError)
-                .with_message("Failed to exchange authorization code")
-                .with_details(e.to_string())
+            fail(
+                ErrorResponse::new(ErrorCode::ExternalServiceError)
+                    .with_message("Failed to exchange authorization code")
+                    .with_details(e.to_string()),
+            )
         })?;
 
-    finish_google_login(state, auth, token_result, oauth_state.nonce.as_deref()).await
+    if let Some(target_user_id) = link_user_id {
+        let access_token = token_result.access_token().secret();
+        let user_info = fetch_google_user_info(access_token).await.map_err(fail)?;
+        let outcome = link_google_identity(
+            &state.sea_db,
+            auth.user.as_ref().map(|user| user.id),
+            target_user_id,
+            &user_info,
+        )
+        .await
+        .map_err(fail)?;
+        return Ok(outcome);
+    }
+
+    finish_google_login(state, auth, token_result, oauth_state.nonce.as_deref())
+        .await
+        .map_err(fail)
+        .map(|user| CallbackOutcome::Login(user.id))
+}
+
+/// Completes the link branch of a Google callback: verify the flow belongs to the current session
+/// user, then attach the provider identity. Never logs in, creates users, or rotates the session.
+async fn link_google_identity(
+    db: &sea_orm::DatabaseConnection,
+    session_user_id: Option<i32>,
+    target_user_id: i32,
+    user_info: &GoogleUserInfo,
+) -> Result<CallbackOutcome, ErrorResponse> {
+    if session_user_id != Some(target_user_id) {
+        warn!("Google link callback session does not match the state link target");
+        return Err(ErrorResponse::new(ErrorCode::Unauthorized)
+            .with_message("Link session does not match the link target"));
+    }
+
+    let outcome = link_identity_to_user(
+        db,
+        target_user_id,
+        oauth::OAuthProvider::Google,
+        &user_info.id,
+    )
+    .await?;
+    Ok(CallbackOutcome::from(outcome))
 }
 
 #[debug_handler(state = AppState)]
@@ -170,6 +302,11 @@ pub async fn google_exchange(
 
     let session_id = oauth::oauth_session_id(auth.session())?;
     let oauth_state = oauth::consume_oauth_state(&session_id, &payload.state)?;
+    if oauth_state.link_user_id.is_some() {
+        warn!("Rejecting account-link state on the Google exchange endpoint");
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("Account linking must complete through the OAuth callback"));
+    }
 
     let client = get_google_oauth_client()?;
     let mut exchange = client.exchange_code(AuthorizationCode::new(payload.code));

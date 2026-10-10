@@ -13,6 +13,7 @@ use crate::{config, AppState};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/login", get(controller::github_login))
+        .route("/link", get(controller::github_link))
         .route("/callback", get(controller::github_callback))
         .route("/exchange", post(controller::github_exchange))
         .route("/token", post(controller::github_token))

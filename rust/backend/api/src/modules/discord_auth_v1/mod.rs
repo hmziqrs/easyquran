@@ -13,6 +13,7 @@ use crate::{config, AppState};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/login", get(controller::discord_login))
+        .route("/link", get(controller::discord_link))
         .route("/callback", get(controller::discord_callback))
         .route("/exchange", post(controller::discord_exchange))
         .route("/token", post(controller::discord_token))

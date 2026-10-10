@@ -81,7 +81,7 @@ pub async fn facebook_login(
 
     // Empty PKCE verifier: Facebook has no PKCE; "" round-trips as `None` at consume time.
     let session_id = oauth::oauth_session_id(&session)?;
-    oauth::store_oauth_state(&session_id, csrf_token.secret(), "", None)?;
+    oauth::store_oauth_state(&session_id, csrf_token.secret(), "", None, None)?;
 
     info!("Generated Facebook auth URL with session-bound CSRF state");
     tracing::Span::current().record("result", "success");

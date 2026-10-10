@@ -9,6 +9,7 @@ use crate::{config, AppState};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/login", get(controller::google_login))
+        .route("/link", get(controller::google_link))
         .route("/callback", get(controller::google_callback))
         .route(
             "/exchange",
