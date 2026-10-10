@@ -48,6 +48,10 @@ async fn build_mail_router(
         .ok()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
+    let reply_to = env::var("MAIL_REPLY_TO")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
 
     let mut providers: HashMap<String, std::sync::Arc<dyn MailProvider>> = HashMap::new();
     let default = match selected.as_str() {
@@ -92,6 +96,7 @@ async fn build_mail_router(
                 base_url,
                 from_address,
                 from_name,
+                reply_to,
                 http_client,
                 allowed,
             )

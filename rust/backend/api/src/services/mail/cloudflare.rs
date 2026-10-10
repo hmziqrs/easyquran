@@ -17,6 +17,7 @@ pub struct CloudflareMailProvider {
     endpoint: String,
     from_address: String,
     from_name: Option<String>,
+    reply_to: Option<String>,
     http_client: reqwest::Client,
     allowed_addresses: Option<Vec<String>>,
 }
@@ -30,6 +31,7 @@ impl CloudflareMailProvider {
         base_url: String,
         from_address: String,
         from_name: Option<String>,
+        reply_to: Option<String>,
         http_client: reqwest::Client,
         allowed_addresses: Option<Vec<String>>,
     ) -> Result<Self, MailError> {
@@ -61,6 +63,9 @@ impl CloudflareMailProvider {
             from_name: from_name
                 .map(|n| n.trim().to_string())
                 .filter(|n| !n.is_empty()),
+            reply_to: reply_to
+                .map(|r| r.trim().to_string())
+                .filter(|r| !r.is_empty()),
             http_client,
             allowed_addresses: allowed_addresses.map(|addrs| {
                 addrs
@@ -103,6 +108,7 @@ impl MailProvider for CloudflareMailProvider {
         let body = CfSendRequest {
             to: msg.to.as_str(),
             from: from.as_str(),
+            reply_to: self.reply_to.as_deref(),
             subject: msg.subject.as_str(),
             text: msg.text.as_deref(),
             html: msg.html.as_deref(),
@@ -223,6 +229,8 @@ impl MailProvider for CloudflareMailProvider {
 struct CfSendRequest<'a> {
     to: &'a str,
     from: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reply_to: Option<&'a str>,
     subject: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     text: Option<&'a str>,
@@ -280,6 +288,7 @@ mod tests {
             "https://api.cloudflare.com/client/v4".to_string(),
             "no-reply@example.com".to_string(),
             None,
+            None,
             reqwest::Client::new(),
             None,
         )
@@ -294,6 +303,7 @@ mod tests {
             SecretString::from("s".to_string()),
             "https://x".to_string(),
             "f@x.com".to_string(),
+            None,
             None,
             reqwest::Client::new(),
             None,
@@ -360,6 +370,7 @@ mod tests {
             SecretString::from(String::new()),
             "https://api.cloudflare.com/client/v4".to_string(),
             "no-reply@example.com".to_string(),
+            None,
             None,
             reqwest::Client::new(),
             None,
@@ -438,6 +449,7 @@ mod tests {
             .and(body_partial_json(serde_json::json!({
                 "to": "victim@example.com",
                 "from": "no-reply@example.com",
+                "reply_to": "support@example.com",
                 "subject": "Hi",
             })))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -460,6 +472,7 @@ mod tests {
             server.uri(),
             "no-reply@example.com".to_string(),
             None,
+            Some("support@example.com".to_string()),
             reqwest::Client::new(),
             None,
         )
@@ -507,6 +520,7 @@ mod tests {
             server.uri(),
             "no-reply@example.com".to_string(),
             None,
+            None,
             reqwest::Client::new(),
             None,
         )
@@ -532,6 +546,7 @@ mod tests {
             SecretString::from("sec".to_string()),
             "https://api.cloudflare.com/client/v4".to_string(),
             "no-reply@example.com".to_string(),
+            None,
             None,
             reqwest::Client::new(),
             Some(vec!["allowed@example.com".to_string()]),
