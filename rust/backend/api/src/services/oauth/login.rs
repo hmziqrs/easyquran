@@ -148,6 +148,93 @@ async fn link_identity(
     .map(|_| ())
 }
 
+/// Result of attaching a provider identity to an already-authenticated account.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkOutcome {
+    Linked,
+    AlreadyLinkedSameUser,
+    AlreadyLinkedOtherUser,
+}
+
+fn classify_existing_link(identity_user_id: i32, user_id: i32) -> LinkOutcome {
+    if identity_user_id == user_id {
+        LinkOutcome::AlreadyLinkedSameUser
+    } else {
+        LinkOutcome::AlreadyLinkedOtherUser
+    }
+}
+
+/// Attach `provider_user_id` to `user_id` without touching users, sessions, or provider metadata.
+/// A duplicate-entry insert (concurrent link of the same identity) is re-checked so the outcome
+/// stays deterministic instead of surfacing a constraint error.
+pub async fn link_identity_to_user(
+    db: &sea_orm::DatabaseConnection,
+    user_id: i32,
+    provider: OAuthProvider,
+    provider_user_id: &str,
+) -> Result<LinkOutcome, ErrorResponse> {
+    if let Some(identity) =
+        user_oauth_identity::Entity::find_by_provider(db, provider.as_str(), provider_user_id)
+            .await?
+    {
+        return Ok(classify_existing_link(identity.user_id, user_id));
+    }
+
+    match link_identity(db, user_id, provider.as_str(), provider_user_id).await {
+        Ok(()) => Ok(LinkOutcome::Linked),
+        Err(err) => {
+            // Race: a concurrent callback may have inserted the same identity between the read
+            // above and this insert. Re-check and map; anything else stays a hard error.
+            match user_oauth_identity::Entity::find_by_provider(
+                db,
+                provider.as_str(),
+                provider_user_id,
+            )
+            .await?
+            {
+                Some(identity) => Ok(classify_existing_link(identity.user_id, user_id)),
+                None => Err(err),
+            }
+        }
+    }
+}
+
+/// Outcome of a provider web callback: a login session for the given user id, a successful link
+/// onto the already-authenticated account, or a link refused because the identity belongs to
+/// another user.
+#[derive(Debug)]
+pub enum CallbackOutcome {
+    Login(i32),
+    Linked,
+    AlreadyLinkedOtherUser,
+}
+
+impl From<LinkOutcome> for CallbackOutcome {
+    fn from(outcome: LinkOutcome) -> Self {
+        match outcome {
+            LinkOutcome::Linked | LinkOutcome::AlreadyLinkedSameUser => CallbackOutcome::Linked,
+            LinkOutcome::AlreadyLinkedOtherUser => CallbackOutcome::AlreadyLinkedOtherUser,
+        }
+    }
+}
+
+/// Callback error plus whether the flow carried link intent, so the controller redirects to the
+/// login failure path or the `/account` link-error path.
+pub struct CallbackFailure {
+    pub link_mode: bool,
+    pub error: ErrorResponse,
+}
+
+impl CallbackFailure {
+    /// Failure before link intent is known (session/state handling) — always a login failure.
+    pub fn login(error: ErrorResponse) -> Self {
+        Self {
+            link_mode: false,
+            error,
+        }
+    }
+}
+
 pub async fn finish_oauth_login(
     state: &AppState,
     auth: &mut AuthSession,
@@ -202,35 +289,50 @@ mod tests {
         assert!(result.is_err(), "unverified email must not link or create");
     }
 
+    async fn mem_db() -> sea_orm::DatabaseConnection {
+        use migration::{Migrator, MigratorTrait};
+        use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection};
+
+        let mut opt = ConnectOptions::new("sqlite::memory:".to_string());
+        opt.max_connections(1);
+        let db: DatabaseConnection = Database::connect(opt).await.unwrap();
+        Migrator::up(&db, None).await.unwrap();
+        // No migration owns user_oauth_identities yet (pre-existing repo gap);
+        // create it to match the sea-orm model so the lookup path is testable.
+        db.execute_unprepared(
+            "CREATE TABLE IF NOT EXISTS user_oauth_identities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                provider TEXT NOT NULL,
+                provider_user_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE (provider, provider_user_id)
+            )",
+        )
+        .await
+        .unwrap();
+        db
+    }
+
+    async fn insert_user(db: &sea_orm::DatabaseConnection, email: &str) -> user::Model {
+        let now = chrono::Utc::now().fixed_offset();
+        user::ActiveModel {
+            name: Set("Test User".to_string()),
+            email: Set(email.to_string()),
+            password: Set(Some("password-hash".to_string())),
+            role: Set(user::UserRole::User),
+            is_verified: Set(true),
+            created_at: Set(now),
+            updated_at: Set(now),
+            ..Default::default()
+        }
+        .insert(db)
+        .await
+        .unwrap()
+    }
+
     #[tokio::test]
     async fn unverified_provider_email_never_links_existing_password_account() {
-        use migration::{Migrator, MigratorTrait};
-        use sea_orm::{ConnectOptions, Database, DatabaseConnection};
-
-        async fn mem_db() -> DatabaseConnection {
-            use sea_orm::ConnectionTrait;
-
-            let mut opt = ConnectOptions::new("sqlite::memory:".to_string());
-            opt.max_connections(1);
-            let db = Database::connect(opt).await.unwrap();
-            Migrator::up(&db, None).await.unwrap();
-            // No migration owns user_oauth_identities yet (pre-existing repo gap);
-            // create it to match the sea-orm model so the lookup path is testable.
-            db.execute_unprepared(
-                "CREATE TABLE IF NOT EXISTS user_oauth_identities (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    provider TEXT NOT NULL,
-                    provider_user_id TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    UNIQUE (provider, provider_user_id)
-                )",
-            )
-            .await
-            .unwrap();
-            db
-        }
-
         let db = mem_db().await;
 
         let now = chrono::Utc::now().fixed_offset();
@@ -280,5 +382,58 @@ mod tests {
                 .is_none(),
             "no identity link row may be created for the attacker"
         );
+    }
+
+    #[tokio::test]
+    async fn link_identity_links_new_identity_to_user() {
+        let db = mem_db().await;
+        let user = insert_user(&db, "linker@example.com").await;
+
+        let outcome = link_identity_to_user(&db, user.id, OAuthProvider::Github, "gh-1")
+            .await
+            .unwrap();
+
+        assert_eq!(outcome, LinkOutcome::Linked);
+        let identity = user_oauth_identity::Entity::find_by_provider(&db, "github", "gh-1")
+            .await
+            .unwrap()
+            .expect("identity link row exists");
+        assert_eq!(identity.user_id, user.id);
+    }
+
+    #[tokio::test]
+    async fn link_identity_same_user_is_idempotent() {
+        let db = mem_db().await;
+        let user = insert_user(&db, "same@example.com").await;
+        link_identity_to_user(&db, user.id, OAuthProvider::Discord, "dc-1")
+            .await
+            .unwrap();
+
+        let outcome = link_identity_to_user(&db, user.id, OAuthProvider::Discord, "dc-1")
+            .await
+            .unwrap();
+
+        assert_eq!(outcome, LinkOutcome::AlreadyLinkedSameUser);
+    }
+
+    #[tokio::test]
+    async fn link_identity_other_user_is_rejected() {
+        let db = mem_db().await;
+        let owner = insert_user(&db, "owner@example.com").await;
+        let attacker = insert_user(&db, "attacker@example.com").await;
+        link_identity_to_user(&db, owner.id, OAuthProvider::Google, "g-1")
+            .await
+            .unwrap();
+
+        let outcome = link_identity_to_user(&db, attacker.id, OAuthProvider::Google, "g-1")
+            .await
+            .unwrap();
+
+        assert_eq!(outcome, LinkOutcome::AlreadyLinkedOtherUser);
+        let identity = user_oauth_identity::Entity::find_by_provider(&db, "google", "g-1")
+            .await
+            .unwrap()
+            .expect("identity link row exists");
+        assert_eq!(identity.user_id, owner.id, "existing link must stay put");
     }
 }

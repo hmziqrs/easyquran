@@ -130,8 +130,9 @@ pub fn store_oauth_state(
     state_secret: &str,
     pkce_verifier_secret: &str,
     nonce: Option<&str>,
+    link_user_id: Option<i32>,
 ) -> Result<(), ErrorResponse> {
-    let payload = json!({ "v": pkce_verifier_secret, "n": nonce }).to_string();
+    let payload = json!({ "v": pkce_verifier_secret, "n": nonce, "lu": link_user_id }).to_string();
     let mut map = oauth_states().lock().map_err(|e| {
         error!(error = %e, "OAuth state map poisoned");
         ErrorResponse::new(ErrorCode::InternalServerError)
@@ -159,11 +160,16 @@ struct StoredState {
     v: String,
     #[serde(default)]
     n: Option<String>,
+    #[serde(default)]
+    lu: Option<i32>,
 }
 
 pub struct ConsumedOauthState {
     pub pkce_verifier: Option<PkceCodeVerifier>,
     pub nonce: Option<String>,
+    /// Account this flow intends to link the provider identity onto (link intent); `None` for
+    /// login flows. `serde(default)` keeps payloads stored before the field existed readable.
+    pub link_user_id: Option<i32>,
 }
 
 /// Single-use CSRF guard: `map.remove(...)` below must stay a remove-on-read (never `get`/peek, don't defer past a successful parse) so a replayed `state` observes `None`. No test pins this — do not weaken without one.
@@ -198,12 +204,37 @@ pub fn consume_oauth_state(
             Some(PkceCodeVerifier::new(parsed.v))
         },
         nonce: parsed.n,
+        link_user_id: parsed.lu,
     })
+}
+
+/// Cancelled/error callback detection for link flows: the provider echoes `state` back, so consume
+/// it (single-use — the flow is abandoned either way) and report the link target it carried.
+pub fn link_user_id_from_cancelled_state(
+    session: &Session,
+    state_secret: Option<&str>,
+) -> Option<i32> {
+    let state_secret = state_secret.filter(|secret| !secret.trim().is_empty())?;
+    let session_id = oauth_session_id(session).ok()?;
+    match consume_oauth_state(&session_id, state_secret) {
+        Ok(state) => state.link_user_id,
+        Err(_) => None,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The state map is process-global, so tests that store/consume must not interleave with the
+    /// cap test's eviction sweep.
+    static STATE_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn state_test_guard() -> std::sync::MutexGuard<'static, ()> {
+        STATE_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
 
     #[test]
     fn google_challenge_nonce_is_consumed_once() {
@@ -234,11 +265,13 @@ mod tests {
 
     #[test]
     fn state_store_caps_map_size() {
+        let _guard = state_test_guard();
         for i in 0..(MAX_OAUTH_STATES + 5) {
             store_oauth_state(
                 &format!("cap-session-{i}"),
                 &format!("cap-state-{i}"),
                 "",
+                None,
                 None,
             )
             .unwrap();
@@ -250,5 +283,51 @@ mod tests {
             MAX_OAUTH_STATES,
             "OAUTH_STATES must evict-oldest instead of growing without bound"
         );
+    }
+
+    #[test]
+    fn state_round_trips_link_user_id() {
+        let _guard = state_test_guard();
+        store_oauth_state(
+            "link-session",
+            "link-state",
+            "link-verifier",
+            Some("link-nonce"),
+            Some(42),
+        )
+        .unwrap();
+
+        let consumed = consume_oauth_state("link-session", "link-state").unwrap();
+
+        assert_eq!(consumed.link_user_id, Some(42));
+        assert_eq!(consumed.nonce.as_deref(), Some("link-nonce"));
+        assert_eq!(
+            consumed.pkce_verifier.map(|v| v.secret().to_string()),
+            Some("link-verifier".to_string())
+        );
+    }
+
+    #[test]
+    fn state_round_trips_login_without_link_intent() {
+        let _guard = state_test_guard();
+        store_oauth_state("login-session", "login-state", "", None, None).unwrap();
+
+        let consumed = consume_oauth_state("login-session", "login-state").unwrap();
+
+        assert_eq!(consumed.link_user_id, None);
+    }
+
+    #[test]
+    fn state_parses_payload_stored_before_link_intent_existed() {
+        let _guard = state_test_guard();
+        // Payload shape written before the `lu` field was added; serde(default) must keep it readable.
+        oauth_states().lock().unwrap().insert(
+            state_key("legacy-session", "legacy-state"),
+            (r#"{"v":"","n":null}"#.to_string(), Instant::now()),
+        );
+
+        let consumed = consume_oauth_state("legacy-session", "legacy-state").unwrap();
+
+        assert_eq!(consumed.link_user_id, None);
     }
 }

@@ -79,6 +79,47 @@ pub fn build_failure_redirect(
     build_allowed_success_redirect(&failure_path(provider, code))
 }
 
+/// Opaque failure code carried in the account link failure redirect as `?link_error=<code>`.
+///
+/// Same privacy contract as [`FailureCode`]: short, provider-independent, no IdP payload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LinkFailureCode(&'static str);
+
+impl LinkFailureCode {
+    pub fn as_str(&self) -> &'static str {
+        self.0
+    }
+}
+
+/// Provider signalled cancellation on a link flow.
+pub const LINK_FAILURE_CANCELLED: LinkFailureCode = LinkFailureCode("cancelled");
+/// The provider identity already belongs to a different account.
+pub const LINK_FAILURE_ALREADY_LINKED: LinkFailureCode = LinkFailureCode("already_linked");
+/// Unspecified server-side failure while linking.
+pub const LINK_FAILURE_FAILED: LinkFailureCode = LinkFailureCode("link_failed");
+
+/// Frontend success path for a completed link: `/account?linked={provider}`.
+pub fn link_success_path(provider: OAuthProvider) -> String {
+    format!("/account?linked={}", provider.as_str())
+}
+
+/// Frontend failure path for a link attempt: `/account?link_error=<opaque>`.
+pub fn link_failure_path(code: LinkFailureCode) -> String {
+    format!("/account?link_error={}", code.as_str())
+}
+
+/// Absolute allow-listed link success redirect: `{allowed_origin}/account?linked={provider}`.
+#[allow(clippy::result_large_err)]
+pub fn build_link_success_redirect(provider: OAuthProvider) -> Result<String, ErrorResponse> {
+    build_allowed_success_redirect(&link_success_path(provider))
+}
+
+/// Absolute allow-listed link failure redirect: `{allowed_origin}/account?link_error=<opaque>`.
+#[allow(clippy::result_large_err)]
+pub fn build_link_failure_redirect(code: LinkFailureCode) -> Result<String, ErrorResponse> {
+    build_allowed_success_redirect(&link_failure_path(code))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,6 +206,63 @@ mod tests {
         ] {
             let s = c.as_str();
             assert!(s.len() <= 8);
+            assert!(!s.contains('@'));
+        }
+    }
+
+    #[test]
+    fn link_success_path_is_account_with_provider() {
+        assert_eq!(
+            link_success_path(OAuthProvider::Github),
+            "/account?linked=github"
+        );
+        assert_eq!(
+            link_success_path(OAuthProvider::Discord),
+            "/account?linked=discord"
+        );
+        assert_eq!(
+            link_success_path(OAuthProvider::Google),
+            "/account?linked=google"
+        );
+    }
+
+    #[test]
+    fn link_failure_path_carries_only_opaque_code() {
+        let url = link_failure_path(LINK_FAILURE_ALREADY_LINKED);
+        assert_eq!(url, "/account?link_error=already_linked");
+        // Same privacy invariant as the login failure path: nothing provider-supplied leaks.
+        assert!(!url.contains("code="));
+        assert!(!url.contains("state="));
+        assert!(!url.contains("error_description"));
+        assert!(!url.contains("access_token"));
+        assert!(!url.contains("email"));
+    }
+
+    #[test]
+    fn link_failure_path_each_code() {
+        assert_eq!(
+            link_failure_path(LINK_FAILURE_CANCELLED),
+            "/account?link_error=cancelled"
+        );
+        assert_eq!(
+            link_failure_path(LINK_FAILURE_ALREADY_LINKED),
+            "/account?link_error=already_linked"
+        );
+        assert_eq!(
+            link_failure_path(LINK_FAILURE_FAILED),
+            "/account?link_error=link_failed"
+        );
+    }
+
+    #[test]
+    fn link_failure_codes_are_opaque_short_tokens() {
+        for c in [
+            LINK_FAILURE_CANCELLED,
+            LINK_FAILURE_ALREADY_LINKED,
+            LINK_FAILURE_FAILED,
+        ] {
+            let s = c.as_str();
+            assert!(s.len() <= 16);
             assert!(!s.contains('@'));
         }
     }
