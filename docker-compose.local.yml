@@ -21,7 +21,6 @@ services:
     # registry copy.
     pull_policy: never
     environment:
-      ORIGIN: http://localhost:8080
       # Base compose derives https://${DOMAIN}/api with DOMAIN=localhost — broken
       # for local docker (no TLS; api serves at root, no edge /api strip). Point
       # the browser at the published host port instead.
@@ -33,8 +32,8 @@ services:
     pull_policy: never
     environment:
       # Flip the production boot gates off for local docker dev (the base
-      # hardcodes RUST_ENV=production / IP_SOURCE=CfConnectingIp).
-      RUST_ENV: development
+      # hardcodes APP_ENV=production / IP_SOURCE=CfConnectingIp).
+      APP_ENV: development
       IP_SOURCE: ConnectInfo
     ports:
       - "127.0.0.1:8888:8888"

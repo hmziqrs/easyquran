@@ -326,7 +326,7 @@ on the proxy's TCP address. Three isolated, non-escalating identities:
 | Public readiness           | exempt from identity resolution                                                                                               | `ratelimit:unknown:quran-health` | `QURAN_HEALTH_REQUESTS_PER_MINUTE` (default 120)                       |
 | Docker health (`/healthz`) | exempt from identity, route blocker, and all limiters; **not on the public host router** (Docker-network / in-container only) | —                                | —                                                                      |
 
-`.env.example` ships `IP_SOURCE=CfConnectingIp` (exact PascalCase; `connect-info`
+`IP_SOURCE` is hardcoded to `CfConnectingIp` in `docker-compose.yml` (exact PascalCase; `connect-info`
 and `cf-connecting-ip` are invalid). The api refuses to boot in production with
 `IP_SOURCE=ConnectInfo` — behind Cloudflare→Traefik that would collapse every
 caller into one proxy-IP bucket. Production boot also fails closed on a missing

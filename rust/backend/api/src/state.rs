@@ -73,8 +73,7 @@ impl FromRef<AppState> for AuthBackend {
 
 pub const KNOWN_COOKIE_KEY_PLACEHOLDERS: &[&str] = &[
     "CHANGE_ME_rotate_me_generate_with_openssl_rand_hex_32___",
-    // Shipped values (root + deploy templates; pinned by the template-scan test):
-    "CHANGE_ME_generate_with_openssl_rand_hex_32_______________________",
+    // Shipped value (root + deploy templates; pinned by the template-scan test):
     "CHANGE_ME_openssl_rand_hex_32",
 ];
 
