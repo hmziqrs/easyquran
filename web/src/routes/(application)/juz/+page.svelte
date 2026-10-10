@@ -88,7 +88,9 @@
           </span>
           {#if juz.sajdas.length > 0}
             <span
-              class="flex flex-none items-center gap-1 rounded-pill bg-background-subtle px-2 py-1 text-[11px] font-medium text-foreground-secondary"
+              class="flex flex-none items-center gap-1 rounded-pill px-2 py-1 text-[11px] font-medium"
+              style:background={HUE_SOFT[hue]}
+              style:color={HUE_LEGIBLE[hue]}
               title={sajdaTitle(juz.sajdas)}
             >
               <Icon name="moon" size={11} />

@@ -124,11 +124,10 @@
                     {#if page.sajdas.length > 0}
                       <span
                         data-sajda
-                        class="inline-flex items-center gap-1 text-foreground-secondary"
-                        title={sajdaChipLabel(page)}
+                        class="inline-flex items-center gap-1 rounded-pill bg-primary-soft px-2 py-0.5 font-medium text-primary"
                       >
                         <Icon name="moon" size={11} />
-                        {copy.index.sajda}
+                        {sajdaChipLabel(page)}
                       </span>
                     {/if}
                   </span>
