@@ -16,7 +16,8 @@
     "font:indopak:test": "python3 -m unittest discover -s scripts/fonts/indopak -p 'test_*.py'",
     "font:indopak:browser": "node scripts/fonts/indopak/browser-check.mjs",
     "quran:check": "pnpm quran:typecheck && pnpm quran:test",
-    "quran:test": "tsx --test scripts/quran/upload.test.ts",
+    "quran:mirror": "tsx scripts/quran/mirror-qurancom.ts",
+    "quran:test": "tsx --test scripts/quran/upload.test.ts scripts/quran/qurancom-mirror.test.ts",
     "quran:upload": "tsx scripts/quran/upload.ts",
     "quran:typecheck": "tsc --noEmit -p scripts/quran/tsconfig.json",
     "prepare": "vp config"
