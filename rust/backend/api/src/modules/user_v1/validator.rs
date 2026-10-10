@@ -31,7 +31,9 @@ impl V1UpdateProfilePayload {
     pub fn into_update_user(self) -> UpdateUser {
         UpdateUser {
             name: self.name,
-            email: self.email,
+            email: self
+                .email
+                .map(|email| crate::utils::email::normalize_email(&email)),
             updated_at: chrono::Utc::now().fixed_offset(),
         }
     }
@@ -68,7 +70,7 @@ impl V1AdminCreateUserPayload {
     pub fn into_new_user(self) -> AdminCreateUser {
         AdminCreateUser {
             name: self.name,
-            email: self.email,
+            email: crate::utils::email::normalize_email(&self.email),
             password: self.password,
             role: UserRole::from_str(&self.role).unwrap_or(UserRole::User),
             avatar_id: self.avatar_id,
@@ -95,7 +97,9 @@ impl V1AdminUpdateUserPayload {
     pub fn into_update_user(self) -> AdminUpdateUser {
         AdminUpdateUser {
             name: self.name,
-            email: self.email,
+            email: self
+                .email
+                .map(|email| crate::utils::email::normalize_email(&email)),
             avatar_id: self.avatar_id,
             password: self.password,
             is_verified: self.is_verified,

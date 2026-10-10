@@ -508,8 +508,11 @@ async fn find_or_create_user(
         return Ok(existing_user);
     }
 
-    if let Some(existing_user) =
-        user::Entity::find_by_email(&state.sea_db, user_info.email.clone()).await?
+    if let Some(existing_user) = user::Entity::find_by_email(
+        &state.sea_db,
+        crate::utils::email::normalize_email(&user_info.email),
+    )
+    .await?
     {
         info!(
             user_id = existing_user.id,
@@ -535,7 +538,7 @@ async fn find_or_create_user(
     user::Entity::create_from_google(
         &state.sea_db,
         user_info.id.clone(),
-        user_info.email.clone(),
+        crate::utils::email::normalize_email(&user_info.email),
         user_info.name.clone(),
     )
     .await

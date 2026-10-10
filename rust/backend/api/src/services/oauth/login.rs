@@ -78,6 +78,7 @@ pub async fn find_or_create_user_for_oauth(
 
     let email = email
         .filter(|value| !value.trim().is_empty())
+        .map(|value| crate::utils::email::normalize_email(&value))
         .ok_or_else(|| {
             warn!("OAuth provider returned no email for an unlinked identity");
             ErrorResponse::new(ErrorCode::OperationNotAllowed)

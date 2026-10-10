@@ -44,7 +44,7 @@ impl V1RegisterPayload {
     pub fn into_new_user(self) -> NewUser {
         NewUser {
             name: self.name,
-            email: self.email,
+            email: crate::utils::email::normalize_email(&self.email),
             password: self.password,
             role: UserRole::User,
         }

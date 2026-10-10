@@ -103,7 +103,8 @@ pub async fn generate(
     }
 
     let pool = &state.sea_db;
-    let user = match user::Entity::find_by_email(pool, payload.email.clone()).await {
+    let normalized_email = crate::utils::email::normalize_email(&payload.email);
+    let user = match user::Entity::find_by_email(pool, normalized_email.clone()).await {
         Ok(Some(user)) => user,
         Ok(None) => {
             warn!("Forgot password requested for non-existent email");
@@ -193,7 +194,7 @@ pub async fn verify(
     let result = forgot_password::Entity::find_query(
         &state.sea_db,
         None,
-        Some(&payload.email),
+        Some(&crate::utils::email::normalize_email(&payload.email)),
         Some(&code_hash),
     )
     .await;

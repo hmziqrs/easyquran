@@ -391,7 +391,7 @@ pub async fn register(
     )
     .await?;
 
-    let email = payload.email.clone();
+    let email = crate::utils::email::normalize_email(&payload.email);
 
     // Store only the keyed hash; the plaintext code is emailed, never persisted.
     let code = email_verification::Entity::generate_code();

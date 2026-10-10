@@ -114,7 +114,9 @@ impl AuthBackend {
 
         info!("Attempting password authentication");
 
-        let user_result = user::Entity::find_by_email(&self.pool, email.clone()).await;
+        let user_result =
+            user::Entity::find_by_email(&self.pool, crate::utils::email::normalize_email(&email))
+                .await;
 
         let user = match user_result {
             Ok(Some(user)) => user,
