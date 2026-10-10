@@ -12,7 +12,9 @@ import { SearchHitKind, SearchProvider } from "#lib/quran/search/types.js";
 import { quranWorker, StorageAdminError } from "#lib/quran/worker-client.js";
 import { QURAN_DATA } from "#lib/server/quran-data.js";
 
-vi.mock("#lib/config/site.js", () => ({ QURAN: { apiBase: "" } }));
+vi.mock("#lib/config/site.js", () => ({
+  QURAN: { apiBase: "", dataEnvironment: "prod" },
+}));
 
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- mirrors the DOM Worker addEventListener callback contract; quranWorker registers its own opaque message listener, so the event shape stays unknown at this fake boundary
 type Listener = (e: unknown) => void;
@@ -326,6 +328,49 @@ describe("quranWorker request settlement", () => {
     await expect(p).rejects.toThrow("disposed");
     expect(fake.terminated).toBe(true);
     expect(quranWorker.ready).toBe(false);
+  });
+});
+
+describe("quranWorker production script gating", () => {
+  it("drops production-disabled sources from the init artifact list", async () => {
+    const artifacts: readonly ArtifactSpec[] = [
+      ...ARTIFACTS,
+      { id: QuranSourceId.Indopak, sizeBytes: 1, downloadUrl: "https://x/indopak" },
+    ];
+    const started = quranWorker.start(artifacts, QURAN_DATA.coordinates);
+    const fake = FakeWorker.last!;
+    const init = fake.posted.find(
+      (message): message is Extract<WorkerRequest, { type: "init" }> => message.type === "init",
+    )!;
+    expect(init.artifacts.map((artifact) => artifact.id)).toEqual([
+      QuranSourceId.TanzilUthmani,
+      QuranSourceId.TanzilSimpleClean,
+    ]);
+    fake.emit("message", { id: init.id, ok: true, result: null });
+    await started;
+  });
+
+  it("refuses a production-disabled preference and read source", async () => {
+    const fake = await startReady();
+    quranWorker.setPreferredArabicSource(QuranSourceId.Indopak);
+
+    const explicit = quranWorker.readSurah(1, QuranSourceId.Indopak);
+    const explicitReq = fake.posted.at(-1)!;
+    expect(explicitReq).toMatchObject({
+      type: "readSurah",
+      source: QuranSourceId.AnnotatedUthmani,
+    });
+    fake.emit("message", { id: explicitReq.id, ok: false, error: "stop" });
+    await expect(explicit).rejects.toThrow("stop");
+
+    const fallback = quranWorker.readSurah(1);
+    const fallbackReq = fake.posted.at(-1)!;
+    expect(fallbackReq).toMatchObject({
+      type: "readSurah",
+      source: QuranSourceId.AnnotatedUthmani,
+    });
+    fake.emit("message", { id: fallbackReq.id, ok: false, error: "stop" });
+    await expect(fallback).rejects.toThrow("stop");
   });
 });
 

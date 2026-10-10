@@ -1,5 +1,7 @@
 import { ARABIC_FONT_IDS, type ArabicFontId } from "#lib/config/reader-fonts.js";
 import type { QuranSourceId } from "#lib/data/quran-types.js";
+import { clientQuranEnvironment } from "#lib/quran/client-environment.js";
+import { isScriptEnabled } from "#lib/quran/script-availability.js";
 import {
   asArray,
   asBooleanRecord,
@@ -138,7 +140,11 @@ function applyPersisted(s: ReaderCore["s"], p: Partial<Persisted>): void {
   if (p.current !== undefined) s.current = p.current;
   if (p.fontSize !== undefined) s.fontSize = p.fontSize;
   if (p.arabicFont !== undefined) s.arabicFont = p.arabicFont;
-  if (p.arabicScript !== undefined) s.arabicScript = p.arabicScript;
+  // A production-disabled persisted script falls back to the default; the stored
+  // preference is left intact so local/dev still hydrates it.
+  if (p.arabicScript !== undefined && isScriptEnabled(p.arabicScript, clientQuranEnvironment())) {
+    s.arabicScript = p.arabicScript;
+  }
   if (p.translationSize !== undefined) s.translationSize = p.translationSize;
   if (p.mode !== undefined) s.mode = p.mode;
   if (p.bookmarks !== undefined) s.bookmarks = p.bookmarks;

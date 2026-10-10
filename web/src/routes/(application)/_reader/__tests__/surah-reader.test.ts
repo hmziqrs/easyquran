@@ -78,6 +78,12 @@ const {
 }));
 
 vi.mock("$app/env", () => ({ browser: true }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: "local",
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 vi.mock("$app/navigation", () => ({
   beforeNavigate: () => {},
   goto: gotoSpy,

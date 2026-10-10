@@ -3,6 +3,12 @@ import { describe, expect, it, vi } from "vite-plus/test";
 vi.mock("#lib/offline/messages.js", () => ({
   purgeUserCaches: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: "local",
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 
 import type { AuthTransitionContext } from "#lib/auth/auth-state.svelte.js";
 import { installPurgeHook, makePurgeHook } from "#lib/auth/purge-hook.js";

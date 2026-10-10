@@ -6,6 +6,7 @@ import type {
   TranslationCatalogueEntry,
 } from "#lib/data/quran-types.js";
 
+import type { QuranDataEnvironment } from "./environment.js";
 import type { SearchOpts } from "./search/types";
 
 export type WorkerStatus = "init" | "downloading" | "ready" | "error" | "translation-fetch-failed";
@@ -25,6 +26,7 @@ export type WorkerRequest =
       artifacts: readonly ArtifactSpec[];
       coordinates: CanonicalQuranCoordinates;
       catalogue?: readonly TranslationCatalogueEntry[];
+      environment?: QuranDataEnvironment;
     }
   | { id: number; type: "readSurah"; num: number; source?: QuranReaderSource }
   | { id: number; type: "readRange"; from: number; to: number; source?: QuranReaderSource }

@@ -6,6 +6,8 @@ import {
 } from "#lib/config/reader-fonts.js";
 import { ACCENTS, DEFAULTS, SURFACES, type ThemeMode } from "#lib/config/site.js";
 import { QURAN_SOURCE_IDS, type QuranSourceId } from "#lib/data/quran-types.js";
+import { clientQuranEnvironment } from "#lib/quran/client-environment.js";
+import { isScriptEnabled } from "#lib/quran/script-availability.js";
 import { asLiteral, asNumber, asObject, asString } from "#lib/storage/index.js";
 import { consent, decodeConsent, type ConsentFlags } from "#lib/stores/consent.svelte.js";
 import { prefs, type Prefs } from "#lib/stores/prefs.svelte.js";
@@ -211,6 +213,11 @@ function applyTranslationSize(store: SettingsReaderPort, target: number): void {
   );
 }
 
+function applyArabicScript(store: SettingsReaderPort, sourceId: QuranSourceId): void {
+  if (!isScriptEnabled(sourceId, clientQuranEnvironment())) return;
+  store.setArabicScript(sourceId);
+}
+
 export function applySettingsDoc(
   doc: SettingsDoc,
   stores: SettingsDocStores = { prefs, consent, reader },
@@ -219,7 +226,7 @@ export function applySettingsDoc(
   stores.consent.set({ ...doc.privacy });
   stores.reader.setMode(doc.reading.mode);
   stores.reader.setArabicFont(doc.reading.arabicFont);
-  stores.reader.setArabicScript(doc.reading.arabicScript);
+  applyArabicScript(stores.reader, doc.reading.arabicScript);
   applyFontSize(stores.reader, doc.reading.fontSize);
   applyTranslationSize(stores.reader, doc.reading.translationSize);
   stores.prefs.apply();

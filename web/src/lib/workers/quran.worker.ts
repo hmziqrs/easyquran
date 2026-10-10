@@ -17,6 +17,8 @@ import {
   type SurahNormalization,
   type TranslationCatalogueEntry,
 } from "#lib/data/quran-types.js";
+import { QuranDataEnvironment } from "#lib/quran/environment.js";
+import { isScriptEnabled } from "#lib/quran/script-availability.js";
 import { DEFAULT_QURAN_SOURCE_PLAN, plannedSourceIds } from "#lib/quran/source-plan.js";
 import {
   runOne,
@@ -217,12 +219,22 @@ export async function __initValidatorRuntime(): Promise<void> {
 // downloaded (see bootArabic).
 let readerDefault: QuranSourceId = DEFAULT_QURAN_SOURCE_PLAN.reader;
 
+// Script gating environment, set from the init message. Production is the safe default:
+// a stale client that omits it can never stage a production-disabled source.
+let environment: QuranDataEnvironment = QuranDataEnvironment.Production;
+
+function assertSourceEnabled(sourceId: QuranSourceId): void {
+  if (isScriptEnabled(sourceId, environment)) return;
+  throw new Error(`Quran source ${sourceId} is disabled in ${environment}`);
+}
+
 async function stageQuranSource(
   sourceId: QuranSourceId,
   artifacts: readonly ArtifactSpec[],
   coordinates: CanonicalQuranCoordinates,
   persistent: boolean,
 ): Promise<void> {
+  assertSourceEnabled(sourceId);
   const spec = artifacts.find((artifact) => artifact.id === sourceId);
   if (!spec) throw new Error(`artifact list missing Quran source ${sourceId}`);
   const profile = resolveSourceProfile(spec.id);
@@ -324,6 +336,7 @@ async function initialize(
 }
 
 async function ensureArabicSource(sourceId: QuranSourceId): Promise<void> {
+  assertSourceEnabled(sourceId);
   if (sources.has(sourceId)) return;
   const pending = pendingArabicSources.get(sourceId);
   if (pending) return pending;
@@ -750,6 +763,7 @@ type Handler<K extends WorkerRequest["type"]> = (
 
 const handlers = {
   init: async (m) => {
+    environment = m.environment ?? QuranDataEnvironment.Production;
     await initialize(m.artifacts, m.coordinates, m.catalogue);
     return null;
   },

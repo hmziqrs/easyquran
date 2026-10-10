@@ -1,5 +1,7 @@
 import type { ArabicFontId, TranslationFamily } from "#lib/config/reader-fonts.js";
 import type { QuranSourceId } from "#lib/data/quran-types.js";
+import { clientQuranEnvironment } from "#lib/quran/client-environment.js";
+import { isScriptEnabled } from "#lib/quran/script-availability.js";
 import {
   ARABIC_FONT_MAX,
   ARABIC_FONT_MIN,
@@ -52,6 +54,7 @@ export function createReaderSettings(core: ReaderCore, persistence: ReaderPersis
       return core.s.arabicScript;
     },
     setArabicScript(id: QuranSourceId): void {
+      if (!isScriptEnabled(id, clientQuranEnvironment())) return;
       if (core.s.arabicScript === id) return;
       core.s.arabicScript = id;
       persistence.writeNow();

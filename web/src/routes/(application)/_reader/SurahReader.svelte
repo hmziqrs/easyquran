@@ -17,6 +17,8 @@
   import { readerHrefFor } from "#lib/i18n/reader.js";
   import { publicHref } from "#lib/i18n/public-href.js";
   import { TooltipProvider } from "#lib/components/ui/tooltip/index.js";
+  import { clientQuranEnvironment } from "#lib/quran/client-environment.js";
+  import { isScriptEnabled } from "#lib/quran/script-availability.js";
   import { quranWorker } from "#lib/quran/worker-client.js";
   import { TRANSLATION_CATALOGUE, TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
   import type { ReadTierStatus } from "#lib/quran/fetch.js";
@@ -954,6 +956,8 @@
   let appliedScript: string | null = null;
   $effect(() => {
     const script = reader.arabicScript;
+    // A production-disabled script never drives a re-request; current pages stay put.
+    if (!isScriptEnabled(script, clientQuranEnvironment())) return;
     const previous = appliedScript;
     appliedScript = script;
     if (!clientMounted || isTranslationSource || previous === null || previous === script) return;

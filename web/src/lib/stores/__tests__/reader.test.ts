@@ -1,6 +1,13 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { flushSync } from "svelte";
-import { describe, it, expect } from "vite-plus/test";
+import { describe, it, expect, vi } from "vite-plus/test";
+
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: "local",
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 
 import { createReader, type ReaderApi } from "../reader.svelte";
 import { observeVersesFor } from "./reader-reactivity.probe.svelte";

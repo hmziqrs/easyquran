@@ -40,6 +40,7 @@ import {
   type TranslationSearchResponse,
 } from "./search/types";
 import { DEFAULT_QURAN_SOURCE_PLAN } from "./source-plan";
+import { isScriptEnabled } from "./script-availability";
 import {
   decodeQuranRangeText,
   decodeQuranSurahText,
@@ -486,6 +487,18 @@ function defaultArabicSource(): QuranSourceId {
   return preferredArabicSource;
 }
 
+function scriptEnabled(sourceId: QuranSourceId): boolean {
+  return isScriptEnabled(sourceId, QURAN.dataEnvironment);
+}
+
+// A production-disabled script never reaches the worker or the API ladder: reads
+// fall back to the preferred enabled source.
+function readableArabicSource(source: QuranReaderSource): QuranReaderSource {
+  if (!isArabicSourceId(source)) return source;
+  if (scriptEnabled(source)) return source;
+  return defaultArabicSource();
+}
+
 export const quranWorker = {
   get ready(): boolean {
     return isReady;
@@ -501,7 +514,9 @@ export const quranWorker = {
 
   /** Reader preference: which Arabic mushaf variant reads serve when no source is pinned. */
   setPreferredArabicSource(sourceId: QuranSourceId): void {
-    if (isArabicSourceId(sourceId)) preferredArabicSource = sourceId;
+    if (!isArabicSourceId(sourceId)) return;
+    if (!scriptEnabled(sourceId)) return;
+    preferredArabicSource = sourceId;
   },
 
   hasTranslation(source: QuranReaderSource): Promise<boolean> {
@@ -564,6 +579,8 @@ export const quranWorker = {
     catalogue?: readonly TranslationCatalogueEntry[],
   ): Promise<void> {
     if (startPromise) return startPromise;
+    // Production-disabled scripts never reach the worker: no spec means no staging path.
+    const enabledArtifacts = artifacts.filter((artifact) => scriptEnabled(artifact.id));
     const attempt = (async () => {
       worker = new Worker(new URL("../workers/quran.worker.ts", import.meta.url), {
         type: "module",
@@ -583,9 +600,10 @@ export const quranWorker = {
       await request<null>((id) => ({
         id,
         type: "init",
-        artifacts: [...artifacts],
+        artifacts: [...enabledArtifacts],
         coordinates,
         catalogue: catalogue ? [...catalogue] : undefined,
+        environment: QURAN.dataEnvironment,
       }));
       isReady = true;
     })();
@@ -612,7 +630,7 @@ export const quranWorker = {
     onStatus?: (status: ReadTierStatus) => void,
     options?: ReadOptions,
   ): Promise<QuranSurahText> {
-    const reader = source ?? defaultArabicSource();
+    const reader = readableArabicSource(source ?? defaultArabicSource());
     if (isArabicSourceId(reader)) {
       return withSourceFallback({
         hasLocal: () => quranWorker.ready,
@@ -649,7 +667,7 @@ export const quranWorker = {
     onStatus?: (status: ReadTierStatus) => void,
     options?: ReadOptions,
   ): Promise<QuranRangeText> {
-    const reader = source ?? defaultArabicSource();
+    const reader = readableArabicSource(source ?? defaultArabicSource());
     if (isArabicSourceId(reader)) {
       return withSourceFallback({
         hasLocal: () => quranWorker.ready,

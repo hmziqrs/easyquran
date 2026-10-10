@@ -6,6 +6,12 @@ vi.mock("$app/env", () => ({
     return flag.value;
   },
 }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: "local",
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 
 import { createReaderCore, type Persisted, READER_SCHEMA_VERSION } from "../reader-core.svelte";
 import { createReaderPersistence, decodeReader } from "../reader-persistence.svelte";
