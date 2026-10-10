@@ -1,11 +1,11 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use axum_macros::debug_handler;
 use rux_auth::AuthBackend as AuthBackendTrait;
-use sea_orm::{TransactionError, TransactionTrait};
+use sea_orm::{EntityTrait, TransactionError, TransactionTrait};
 use serde_json::json;
 use tracing::{info, instrument, warn};
 
-use crate::db::sea_models::{passkey_credential, user_oauth_identity};
+use crate::db::sea_models::{passkey_credential, user::Entity as UserEntity, user_oauth_identity};
 use crate::error::{ErrorCode, ErrorResponse};
 use crate::extractors::ValidatedJson;
 use crate::modules::auth_v1::controller::{create_bound_session, session_rotated_headers};
@@ -111,20 +111,43 @@ pub async fn remove(
     let payload = payload.0;
 
     let user_id = user.id;
-    let has_password = user.password.is_some();
     let credential_id = payload.credential_id.clone();
 
-    // Guard + delete in ONE transaction: a concurrent identity unlink cannot slip
-    // between the method count and the delete and leave the account with zero
-    // sign-in methods (permanent lockout). Same guard semantics as unlink.
+    // Existence check + last-method guard + delete in ONE transaction: a
+    // concurrent identity unlink cannot slip between the method count and the
+    // delete and leave the account with zero sign-in methods (permanent
+    // lockout). Same guard semantics as unlink.
     let removed = state
         .sea_db
         .transaction::<_, u64, ErrorResponse>(|txn| {
             Box::pin(async move {
+                // User-scoped existence check FIRST: a bogus/foreign
+                // credential_id stays a 404 even when the guard would refuse.
+                passkey_credential::Entity::find_by_credential_id_for_user(
+                    txn,
+                    &credential_id,
+                    user_id,
+                )
+                .await?
+                .ok_or_else(|| {
+                    ErrorResponse::new(ErrorCode::RecordNotFound)
+                        .with_message("Passkey credential not found")
+                })?;
+
+                // Re-read inside the txn: password presence can change concurrently.
+                let Some(fresh_user) = UserEntity::find_by_id(user_id).one(txn).await? else {
+                    return Err(ErrorResponse::new(ErrorCode::Unauthorized)
+                        .with_message("You must be logged in to access this resource"));
+                };
+
                 let identities = user_oauth_identity::Entity::list_for_user(txn, user_id).await?;
                 let passkey_count =
                     passkey_credential::Entity::count_for_user(txn, user_id).await?;
-                let total = total_sign_in_methods(identities.len(), has_password, passkey_count);
+                let total = total_sign_in_methods(
+                    identities.len(),
+                    fresh_user.password.is_some(),
+                    passkey_count,
+                );
                 if !can_unlink(total) {
                     warn!(user_id, "Refused to remove the last sign-in method");
                     // 409 (BIZ_004): the request conflicts with the "keep one method" invariant.

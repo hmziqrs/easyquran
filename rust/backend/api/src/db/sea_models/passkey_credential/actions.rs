@@ -80,6 +80,22 @@ impl Entity {
         }
     }
 
+    pub async fn find_by_credential_id_for_user<T: ConnectionTrait>(
+        conn: &T,
+        credential_id: &str,
+        user_id: i32,
+    ) -> DbResult<Option<Model>> {
+        match Self::find()
+            .filter(Column::CredentialId.eq(credential_id))
+            .filter(Column::UserId.eq(user_id))
+            .one(conn)
+            .await
+        {
+            Ok(opt) => Ok(opt),
+            Err(err) => Err(err.into()),
+        }
+    }
+
     pub async fn touch_counter<T: ConnectionTrait>(
         conn: &T,
         id: i32,
@@ -171,5 +187,30 @@ mod tests {
         assert_eq!(Entity::count_for_user(&db, 1).await.unwrap(), 2);
         assert_eq!(Entity::count_for_user(&db, 2).await.unwrap(), 1);
         assert_eq!(Entity::count_for_user(&db, 3).await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn find_by_credential_id_for_user_is_user_scoped() {
+        let db = mem_db().await;
+        insert_credential(&db, 1, "cred-a").await;
+        insert_credential(&db, 2, "cred-b").await;
+
+        let own = Entity::find_by_credential_id_for_user(&db, "cred-a", 1)
+            .await
+            .unwrap();
+        assert_eq!(own.map(|m| m.user_id), Some(1));
+
+        let other_users = Entity::find_by_credential_id_for_user(&db, "cred-a", 2)
+            .await
+            .unwrap();
+        assert!(
+            other_users.is_none(),
+            "another user's credential_id must not resolve"
+        );
+
+        let missing = Entity::find_by_credential_id_for_user(&db, "nope", 1)
+            .await
+            .unwrap();
+        assert!(missing.is_none());
     }
 }
