@@ -49,5 +49,18 @@
   "auth_error_code_required": "أدخل الرمز.",
   "auth_error_code_digits": "الرمز مكوّن من 6 أرقام.",
   "auth_error_code_length_8": "الرمز مكوّن من 8 خانات.",
-  "auth_error_backup_code_invalid": "أدخل رمزك المكوّن من 6 أرقام أو رمز احتياطي."
+  "auth_error_backup_code_invalid": "أدخل رمزك المكوّن من 6 أرقام أو رمز احتياطي.",
+  "auth_connected_accounts_heading": "الحسابات المرتبطة",
+  "auth_connected_accounts_description": "طرق تسجيل الدخول المرتبطة بحسابك.",
+  "auth_connected_linked_on": "تم الربط في {date}",
+  "auth_connected_unlink": "إلغاء الربط",
+  "auth_connected_unlink_confirm": "تأكيد إلغاء الربط",
+  "auth_connected_unlink_cancel": "إلغاء",
+  "auth_connected_last_method_hint": "أضف كلمة مرور أو طريقة تسجيل دخول أخرى قبل إلغاء ربط هذه الطريقة.",
+  "auth_connected_link_provider": "ربط {provider}",
+  "auth_connected_linked_banner": "تم ربط حساب {provider} الخاص بك.",
+  "auth_connected_already_linked_error": "حساب {provider} هذا مرتبط بالفعل بحساب مختلف.",
+  "auth_connected_cancelled_error": "أُلغي الربط.",
+  "auth_connected_failed_error": "تعذّر ربط هذا الحساب. حاول مرة أخرى.",
+  "auth_connected_unlink_error": "تعذّر إلغاء ربط هذا الحساب. حاول مرة أخرى."
 }

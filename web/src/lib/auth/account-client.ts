@@ -30,6 +30,54 @@ export interface ProfileUpdateInput {
   readonly avatarId?: number | null;
 }
 
+export type IdentityProvider = "github" | "discord" | "google";
+
+const IDENTITY_PROVIDERS: ReadonlySet<string> = new Set<IdentityProvider>([
+  "github",
+  "discord",
+  "google",
+]);
+
+export function isIdentityProvider(value: string): value is IdentityProvider {
+  return IDENTITY_PROVIDERS.has(value);
+}
+
+export interface LinkedIdentity {
+  readonly provider: IdentityProvider;
+  readonly providerUserId: string;
+  readonly createdAt: string;
+}
+
+export interface IdentitySummary {
+  readonly identities: ReadonlyArray<LinkedIdentity>;
+  readonly hasPassword: boolean;
+  readonly passkeyCount: number;
+  readonly canUnlinkAny: boolean;
+  readonly linkableProviders: ReadonlyArray<IdentityProvider>;
+}
+
+const IDENTITY_PROVIDER_LABELS = {
+  github: "GitHub",
+  discord: "Discord",
+  google: "Google",
+} satisfies Record<IdentityProvider, string>;
+
+export function identityProviderLabel(provider: IdentityProvider): string {
+  return IDENTITY_PROVIDER_LABELS[provider];
+}
+
+// Sign-in method count: every linked identity + the password (if set) + the
+// passkey factor (if at least one exists). The server's can_unlink_any mirrors
+// this rule; the UI recomputes it so the disable state never lags the counts.
+export function countSignInMethods(summary: IdentitySummary): number {
+  const passkey = summary.passkeyCount > 0 ? 1 : 0;
+  return summary.identities.length + (summary.hasPassword ? 1 : 0) + passkey;
+}
+
+export function canUnlinkIdentity(summary: IdentitySummary): boolean {
+  return countSignInMethods(summary) > 1;
+}
+
 export type AccountResultStatus = "ok" | "anonymous" | "error";
 
 type SessionDraft = {
@@ -114,6 +162,50 @@ export function decodeSessionList(raw: unknown): SessionInfo[] {
   return out;
 }
 
+function decodeLinkedIdentity(raw: JsonValue | undefined): LinkedIdentity | null {
+  if (!isWireObject(raw)) return null;
+  const o = raw;
+  const provider = o.provider;
+  if (!isString(provider) || !isIdentityProvider(provider)) return null;
+  const providerUserId = firstString(o, "provider_user_id", "providerUserId");
+  if (providerUserId === undefined) return null;
+  return {
+    provider,
+    providerUserId,
+    createdAt: firstString(o, "created_at", "createdAt") ?? "",
+  };
+}
+
+function decodeLinkableProviders(raw: JsonValue | undefined): IdentityProvider[] {
+  const out: IdentityProvider[] = [];
+  if (!Array.isArray(raw)) return out;
+  for (const entry of raw) {
+    if (!isString(entry) || !isIdentityProvider(entry)) continue;
+    if (!out.includes(entry)) out.push(entry);
+  }
+  return out;
+}
+
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the unparsed identities JSON body from fetch; this function is its boundary parser
+export function decodeIdentitySummary(raw: unknown): IdentitySummary | null {
+  if (!isWireObject(raw)) return null;
+  const o = raw;
+  const rawIdentities = o.identities;
+  if (!Array.isArray(rawIdentities)) return null;
+  const identities: LinkedIdentity[] = [];
+  for (const entry of rawIdentities) {
+    const identity = decodeLinkedIdentity(entry);
+    if (identity) identities.push(identity);
+  }
+  return {
+    identities,
+    hasPassword: o.has_password === true,
+    passkeyCount: isNumber(o.passkey_count) ? o.passkey_count : 0,
+    canUnlinkAny: o.can_unlink_any === true,
+    linkableProviders: decodeLinkableProviders(o.linkable_providers),
+  };
+}
+
 function statusFor(httpStatus: number): AccountResultStatus {
   if (httpStatus === 401 || httpStatus === 403) return "anonymous";
   if (httpStatus >= 200 && httpStatus < 300) return "ok";
@@ -154,6 +246,23 @@ export class AccountClient {
     );
     const status = statusFor(res.status);
     return { status, httpStatus: res.status, isCurrent: false };
+  }
+
+  async getIdentities(): Promise<AccountResult<IdentitySummary>> {
+    const res = await this.auth.get<WireObject>("/user/v1/identities");
+    const status = statusFor(res.status);
+    const data = res.ok ? decodeIdentitySummary(res.data) : null;
+    return { status, httpStatus: res.status, data, error: res.error };
+  }
+
+  async unlinkIdentity(provider: IdentityProvider): Promise<AccountResult<IdentitySummary>> {
+    const res = await this.auth.unsafeRequest<WireObject>("/user/v1/identities/unlink", {
+      method: "POST",
+      body: { provider },
+    });
+    const status = statusFor(res.status);
+    const data = res.ok ? decodeIdentitySummary(res.data) : null;
+    return { status, httpStatus: res.status, data, error: res.error };
   }
 }
 

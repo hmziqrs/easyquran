@@ -2,7 +2,7 @@
 //
 // Auth modal + /login /register routes. Lazy: ships only inside the lazy auth chunk + auth routes.
 //
-// 51 messages. Import this barrel, never
+// 64 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { auth_captcha_error } from "#lib/paraglide/messages/auth_captcha_error.js";
@@ -10,6 +10,19 @@ export { auth_captcha_label } from "#lib/paraglide/messages/auth_captcha_label.j
 export { auth_captcha_required } from "#lib/paraglide/messages/auth_captcha_required.js";
 export { auth_close } from "#lib/paraglide/messages/auth_close.js";
 export { auth_confirm_password_placeholder } from "#lib/paraglide/messages/auth_confirm_password_placeholder.js";
+export { auth_connected_accounts_description } from "#lib/paraglide/messages/auth_connected_accounts_description.js";
+export { auth_connected_accounts_heading } from "#lib/paraglide/messages/auth_connected_accounts_heading.js";
+export { auth_connected_already_linked_error } from "#lib/paraglide/messages/auth_connected_already_linked_error.js";
+export { auth_connected_cancelled_error } from "#lib/paraglide/messages/auth_connected_cancelled_error.js";
+export { auth_connected_failed_error } from "#lib/paraglide/messages/auth_connected_failed_error.js";
+export { auth_connected_last_method_hint } from "#lib/paraglide/messages/auth_connected_last_method_hint.js";
+export { auth_connected_link_provider } from "#lib/paraglide/messages/auth_connected_link_provider.js";
+export { auth_connected_linked_banner } from "#lib/paraglide/messages/auth_connected_linked_banner.js";
+export { auth_connected_linked_on } from "#lib/paraglide/messages/auth_connected_linked_on.js";
+export { auth_connected_unlink } from "#lib/paraglide/messages/auth_connected_unlink.js";
+export { auth_connected_unlink_cancel } from "#lib/paraglide/messages/auth_connected_unlink_cancel.js";
+export { auth_connected_unlink_confirm } from "#lib/paraglide/messages/auth_connected_unlink_confirm.js";
+export { auth_connected_unlink_error } from "#lib/paraglide/messages/auth_connected_unlink_error.js";
 export { auth_continue } from "#lib/paraglide/messages/auth_continue.js";
 export { auth_continue_with_passkey } from "#lib/paraglide/messages/auth_continue_with_passkey.js";
 export { auth_continue_with_provider } from "#lib/paraglide/messages/auth_continue_with_provider.js";

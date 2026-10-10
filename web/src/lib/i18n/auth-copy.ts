@@ -38,6 +38,19 @@ import {
   auth_continue_with_passkey,
   auth_continue_with_provider,
   auth_close,
+  auth_connected_accounts_heading,
+  auth_connected_accounts_description,
+  auth_connected_linked_on,
+  auth_connected_unlink,
+  auth_connected_unlink_confirm,
+  auth_connected_unlink_cancel,
+  auth_connected_last_method_hint,
+  auth_connected_link_provider,
+  auth_connected_linked_banner,
+  auth_connected_already_linked_error,
+  auth_connected_cancelled_error,
+  auth_connected_failed_error,
+  auth_connected_unlink_error,
 } from "#lib/i18n/m/auth.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
 
@@ -82,6 +95,19 @@ export interface AuthCopy {
   continueWithPasskey: string;
   showPasswordAria: string;
   hidePasswordAria: string;
+  connectedAccountsHeading: string;
+  connectedAccountsDescription: string;
+  connectedLinkedOn: (date: string) => string;
+  connectedUnlink: string;
+  connectedUnlinkConfirm: string;
+  connectedUnlinkCancel: string;
+  connectedLastMethodHint: string;
+  connectedLinkProvider: (provider: string) => string;
+  connectedLinkedBanner: (provider: string) => string;
+  connectedAlreadyLinkedError: (provider: string) => string;
+  connectedCancelledError: string;
+  connectedFailedError: string;
+  connectedUnlinkError: string;
 }
 
 // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.
@@ -128,5 +154,21 @@ export function getAuthCopy(locale: UiLocale = getLocale() as UiLocale): AuthCop
     continueWithPasskey: auth_continue_with_passkey(undefined, { locale }),
     showPasswordAria: auth_show_password_aria(undefined, { locale }),
     hidePasswordAria: auth_hide_password_aria(undefined, { locale }),
+    connectedAccountsHeading: auth_connected_accounts_heading(undefined, { locale }),
+    connectedAccountsDescription: auth_connected_accounts_description(undefined, { locale }),
+    connectedLinkedOn: (date: string) => auth_connected_linked_on({ date }, { locale }),
+    connectedUnlink: auth_connected_unlink(undefined, { locale }),
+    connectedUnlinkConfirm: auth_connected_unlink_confirm(undefined, { locale }),
+    connectedUnlinkCancel: auth_connected_unlink_cancel(undefined, { locale }),
+    connectedLastMethodHint: auth_connected_last_method_hint(undefined, { locale }),
+    connectedLinkProvider: (provider: string) =>
+      auth_connected_link_provider({ provider }, { locale }),
+    connectedLinkedBanner: (provider: string) =>
+      auth_connected_linked_banner({ provider }, { locale }),
+    connectedAlreadyLinkedError: (provider: string) =>
+      auth_connected_already_linked_error({ provider }, { locale }),
+    connectedCancelledError: auth_connected_cancelled_error(undefined, { locale }),
+    connectedFailedError: auth_connected_failed_error(undefined, { locale }),
+    connectedUnlinkError: auth_connected_unlink_error(undefined, { locale }),
   };
 }

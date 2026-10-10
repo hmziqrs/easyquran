@@ -7,7 +7,11 @@ vi.mock("$app/env/public", () => ({
   PUBLIC_FCM_VAPID_KEY: undefined,
 }));
 
-import { createAccountClient, decodeSessionList } from "#lib/auth/account-client.js";
+import {
+  createAccountClient,
+  decodeIdentitySummary,
+  decodeSessionList,
+} from "#lib/auth/account-client.js";
 import type { AuthClient, AuthRequestResult } from "#lib/auth/auth-client.js";
 
 function mockClient(): AuthClient & {
@@ -213,5 +217,132 @@ describe("AccountClient.updateProfile", () => {
     const res = await ac.updateProfile({ name: "X" });
     expect(res.status).toBe("anonymous");
     expect(res.data).toBeNull();
+  });
+});
+
+describe("decodeIdentitySummary", () => {
+  it("decodes the frozen identities contract shape", () => {
+    const summary = decodeIdentitySummary({
+      identities: [
+        { provider: "github", provider_user_id: "gh-1", created_at: "2026-01-01T00:00:00Z" },
+        { provider: "google", provider_user_id: "g-2", created_at: "2026-02-01T00:00:00Z" },
+      ],
+      has_password: true,
+      passkey_count: 1,
+      can_unlink_any: true,
+      linkable_providers: ["discord"],
+    });
+    expect(summary).not.toBeNull();
+    expect(summary?.identities.map((i) => i.provider)).toEqual(["github", "google"]);
+    expect(summary?.identities[0]?.providerUserId).toBe("gh-1");
+    expect(summary?.identities[0]?.createdAt).toBe("2026-01-01T00:00:00Z");
+    expect(summary?.hasPassword).toBe(true);
+    expect(summary?.passkeyCount).toBe(1);
+    expect(summary?.canUnlinkAny).toBe(true);
+    expect(summary?.linkableProviders).toEqual(["discord"]);
+  });
+
+  it("drops unknown providers and defaults absent optional fields", () => {
+    const summary = decodeIdentitySummary({
+      identities: [
+        { provider: "steam", provider_user_id: "s-1", created_at: "x" },
+        { provider: "github", provider_user_id: "gh-1" },
+        { provider: "discord" },
+      ],
+      linkable_providers: ["github", "steam", "discord", "github"],
+    });
+    expect(summary?.identities.map((i) => i.provider)).toEqual(["github"]);
+    expect(summary?.identities[0]?.createdAt).toBe("");
+    expect(summary?.hasPassword).toBe(false);
+    expect(summary?.passkeyCount).toBe(0);
+    expect(summary?.canUnlinkAny).toBe(false);
+    expect(summary?.linkableProviders).toEqual(["github", "discord"]);
+  });
+
+  it("returns null for malformed payloads", () => {
+    expect(decodeIdentitySummary(null)).toBeNull();
+    expect(decodeIdentitySummary({})).toBeNull();
+    expect(decodeIdentitySummary({ identities: "nope" })).toBeNull();
+  });
+});
+
+describe("AccountClient.getIdentities", () => {
+  it("GETs /user/v1/identities and decodes the summary", async () => {
+    const client = mockClient();
+    client.get.mockResolvedValueOnce(
+      ok({
+        identities: [
+          { provider: "github", provider_user_id: "gh-1", created_at: "2026-01-01T00:00:00Z" },
+        ],
+        has_password: false,
+        passkey_count: 0,
+        can_unlink_any: true,
+        linkable_providers: ["google", "discord"],
+      }),
+    );
+    const ac = createAccountClient(client);
+    const res = await ac.getIdentities();
+    expect(res.status).toBe("ok");
+    expect(res.data?.identities.map((i) => i.provider)).toEqual(["github"]);
+    expect(res.data?.linkableProviders).toEqual(["google", "discord"]);
+    expect(client.get).toHaveBeenCalledWith("/user/v1/identities");
+  });
+
+  it("401 -> anonymous", async () => {
+    const client = mockClient();
+    client.get.mockResolvedValueOnce(http(401));
+    const ac = createAccountClient(client);
+    const res = await ac.getIdentities();
+    expect(res.status).toBe("anonymous");
+    expect(res.data).toBeNull();
+  });
+});
+
+describe("AccountClient.unlinkIdentity", () => {
+  it("POSTs the provider to /user/v1/identities/unlink through the CSRF unsafe path", async () => {
+    const client = mockClient();
+    client.unsafeRequest.mockResolvedValueOnce(
+      ok({
+        identities: [],
+        has_password: true,
+        passkey_count: 0,
+        can_unlink_any: false,
+        linkable_providers: ["github"],
+      }),
+    );
+    const ac = createAccountClient(client);
+    const res = await ac.unlinkIdentity("github");
+    expect(res.status).toBe("ok");
+    expect(res.data?.hasPassword).toBe(true);
+    expect(res.data?.identities).toEqual([]);
+    expect(client.unsafeRequest).toHaveBeenCalledWith("/user/v1/identities/unlink", {
+      method: "POST",
+      body: { provider: "github" },
+    });
+  });
+
+  it("409 -> error result keeps the server message for the inline banner", async () => {
+    const client = mockClient();
+    client.unsafeRequest.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      data: null,
+      error: { message: "Add a password or another sign-in method first" },
+      rotated: false,
+    });
+    const ac = createAccountClient(client);
+    const res = await ac.unlinkIdentity("google");
+    expect(res.status).toBe("error");
+    expect(res.httpStatus).toBe(409);
+    expect(res.data).toBeNull();
+    expect(res.error?.message).toBe("Add a password or another sign-in method first");
+  });
+
+  it("401 -> anonymous", async () => {
+    const client = mockClient();
+    client.unsafeRequest.mockResolvedValueOnce(http(401));
+    const ac = createAccountClient(client);
+    const res = await ac.unlinkIdentity("discord");
+    expect(res.status).toBe("anonymous");
   });
 });

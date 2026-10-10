@@ -49,5 +49,18 @@
   "auth_error_code_required": "Enter the code.",
   "auth_error_code_digits": "The code is 6 digits.",
   "auth_error_code_length_8": "The code is 8 characters.",
-  "auth_error_backup_code_invalid": "Enter your 6-digit code or a backup code."
+  "auth_error_backup_code_invalid": "Enter your 6-digit code or a backup code.",
+  "auth_connected_accounts_heading": "Connected accounts",
+  "auth_connected_accounts_description": "Sign-in methods linked to your account.",
+  "auth_connected_linked_on": "Linked {date}",
+  "auth_connected_unlink": "Unlink",
+  "auth_connected_unlink_confirm": "Confirm unlink",
+  "auth_connected_unlink_cancel": "Cancel",
+  "auth_connected_last_method_hint": "Add a password or another sign-in method before you can unlink this one.",
+  "auth_connected_link_provider": "Link {provider}",
+  "auth_connected_linked_banner": "Your {provider} account is now linked.",
+  "auth_connected_already_linked_error": "That {provider} account is already linked to a different account.",
+  "auth_connected_cancelled_error": "Link cancelled.",
+  "auth_connected_failed_error": "Couldn't link that account. Please try again.",
+  "auth_connected_unlink_error": "Couldn't unlink that account. Please try again."
 }
