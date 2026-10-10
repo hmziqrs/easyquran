@@ -5,6 +5,7 @@ vi.mock("$app/env/public", () => ({
   PUBLIC_QURAN_API_BASE: undefined,
   PUBLIC_ENV: undefined,
   PUBLIC_FCM_VAPID_KEY: undefined,
+  PUBLIC_TURNSTILE_SITE_KEY: undefined,
 }));
 
 import type { AuthClient } from "#lib/auth/auth-client.js";

@@ -542,6 +542,7 @@ export const DYNAMIC_PUBLIC_ENV_VARS: readonly string[] = [
   "PUBLIC_QURAN_API_BASE",
   "PUBLIC_ENV",
   "PUBLIC_FCM_VAPID_KEY",
+  "PUBLIC_TURNSTILE_SITE_KEY",
 ];
 
 // Same module shape kit's own builder.generateEnvModule() writes —

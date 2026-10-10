@@ -16,6 +16,7 @@ pub mod route_blocker_service;
 pub mod scheduler;
 pub mod session_store;
 pub mod translation_popularity_store;
+pub mod turnstile;
 pub mod webauthn;
 pub mod webhook_util;
 

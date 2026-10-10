@@ -68,6 +68,9 @@ services:
       # $env/dynamic/public (NOT build-baked), so these live here, not in build args.
       PUBLIC_API_BASE_URL: https://${DOMAIN}/api
       PUBLIC_QURAN_API_BASE: https://${DOMAIN}/api/quran
+      # Cloudflare Turnstile sitekey (public by design). Empty hides the widget;
+      # the api gate activates when its own TURNSTILE_SECRET_KEY is set.
+      PUBLIC_TURNSTILE_SITE_KEY: ${PUBLIC_TURNSTILE_SITE_KEY:-}
       # Firebase Cloud Messaging web-push VAPID key (Firebase console → Cloud
       # Messaging → WebPush certificates). Empty until provisioned: the UI then
       # shows "notifications not configured" instead of enabling a dead flow.

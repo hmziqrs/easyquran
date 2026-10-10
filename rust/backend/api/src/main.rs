@@ -488,7 +488,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!(
         email_aliases_enabled = ruxlog::config::settings::email_aliases_enabled(),
-        "Email alias policy resolved"
+        turnstile_enabled = ruxlog::services::turnstile::turnstile_enabled(),
+        "Email alias + captcha policy resolved"
     );
 
     let image_moderator: Option<

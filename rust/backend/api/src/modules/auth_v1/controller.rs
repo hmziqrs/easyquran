@@ -23,7 +23,7 @@ use crate::{
         V1LoginPayload, V1LoginTotpPayload, V1RegisterPayload, V1TwoFADisablePayload,
         V1TwoFASetupPayload, V1TwoFAVerifyPayload,
     },
-    services::{abuse_limiter, auth::AuthSession, mail::send_email_verification_code},
+    services::{abuse_limiter, auth::AuthSession, mail::send_email_verification_code, turnstile},
     utils::twofa,
     AppState,
 };
@@ -376,11 +376,20 @@ pub async fn login_totp(
 #[instrument(skip(state, payload), fields(user_id, result))]
 pub async fn register(
     State(state): State<AppState>,
+    ClientIp(secure_ip): ClientIp,
     payload: ValidatedJson<V1RegisterPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let payload = payload.0;
 
     info!("User registration attempt");
+
+    // Turnstile gate (no-op unless TURNSTILE_SECRET_KEY is configured). Runs
+    // before user creation so bot traffic never reaches the DB or the mailer.
+    turnstile::verify_registration(
+        payload.turnstile_token.as_deref(),
+        Some(&secure_ip.to_string()),
+    )
+    .await?;
 
     let email = payload.email.clone();
 

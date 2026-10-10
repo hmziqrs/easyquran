@@ -242,4 +242,46 @@ describe("RegisterFlow register->login->verification", () => {
     expect(flow.step).toBe("form");
     expect(client.unsafeRequest).not.toHaveBeenCalled();
   });
+
+  it("includes turnstile_token when set, then clears it (single-use)", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest
+      .mockResolvedValueOnce(okStatus(201, UNVERIFIED))
+      .mockResolvedValueOnce(ok(UNVERIFIED, true));
+    const flow = createRegisterFlow({ client, state });
+    flow.email = "new@eq.test";
+    flow.password = "strong-password-1";
+    flow.confirmPassword = "strong-password-1";
+    flow.turnstileToken = "widget-token-1";
+    const res = await flow.submit();
+    expect(res).toBe(true);
+    // SAFETY: first recorded call is the register request; its options carry the body built by the flow.
+    const [path, options] = client.unsafeRequest.mock.calls[0] as [
+      string,
+      { body: Record<string, string> },
+    ];
+    expect(path).toBe("/auth/v1/register");
+    expect(options.body.turnstile_token).toBe("widget-token-1");
+    expect(flow.turnstileToken).toBeNull();
+  });
+
+  it("omits turnstile_token when unset", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest
+      .mockResolvedValueOnce(okStatus(201, UNVERIFIED))
+      .mockResolvedValueOnce(ok(UNVERIFIED, true));
+    const flow = createRegisterFlow({ client, state });
+    flow.email = "new@eq.test";
+    flow.password = "strong-password-1";
+    flow.confirmPassword = "strong-password-1";
+    await flow.submit();
+    // SAFETY: first recorded call is the register request; its options carry the body built by the flow.
+    const [, options] = client.unsafeRequest.mock.calls[0] as [
+      string,
+      { body: Record<string, string> },
+    ];
+    expect("turnstile_token" in options.body).toBe(false);
+  });
 });

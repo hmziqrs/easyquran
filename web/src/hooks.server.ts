@@ -80,6 +80,9 @@ function buildCsp(nonce: string | undefined): string {
   const scriptSrc = ["'self'", "'wasm-unsafe-eval'"];
   if (nonce) scriptSrc.push(`'nonce-${nonce}'`);
   scriptSrc.push("https://www.gstatic.com", "https://www.googletagmanager.com");
+  // Cloudflare Turnstile: widget script, iframe, and (frame→parent) connect.
+  scriptSrc.push("https://challenges.cloudflare.com");
+  connectSrc.push("https://challenges.cloudflare.com");
   if (import.meta.env.DEV) {
     scriptSrc.push("'unsafe-eval'");
   }
@@ -90,6 +93,7 @@ function buildCsp(nonce: string | undefined): string {
     "worker-src 'self' blob:",
     "img-src 'self' data: https:",
     "style-src 'self' 'unsafe-inline'",
+    "frame-src 'self' https://challenges.cloudflare.com",
     "object-src 'none'",
     "base-uri 'self'",
     "frame-ancestors 'none'",

@@ -26,9 +26,10 @@ export const variables = defineEnvVars({
   INTERNAL_QURAN_API_TOKEN: { schema: optionalString },
   OWNER_SOURCE_URL: { schema: optionalString },
   // Browser-visible: API base (same-origin "/api" fallback), Quran artifact
-  // environment switch, and the FCM push key.
+  // environment switch, the FCM push key, and the Turnstile sitekey.
   PUBLIC_API_BASE_URL: { public: true, schema: optionalString },
   PUBLIC_QURAN_API_BASE: { public: true, schema: optionalString },
   PUBLIC_ENV: { public: true, schema: optionalString },
   PUBLIC_FCM_VAPID_KEY: { public: true, schema: optionalString },
+  PUBLIC_TURNSTILE_SITE_KEY: { public: true, schema: optionalString },
 });

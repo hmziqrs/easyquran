@@ -3,8 +3,10 @@
   import AuthForm from "./AuthForm.svelte";
   import AuthField from "./AuthField.svelte";
   import PasswordInput from "./PasswordInput.svelte";
+  import TurnstileWidget from "./TurnstileWidget.svelte";
   import { Icon } from "#lib/components/icon/index.js";
   import type { RegisterFlow } from "#lib/auth/flows.svelte.js";
+  import { turnstileEnabled } from "#lib/auth/turnstile.js";
   import {
     dynamicValidator,
     fieldError,
@@ -28,6 +30,9 @@
   const registerErrors = new ServerFieldErrors();
   const totpErrors = new ServerFieldErrors();
 
+  let captchaToken = $state<string | null>(null);
+  let captchaAttempt = $state(0);
+
   const form = createForm(() => ({
     defaultValues: {
       name: flow.name,
@@ -43,8 +48,16 @@
       flow.email = value.email.trim();
       flow.password = value.password;
       flow.confirmPassword = value.confirm_password;
+      if (turnstileEnabled() && !captchaToken) {
+        flow.genericError = copy.captchaRequired;
+        return;
+      }
+      flow.turnstileToken = captchaToken;
       const ok = await flow.submit();
       if (!ok) {
+        // The token is single-use — force a fresh widget for the retry.
+        captchaToken = null;
+        captchaAttempt += 1;
         registerErrors.adopt(flow.fieldErrors);
         return;
       }
@@ -202,6 +215,17 @@
         />
       {/snippet}
     </form.Field>
+    {#if turnstileEnabled()}
+      {#key captchaAttempt}
+        <TurnstileWidget
+          label={copy.captchaLabel}
+          ontoken={(token) => {
+            captchaToken = token;
+            if (token) flow.genericError = null;
+          }}
+        />
+      {/key}
+    {/if}
     {#snippet footer()}
       <!-- Same rule as SignInForm: link only where there is no tab switcher. -->
       {#if variant === "page"}

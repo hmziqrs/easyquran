@@ -18,6 +18,9 @@ import {
   auth_more_sign_in_options_aria,
   auth_no_account_prompt,
   auth_oauth_error,
+  auth_captcha_error,
+  auth_captcha_label,
+  auth_captcha_required,
   auth_or_continue_with,
   auth_password_min_placeholder,
   auth_password_placeholder,
@@ -70,6 +73,9 @@ export interface AuthCopy {
   fieldConfirmPassword: string;
   haveAccountPrompt: string;
   oauthError: string;
+  captchaLabel: string;
+  captchaRequired: string;
+  captchaError: string;
   moreSignInOptionsAria: string;
   orContinueWith: string;
   continueWithProvider: (provider: string) => string;
@@ -112,6 +118,9 @@ export function getAuthCopy(locale: UiLocale = getLocale() as UiLocale): AuthCop
     fieldConfirmPassword: auth_field_confirm_password(undefined, { locale }),
     haveAccountPrompt: auth_have_account_prompt(undefined, { locale }),
     oauthError: auth_oauth_error(undefined, { locale }),
+    captchaLabel: auth_captcha_label(undefined, { locale }),
+    captchaRequired: auth_captcha_required(undefined, { locale }),
+    captchaError: auth_captcha_error(undefined, { locale }),
     moreSignInOptionsAria: auth_more_sign_in_options_aria(undefined, { locale }),
     orContinueWith: auth_or_continue_with(undefined, { locale }),
     continueWithProvider: (provider: string) =>

@@ -33,6 +33,11 @@ pub struct V1RegisterPayload {
     pub email: String,
     #[validate(length(min = PASSWORD_MIN, max = PASSWORD_MAX))]
     pub password: String,
+    /// Cloudflare Turnstile widget token; required only when the server has
+    /// `TURNSTILE_SECRET_KEY` configured (see services::turnstile).
+    #[serde(default)]
+    #[validate(length(max = 4096))]
+    pub turnstile_token: Option<String>,
 }
 
 impl V1RegisterPayload {
@@ -131,6 +136,7 @@ mod tests {
             name: "Alice".to_string(),
             email: "alice@example.com".to_string(),
             password: "s3cret".to_string(),
+            turnstile_token: None,
         };
         let new_user = payload.into_new_user();
         assert_eq!(new_user.name, "Alice");
@@ -145,6 +151,7 @@ mod tests {
             name: "Bob".to_string(),
             email: "bob@test.com".to_string(),
             password: "strongpassword123".to_string(),
+            turnstile_token: None,
         };
         assert!(payload.validate().is_ok());
     }
@@ -155,6 +162,7 @@ mod tests {
             name: "".to_string(),
             email: "bob@test.com".to_string(),
             password: "strongpassword123".to_string(),
+            turnstile_token: None,
         };
         assert!(payload.validate().is_err());
     }
@@ -165,6 +173,7 @@ mod tests {
             name: "Bob".to_string(),
             email: "bob@test.com".to_string(),
             password: "".to_string(),
+            turnstile_token: None,
         };
         assert!(payload.validate().is_err());
     }
@@ -175,6 +184,7 @@ mod tests {
             name: "Bob".to_string(),
             email: "not-an-email".to_string(),
             password: "strongpassword123".to_string(),
+            turnstile_token: None,
         };
         assert!(payload.validate().is_err());
     }
@@ -233,6 +243,7 @@ mod tests {
             name: "Bob".to_string(),
             email: "bob@test.com".to_string(),
             password: "a".repeat((PASSWORD_MAX + 1) as usize),
+            turnstile_token: None,
         };
         assert!(payload.validate().is_err());
     }
@@ -249,6 +260,7 @@ mod tests {
             name: "Bob".to_string(),
             email: "bob@test.com".to_string(),
             password: over_max,
+            turnstile_token: None,
         }
         .validate();
         assert_eq!(

@@ -51,6 +51,14 @@ export interface FlowDeps {
 
 const LOGIN_FIELDS = ["email", "password"] as const;
 const REGISTER_FIELDS = ["name", "email", "password", "confirm_password"] as const;
+
+interface RegisterBody {
+  name: string;
+  email: string;
+  password: string;
+  confirm_password: string;
+  turnstile_token?: string;
+}
 const VERIFY_EMAIL_FIELDS = ["code"] as const;
 const FORGOT_REQUEST_FIELDS = ["email"] as const;
 const FORGOT_VERIFY_FIELDS = ["email", "code"] as const;
@@ -293,6 +301,7 @@ export class RegisterFlow {
   email = $state("");
   password = $state("");
   confirmPassword = $state("");
+  turnstileToken = $state<string | null>(null);
   pending = $state(false);
   genericError = $state<string | null>(null);
   fieldErrors = $state<Readonly<Record<string, string>>>({});
@@ -322,14 +331,16 @@ export class RegisterFlow {
     this.fieldErrors = {};
     this.step = "registering";
     try {
+      const body: RegisterBody = {
+        name: this.name,
+        email: this.email,
+        password: this.password,
+        confirm_password: this.confirmPassword,
+      };
+      if (this.turnstileToken) body.turnstile_token = this.turnstileToken;
       const res = await this.client.unsafeRequest<unknown>("/auth/v1/register", {
         method: "POST",
-        body: {
-          name: this.name,
-          email: this.email,
-          password: this.password,
-          confirm_password: this.confirmPassword,
-        },
+        body,
       });
       if (!res.ok) {
         if (await adoptAlreadyAuthenticatedSession(this.state, res.status, res.error)) {
@@ -350,6 +361,8 @@ export class RegisterFlow {
       this.fail(0, null);
       return false;
     } finally {
+      // Turnstile tokens are single-use: a retry always needs a fresh one.
+      this.turnstileToken = null;
       this.pending = false;
     }
   }
