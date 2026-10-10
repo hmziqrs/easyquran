@@ -151,6 +151,10 @@ Persisted reader schema v4 includes:
   `web/src/lib/quran/script-availability.ts` (`isScriptEnabled`) against
   `clientQuranEnvironment()` (`web/src/lib/quran/client-environment.ts`); the setter and
   persisted-blob hydration refuse a disabled script (see `quran-system.md`, Script availability).
+  The preview specimen mirrors the selected script: same two verses (94:5–6) with verbatim
+  per-source text, Tajweed renders parsed rule colors, IndoPak uses the reader compat face; every
+  selectable Arabic face preloads when the section mounts so pills and specimen never render
+  fallbacks.
 - `translationSize`, integer 13–28 px; default 17 px.
 
 Schema v4 migration is decode-side only: v3 blobs hydrate with the `uthmani-annotated`

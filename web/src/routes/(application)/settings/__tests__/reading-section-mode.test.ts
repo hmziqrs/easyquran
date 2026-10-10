@@ -52,6 +52,7 @@ vi.mock("#lib/stores/reader.svelte.js", () => ({
 vi.mock("#lib/fonts/arabic-fonts.js", () => ({ loadArabicFont: vi.fn() }));
 
 import { getSettingsCopy } from "#lib/i18n/settings-copy.js";
+import { loadArabicFont } from "#lib/fonts/arabic-fonts.js";
 import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
 
 import ReadingSection from "../_components/ReadingSection.svelte";
@@ -65,6 +66,8 @@ beforeEach(() => {
   h.readerStub.mode = "verse";
   h.readerStub.isReadingMode = false;
   h.readerStub.isVerseMode = true;
+  h.readerStub.arabicScript = "uthmani";
+  vi.mocked(loadArabicFont).mockClear();
   h.setModeSpy.mockClear();
   h.setModeSpy.mockImplementation((m: string) => {
     h.readerStub.mode = m;
@@ -160,5 +163,40 @@ describe("ReadingSection production script gating", () => {
       expect(pillWithText(name).disabled, `${name} must stay selectable locally`).toBe(false);
     }
     expect(document.body.textContent).not.toContain(readingCopy.scriptDisabledNote);
+  });
+});
+
+describe("ReadingSection specimen follows the selected script", () => {
+  it("renders colored tajweed runs when tajweed is selected", async () => {
+    h.readerStub.arabicScript = "tajweed";
+    mountSection();
+    await settle();
+    const runs = [...document.querySelectorAll<HTMLElement>(".tajweed-run")];
+    expect(runs.length).toBeGreaterThan(0);
+    expect(runs.some((run) => run.style.color.length > 0)).toBe(true);
+  });
+
+  it("uses the IndoPak compat face for the specimen when indopak is selected", async () => {
+    h.readerStub.arabicScript = "indopak";
+    mountSection();
+    await settle();
+    expect(document.querySelector(".indopak-spec")).not.toBeNull();
+    expect(document.querySelector(".spec-arabic.indopak-spec")).not.toBeNull();
+  });
+
+  it("preloads every selectable Arabic face on mount", async () => {
+    mountSection();
+    await settle();
+    const load = vi.mocked(loadArabicFont);
+    for (const id of [
+      "amiri",
+      "scheherazade-new",
+      "noto-naskh-arabic",
+      "kfgqpc-hafs",
+      "kfgqpc-taha-v1",
+      "kfgqpc-taha-v1-bold",
+    ]) {
+      expect(load, `${id} must preload`).toHaveBeenCalledWith(id);
+    }
   });
 });

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onMount } from "svelte";
+
   import {
     TRANSLATION_FAMILIES,
     arabicFontStack,
@@ -16,6 +18,7 @@
   import { QuranSourceId, type QuranSourceId as QuranSourceIdValue } from "#lib/data/quran-types.js";
   import { clientQuranEnvironment } from "#lib/quran/client-environment.js";
   import { isScriptEnabled } from "#lib/quran/script-availability.js";
+  import { parseTajweedSegments, tajweedRuleColor } from "#lib/quran/view/tajweed.js";
   import { reader, type ReaderMode } from "#lib/stores/reader.svelte.js";
   import { cn } from "#lib/utils.js";
   import type { SettingsCopy } from "#lib/i18n/settings-copy.js";
@@ -30,18 +33,52 @@
     copy: SettingsCopy["reading"];
   } = $props();
 
-  const SPECIMEN = [
-    {
-      marker: "٥",
-      text: "فَإِنَّ مَعَ ٱلْعُسْرِ يُسْرًا",
-      sample: () => copy.sampleAlt,
-    },
-    {
-      marker: "٦",
-      text: "إِنَّ مَعَ ٱلْعُسْرِ يُسْرًا",
-      sample: () => copy.sample,
-    },
-  ] as const;
+  // Preview mirrors the selected script: same two verses (94:5–6), verbatim text per
+  // source DB. Tajweed renders parsed rule runs; IndoPak uses the reader compat face.
+  interface SpecimenVerse {
+    readonly marker: string;
+    readonly text: string;
+    readonly sample: () => string;
+  }
+
+  function specimenVerses(first: string, second: string): readonly SpecimenVerse[] {
+    return [
+      { marker: "٥", text: first, sample: () => copy.sampleAlt },
+      { marker: "٦", text: second, sample: () => copy.sample },
+    ];
+  }
+
+  const SPECIMEN = {
+    [QuranSourceId.AnnotatedUthmani]: specimenVerses(
+      "فَإِنَّ مَعَ ٱلْعُسْرِ يُسْرًا",
+      "إِنَّ مَعَ ٱلْعُسْرِ يُسْرًۭا",
+    ),
+    [QuranSourceId.TanzilUthmani]: specimenVerses(
+      "فَإِنَّ مَعَ ٱلْعُسْرِ يُسْرًا",
+      "إِنَّ مَعَ ٱلْعُسْرِ يُسْرًا",
+    ),
+    [QuranSourceId.TanzilSimpleClean]: specimenVerses("فإن مع العسر يسرا", "إن مع العسر يسرا"),
+    [QuranSourceId.Indopak]: specimenVerses(
+      "فَاِنَّ مَعَ الۡعُسۡرِ يُسۡرًا ۙ",
+      "اِنَّ مَعَ الۡعُسۡرِ يُسۡرًا ؕ",
+    ),
+    [QuranSourceId.Tajweed]: specimenVerses(
+      "فَإِ[g[نّ]َ مَعَ [h:14550[ٱ]لْعُسْرِ يُسْرًا",
+      "إِ[g[نّ]َ مَعَ [h:14550[ٱ]لْعُسْرِ يُسْرًا",
+    ),
+  } satisfies Record<QuranSourceIdValue, readonly SpecimenVerse[]>;
+
+  const specimen = $derived(SPECIMEN[reader.arabicScript]);
+  const specimenIsTajweed = $derived(reader.arabicScript === QuranSourceId.Tajweed);
+  const specimenIsIndopak = $derived(reader.arabicScript === QuranSourceId.Indopak);
+
+  onMount(() => {
+    // Every selectable face loads up front so the pills and the specimen render their
+    // real typefaces instead of fallbacks (FontFace loading is explicit, not CSS-driven).
+    for (const fontId of enabledArabicFontIds(clientQuranEnvironment())) {
+      void loadArabicFont(fontId);
+    }
+  });
 
   const pill =
     "flex items-center rounded-pill border px-3.5 py-2 text-start text-caption transition-colors duration-150";
@@ -132,20 +169,30 @@
         <p class="eyebrow">{copy.preview}</p>
         {#if reader.mode === "verse"}
           <div class="mt-3.5 grid gap-5">
-            {#each SPECIMEN as verse (verse.marker)}
+            {#each specimen as verse (verse.marker)}
               <div>
-                <p class="spec-arabic" dir="rtl" lang="ar"
-                  >{verse.text}<span class="ayah-marker">{verse.marker}</span></p
+                <p class:indopak-spec={specimenIsIndopak} class="spec-arabic" dir="rtl" lang="ar"
+                  >{#if specimenIsTajweed}{#each parseTajweedSegments(verse.text) as segment}{#if segment.rule}<span
+                        class="tajweed-run"
+                        style:color={tajweedRuleColor(segment.rule)}>{segment.text}</span
+                      >{:else}{segment.text}{/if}{/each}{:else}{verse.text}{/if}<span
+                    class="ayah-marker">{verse.marker}</span></p
                 >
                 <p class="spec-translation" dir="auto">{verse.sample()}</p>
               </div>
             {/each}
           </div>
         {:else}
-          <p class="spec-flow mt-3.5" dir="rtl" lang="ar">
-            {#each SPECIMEN as verse (verse.marker)}{verse.text}<span class="ayah-marker"
+          <p class:indopak-spec={specimenIsIndopak} class="spec-flow mt-3.5" dir="rtl" lang="ar">
+            {#each specimen as verse (verse.marker)}{#if specimenIsTajweed}{#each parseTajweedSegments(
+                verse.text,
+              ) as segment}{#if segment.rule}<span
+                  class="tajweed-run"
+                  style:color={tajweedRuleColor(segment.rule)}>{segment.text}</span
+                >{:else}{segment.text}{/if}{/each}{:else}{verse.text}{/if}<span class="ayah-marker"
                 >{verse.marker}</span
-              > {/each}
+              >{" "}
+            {/each}
           </p>
         {/if}
       </div>
@@ -296,5 +343,24 @@
     text-align: justify;
     text-align-last: center;
     word-spacing: 0.14em;
+  }
+
+  /* Same compat face the reader's IndoPak path uses (IndoPakAyah.svelte); declared here
+     so the settings specimen renders IndoPak text without mounting the reader. */
+  @font-face {
+    font-family: "IndoPak Reader Compat";
+    src:
+      url("/fonts/indopak-reader-compat-v4.woff2") format("woff2"),
+      url("/fonts/indopak-reader-compat-v4.ttf") format("truetype");
+    font-display: swap;
+  }
+
+  .indopak-spec {
+    font-family: "IndoPak Reader Compat", var(--reader-arabic-family, var(--font-arabic));
+  }
+
+  .tajweed-run {
+    /* Color comes from the inline style (rule palette in lib/quran/view/tajweed.ts). */
+    text-decoration: none;
   }
 </style>
