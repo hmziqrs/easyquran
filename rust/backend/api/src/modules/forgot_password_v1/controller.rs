@@ -27,32 +27,101 @@ const ABUSE_LIMITER_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::A
     block_duration: 86400,
 };
 
-/// Single-use reset tokens minted by `verify`, consumed by `reset`; backed by an in-memory TTL map (a restart drops outstanding tokens).
 mod reset_token {
     use super::*;
     use rand::Rng;
     use std::collections::HashMap;
     use std::sync::{Mutex, OnceLock};
-    use std::time::Instant;
+    use std::time::{Duration, Instant};
     use zeroize::Zeroize;
 
-    const TTL_SECS: u64 = 600;
+    const TOKEN_TTL: Duration = Duration::from_secs(600);
+    const MAX_TRACKED_USERS: usize = 10_000;
 
     pub struct ResetGrant {
         pub user_id: i32,
         pub session_auth_secret: String,
+        generation: String,
+        issued_at: Instant,
     }
 
-    type TokenMap = HashMap<String, (ResetGrant, Instant)>;
+    #[derive(Default)]
+    struct TokenMap {
+        grants: HashMap<String, ResetGrant>,
+        generations: HashMap<i32, (String, Instant)>,
+    }
+
+    impl TokenMap {
+        fn reap_stale(&mut self, now: Instant) {
+            self.grants
+                .retain(|_, grant| now.saturating_duration_since(grant.issued_at) < TOKEN_TTL);
+            self.generations
+                .retain(|_, (_, at)| now.saturating_duration_since(*at) < TOKEN_TTL);
+        }
+
+        fn mint(
+            &mut self,
+            token: &str,
+            user_id: i32,
+            session_auth_secret: String,
+            issued_at: Instant,
+        ) -> Result<(), ErrorResponse> {
+            self.reap_stale(issued_at);
+            if !self.generations.contains_key(&user_id)
+                && self.generations.len() >= MAX_TRACKED_USERS
+            {
+                return Err(ErrorResponse::new(ErrorCode::ServiceUnavailable)
+                    .with_message("Password recovery is temporarily unavailable"));
+            }
+            self.grants.retain(|_, grant| grant.user_id != user_id);
+            let generation = namespaced_key(token);
+            self.generations
+                .insert(user_id, (generation.clone(), issued_at));
+            self.grants.insert(
+                generation.clone(),
+                ResetGrant {
+                    user_id,
+                    session_auth_secret,
+                    generation,
+                    issued_at,
+                },
+            );
+            Ok(())
+        }
+
+        fn take(&mut self, token: &str, now: Instant) -> Option<ResetGrant> {
+            self.reap_stale(now);
+            self.grants.remove(&namespaced_key(token))
+        }
+
+        fn restore_after_rejection(
+            &mut self,
+            grant: ResetGrant,
+            error: &ErrorResponse,
+            now: Instant,
+        ) -> bool {
+            self.reap_stale(now);
+            if error.code != ErrorCode::RateLimited
+                || now.saturating_duration_since(grant.issued_at) >= TOKEN_TTL
+                || self.grants.contains_key(&grant.generation)
+                || !self
+                    .generations
+                    .get(&grant.user_id)
+                    .is_some_and(|(generation, issued_at)| {
+                        *generation == grant.generation && *issued_at == grant.issued_at
+                    })
+            {
+                return false;
+            }
+            self.grants.insert(grant.generation.clone(), grant);
+            true
+        }
+    }
 
     static TOKENS: OnceLock<Mutex<TokenMap>> = OnceLock::new();
 
     fn tokens() -> &'static Mutex<TokenMap> {
-        TOKENS.get_or_init(|| Mutex::new(HashMap::new()))
-    }
-
-    fn reap_stale(map: &mut TokenMap) {
-        map.retain(|_, (_, at)| at.elapsed().as_secs() < TTL_SECS);
+        TOKENS.get_or_init(|| Mutex::new(TokenMap::default()))
     }
 
     fn namespaced_key(token: &str) -> String {
@@ -69,28 +138,176 @@ mod reset_token {
             error!(error = %e, "reset_token map poisoned");
             ErrorResponse::new(ErrorCode::InternalServerError)
         })?;
-        reap_stale(&mut map);
-        map.retain(|_, (grant, _)| grant.user_id != account.id);
-        if map.len() >= 10_000 {
-            return Err(ErrorResponse::new(ErrorCode::ServiceUnavailable)
-                .with_message("Password recovery is temporarily unavailable"));
-        }
-        let grant = ResetGrant {
-            user_id: account.id,
-            session_auth_secret: account.session_auth_secret.clone(),
-        };
-        map.insert(namespaced_key(&token), (grant, Instant::now()));
+        map.mint(
+            &token,
+            account.id,
+            account.session_auth_secret.clone(),
+            Instant::now(),
+        )?;
         Ok(token)
     }
 
-    /// Removal on take is required for single-use semantics — never a read (`get`), or a replayed `reset` could reuse the token.
+    /// Removes the grant so a concurrent reset cannot replay it.
     pub async fn take(token: &str) -> Result<Option<ResetGrant>, ErrorResponse> {
         let mut map = tokens().lock().map_err(|e| {
             error!(error = %e, "reset_token map poisoned");
             ErrorResponse::new(ErrorCode::InternalServerError)
         })?;
-        reap_stale(&mut map);
-        Ok(map.remove(&namespaced_key(token)).map(|(grant, _)| grant))
+        Ok(map.take(token, Instant::now()))
+    }
+
+    /// Restores only an unexpired, unsuperseded grant rejected before password work was admitted.
+    pub async fn restore_after_rejection(
+        grant: ResetGrant,
+        error: &ErrorResponse,
+    ) -> Result<bool, ErrorResponse> {
+        if error.code != ErrorCode::RateLimited {
+            return Ok(false);
+        }
+        let mut map = tokens().lock().map_err(|e| {
+            error!(error = %e, "reset_token map poisoned");
+            ErrorResponse::new(ErrorCode::InternalServerError)
+        })?;
+        Ok(map.restore_after_rejection(grant, error, Instant::now()))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn busy_rejection_preserves_same_bound_grant_for_one_retry() {
+            let mut map = TokenMap::default();
+            let issued_at = Instant::now();
+            map.mint("original", 7, "credential-binding".into(), issued_at)
+                .unwrap();
+            let grant = map.take("original", issued_at).unwrap();
+            assert!(map.take("original", issued_at).is_none());
+            assert!(map.restore_after_rejection(
+                grant,
+                &ErrorResponse::new(ErrorCode::RateLimited),
+                issued_at,
+            ));
+            let retried = map.take("original", issued_at).unwrap();
+            assert_eq!(retried.user_id, 7);
+            assert_eq!(retried.session_auth_secret, "credential-binding");
+            assert_eq!(retried.issued_at, issued_at);
+            assert!(map.take("original", issued_at).is_none());
+        }
+
+        #[test]
+        fn retry_does_not_extend_original_expiry() {
+            let mut map = TokenMap::default();
+            let issued_at = Instant::now();
+            map.mint("original", 7, "binding".into(), issued_at)
+                .unwrap();
+            let retry_at = issued_at + TOKEN_TTL - Duration::from_secs(1);
+            let grant = map.take("original", retry_at).unwrap();
+            assert!(map.restore_after_rejection(
+                grant,
+                &ErrorResponse::new(ErrorCode::RateLimited),
+                retry_at,
+            ));
+            assert!(map.take("original", issued_at + TOKEN_TTL).is_none());
+        }
+
+        #[test]
+        fn expired_in_flight_grant_cannot_be_restored() {
+            let mut map = TokenMap::default();
+            let issued_at = Instant::now();
+            map.mint("original", 7, "binding".into(), issued_at)
+                .unwrap();
+            let grant = map.take("original", issued_at).unwrap();
+            assert!(!map.restore_after_rejection(
+                grant,
+                &ErrorResponse::new(ErrorCode::RateLimited),
+                issued_at + TOKEN_TTL,
+            ));
+            assert!(map.take("original", issued_at + TOKEN_TTL).is_none());
+        }
+
+        #[test]
+        fn superseding_grant_cannot_be_overwritten_by_old_busy_retry() {
+            let mut map = TokenMap::default();
+            let issued_at = Instant::now();
+            map.mint("old", 7, "old-binding".into(), issued_at).unwrap();
+            let old = map.take("old", issued_at).unwrap();
+            map.mint("new", 7, "new-binding".into(), issued_at).unwrap();
+            assert!(!map.restore_after_rejection(
+                old,
+                &ErrorResponse::new(ErrorCode::RateLimited),
+                issued_at,
+            ));
+            assert!(map.take("old", issued_at).is_none());
+            assert_eq!(
+                map.take("new", issued_at).unwrap().session_auth_secret,
+                "new-binding",
+            );
+        }
+
+        #[test]
+        fn consuming_newer_grant_does_not_revive_old_busy_grant() {
+            let mut map = TokenMap::default();
+            let issued_at = Instant::now();
+            map.mint("old", 7, "old-binding".into(), issued_at).unwrap();
+            let old = map.take("old", issued_at).unwrap();
+            map.mint("new", 7, "new-binding".into(), issued_at).unwrap();
+            let new = map.take("new", issued_at).unwrap();
+            assert!(!map.restore_after_rejection(
+                old,
+                &ErrorResponse::new(ErrorCode::RateLimited),
+                issued_at,
+            ));
+            assert!(map.take("old", issued_at).is_none());
+            assert!(map.restore_after_rejection(
+                new,
+                &ErrorResponse::new(ErrorCode::RateLimited),
+                issued_at,
+            ));
+            assert_eq!(
+                map.take("new", issued_at).unwrap().session_auth_secret,
+                "new-binding",
+            );
+        }
+
+        #[test]
+        fn non_admission_errors_leave_grant_consumed() {
+            for code in [ErrorCode::InvalidInput, ErrorCode::InternalServerError] {
+                let mut map = TokenMap::default();
+                let issued_at = Instant::now();
+                map.mint("original", 7, "binding".into(), issued_at)
+                    .unwrap();
+                let grant = map.take("original", issued_at).unwrap();
+                assert!(!map.restore_after_rejection(grant, &ErrorResponse::new(code), issued_at,));
+                assert!(map.take("original", issued_at).is_none());
+            }
+        }
+
+        #[test]
+        fn consumed_generation_markers_stay_bounded_and_expire() {
+            let mut map = TokenMap::default();
+            let issued_at = Instant::now();
+            for user_id in 0..MAX_TRACKED_USERS as i32 {
+                let token = user_id.to_string();
+                map.mint(&token, user_id, "binding".into(), issued_at)
+                    .unwrap();
+                map.take(&token, issued_at).unwrap();
+            }
+            assert_eq!(
+                map.mint("overflow", i32::MAX, "binding".into(), issued_at)
+                    .unwrap_err()
+                    .code,
+                ErrorCode::ServiceUnavailable,
+            );
+            map.mint(
+                "after-expiry",
+                i32::MAX,
+                "binding".into(),
+                issued_at + TOKEN_TTL,
+            )
+            .unwrap();
+            assert_eq!(map.generations.len(), 1);
+        }
     }
 }
 
@@ -271,6 +488,7 @@ pub async fn reset(
             ))
         }
         Err(err) => {
+            reset_token::restore_after_rejection(grant, &err).await?;
             error!(user_id, "Failed to reset password: {}", err);
             Err(err)
         }
@@ -312,12 +530,10 @@ mod tests {
             .unwrap();
     }
 
-    // Guards only the handler source — each test's own text must not satisfy
-    // its asserts, so the strings they pin appear in the asserts only.
     fn handler_src() -> &'static str {
         let src = include_str!("controller.rs");
         let (code, _) = src
-            .split_once("#[cfg(test)]")
+            .rsplit_once("#[cfg(test)]")
             .expect("tests module present");
         code
     }
