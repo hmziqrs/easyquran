@@ -136,6 +136,7 @@
     const status = authState.status;
     const user = authState.user;
     untrack(() => bookmarks.onAuthChanged(status === "authenticated" && user !== null));
+    untrack(() => { void notifications.onAuthChanged(status, user?.id ?? null); });
   });
 
   beforeNavigate(({ willUnload, to }) => {

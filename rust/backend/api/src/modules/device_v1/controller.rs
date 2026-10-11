@@ -24,7 +24,7 @@ async fn evict_beyond_cap(
     let devices = device::Entity::list_for_user(db, user_id).await?;
     if let Some(stale) = devices.get(MAX_DEVICES_PER_USER..) {
         for dev in stale {
-            device::Entity::prune_by_id(db, dev.id).await?;
+            device::Entity::prune_owned_by_id(db, dev.id, user_id).await?;
         }
     }
     Ok(())
@@ -37,7 +37,8 @@ pub async fn register(
     auth: AuthSession,
     payload: ValidatedJson<V1RegisterDevicePayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
+    ensure_expected_owner(user.id, payload.expected_user_id)?;
     let model = device::Entity::upsert(
         &state.sea_db,
         device::NewDevice {
@@ -66,7 +67,7 @@ pub async fn list(
     state: State<AppState>,
     auth: AuthSession,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
     let devices = device::Entity::list_for_user(&state.sea_db, user.id).await?;
     Ok((StatusCode::OK, Json(json!({ "devices": devices }))))
 }
@@ -78,13 +79,18 @@ pub async fn delete(
     auth: AuthSession,
     payload: ValidatedJson<V1DeleteDevicePayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap();
+    let user = auth.user_required()?;
+    ensure_expected_owner(user.id, payload.expected_user_id)?;
     let removed = device::Entity::delete_for_user(&state.sea_db, user.id, &payload.token).await?;
-    if removed == 0 {
-        return Err(ErrorResponse::new(ErrorCode::RecordNotFound)
-            .with_message("No device found for this token"));
-    }
     Ok((StatusCode::OK, Json(json!({ "removed": removed }))))
+}
+
+fn ensure_expected_owner(user_id: i32, expected_user_id: i32) -> Result<(), ErrorResponse> {
+    if user_id != expected_user_id {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("Push subscription account changed"));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -100,7 +106,7 @@ mod tests {
             r#"CREATE TABLE "devices" (
                 "id" INTEGER PRIMARY KEY AUTOINCREMENT,
                 "user_id" INTEGER NOT NULL,
-                "token" TEXT NOT NULL,
+                "token" TEXT NOT NULL UNIQUE,
                 "platform" TEXT NOT NULL,
                 "created_at" TEXT NOT NULL,
                 "updated_at" TEXT NOT NULL,
@@ -155,5 +161,40 @@ mod tests {
 
         let devices = device::Entity::list_for_user(&db, 1).await.expect("list");
         assert_eq!(devices.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn registering_same_token_transfers_ownership_without_duplicate_delivery() {
+        let db = test_db().await;
+        seed(&db, 1, "shared-browser").await;
+        seed(&db, 2, "shared-browser").await;
+        let transferred = device::Entity::list_for_user(&db, 2).await.unwrap();
+        device::Entity::prune_owned_by_id(&db, transferred[0].id, 1)
+            .await
+            .unwrap();
+        assert!(device::Entity::list_for_user(&db, 1)
+            .await
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            device::Entity::list_for_user(&db, 2).await.unwrap().len(),
+            1
+        );
+        assert_eq!(
+            device::Entity::delete_for_user(&db, 1, "shared-browser")
+                .await
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            device::Entity::list_for_user(&db, 2).await.unwrap().len(),
+            1
+        );
+    }
+
+    #[test]
+    fn stale_registration_and_deletion_owner_are_rejected() {
+        assert!(ensure_expected_owner(2, 1).is_err());
+        assert!(ensure_expected_owner(2, 2).is_ok());
     }
 }

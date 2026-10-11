@@ -8,8 +8,9 @@ const { messaging, firebaseCore, analytics } = vi.hoisted(() => ({
     initMessaging: vi.fn<() => Promise<Messaging | null>>(),
     requestPermission: vi.fn<() => Promise<string>>(),
     getFcmToken: vi.fn<() => Promise<string | null>>(),
-    registerTokenWithServer: vi.fn<() => Promise<boolean>>(),
-    unregisterTokenFromServer: vi.fn<() => Promise<boolean>>(),
+    registerTokenWithServer:
+      vi.fn<(token: string, ownerId: number, signal?: AbortSignal) => Promise<boolean>>(),
+    unregisterTokenFromServer: vi.fn<(token: string, ownerId: number) => Promise<boolean>>(),
     deleteFcmToken: vi.fn<() => Promise<void>>(),
     onForegroundMessage: vi.fn<(cb: (p: MessagePayload) => void) => Promise<Unsubscribe>>(),
   },
@@ -26,6 +27,13 @@ import { notificationsStatus } from "#lib/components/notifications/notifications
 import { createNotifications } from "#lib/stores/notifications.svelte.js";
 
 const STORAGE_KEY = "easyquran.fcm";
+const stores: ReturnType<typeof createNotifications>[] = [];
+function createOwnedStore() {
+  const store = createNotifications();
+  void store.onAuthChanged("authenticated", 7);
+  stores.push(store);
+  return store;
+}
 let foregroundCb: ((p: MessagePayload) => void) | undefined;
 
 const statusMessages = {
@@ -77,12 +85,18 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const store of stores.splice(0)) store.dispose();
   vi.restoreAllMocks();
 });
 
 describe("NotificationsStore.subscribe guards", () => {
-  it("returns false and skips getFcmToken when subscribe is already busy", async () => {
+  it("rejects anonymous push registration", async () => {
     const store = createNotifications();
+    expect(await store.subscribe()).toBe(false);
+    expect(messaging.registerTokenWithServer).not.toHaveBeenCalled();
+  });
+  it("returns false and skips getFcmToken when subscribe is already busy", async () => {
+    const store = createOwnedStore();
     let releasePermission: (value: string) => void = () => {};
     messaging.requestPermission.mockReturnValue(
       new Promise<string>((resolve) => {
@@ -100,7 +114,7 @@ describe("NotificationsStore.subscribe guards", () => {
 
   it("returns false without registering when permission is denied", async () => {
     messaging.requestPermission.mockResolvedValue("denied");
-    const store = createNotifications();
+    const store = createOwnedStore();
     const result = await store.subscribe();
     expect(result).toBe(false);
     expect(messaging.registerTokenWithServer).not.toHaveBeenCalled();
@@ -109,11 +123,26 @@ describe("NotificationsStore.subscribe guards", () => {
 });
 
 describe("NotificationsStore hydration", () => {
+  it("does not restore an account-owned subscription before authentication resolves", async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ token: "old", subscribed: true, ownerId: 7 }),
+    );
+    const store = createNotifications();
+    store.hydrate();
+    await flush();
+    expect(store.subscribed).toBe(false);
+    expect(messaging.registerTokenWithServer).not.toHaveBeenCalled();
+    store.dispose();
+  });
   it("skips Messaging listeners and token refresh when unsupported", async () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ token: "old", subscribed: true }));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ token: "old", subscribed: true, ownerId: 7 }),
+    );
     messaging.isMessagingSupported.mockResolvedValue(false);
 
-    const store = createNotifications();
+    const store = createOwnedStore();
     store.hydrate();
     await flush();
 
@@ -126,9 +155,12 @@ describe("NotificationsStore hydration", () => {
   });
 
   it("wires once and refreshes an existing subscription when supported", async () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ token: "old", subscribed: true }));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ token: "old", subscribed: true, ownerId: 7 }),
+    );
 
-    const store = createNotifications();
+    const store = createOwnedStore();
     store.hydrate();
     store.hydrate();
     await flush();
@@ -143,26 +175,33 @@ describe("NotificationsStore hydration", () => {
 describe("NotificationsStore.subscribe happy path", () => {
   it("registers the token, flips subscribed, and persists the record", async () => {
     messaging.getFcmToken.mockResolvedValue("abc-123");
-    const store = createNotifications();
+    const store = createOwnedStore();
     const result = await store.subscribe();
     expect(result).toBe(true);
-    expect(messaging.registerTokenWithServer).toHaveBeenCalledWith("abc-123");
+    expect(messaging.registerTokenWithServer).toHaveBeenCalledWith(
+      "abc-123",
+      7,
+      expect.any(AbortSignal),
+    );
     expect(store.subscribed).toBe(true);
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
-    expect(stored).toEqual({ token: "abc-123", subscribed: true });
+    expect(stored).toEqual({ token: "abc-123", subscribed: true, ownerId: 7 });
   });
 });
 
 describe("NotificationsStore #refreshToken dedup", () => {
   it("shares a single getFcmToken call across concurrent refresh triggers", async () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ token: "old", subscribed: true }));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ token: "old", subscribed: true, ownerId: 7 }),
+    );
     let release: (value: string | null) => void = () => {};
     messaging.getFcmToken.mockReturnValue(
       new Promise<string | null>((resolve) => {
         release = resolve;
       }),
     );
-    const store = createNotifications();
+    const store = createOwnedStore();
     store.hydrate();
     await flush();
     expect(messaging.getFcmToken).toHaveBeenCalledTimes(1);
@@ -177,7 +216,10 @@ describe("NotificationsStore #refreshToken dedup", () => {
 
 describe("NotificationsStore generation race-guard", () => {
   it("does not register the stale token after unsubscribe bumps the generation", async () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ token: "old", subscribed: true }));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ token: "old", subscribed: true, ownerId: 7 }),
+    );
     let release: (value: string | null) => void = () => {};
     messaging.getFcmToken.mockReturnValue(
       new Promise<string | null>((resolve) => {
@@ -187,7 +229,7 @@ describe("NotificationsStore generation race-guard", () => {
     messaging.unregisterTokenFromServer.mockResolvedValue(true);
     messaging.deleteFcmToken.mockResolvedValue(undefined);
 
-    const store = createNotifications();
+    const store = createOwnedStore();
     store.hydrate();
     await flush();
 
@@ -201,14 +243,15 @@ describe("NotificationsStore generation race-guard", () => {
     expect(messaging.registerTokenWithServer).not.toHaveBeenCalled();
     expect(store.subscribed).toBe(false);
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
-    expect(stored).toEqual({ token: null, subscribed: false });
+    expect(stored).toEqual({ token: null, subscribed: false, ownerId: 7 });
     store.dispose();
   });
 });
 
 describe("NotificationsStore foreground message", () => {
   it("exposes the foreground payload and bumps the sequence counter", async () => {
-    const store = createNotifications();
+    const store = createOwnedStore();
+    await store.subscribe();
     store.hydrate();
     await flush();
     expect(foregroundCb).toBeTypeOf("function");
@@ -221,7 +264,8 @@ describe("NotificationsStore foreground message", () => {
   });
 
   it("clearMessage nulls the last message", async () => {
-    const store = createNotifications();
+    const store = createOwnedStore();
+    await store.subscribe();
     store.hydrate();
     await flush();
     // SAFETY: minimal fixture for the foreground-message path; only messageId (a required string field) is read.
@@ -235,8 +279,11 @@ describe("NotificationsStore foreground message", () => {
 
 describe("NotificationsStore.syncPermission", () => {
   it("revokes subscription when permission has flipped to denied", async () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ token: "tok", subscribed: true }));
-    const store = createNotifications();
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ token: "tok", subscribed: true, ownerId: 7 }),
+    );
+    const store = createOwnedStore();
     store.hydrate();
     await flush();
     expect(store.subscribed).toBe(true);
@@ -246,14 +293,14 @@ describe("NotificationsStore.syncPermission", () => {
 
     expect(store.subscribed).toBe(false);
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
-    expect(stored).toEqual({ token: null, subscribed: false });
+    expect(stored).toEqual({ token: null, subscribed: false, ownerId: 7 });
     store.dispose();
   });
 });
 
 describe("NotificationsStore capability split", () => {
   it("marks the store configured and supported on the Chrome-capable path", async () => {
-    const store = createNotifications();
+    const store = createOwnedStore();
     expect(store.supported).toBe(null);
     store.hydrate();
     await flush();
@@ -263,7 +310,7 @@ describe("NotificationsStore capability split", () => {
 
   it("reports unavailable when messaging is not configured even though the probe passes", async () => {
     firebaseCore.isMessagingConfigured = false;
-    const store = createNotifications();
+    const store = createOwnedStore();
     store.hydrate();
     await flush();
     expect(store.supported).toBe(true);
@@ -280,7 +327,7 @@ describe("NotificationsStore capability split", () => {
 
   it("re-runs the support probe on visible tab return while unsupported", async () => {
     messaging.isMessagingSupported.mockResolvedValueOnce(false).mockResolvedValue(true);
-    const store = createNotifications();
+    const store = createOwnedStore();
     store.hydrate();
     await flush();
     expect(store.supported).toBe(false);
@@ -291,7 +338,7 @@ describe("NotificationsStore capability split", () => {
 
   it("flags pushError when the token fetch fails and clears it on a later success", async () => {
     messaging.getFcmToken.mockResolvedValue(null);
-    const store = createNotifications();
+    const store = createOwnedStore();
     await expect(store.subscribe()).resolves.toBe(false);
     expect(store.pushError).toBe(true);
     expect(
@@ -307,5 +354,140 @@ describe("NotificationsStore capability split", () => {
     messaging.getFcmToken.mockResolvedValue("tok-retry");
     await expect(store.subscribe()).resolves.toBe(true);
     expect(store.pushError).toBe(false);
+  });
+});
+
+describe("NotificationsStore account privacy", () => {
+  it("always registers unchanged tokens for the authenticated owner", async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ token: "token-xyz", subscribed: true, ownerId: 7 }),
+    );
+    const store = createOwnedStore();
+    store.hydrate();
+    await flush(30);
+    expect(messaging.registerTokenWithServer).toHaveBeenCalledWith(
+      "token-xyz",
+      7,
+      expect.any(AbortSignal),
+    );
+    expect(store.subscribed).toBe(true);
+  });
+
+  it("clears former owner and tears down registration before another account subscribes", async () => {
+    const store = createOwnedStore();
+    await store.subscribe();
+    await store.onAuthChanged("authenticated", 8);
+    expect(store.subscribed).toBe(false);
+    expect(messaging.unregisterTokenFromServer).toHaveBeenCalledWith("token-xyz", 7);
+    expect(messaging.deleteFcmToken).toHaveBeenCalledOnce();
+    await store.subscribe();
+    expect(messaging.registerTokenWithServer).toHaveBeenLastCalledWith(
+      "token-xyz",
+      8,
+      expect.any(AbortSignal),
+    );
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null")).toEqual({
+      token: "token-xyz",
+      subscribed: true,
+      ownerId: 8,
+    });
+  });
+
+  it("aborts and ignores an old account registration completing after a switch", async () => {
+    let release: (value: boolean) => void = () => {};
+    messaging.registerTokenWithServer.mockReturnValueOnce(
+      new Promise<boolean>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const store = createOwnedStore();
+    const subscription = store.subscribe();
+    await flush(30);
+    const signal = messaging.registerTokenWithServer.mock.calls[0]?.[2];
+    await store.onAuthChanged("authenticated", 8);
+    expect(signal?.aborted).toBe(true);
+    release(true);
+    expect(await subscription).toBe(false);
+    expect(store.subscribed).toBe(false);
+    await store.subscribe();
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null")?.ownerId).toBe(8);
+  });
+
+  it("rejects delayed token results from the former owner", async () => {
+    let release: (value: string | null) => void = () => {};
+    messaging.getFcmToken.mockReturnValueOnce(
+      new Promise<string | null>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const store = createOwnedStore();
+    const subscription = store.subscribe();
+    await flush(30);
+    await store.onAuthChanged("authenticated", 8);
+    release("former-owner-token");
+    expect(await subscription).toBe(false);
+    expect(messaging.registerTokenWithServer).not.toHaveBeenCalled();
+  });
+
+  it("rejects delayed permission results after logout", async () => {
+    let release: (value: string) => void = () => {};
+    messaging.requestPermission.mockReturnValueOnce(
+      new Promise<string>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const store = createOwnedStore();
+    const subscription = store.subscribe();
+    await store.prepareLogout();
+    release("granted");
+    expect(await subscription).toBe(false);
+    expect(messaging.getFcmToken).not.toHaveBeenCalled();
+  });
+
+  it("revokes foreign or ownerless persisted tokens when booting under a known account", async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ token: "former-token", subscribed: true, ownerId: 8 }),
+    );
+    const store = createOwnedStore();
+    store.hydrate();
+    await flush(30);
+    expect(store.subscribed).toBe(false);
+    expect(messaging.unregisterTokenFromServer).toHaveBeenCalledWith("former-token", 8);
+    expect(messaging.deleteFcmToken).toHaveBeenCalledOnce();
+    expect(messaging.registerTokenWithServer).not.toHaveBeenCalled();
+  });
+
+  it("clears locally on offline logout even when server and Firebase cleanup fail", async () => {
+    const store = createOwnedStore();
+    await store.subscribe();
+    messaging.unregisterTokenFromServer.mockRejectedValue(new Error("offline"));
+    messaging.deleteFcmToken.mockRejectedValue(new Error("offline"));
+    await expect(store.prepareLogout()).resolves.toBeUndefined();
+    expect(store.subscribed).toBe(false);
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null")?.token).toBeNull();
+  });
+
+  it("never displays private legacy foreground content or identifiers", async () => {
+    const store = createOwnedStore();
+    store.hydrate();
+    await flush(30);
+    await store.subscribe();
+    foregroundCb?.({
+      from: "fcm",
+      collapseKey: "private-123",
+      messageId: "m",
+      notification: { title: "Secret title", body: "Private body" },
+      data: { url: "/private", user_id: "7", body: "More private content" },
+    });
+    expect(store.lastMessage?.notification).toEqual({
+      title: "EasyQuran",
+      body: "Open EasyQuran to view notifications.",
+    });
+    expect(store.lastMessage?.data).toBeUndefined();
+    await store.onAuthChanged("anonymous", null);
+    foregroundCb?.({ from: "fcm", collapseKey: "private-123", messageId: "m" });
+    expect(store.lastMessage).toBeNull();
   });
 });

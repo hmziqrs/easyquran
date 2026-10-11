@@ -10,6 +10,7 @@ mod m000007_bookmarks;
 mod m000008_bookmark_verse_unique;
 mod m000009_lowercase_emails;
 mod m000010_passkey_credentials;
+mod m000011_device_token_ownership;
 
 pub struct Migrator;
 
@@ -51,6 +52,7 @@ impl MigratorTrait for Migrator {
             // wrote this table but no migration ever created it, so passkey
             // writes and the identities COUNT(*) failed on every real DB.
             Box::new(m000010_passkey_credentials::Migration),
+            Box::new(m000011_device_token_ownership::Migration),
         ]
     }
 }

@@ -9,6 +9,7 @@ import { version } from "$app/env";
 import { assets, immutable } from "$app/manifest";
 import { resolve } from "$app/paths";
 
+import { PUSH_TITLE, PUSH_BODY, PUSH_TAG } from "./lib/firebase/push-privacy";
 import {
   SKIP_WAITING,
   APP_READY,
@@ -949,32 +950,14 @@ function safeTarget(raw: unknown): string {
   }
 }
 
-interface PushPayload {
-  notification?: { title?: string; body?: string };
-  data?: Record<string, string>;
-}
-
 sw.addEventListener("push", (event) => {
-  let payload: PushPayload = {};
-  try {
-    // SAFETY: event.data.json() returns untyped JSON; PushPayload fields are
-    // all optional and every read below falls back when data is missing.
-    payload = event.data ? (event.data.json() as PushPayload) : {};
-  } catch {
-    payload = {};
-  }
-  const n = payload.notification || {};
-  const data = payload.data || {};
-  const title = n.title || data.title || "EasyQuran";
-  const body = n.body || data.body || "";
-  const url = safeTarget(data.url);
   event.waitUntil(
-    sw.registration.showNotification(title, {
-      body,
+    sw.registration.showNotification(PUSH_TITLE, {
+      body: PUSH_BODY,
       icon: "/icons/icon-192.png",
       badge: "/icons/badge-96.png",
-      tag: data.tag || undefined,
-      data: Object.assign({ url }, data),
+      tag: PUSH_TAG,
+      data: { url: "/account" },
     }),
   );
 });

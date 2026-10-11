@@ -40,17 +40,23 @@ describe("decodeFcm", () => {
     expect(decodeFcm({ token: "abc", subscribed: true })).toEqual({
       token: "abc",
       subscribed: true,
+      ownerId: null,
     });
   });
   it("nulls non-string tokens and only accepts subscribed === true", () => {
-    expect(decodeFcm({ token: 5, subscribed: 1 })).toEqual({ token: null, subscribed: false });
+    expect(decodeFcm({ token: 5, subscribed: 1 })).toEqual({
+      token: null,
+      subscribed: false,
+      ownerId: null,
+    });
     expect(decodeFcm({ token: null, subscribed: "true" })).toEqual({
       token: null,
       subscribed: false,
+      ownerId: null,
     });
   });
   it("defaults when absent or non-object", () => {
-    expect(decodeFcm({})).toEqual({ token: null, subscribed: false });
-    expect(decodeFcm(undefined)).toEqual({ token: null, subscribed: false });
+    expect(decodeFcm({})).toEqual({ token: null, subscribed: false, ownerId: null });
+    expect(decodeFcm(undefined)).toEqual({ token: null, subscribed: false, ownerId: null });
   });
 });

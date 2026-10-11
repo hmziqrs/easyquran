@@ -158,6 +158,22 @@ class FakeInstallEvent extends Event {
   }
 }
 
+class FakePrivatePushEvent extends Event {
+  readonly data = {
+    json: vi.fn(() => ({
+      notification: { title: "Private account title", body: "Private payment details" },
+      data: { url: "/private/payment", user_id: "7", token: "private-token" },
+    })),
+  };
+  promise: Promise<void> | undefined;
+  constructor() {
+    super("push");
+  }
+  waitUntil(promise: Promise<void>): void {
+    this.promise = promise;
+  }
+}
+
 const ORIGIN = self.location.origin;
 
 function makeRequest(pathname: string, init?: RequestInit): Request {
@@ -201,6 +217,26 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("background push privacy", () => {
+  it("replaces legacy private payload with a generic authenticated-account link", async () => {
+    const showNotification = vi
+      .fn<(title: string, options: NotificationOptions) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    vi.stubGlobal("registration", { showNotification });
+    const event = new FakePrivatePushEvent();
+    self.dispatchEvent(event);
+    await event.promise;
+    expect(event.data.json).not.toHaveBeenCalled();
+    expect(showNotification).toHaveBeenCalledWith("EasyQuran", {
+      body: "Open EasyQuran to view notifications.",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/badge-96.png",
+      tag: "easyquran-notifications",
+      data: { url: "/account" },
+    });
+  });
 });
 
 describe("W5 same-origin /api/ requests never enter Cache Storage", () => {

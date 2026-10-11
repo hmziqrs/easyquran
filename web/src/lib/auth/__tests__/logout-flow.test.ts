@@ -8,6 +8,7 @@ vi.mock("$app/env/public", () => ({
 }));
 import type { AuthClient, AuthRequestResult } from "#lib/auth/auth-client.js";
 import { createLogoutFlow } from "#lib/auth/flows.svelte.js";
+import { notifications } from "#lib/stores/notifications.svelte.js";
 
 function mockClient() {
   // SAFETY: hand-built AuthClient test double — the class's #private csrf members are never
@@ -41,6 +42,7 @@ function ok<T>(data: T, rotated = true): AuthRequestResult<T> {
 
 describe("LogoutFlow clearing + purge + anonymous probe", () => {
   it("posts log_out, clears CSRF, transitions(logout), resets, probes anonymous", async () => {
+    const pushCleanup = vi.spyOn(notifications, "prepareLogout").mockResolvedValue(undefined);
     const client = mockClient();
     const state = mockState();
     client.unsafeRequest.mockResolvedValueOnce(ok({ message: "Logged out" }, true));
@@ -58,6 +60,10 @@ describe("LogoutFlow clearing + purge + anonymous probe", () => {
     expect(flow.anonymous).toBe(true);
 
     const clearOrder = client.clearCsrf.mock.invocationCallOrder[0]!;
+    expect(pushCleanup.mock.invocationCallOrder[0]).toBeLessThan(
+      client.unsafeRequest.mock.invocationCallOrder[0]!,
+    );
+    pushCleanup.mockRestore();
     const transitionOrder = state.transition.mock.invocationCallOrder[0]!;
     const resetOrder = state.reset.mock.invocationCallOrder[0]!;
     const probeOrder = state.probe.mock.invocationCallOrder[0]!;

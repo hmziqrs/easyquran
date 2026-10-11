@@ -1,9 +1,11 @@
 import { browser } from "$app/env";
 import type { Messaging, MessagePayload, Unsubscribe } from "firebase/messaging";
 
+import { authClient } from "#lib/auth/auth-client.js";
 import { registerServiceWorker } from "#lib/boot/service-worker.js";
+import { publicPushPayload } from "#lib/firebase/push-privacy.js";
 
-import { isConfigured, FCM_VAPID_KEY, API_BASE_URL, initApp } from "./index";
+import { isConfigured, FCM_VAPID_KEY, initApp } from "./index";
 
 export type PermissionState = "granted" | "denied" | "default" | "unsupported";
 
@@ -45,10 +47,11 @@ export function initMessaging(): Promise<Messaging | null> {
         const { getMessaging, onMessage } = await import("firebase/messaging");
         const m = getMessaging(core);
         onMessage(m, (payload) => {
-          window.dispatchEvent(new CustomEvent("easyquran:fcm", { detail: payload }));
+          const publicPayload = publicPushPayload(payload);
+          window.dispatchEvent(new CustomEvent("easyquran:fcm", { detail: publicPayload }));
           for (const cb of foregroundCallbacks) {
             try {
-              cb(payload);
+              cb(publicPayload);
             } catch (err) {
               console.warn("[firebase] onMessage listener threw:", err);
             }
@@ -132,15 +135,14 @@ export async function onForegroundMessage(
 
 async function postDeviceEndpoint(
   path: string,
-  body: { token: string; platform?: string },
+  body: { token: string; expected_user_id: number; platform?: string },
+  signal?: AbortSignal,
 ): Promise<boolean> {
-  if (!API_BASE_URL) return false;
   try {
-    const res = await fetch(`${API_BASE_URL}/device/v1/${path}`, {
+    const res = await authClient.unsafeRequest(`/device/v1/${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(body),
+      body,
+      signal,
     });
     return res.ok;
   } catch (err) {
@@ -149,10 +151,18 @@ async function postDeviceEndpoint(
   }
 }
 
-export function registerTokenWithServer(token: string): Promise<boolean> {
-  return postDeviceEndpoint("register", { token, platform: "web" });
+export function registerTokenWithServer(
+  token: string,
+  ownerId: number,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  return postDeviceEndpoint(
+    "register",
+    { token, platform: "web", expected_user_id: ownerId },
+    signal,
+  );
 }
 
-export function unregisterTokenFromServer(token: string): Promise<boolean> {
-  return postDeviceEndpoint("delete", { token });
+export function unregisterTokenFromServer(token: string, ownerId: number): Promise<boolean> {
+  return postDeviceEndpoint("delete", { token, expected_user_id: ownerId });
 }

@@ -98,19 +98,8 @@ async fn dispatch(
         return Ok(model);
     }
 
-    let data_map = data.as_ref().and_then(|v| v.as_object()).cloned();
-
     for dev in devices {
-        let msg = rux_fcm::FcmMessage {
-            token: dev.token.clone(),
-            notification: Some(rux_fcm::Notification {
-                title: Some(title.clone()),
-                body: Some(body.clone()),
-            }),
-            data: data_map.clone(),
-            android: None,
-            webpush: None,
-        };
+        let msg = private_push_hint(&dev.token);
         match client.send(msg).await {
             Ok(name) => {
                 tracing::debug!(
@@ -124,7 +113,7 @@ async fn dispatch(
                     device_id = dev.id,
                     "FCM token unregistered; pruning stale device"
                 );
-                if let Err(err) = device::Entity::prune_by_id(db, dev.id).await {
+                if let Err(err) = device::Entity::prune_owned_by_id(db, dev.id, user_id).await {
                     tracing::warn!(
                         error = %err,
                         device_id = dev.id,
@@ -143,4 +132,74 @@ async fn dispatch(
     }
 
     Ok(model)
+}
+
+fn private_push_hint(token: &str) -> rux_fcm::FcmMessage {
+    rux_fcm::FcmMessage {
+        token: token.into(),
+        notification: Some(rux_fcm::Notification {
+            title: Some("EasyQuran".into()),
+            body: Some("Open EasyQuran to view notifications.".into()),
+        }),
+        data: None,
+        android: None,
+        webpush: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn push_hint_contains_no_account_or_notification_details() {
+        let message = serde_json::to_value(private_push_hint("device-token")).unwrap();
+        assert_eq!(
+            message,
+            serde_json::json!({
+                "token": "device-token",
+                "notification": {
+                    "title": "EasyQuran",
+                    "body": "Open EasyQuran to view notifications."
+                }
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn private_details_remain_durable_and_scoped_to_recipient() {
+        use sea_orm::{ConnectionTrait, Database};
+        let db = Database::connect("sqlite::memory:").await.unwrap();
+        db.execute_unprepared(
+            "CREATE TABLE notifications (
+                id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, kind TEXT NOT NULL,
+                title TEXT NOT NULL, body TEXT NOT NULL, data TEXT, read_at TEXT,
+                created_at TEXT NOT NULL
+            )",
+        )
+        .await
+        .unwrap();
+        let private_data = serde_json::json!({"payment_id":"private-payment", "url":"/private"});
+        NotificationService::new(db.clone(), None)
+            .create_and_dispatch(
+                7,
+                NotificationKind::PaymentReceived,
+                "Private title",
+                "Private body",
+                Some(private_data.clone()),
+            )
+            .await
+            .unwrap();
+        let recipient = notification::Entity::list_for_user(&db, 7, 1, 20)
+            .await
+            .unwrap();
+        assert_eq!(recipient.data[0].title, "Private title");
+        assert_eq!(recipient.data[0].body, "Private body");
+        assert_eq!(recipient.data[0].data.as_ref(), Some(&private_data));
+        assert!(notification::Entity::list_for_user(&db, 8, 1, 20)
+            .await
+            .unwrap()
+            .data
+            .is_empty());
+    }
 }
