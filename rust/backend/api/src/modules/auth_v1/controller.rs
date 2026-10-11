@@ -9,7 +9,7 @@ use axum_macros::debug_handler;
 use axum_client_ip::ClientIp;
 
 use rux_auth::AuthBackend as AuthBackendTrait;
-use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use tracing::{error, info, instrument, warn};
@@ -37,23 +37,15 @@ const ABUSE_LIMITER_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::A
     block_duration: 86400,
 };
 
-/// N4: login/totp, 2fa/verify and 2fa/disable deliberately share ONE per-account
-/// budget (anti-brute design — code attempts anywhere lock code checks
-/// everywhere). 2fa/setup gets its own key so re-arming attempts can never
-/// consume or escalate the shared login budget.
 fn totp_limiter_key(user_id: i32) -> String {
     format!("totp:{user_id}")
 }
 
-/// N4: separate budget for the enrolled re-arm gate on 2fa/setup.
 fn totp_setup_limiter_key(user_id: i32) -> String {
     format!("totp_setup:{user_id}")
 }
 
-/// M2: axum 0.8 has no `Option<ValidatedJson<T>>` blanket impl, and 2FA setup
-/// must keep accepting a body-less POST (the un-enrolled first call). A missing,
-/// malformed, or validation-failing body extracts to `None` — fail-closed: an
-/// enrolled account then hits the "code is required" rejection.
+/// Accepts a body-less setup request; optional invalid bodies become `None`.
 pub struct OptionalValidatedJson<T>(pub Option<T>);
 
 impl<T, S> FromRequest<S> for OptionalValidatedJson<T>
@@ -175,7 +167,7 @@ pub async fn log_in(
 
             if user.two_fa_enabled {
                 tracing::Span::current().record("result", "totp_required");
-                let totp_token = login_totp_token::mint(user.id).await?;
+                let totp_token = crate::services::pending_login::issue(&auth, &user).await?;
                 info!(user_id = user.id, "Login requires TOTP (2FA enrolled)");
                 return Ok((
                     StatusCode::OK,
@@ -251,16 +243,30 @@ pub async fn login_totp(
     mut auth: AuthSession,
     payload: ValidatedJson<V1LoginTotpPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let payload = payload.0;
+    let user =
+        complete_pending_totp_login(&state.sea_db, &state.gate_store, &mut auth, payload.0).await?;
+    Ok((
+        StatusCode::OK,
+        session_rotated_headers(true),
+        Json(json!(user)),
+    ))
+}
 
-    let user_id = match login_totp_token::take(&payload.totp_token).await? {
-        Some(id) => id,
+pub async fn complete_pending_totp_login(
+    db: &DatabaseConnection,
+    gate_store: &rux_request_gate::InMemoryStore,
+    auth: &mut AuthSession,
+    payload: V1LoginTotpPayload,
+) -> Result<user::Model, ErrorResponse> {
+    let grant = match crate::services::pending_login::take(&auth, &payload.totp_token).await? {
+        Some(grant) => grant,
         None => {
             warn!("login/totp: pending token missing/expired/replayed");
             return Err(ErrorResponse::new(ErrorCode::Unauthorized)
                 .with_message("Invalid or expired login session"));
         }
     };
+    let user_id = grant.user_id;
     tracing::Span::current().record("user_id", user_id);
 
     let user = match auth.backend().get_user(&user_id).await {
@@ -272,7 +278,11 @@ pub async fn login_totp(
         }
     };
 
-    // Fail-closed ban re-check between the two steps.
+    if !grant.matches_user(&user) {
+        return Err(ErrorResponse::new(ErrorCode::Unauthorized)
+            .with_message("Invalid or expired login session"));
+    }
+
     match auth.backend().check_ban(&user.id).await {
         Ok(ban_status) if ban_status.is_banned() => {
             warn!(user_id = user.id, "login/totp: banned user");
@@ -286,11 +296,9 @@ pub async fn login_totp(
         }
     }
 
-    // Fail-closed per-account TOTP brute-force throttle.
     let key_prefix = totp_limiter_key(user.id);
-    abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
+    abuse_limiter::limiter(gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
 
-    // CRYP-2FA-002: secret is encrypted at rest; a decrypt failure must fail closed (reject), never verify against the opaque envelope bytes.
     let secret = match user.two_fa_secret_plain() {
         Ok(Some(s)) => s,
         Ok(None) => {
@@ -319,7 +327,6 @@ pub async fn login_totp(
         }
     };
 
-    // Replay gate: keep both — is_fresh_counter is the fast-path reject and advance_totp_counter_if_higher (atomic conditional UPDATE) is the authoritative gate closing the TOCTOU race across login/verify/disable.
     if !twofa::is_fresh_counter(matched, user.two_fa_last_totp_counter) {
         warn!(
             user_id = user.id,
@@ -328,8 +335,7 @@ pub async fn login_totp(
         );
         return Err(ErrorResponse::new(ErrorCode::Unauthorized).with_message("Invalid 2FA code"));
     }
-    let advanced =
-        user::Entity::advance_totp_counter_if_higher(&state.sea_db, user.id, matched).await?;
+    let advanced = advance_totp_for_unchanged_user(db, &user, matched).await?;
     if !advanced {
         warn!(
             user_id = user.id,
@@ -352,15 +358,9 @@ pub async fn login_totp(
             );
             tracing::Span::current().record("result", "success");
 
-            // W8e durable binding, same fail-closed contract as password login.
-            create_bound_session(&state.sea_db, &mut auth, user.id, device, ip).await?;
+            create_bound_session(db, auth, user.id, device, ip).await?;
 
-            // W8B-001: login_with_metadata cycled the session id (see log_in).
-            Ok((
-                StatusCode::OK,
-                session_rotated_headers(true),
-                Json(json!(user)),
-            ))
+            Ok(user)
         }
         Err(err) => {
             error!(error = %err, user_id = user.id, "login/totp: session creation failed");
@@ -370,6 +370,14 @@ pub async fn login_totp(
                 .with_details(err.to_string()))
         }
     }
+}
+
+#[debug_handler(state = AppState)]
+pub async fn pending_login(auth: AuthSession) -> Result<impl IntoResponse, ErrorResponse> {
+    let body = crate::services::pending_login::response(&auth)
+        .await?
+        .unwrap_or_else(|| json!({ "status": "none" }));
+    Ok((StatusCode::OK, Json(body)))
 }
 
 #[debug_handler]
@@ -479,44 +487,37 @@ fn register_accepted_body() -> serde_json::Value {
 }
 
 #[debug_handler]
-#[instrument(skip(state, auth, payload), fields(user_id))]
+#[instrument(skip(state, auth, _payload), fields(user_id))]
 pub async fn twofa_setup(
     State(state): State<AppState>,
-    mut auth: AuthSession,
-    payload: OptionalValidatedJson<V1TwoFASetupPayload>,
+    auth: AuthSession,
+    _payload: OptionalValidatedJson<V1TwoFASetupPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user = auth.user_required()?;
     tracing::Span::current().record("user_id", user.id);
-
-    info!(user_id = user.id, "2FA setup initiated");
-
     let existing = user::Entity::find_by_id_with_404(&state.sea_db, user.id).await?;
-
-    // M2: rotating the secret on an enrolled account disarms 2FA (two_fa_enabled
-    // drops to false below and the old secret + backup codes are replaced), i.e.
-    // a trust downgrade — demand a valid current TOTP/backup code first, the
-    // same gate twofa_disable uses. An un-enrolled account keeps the
-    // generate-fresh-secret behavior (nothing to disarm).
-    let was_enabled = existing.two_fa_enabled;
-    if was_enabled {
-        // Fail-closed per-account TOTP brute-force throttle, but on its OWN key:
-        // a user fumbling the re-arm code must never drain the shared
-        // login/verify/disable budget (N4 — a lockout here locked out LOGIN).
+    if existing.two_fa_enabled {
         let key_prefix = totp_setup_limiter_key(user.id);
         abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
-
-        let code = payload.0.and_then(|p| p.code).ok_or_else(|| {
-            ErrorResponse::new(ErrorCode::MissingRequiredField).with_message("code is required")
-        })?;
-        verify_current_second_factor(&state.sea_db, &existing, &code).await?;
     }
+    let setup = prepare_twofa_setup(&state.sea_db, &existing).await?;
+    Ok((StatusCode::OK, session_rotated_headers(false), Json(setup)))
+}
 
+pub async fn prepare_twofa_setup(
+    db: &DatabaseConnection,
+    existing: &user::Model,
+) -> Result<serde_json::Value, ErrorResponse> {
+    if existing.two_fa_enabled {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("Disable existing 2FA before setting up a replacement"));
+    }
     let secret_b32 = twofa::generate_secret_base32(20).ok_or_else(|| {
         ErrorResponse::new(ErrorCode::InternalServerError)
             .with_message("Failed to generate 2FA secret")
     })?;
     let otpauth_url = twofa::build_otpauth_url(
-        &user.email,
+        &existing.email,
         "Ruxlog",
         &secret_b32,
         twofa::DEFAULT_TOTP_DIGITS,
@@ -537,39 +538,69 @@ pub async fn twofa_setup(
     };
     let backup_hashes_json = serde_json::json!(backup_hashes);
 
-    let mut active: user::ActiveModel = existing.into();
-    active.two_fa_enabled = sea_orm::Set(false);
-    active.two_fa_secret = sea_orm::Set(Some(secret_b32.clone()));
+    let encrypted_secret = crate::utils::field_crypto::encrypt(&secret_b32).map_err(|_| {
+        ErrorResponse::new(ErrorCode::InternalServerError)
+            .with_message("Failed to protect 2FA secret")
+    })?;
+    let secret_matches = match &existing.two_fa_secret {
+        Some(secret) => user::Column::TwoFaSecret.eq(secret.clone()),
+        None => user::Column::TwoFaSecret.is_null(),
+    };
+    let counter_matches = match existing.two_fa_last_totp_counter {
+        Some(counter) => user::Column::TwoFaLastTotpCounter.eq(counter),
+        None => user::Column::TwoFaLastTotpCounter.is_null(),
+    };
+    let mut active: user::ActiveModel = existing.clone().into();
+    active.two_fa_secret = sea_orm::Set(Some(encrypted_secret));
     active.two_fa_backup_codes = sea_orm::Set(Some(backup_hashes_json));
     active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
-    active.update(&state.sea_db).await?;
+    let changed = user::Entity::update_many()
+        .set(active)
+        .filter(user::Column::Id.eq(existing.id))
+        .filter(user::Column::TwoFaEnabled.eq(false))
+        .filter(secret_matches)
+        .filter(counter_matches)
+        .exec(db)
+        .await?;
+    if changed.rows_affected != 1 {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("2FA state changed; try again"));
+    }
 
-    // Trust changed (enrolled -> pending re-verify): rotate the session id and
-    // rebind the durable mapping, same contract as verify/disable.
-    let rotated = if was_enabled {
-        rotate_session_after_trust_change(&state.sea_db, &mut auth).await?
-    } else {
-        false
-    };
-
-    Ok((
-        StatusCode::OK,
-        session_rotated_headers(rotated),
-        Json(json!({
-            "secret": secret_b32,
-            "otpauth_url": otpauth_url,
-            "backup_codes": backup_codes,
-        })),
-    ))
+    Ok(json!({
+        "secret": secret_b32,
+        "otpauth_url": otpauth_url,
+        "backup_codes": backup_codes,
+    }))
 }
 
-/// M2: shared second-factor gate for trust-downgrading operations on an ENROLLED
-/// account (2FA disable, secret rotation via 2FA setup). Accepts a current TOTP
-/// code or a backup code. TOTP path enforces the same replay watermark as
-/// login/verify: `advance_totp_counter_if_higher` is the authoritative atomic
-/// gate closing the TOCTOU race (V-MED-6). Backup-code hits are not persisted
-/// here — every caller replaces or clears the stored set right after, so the
-/// consumed-hash list is intentionally dropped.
+async fn advance_totp_for_unchanged_user(
+    db: &DatabaseConnection,
+    existing: &user::Model,
+    new_counter: i64,
+) -> Result<bool, ErrorResponse> {
+    let factor_matches = match &existing.two_fa_secret {
+        Some(secret) => user::Column::TwoFaSecret.eq(secret.clone()),
+        None => user::Column::TwoFaSecret.is_null(),
+    };
+    let watermark = user::Column::TwoFaLastTotpCounter
+        .is_null()
+        .or(user::Column::TwoFaLastTotpCounter.lt(new_counter));
+    let result = user::Entity::update_many()
+        .col_expr(
+            user::Column::TwoFaLastTotpCounter,
+            sea_orm::sea_query::Expr::value(new_counter),
+        )
+        .filter(user::Column::Id.eq(existing.id))
+        .filter(user::Column::SessionAuthSecret.eq(existing.session_auth_secret.clone()))
+        .filter(user::Column::TwoFaEnabled.eq(existing.two_fa_enabled))
+        .filter(factor_matches)
+        .filter(watermark)
+        .exec(db)
+        .await?;
+    Ok(result.rows_affected == 1)
+}
+
 async fn verify_current_second_factor(
     db: &DatabaseConnection,
     existing: &user::Model,
@@ -596,8 +627,7 @@ async fn verify_current_second_factor(
 
     if totp_fresh {
         let matched = totp_matched.expect("totp_matched is Some when totp_fresh");
-        let advanced =
-            user::Entity::advance_totp_counter_if_higher(db, existing.id, matched).await?;
+        let advanced = advance_totp_for_unchanged_user(db, existing, matched).await?;
         if !advanced {
             warn!(
                 user_id = existing.id,
@@ -667,8 +697,7 @@ pub async fn twofa_verify(
     if let Some(matched) = totp_counter {
         if twofa::is_fresh_counter(matched, existing.two_fa_last_totp_counter) {
             let advanced =
-                user::Entity::advance_totp_counter_if_higher(&state.sea_db, user.id, matched)
-                    .await?;
+                advance_totp_for_unchanged_user(&state.sea_db, &existing, matched).await?;
             if !advanced {
                 warn!(
                     user_id = user.id,
@@ -1035,65 +1064,9 @@ async fn rotate_session_after_trust_change(
     Ok(true)
 }
 
-mod login_totp_token {
-    use super::*;
-    use rand::Rng;
-    use std::collections::HashMap;
-    use std::sync::{Mutex, OnceLock};
-    use std::time::Instant;
-    use zeroize::Zeroize;
-
-    const TTL_SECS: u64 = 300;
-
-    #[doc(hidden)]
-    #[allow(dead_code)] // referenced via type_name::<AssertWired> only (compile-time wiring check)
-    pub struct AssertWired;
-
-    type TokenMap = HashMap<String, (i32, Instant)>;
-
-    static TOKENS: OnceLock<Mutex<TokenMap>> = OnceLock::new();
-
-    fn tokens() -> &'static Mutex<TokenMap> {
-        TOKENS.get_or_init(|| Mutex::new(HashMap::new()))
-    }
-
-    fn reap_stale(map: &mut TokenMap) {
-        map.retain(|_, (_, at)| at.elapsed().as_secs() < TTL_SECS);
-    }
-
-    fn namespaced_key(token: &str) -> String {
-        format!("auth:login_totp:{token}")
-    }
-
-    pub async fn mint(user_id: i32) -> Result<String, ErrorResponse> {
-        let mut bytes = zeroize::Zeroizing::new([0u8; 32]);
-        rand::rng().fill(bytes.as_mut());
-        let token = hex::encode(*bytes);
-        bytes.zeroize();
-
-        let mut map = tokens().lock().map_err(|e| {
-            error!(error = %e, "login_totp token map poisoned");
-            ErrorResponse::new(ErrorCode::InternalServerError)
-        })?;
-        reap_stale(&mut map);
-        map.insert(namespaced_key(&token), (user_id, Instant::now()));
-        Ok(token)
-    }
-
-    pub async fn take(token: &str) -> Result<Option<i32>, ErrorResponse> {
-        let mut map = tokens().lock().map_err(|e| {
-            error!(error = %e, "login_totp token map poisoned");
-            ErrorResponse::new(ErrorCode::InternalServerError)
-        })?;
-        reap_stale(&mut map);
-        Ok(map.remove(&namespaced_key(token)).map(|(id, _)| id))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::annotate_session_row;
-    use super::login_totp_token;
     use super::sessions_list_payload;
     use super::totp_limiter_key;
     use super::totp_setup_limiter_key;
@@ -1105,18 +1078,6 @@ mod tests {
 
     use crate::error::{ErrorCode, ErrorResponse};
     use crate::utils::twofa;
-
-    #[test]
-    fn login_totp_redis_key_prefix_is_stable() {
-        for token in ["deadbeef", "abc123", "z"] {
-            let expected = format!("auth:login_totp:{token}");
-            assert!(
-                expected.starts_with("auth:login_totp:"),
-                "pending-TOTP key must live under the auth:login_totp: namespace"
-            );
-        }
-        let _ = std::any::type_name::<login_totp_token::AssertWired>;
-    }
 
     // --- W8e sessions_list isCurrent -----------------------------------------
 

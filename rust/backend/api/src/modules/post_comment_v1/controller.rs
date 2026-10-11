@@ -5,11 +5,12 @@ use axum::{
     Json,
 };
 use axum_macros::debug_handler;
+use sea_orm::{ConnectionTrait, EntityTrait, TransactionTrait};
 use serde_json::json;
 use tracing::{error, info, instrument, warn};
 
 use crate::{
-    db::sea_models::{comment_flag, post_comment},
+    db::sea_models::{comment_flag, post, post_comment, user},
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
     services::{abuse_limiter, auth::AuthSession},
@@ -31,6 +32,24 @@ use super::validator::{
     V1FlagCommentPayload, V1UpdatePostCommentPayload,
 };
 
+async fn require_post_visibility<C: ConnectionTrait>(
+    conn: &C,
+    post_id: i32,
+    viewer: Option<&user::Model>,
+) -> Result<(), ErrorResponse> {
+    let post = post::Entity::find_by_id(post_id)
+        .one(conn)
+        .await?
+        .ok_or_else(|| ErrorResponse::new(ErrorCode::RecordNotFound))?;
+    let can_view_hidden = viewer
+        .map(|viewer| viewer.id == post.author_id || viewer.is_moderator())
+        .unwrap_or(false);
+    if post.status != post::PostStatus::Published && !can_view_hidden {
+        return Err(ErrorResponse::new(ErrorCode::RecordNotFound));
+    }
+    Ok(())
+}
+
 #[debug_handler]
 #[instrument(skip(state, auth, payload), fields(user_id = auth.user.as_ref().map(|u| u.id), post_id, comment_id))]
 pub async fn create(
@@ -49,9 +68,12 @@ pub async fn create(
 
     let new_comment = payload.0.into_new_post_comment(user.id);
     tracing::Span::current().record("post_id", new_comment.post_id);
+    let tx = state.sea_db.begin().await?;
+    require_post_visibility(&tx, new_comment.post_id, Some(&user)).await?;
 
-    match post_comment::Entity::create(&state.sea_db, new_comment).await {
+    match post_comment::Entity::create(&tx, new_comment).await {
         Ok(comment) => {
+            tx.commit().await?;
             tracing::Span::current().record("comment_id", comment.id);
             info!(
                 user_id = user.id,
@@ -144,19 +166,19 @@ pub async fn delete(
 }
 
 #[debug_handler]
-#[instrument(skip(state), fields(post_id))]
+#[instrument(skip(state, auth), fields(post_id))]
 pub async fn find_all_by_post(
     State(state): State<AppState>,
+    auth: AuthSession,
     Path(post_id): Path<i32>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    match post_comment::Entity::find_all_by_post(
-        &state.sea_db,
-        &state.storage.config.public_url,
-        post_id,
-    )
-    .await
+    let tx = state.sea_db.begin().await?;
+    require_post_visibility(&tx, post_id, auth.user.as_ref()).await?;
+    match post_comment::Entity::find_all_by_post(&tx, &state.storage.config.public_url, post_id)
+        .await
     {
         Ok(comments) => {
+            tx.commit().await?;
             info!(
                 post_id,
                 count = comments.len(),
@@ -325,17 +347,23 @@ pub async fn flag(
     let user = auth.user.unwrap();
     let p = payload.0;
 
+    let tx = state.sea_db.begin().await?;
+    let comment = post_comment::Entity::find_by_id(comment_id)
+        .one(&tx)
+        .await?
+        .ok_or_else(|| ErrorResponse::new(ErrorCode::RecordNotFound))?;
+    require_post_visibility(&tx, comment.post_id, Some(&user)).await?;
+
     let new_flag = comment_flag::slice::NewCommentFlag {
         comment_id,
         user_id: user.id,
         reason: p.reason,
     };
 
-    match comment_flag::Entity::create(&state.sea_db, new_flag).await {
+    match comment_flag::Entity::create(&tx, new_flag).await {
         Ok(_flag) => {
-            let count = comment_flag::Entity::sync_flags_count(&state.sea_db, comment_id)
-                .await
-                .unwrap_or(0);
+            let count = comment_flag::Entity::sync_flags_count(&tx, comment_id).await?;
+            tx.commit().await?;
             info!(
                 user_id = user.id,
                 comment_id,

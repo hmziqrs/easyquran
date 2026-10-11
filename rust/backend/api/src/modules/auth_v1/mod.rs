@@ -15,6 +15,7 @@ pub fn routes() -> Router<AppState> {
     {
         public = public
             .route("/log_in", post(controller::log_in))
+            .route("/login/totp/pending", get(controller::pending_login))
             .route("/login/totp", post(controller::login_totp));
     }
 

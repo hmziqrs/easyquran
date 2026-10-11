@@ -122,6 +122,33 @@ describe("legacy prefix redirect map (scheme A 308 table)", () => {
     expect(custom.headers.get("location")).toBe("/al-baqarah#custom");
   });
 
+  it.each([
+    "/en//attacker.example",
+    "/app//attacker.example",
+    "/en/app//attacker.example",
+    "/en///attacker.example",
+    "/app/\\attacker.example",
+    "/en/app/\\attacker.example",
+  ])("rejects a legacy rewrite that would leave the origin: %s", async (inbound) => {
+    const resolver = resolve();
+    const response = await handle({ event: requestEvent(inbound, null), resolve: resolver });
+    expect(response.status).toBe(400);
+    expect(response.headers.has("location")).toBe(false);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(resolver).not.toHaveBeenCalled();
+  });
+
+  it.each(["/en/%2Fattacker.example", "/app/%5C/attacker.example"])(
+    "keeps encoded separators on the same origin: %s",
+    async (inbound) => {
+      const response = await handle({ event: requestEvent(inbound, null), resolve: resolve() });
+      const location = response.headers.get("location");
+      expect(response.status).toBe(308);
+      expect(location).not.toBeNull();
+      expect(new URL(location!, ORIGIN).origin).toBe(ORIGIN);
+    },
+  );
+
   it("preserves query and hash on every legacy redirect", async () => {
     const res = await handle({
       event: requestEvent("/app/al-fatihah?view=reading#ayah-1-1", null, {}),

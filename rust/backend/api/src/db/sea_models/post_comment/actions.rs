@@ -9,7 +9,7 @@ impl Entity {
     pub const PER_PAGE: u64 = 20;
 
     #[instrument(skip(conn, new_comment), fields(comment_id, post_id = new_comment.post_id, user_id = new_comment.user_id))]
-    pub async fn create(conn: &DbConn, new_comment: NewComment) -> DbResult<Model> {
+    pub async fn create<C: ConnectionTrait>(conn: &C, new_comment: NewComment) -> DbResult<Model> {
         let now = chrono::Utc::now().fixed_offset();
         let comment = ActiveModel {
             post_id: Set(new_comment.post_id),
@@ -105,8 +105,8 @@ impl Entity {
     }
 
     #[instrument(skip(conn), fields(post_id))]
-    pub async fn find_all_by_post(
-        conn: &DbConn,
+    pub async fn find_all_by_post<C: ConnectionTrait>(
+        conn: &C,
         public_url: &str,
         post_id: i32,
     ) -> DbResult<Vec<CommentWithUser>> {
@@ -177,7 +177,6 @@ impl Entity {
             .filter(Column::PostId.eq(post_id))
             .filter(Column::Hidden.eq(false))
             .order_by(Column::CreatedAt, Order::Asc)
-            // Keep the limit: public path has no pagination, so removing it allows an unbounded SELECT + 3-table join per request.
             .limit(500)
             .into_model::<CommentWithUserJoined>()
             .all(conn)

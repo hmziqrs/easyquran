@@ -66,6 +66,20 @@ fn ts_unit_to_secs(ts: i64) -> i64 {
     }
 }
 
+fn resource_id(value: &serde_json::Value) -> Option<String> {
+    if let Some(id) = value.as_str().filter(|id| !id.is_empty()) {
+        return Some(id.to_string());
+    }
+    value.as_u64().map(|id| id.to_string())
+}
+
+fn canonical_resource_id(id: &str) -> String {
+    if id.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return id.to_ascii_lowercase();
+    }
+    id.to_string()
+}
+
 impl MercadoPagoProvider {
     pub fn new(access_token: String, webhook_secret: String) -> Self {
         Self {
@@ -314,11 +328,7 @@ impl MercadoPagoProvider {
             BillingError::WebhookVerification("Mercado Pago webhook query missing data.id".into())
         })?;
         // MP signs data.id lowercased ONLY when alphanumeric (non-alphanumeric values signed as-is); don't simplify to unconditional lowercase — it breaks signatures for non-alphanumeric data.id values.
-        let data_id_signed = if data_id.chars().all(|c| c.is_ascii_alphanumeric()) {
-            data_id.to_ascii_lowercase()
-        } else {
-            data_id
-        };
+        let data_id_signed = canonical_resource_id(&data_id);
         let x_request_id = super::webhook_util::header_str(&event.headers, "x-request-id")
             .ok_or_else(|| {
                 BillingError::WebhookVerification("Missing x-request-id header".into())
@@ -337,37 +347,116 @@ impl MercadoPagoProvider {
             ));
         }
 
-        let data: serde_json::Value = serde_json::from_str(payload_str)
+        let notification: serde_json::Value = serde_json::from_str(payload_str)
             .map_err(|e| BillingError::WebhookVerification(e.to_string()))?;
-
-        let native_event = data["type"].as_str().unwrap_or_default();
-        let event_type = match native_event {
-            // MP has no distinct refund webhook type — refunds/chargebacks arrive as a
-            // plain `payment` notification whose resource status says which; only
-            // notifications that actually carry the resource can be classified (minimal
-            // bodies keep the checkout-completed path).
-            "payment" => match data["data"]["status"].as_str() {
+        let body_id = resource_id(&notification["data"]["id"]).ok_or_else(|| {
+            BillingError::WebhookVerification(
+                "Mercado Pago notification missing resource id".into(),
+            )
+        })?;
+        if canonical_resource_id(&body_id) != data_id_signed {
+            return Err(BillingError::WebhookVerification(
+                "Mercado Pago notification resource id mismatch".into(),
+            ));
+        }
+        let native_event = notification["type"].as_str().unwrap_or_default();
+        let resource_path = match native_event {
+            "payment" => Some("v1/payments"),
+            "preapproval" | "subscription_preapproval" => Some("preapproval"),
+            _ => None,
+        };
+        let Some(resource_path) = resource_path else {
+            return Ok(ParsedWebhook {
+                event_type: "mercado_pago.ignored".into(),
+                customer_id: String::new(),
+                subscription_id: None,
+                payment_id: None,
+                checkout_session_id: None,
+                current_period_end: None,
+                subscription_status: None,
+                user_id: None,
+                amount_cents: None,
+                currency: None,
+                data: serde_json::json!({"type": "mercado_pago.ignored"}),
+            });
+        };
+        if data_id_signed.is_empty()
+            || data_id_signed.len() > 128
+            || !data_id_signed
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-'))
+        {
+            return Err(BillingError::WebhookVerification(
+                "Invalid Mercado Pago resource id".into(),
+            ));
+        }
+        // The signature covers the resource id, request id and timestamp, not the JSON body.
+        let response = self
+            .http_client
+            .get(format!(
+                "{}/{resource_path}/{data_id_signed}",
+                self.base_url.trim_end_matches('/')
+            ))
+            .bearer_auth(self.access_token.expose_secret())
+            .send()
+            .await
+            .map_err(|e| BillingError::ProviderApi(e.to_string()))?
+            .error_for_status()
+            .map_err(|e| BillingError::ProviderApi(e.to_string()))?;
+        let resource: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| BillingError::ProviderApi(e.to_string()))?;
+        if resource_id(&resource["id"])
+            .as_deref()
+            .map(canonical_resource_id)
+            .as_deref()
+            != Some(data_id_signed.as_str())
+        {
+            return Err(BillingError::WebhookVerification(
+                "Mercado Pago API resource id mismatch".into(),
+            ));
+        }
+        let payment = native_event == "payment";
+        let event_type = if payment {
+            match resource["status"].as_str() {
+                Some("approved") => super::provider::canonical::CHECKOUT_COMPLETED,
                 Some("refunded") => "payment.refunded",
                 Some("charged_back") => "payment.charged_back",
-                _ => super::provider::canonical::CHECKOUT_COMPLETED,
-            },
-            "preapproval" => super::provider::canonical::SUBSCRIPTION_UPDATED,
-            other => other,
+                _ => super::provider::canonical::PAYMENT_PENDING,
+            }
+        } else {
+            super::provider::canonical::SUBSCRIPTION_UPDATED
         }
         .to_string();
+        let subscription_id = if payment {
+            resource_id(&resource["preapproval_id"])
+        } else {
+            resource_id(&resource["id"])
+        };
+        let checkout_session_id =
+            resource_id(&resource["preference_id"]).or_else(|| subscription_id.clone());
+        let payment_id = if payment {
+            resource_id(&resource["id"])
+        } else {
+            None
+        };
+        let customer_id = resource_id(&resource["payer"]["id"])
+            .or_else(|| resource_id(&resource["payer_id"]))
+            .unwrap_or_default();
+        let billing_details = if payment {
+            &resource
+        } else {
+            &resource["auto_recurring"]
+        };
+        let data = serde_json::json!({"type": native_event, "data": resource});
 
         Ok(ParsedWebhook {
             event_type,
-            customer_id: data["data"]["payer_id"]
-                .as_str()
-                .unwrap_or_default()
-                .to_string(),
-            subscription_id: data["data"]["preapproval_id"]
-                .as_str()
-                .or_else(|| data["data"]["id"].as_str())
-                .map(String::from),
-            payment_id: data["data"]["id"].as_str().map(String::from),
-            checkout_session_id: data["data"]["preapproval_id"].as_str().map(String::from),
+            customer_id,
+            subscription_id,
+            payment_id,
+            checkout_session_id,
             current_period_end: super::provider::period_end_to_unix(
                 data["data"].get("next_payment_date"),
             ),
@@ -375,10 +464,10 @@ impl MercadoPagoProvider {
             user_id: data["data"]["external_reference"]
                 .as_str()
                 .and_then(|s| s.parse().ok()),
-            amount_cents: data["data"]["transaction_amount"]
+            amount_cents: billing_details["transaction_amount"]
                 .as_f64()
                 .map(|f| (f * 100.0) as i64),
-            currency: data["data"]["currency_id"].as_str().map(String::from),
+            currency: billing_details["currency_id"].as_str().map(String::from),
             data,
         })
     }
@@ -414,6 +503,71 @@ mod tests {
     const TEST_DATA_ID: &str = "1234567890";
     const TEST_REQUEST_ID: &str = "abc-123";
 
+    #[tokio::test]
+    async fn webhook_uses_authoritative_resource_instead_of_unsigned_body_fields() {
+        use wiremock::matchers::{header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/payments/1234567890"))
+            .and(header("Authorization", "Bearer token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": 1234567890_i64, "status": "pending", "payer": {"id": 42},
+                "external_reference": "7", "transaction_amount": 1, "currency_id": "BRL"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let provider =
+            MercadoPagoProvider::new("token".into(), "whsec".into()).with_base_url(server.uri());
+        let event = signed_mp(
+            br#"{"type":"payment","data":{"id":"1234567890","status":"approved","payer_id":"victim","external_reference":"999","preapproval_id":"victim_checkout","transaction_amount":9999}}"#,
+            1_700_000_000, "whsec", TEST_DATA_ID,
+        );
+        let parsed = provider
+            .verify_webhook_at(event, 1_700_000_000)
+            .await
+            .unwrap();
+        assert_eq!(parsed.event_type, "payment.pending");
+        assert_eq!(parsed.user_id, Some(7));
+        assert_eq!(parsed.customer_id, "42");
+        assert_eq!(parsed.amount_cents, Some(100));
+        assert_eq!(parsed.checkout_session_id, None);
+        assert_ne!(parsed.subscription_id.as_deref(), Some("victim_checkout"));
+    }
+
+    #[tokio::test]
+    async fn webhook_rejects_unsigned_resource_id_substitution() {
+        let provider = MercadoPagoProvider::new("token".into(), "whsec".into());
+        let event = signed_mp(
+            br#"{"type":"payment","data":{"id":"other_resource"}}"#,
+            1_700_000_000,
+            "whsec",
+            TEST_DATA_ID,
+        );
+        assert!(matches!(
+            provider.verify_webhook_at(event, 1_700_000_000).await,
+            Err(BillingError::WebhookVerification(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn unknown_unsigned_topic_cannot_become_a_refund_event() {
+        let provider = MercadoPagoProvider::new("token".into(), "whsec".into());
+        let event = signed_mp(
+            br#"{"type":"payment.refunded","data":{"id":"1234567890","external_reference":"999"}}"#,
+            1_700_000_000,
+            "whsec",
+            TEST_DATA_ID,
+        );
+        let parsed = provider
+            .verify_webhook_at(event, 1_700_000_000)
+            .await
+            .unwrap();
+        assert_eq!(parsed.event_type, "mercado_pago.ignored");
+        assert_eq!(parsed.user_id, None);
+    }
+
     fn signed_mp(payload: &[u8], ts_raw: i64, secret: &str, data_id: &str) -> WebhookEvent {
         let ts_str = ts_raw.to_string();
         let signed_data_id = if data_id.chars().all(|c| c.is_ascii_alphanumeric()) {
@@ -437,56 +591,86 @@ mod tests {
         }
     }
 
+    async fn mock_resource_provider(
+        resource: serde_json::Value,
+        kind: &str,
+    ) -> (wiremock::MockServer, MercadoPagoProvider) {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let server = MockServer::start().await;
+        let id = canonical_resource_id(&resource_id(&resource["id"]).unwrap());
+        Mock::given(method("GET"))
+            .and(path(format!("/{kind}/{id}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(resource))
+            .mount(&server)
+            .await;
+        let provider =
+            MercadoPagoProvider::new("token".into(), "whsec".into()).with_base_url(server.uri());
+        (server, provider)
+    }
+
+    async fn mock_payment_provider(id: &str) -> (wiremock::MockServer, MercadoPagoProvider) {
+        mock_resource_provider(
+            serde_json::json!({"id": id, "status": "approved"}),
+            "v1/payments",
+        )
+        .await
+    }
+
     #[tokio::test]
-    async fn verify_webhook_normalizes_native_events_to_canonical() {
-        let provider = MercadoPagoProvider::new("token".into(), "whsec".into());
-        let now_ms: i64 = 1_700_000_000_000;
-        let now_secs = now_ms / 1000;
-
-        let cases: &[(&str, &str)] = &[
-            (
-                r#"{"type":"payment","data":{"id":"pay_1"}}"#,
-                "checkout.session.completed",
-            ),
-            (
-                r#"{"type":"payment","data":{"id":"pay_1","status":"approved"}}"#,
-                "checkout.session.completed",
-            ),
-            (
-                r#"{"type":"payment","data":{"id":"pay_9","status":"refunded","preapproval_id":"preap_1"}}"#,
-                "payment.refunded",
-            ),
-            (
-                r#"{"type":"payment","data":{"id":"pay_9","status":"charged_back"}}"#,
-                "payment.charged_back",
-            ),
-            (
-                r#"{"type":"preapproval","data":{"id":"preap_1","status":"authorized","preapproval_id":"preap_1","next_payment_date":"2026-12-31T00:00:00Z","external_reference":"42","transaction_amount":99.9,"currency_id":"BRL"}}"#,
-                "customer.subscription.updated",
-            ),
-            (
-                r#"{"type":"merchant_order","data":{"id":"mo_1"}}"#,
-                "merchant_order",
-            ),
-        ];
-        for (body, expected) in cases {
-            let evt = signed_mp(body.as_bytes(), now_ms, "whsec", TEST_DATA_ID);
+    async fn verify_webhook_normalizes_authoritative_payment_status() {
+        for (status, expected) in [
+            ("approved", "checkout.session.completed"),
+            ("pending", "payment.pending"),
+            ("rejected", "payment.pending"),
+            ("refunded", "payment.refunded"),
+            ("charged_back", "payment.charged_back"),
+        ] {
+            let (_server, provider) = mock_resource_provider(
+                serde_json::json!({
+                    "id": TEST_DATA_ID, "status": status, "preapproval_id": "preap_1",
+                }),
+                "v1/payments",
+            )
+            .await;
+            let event = signed_mp(
+                br#"{"type":"payment","data":{"id":"1234567890"}}"#,
+                1_700_000_000,
+                "whsec",
+                TEST_DATA_ID,
+            );
             let parsed = provider
-                .verify_webhook_at(evt, now_secs)
+                .verify_webhook_at(event, 1_700_000_000)
                 .await
-                .expect("must verify");
-            assert_eq!(parsed.event_type, *expected, "body={body}");
+                .unwrap();
+            assert_eq!(parsed.event_type, expected, "status={status}");
+            assert_eq!(parsed.subscription_id.as_deref(), Some("preap_1"));
         }
+    }
 
-        let evt = signed_mp(
-            br#"{"type":"preapproval","data":{"id":"preap_1","status":"authorized","preapproval_id":"preap_1","next_payment_date":"2026-12-31T00:00:00Z","external_reference":"42","transaction_amount":99.9,"currency_id":"BRL"}}"#,
-            now_ms,
+    #[tokio::test]
+    async fn verify_webhook_normalizes_authoritative_subscription() {
+        let (_server, provider) = mock_resource_provider(
+            serde_json::json!({
+                "id": TEST_DATA_ID, "status": "authorized", "payer_id": 7,
+                "next_payment_date": "2026-12-31T00:00:00Z", "external_reference": "42",
+                "auto_recurring": {"transaction_amount": 99.9, "currency_id": "BRL"},
+            }),
+            "preapproval",
+        )
+        .await;
+        let event = signed_mp(
+            br#"{"type":"subscription_preapproval","data":{"id":"1234567890"}}"#,
+            1_700_000_000,
             "whsec",
             TEST_DATA_ID,
         );
-        let parsed = provider.verify_webhook_at(evt, now_secs).await.unwrap();
-        assert_eq!(parsed.subscription_id.as_deref(), Some("preap_1"));
-        assert_eq!(parsed.checkout_session_id.as_deref(), Some("preap_1"));
+        let parsed = provider
+            .verify_webhook_at(event, 1_700_000_000)
+            .await
+            .unwrap();
+        assert_eq!(parsed.event_type, "customer.subscription.updated");
+        assert_eq!(parsed.subscription_id.as_deref(), Some(TEST_DATA_ID));
         assert_eq!(parsed.subscription_status.as_deref(), Some("authorized"));
         assert_eq!(parsed.user_id, Some(42));
         assert_eq!(parsed.amount_cents, Some(9990));
@@ -495,7 +679,7 @@ mod tests {
 
     #[tokio::test]
     async fn verify_webhook_uses_official_manifest() {
-        let provider = MercadoPagoProvider::new("token".into(), "whsec".into());
+        let (_server, provider) = mock_payment_provider(TEST_DATA_ID).await;
         let now_ms: i64 = 1_700_000_000_000;
         let now_secs = now_ms / 1000;
         let body = br#"{"type":"payment","data":{"id":"1234567890"}}"#;
@@ -553,7 +737,7 @@ mod tests {
 
     #[tokio::test]
     async fn verify_webhook_accepts_seconds_shaped_ts() {
-        let provider = MercadoPagoProvider::new("token".into(), "whsec".into());
+        let (_server, provider) = mock_payment_provider(TEST_DATA_ID).await;
         const TS_SECS: i64 = 1_704_908_010;
         let now_secs = TS_SECS + 60;
         assert!(
@@ -582,7 +766,7 @@ mod tests {
 
     #[tokio::test]
     async fn verify_webhook_lowercases_alphanumeric_data_id() {
-        let provider = MercadoPagoProvider::new("token".into(), "whsec".into());
+        let (_server, provider) = mock_payment_provider("PAYIDABC123").await;
         let now_ms: i64 = 1_700_000_000_000;
         let now_secs = now_ms / 1000;
         const UPPER_DATA_ID: &str = "PAYIDABC123";

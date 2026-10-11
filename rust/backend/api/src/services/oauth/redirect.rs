@@ -70,6 +70,15 @@ pub fn build_success_redirect(provider: OAuthProvider) -> Result<String, ErrorRe
     build_allowed_success_redirect(&success_path(provider))
 }
 
+pub fn totp_path(provider: OAuthProvider) -> String {
+    format!("/auth/{}/totp", provider.as_str())
+}
+
+#[allow(clippy::result_large_err)]
+pub fn build_totp_redirect(provider: OAuthProvider) -> Result<String, ErrorResponse> {
+    build_allowed_success_redirect(&totp_path(provider))
+}
+
 /// Absolute allow-listed failure redirect: `{allowed_origin}/auth/{provider}/failure?ec=<opaque>`.
 #[allow(clippy::result_large_err)]
 pub fn build_failure_redirect(

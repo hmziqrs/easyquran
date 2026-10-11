@@ -67,12 +67,15 @@ export class SyncEngine {
 
   #phase = $state<SyncPhase>("idle");
   #pending = $state(0);
+  #pendingByDomain = $state.raw<Readonly<Record<string, number>>>({});
   #lastSyncAt = $state<number | null>(null);
   #lastError = $state<string | null>(null);
 
   #running: Promise<void> | null = null;
   #coalesced = false;
-  /** Per-domain consecutive failure counts; a poisoned domain never stretches a healthy domain's retry cadence. */
+  #activeDomainFilter: string | undefined;
+  #coalescedDomainFilter: string | undefined;
+  #controllers = new Map<string, AbortController>();
   #failures = new Map<string, number>();
   #retryTimer: ReturnType<typeof setTimeout> | null = null;
   #started = false;
@@ -93,6 +96,9 @@ export class SyncEngine {
   get pending(): number {
     return this.#pending;
   }
+  pendingFor(domain: string): number {
+    return this.#pendingByDomain[domain] ?? 0;
+  }
   get lastSyncAt(): number | null {
     return this.#lastSyncAt;
   }
@@ -110,29 +116,40 @@ export class SyncEngine {
 
   /** Late domain binding (domains may register after engine creation). */
   register(domain: RegisteredSyncDomain): void {
+    this.#controllers.get(domain.name)?.abort();
     const existing = this.#domains.findIndex((d) => d.name === domain.name);
     if (existing >= 0) this.#domains[existing] = domain;
     else this.#domains.push(domain);
   }
 
-  /**
-   * Queue a mutation (durable before the returned promise resolves) and return
-   * it so the caller can apply it optimistically. Schedules a debounced flush.
-   */
+  unregister(name: string): void {
+    this.#controllers.get(name)?.abort();
+    this.#domains = this.#domains.filter((domain) => domain.name !== name);
+    this.#failures.delete(name);
+    if (this.#domains.length === 0) {
+      this.#cancelRetry();
+      this.#phase = "idle";
+      this.#lastError = null;
+    }
+  }
+
+  /** Persist a mutation before resolving, then schedule a debounced flush. */
   async enqueue<P>(domain: string, payload: P): Promise<SyncMutation<P>> {
     const mutation = await this.#outbox.enqueue(domain, payload);
     this.#pending += 1;
+    this.#pendingByDomain = {
+      ...this.#pendingByDomain,
+      [domain]: this.pendingFor(domain) + 1,
+    };
     this.#flushDebounce.schedule();
     return mutation;
   }
 
-  /**
-   * Replay queued mutations, all domains or just `domain`. Re-entrant calls are
-   * coalesced into the in-flight round (which then runs one extra pass).
-   */
+  /** Replay a domain or all domains; concurrent calls coalesce into a later pass. */
   flush(domain?: string): Promise<void> {
     if (this.#running !== null) {
       this.#coalesced = true;
+      if (domain !== this.#activeDomainFilter) this.#coalescedDomainFilter = undefined;
       return this.#running;
     }
     const run = this.#drain(domain);
@@ -149,17 +166,16 @@ export class SyncEngine {
     await this.#resyncPending();
   }
 
-  /**
-   * Re-read the durable queue depth into `pending` instead of trusting local
-   * arithmetic alone: another tab sharing the storage may have drained (or
-   * queued) entries this engine never saw. A storage read failure keeps the
-   * last known count — the next round retries.
-   */
   async #resyncPending(): Promise<void> {
     try {
-      this.#pending = (await this.#outbox.all()).length;
+      const mutations = await this.#outbox.all();
+      const counts: Record<string, number> = {};
+      for (const mutation of mutations)
+        counts[mutation.domain] = (counts[mutation.domain] ?? 0) + 1;
+      this.#pending = mutations.length;
+      this.#pendingByDomain = counts;
     } catch {
-      // Keep the local count; the outbox read is best-effort here.
+      return;
     }
   }
 
@@ -209,7 +225,7 @@ export class SyncEngine {
       window.removeEventListener("offline", onConnectivity);
     });
 
-    if (this.#wasOnline && this.#pending > 0) void this.flush();
+    if (this.#wasOnline && this.#hasRegisteredPending()) void this.flush();
 
     return () => {
       for (const teardown of teardowns) teardown();
@@ -220,11 +236,15 @@ export class SyncEngine {
   }
 
   async #drain(domainFilter: string | undefined): Promise<void> {
+    let filter = domainFilter;
     do {
       this.#coalesced = false;
-      await this.#flushPass(domainFilter);
+      this.#activeDomainFilter = filter;
+      this.#coalescedDomainFilter = filter;
+      await this.#flushPass(filter);
+      await this.#resyncPending();
+      filter = this.#coalescedDomainFilter;
     } while (this.#coalesced);
-    await this.#resyncPending();
   }
 
   async #flushPass(domainFilter: string | undefined): Promise<void> {
@@ -250,6 +270,7 @@ export class SyncEngine {
     let failed = false;
     for (const domain of targets) {
       const outcome = await this.#drainDomain(domain);
+      if (!this.#domains.includes(domain)) continue;
       if (outcome === "failed") {
         this.#failures.set(domain.name, (this.#failures.get(domain.name) ?? 0) + 1);
         failed = true;
@@ -272,64 +293,63 @@ export class SyncEngine {
     return this.#domains.filter((d) => d.name === domainFilter);
   }
 
-  /**
-   * Drain one domain in FIFO batches until empty. Every step is guarded: a
-   * `take`/`remove` storage throw or a `sync`/`applyServer` domain throw marks
-   * the round failed (phase "error" + retry scheduled) instead of wedging the
-   * phase at "syncing". A `SyncPausedError` from `sync` skips the domain for
-   * this round with no failure count and no backoff growth.
-   *
-   * A domain whose queue is ALREADY empty when this drain starts still runs one
-   * pull-only round — `sync([])` + `applyServer` — so a returning user with
-   * nothing queued (nothing to push) still receives server state (first-visit
-   * pull, reconnect pull). Exactly one pull per flush call; after pushing
-   * batches the last push response already carried the pull.
-   */
   async #drainDomain(domain: RegisteredSyncDomain): Promise<DrainOutcome> {
-    let pushedAny = false;
-    for (;;) {
-      let batch: SyncMutation[];
-      try {
-        batch = await this.#outbox.take(domain.name, FLUSH_BATCH);
-      } catch (err) {
-        this.#lastError = messageOf(err);
-        return "failed";
-      }
-      const pullOnly = batch.length === 0;
-      if (pullOnly && pushedAny) return "drained";
-      let result: SyncRoundResult<unknown>;
-      try {
-        result = await domain.sync(batch);
-      } catch (err) {
-        if (err instanceof SyncPausedError) return "paused";
-        this.#lastError = messageOf(err);
-        return "failed";
-      }
-      try {
-        if (!pullOnly) {
-          await this.#outbox.remove(
-            domain.name,
-            batch.map((m) => m.id),
-          );
-          this.#pending = Math.max(0, this.#pending - batch.length);
+    const controller = new AbortController();
+    const isCurrent = (): boolean => !controller.signal.aborted && this.#domains.includes(domain);
+    this.#controllers.set(domain.name, controller);
+    try {
+      let pushedAny = false;
+      for (;;) {
+        if (!isCurrent()) return "paused";
+        let batch: SyncMutation[];
+        try {
+          batch = await this.#outbox.take(domain.name, FLUSH_BATCH);
+        } catch (err) {
+          this.#lastError = messageOf(err);
+          return "failed";
         }
-        this.#lastSyncAt = Date.now();
-        this.#lastError = null;
-      } catch (err) {
-        this.#lastError = messageOf(err);
-        return "failed";
+        const pullOnly = batch.length === 0;
+        if (pullOnly && pushedAny) return "drained";
+        if (!isCurrent()) return "paused";
+        let result: SyncRoundResult<unknown>;
+        try {
+          result = await domain.sync(batch, controller.signal);
+        } catch (err) {
+          if (!isCurrent() || err instanceof SyncPausedError) return "paused";
+          this.#lastError = messageOf(err);
+          return "failed";
+        }
+        if (!isCurrent()) return "paused";
+        try {
+          if (!pullOnly) {
+            await this.#outbox.remove(
+              domain.name,
+              batch.map((m) => m.id),
+            );
+            this.#pending = Math.max(0, this.#pending - batch.length);
+            this.#pendingByDomain = {
+              ...this.#pendingByDomain,
+              [domain.name]: Math.max(0, this.pendingFor(domain.name) - batch.length),
+            };
+          }
+          if (!isCurrent()) return "paused";
+          this.#lastSyncAt = Date.now();
+          this.#lastError = null;
+        } catch (err) {
+          this.#lastError = messageOf(err);
+          return "failed";
+        }
+        try {
+          domain.applyServer(result.state, batch);
+        } catch (err) {
+          this.#lastError = messageOf(err);
+          return "failed";
+        }
+        if (pullOnly) return "drained";
+        pushedAny = true;
       }
-      try {
-        // Post-removal call: `drained` lets the domain retire exactly these
-        // optimistic entries (its queue slots are already gone). A throw here
-        // is a local-view problem only — record it, keep the batch removed.
-        domain.applyServer(result.state, batch);
-      } catch (err) {
-        this.#lastError = messageOf(err);
-        return "failed";
-      }
-      if (pullOnly) return "drained";
-      pushedAny = true;
+    } finally {
+      if (this.#controllers.get(domain.name) === controller) this.#controllers.delete(domain.name);
     }
   }
 
@@ -337,11 +357,15 @@ export class SyncEngine {
   async clear(domain: string): Promise<void> {
     const removed = await this.#outbox.clear(domain);
     this.#pending = Math.max(0, this.#pending - removed);
+    this.#pendingByDomain = {
+      ...this.#pendingByDomain,
+      [domain]: Math.max(0, this.pendingFor(domain) - removed),
+    };
   }
 
   #scheduleRetry(): void {
     this.#cancelRetry();
-    if (this.#pending <= 0) return;
+    if (!this.#hasRegisteredPending()) return;
     let worst = 0;
     for (const count of this.#failures.values()) worst = Math.max(worst, count);
     const base = syncRetryDelayMs(Math.max(1, worst));
@@ -350,6 +374,10 @@ export class SyncEngine {
       this.#retryTimer = null;
       void this.flush();
     }, base + jitter);
+  }
+
+  #hasRegisteredPending(): boolean {
+    return this.#domains.some((domain) => this.pendingFor(domain.name) > 0);
   }
 
   #cancelRetry(): void {

@@ -9,14 +9,14 @@ use axum_client_ip::ClientIp;
 use crate::db::sea_models::post::UpdatePost;
 use crate::db::sea_models::{post_revision, post_series, post_series_post, scheduled_post};
 use axum_macros::debug_handler;
-use sea_orm::EntityTrait;
+use sea_orm::{ConnectionTrait, EntityTrait, TransactionTrait};
 use serde_json::json;
 use std::collections::HashSet;
 use tracing::{error, info, instrument, warn};
 
 use crate::db::sea_models::user::{self, UserRole};
 use crate::{
-    db::sea_models::post,
+    db::sea_models::{media, post},
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
     modules::post_v1::validator::V1UpdatePostPayload,
@@ -41,6 +41,25 @@ fn viewer_bypasses_paywall(viewer: Option<&user::Model>, author_id: i32) -> bool
 
 fn can_mutate_post(viewer: &user::Model, author_id: i32) -> bool {
     (viewer.id == author_id && viewer.is_author()) || viewer.is_admin()
+}
+
+async fn require_featured_image_access<C: ConnectionTrait>(
+    conn: &C,
+    viewer: &user::Model,
+    image_id: Option<i32>,
+) -> Result<(), ErrorResponse> {
+    let Some(image_id) = image_id else {
+        return Ok(());
+    };
+    let image = <media::Entity as EntityTrait>::find_by_id(image_id)
+        .one(conn)
+        .await?
+        .ok_or_else(|| ErrorResponse::new(ErrorCode::RecordNotFound))?;
+    if image.uploader_id != Some(viewer.id) && !viewer.is_moderator() {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("You do not have permission to use this image"));
+    }
+    Ok(())
 }
 
 async fn require_post_ownership(
@@ -145,9 +164,12 @@ pub async fn create(
     info!(user_id = user.id, "Creating post");
 
     let new_post = payload.0.into_new_post(user.id);
+    let tx = state.sea_db.begin().await?;
+    require_featured_image_access(&tx, user, new_post.featured_image_id).await?;
 
-    match post::Entity::create(&state.sea_db, &state.storage.config.public_url, new_post).await {
+    match post::Entity::create(&tx, &state.storage.config.public_url, new_post).await {
         Ok(post) => {
+            tx.commit().await?;
             info!(post_id = post.id, slug = %post.slug, "Post created successfully");
             tracing::Span::current().record("post_id", post.id);
             tracing::Span::current().record("slug", &post.slug);
@@ -240,16 +262,12 @@ pub async fn update(
     require_post_ownership(&state, post_id, &user).await?;
 
     let update_post = payload.0.into_update_post();
+    let tx = state.sea_db.begin().await?;
+    require_featured_image_access(&tx, &user, update_post.featured_image_id.flatten()).await?;
 
-    match post::Entity::update(
-        &state.sea_db,
-        &state.storage.config.public_url,
-        post_id,
-        update_post,
-    )
-    .await
-    {
+    match post::Entity::update(&tx, &state.storage.config.public_url, post_id, update_post).await {
         Ok(Some(post)) => {
+            tx.commit().await?;
             info!(post_id, slug = %post.slug, "Post updated successfully");
             tracing::Span::current().record("result", "success");
             Ok((StatusCode::OK, Json(json!(post))))

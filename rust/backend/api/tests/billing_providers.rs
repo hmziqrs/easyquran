@@ -1004,10 +1004,22 @@ mod billing_mock_tests {
         #[tokio::test]
         async fn verify_webhook_valid_signature() {
             let secret = "mp_secret_123";
-            let provider = MercadoPagoProvider::new("tok".into(), secret.into());
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/v1/payments/1234567890"))
+                .and(header("Authorization", "Bearer tok"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "id": 1234567890_i64, "status": "approved", "payer": {"id": "cus_mp1"},
+                    "preapproval_id": "sub_mp_w", "preference_id": "mp_preference"
+                })))
+                .expect(1)
+                .mount(&server)
+                .await;
+            let provider =
+                MercadoPagoProvider::new("tok".into(), secret.into()).with_base_url(server.uri());
             let payload = json!({
                 "type": "payment",
-                "data": { "id": "pay_mp1", "payer_id": "cus_mp1", "preapproval_id": "sub_mp_w" }
+                "data": { "id": "1234567890" }
             });
             let payload_bytes = serde_json::to_vec(&payload).unwrap();
             let parsed = provider
@@ -1017,7 +1029,8 @@ mod billing_mock_tests {
             assert_eq!(parsed.event_type, "checkout.session.completed");
             assert_eq!(parsed.customer_id, "cus_mp1");
             assert_eq!(parsed.subscription_id, Some("sub_mp_w".to_string()));
-            assert_eq!(parsed.payment_id, Some("pay_mp1".to_string()));
+            assert_eq!(parsed.payment_id, Some("1234567890".to_string()));
+            assert_eq!(parsed.checkout_session_id.as_deref(), Some("mp_preference"));
         }
 
         #[tokio::test]

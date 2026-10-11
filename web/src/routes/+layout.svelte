@@ -1,6 +1,6 @@
 <script lang="ts">
   import "./layout.css";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { afterNavigate, beforeNavigate } from "$app/navigation";
   import { updated } from "$app/state";
   import { prefs } from "#lib/stores/prefs.svelte.js";
@@ -20,6 +20,9 @@
   import { startCrashReporting } from "#lib/boot/crash-reporting.js";
   import { deLocalizeUrl } from "#lib/paraglide/runtime.js";
   import { copyIndopakSelection } from "#lib/quran/view/indopak-copy.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
+  import { installPurgeHook } from "#lib/auth/purge-hook.js";
+  import { bookmarks } from "#lib/bookmarks/store.svelte.js";
 
   let { children } = $props();
 
@@ -81,6 +84,9 @@
   };
 
   onMount(() => {
+    installPurgeHook(authState);
+    authState.hydrate();
+    bookmarks.hydrate();
     consent.hydrate();
     prefs.hydrate();
     prefs.apply();
@@ -124,6 +130,12 @@
       offlineTeardown?.();
       offlineTeardown = null;
     };
+  });
+
+  $effect(() => {
+    const status = authState.status;
+    const user = authState.user;
+    untrack(() => bookmarks.onAuthChanged(status === "authenticated" && user !== null));
   });
 
   beforeNavigate(({ willUnload, to }) => {

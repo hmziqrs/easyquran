@@ -127,7 +127,13 @@ pub async fn sync(
     auth: AuthSession,
     payload: ValidatedJson<V1BookmarkSyncPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.unwrap(); // safe: route is behind auth_guard::verified
+    let user = auth.user_required()?;
+    if let Some(expected_user_id) = payload.expected_user_id {
+        if expected_user_id != user.id {
+            return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+                .with_message("Bookmark sync account changed"));
+        }
+    }
     let mutations = payload.mutations.as_deref().unwrap_or(&[]);
 
     // Validate every mutation before applying any: a bad item mid-queue must

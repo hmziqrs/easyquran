@@ -47,8 +47,10 @@ impl<B: AuthBackend + SessionRevocation> AuthSession<B> {
         let user = if let Some(ref state) = auth_state {
             match backend.get_user(&state.user_id).await {
                 Ok(Some(user)) => {
-                    // Invalidate if the credential changed since login (e.g. password reset).
-                    if !ct_eq(&state.session_auth_hash, user.session_auth_hash()) {
+                    if session_expired(&backend, state) {
+                        let _ = session.delete().await;
+                        None
+                    } else if !ct_eq(&state.session_auth_hash, user.session_auth_hash()) {
                         tracing::warn!("Session auth hash mismatch — invalidating stale session");
                         let _ = session.delete().await;
                         None
@@ -209,6 +211,14 @@ where
     }
 }
 
+fn session_expired<B: AuthBackend>(
+    backend: &B,
+    state: &AuthSessionState<<B::User as AuthUser>::Id>,
+) -> bool {
+    let age = chrono::Utc::now().fixed_offset() - state.authenticated_at;
+    age < chrono::Duration::zero() || age >= backend.session_max_age()
+}
+
 impl<S, B> FromRequestParts<S> for AuthSession<B>
 where
     B: AuthBackend + SessionRevocation + FromRef<S>,
@@ -232,8 +242,10 @@ where
         let user = if let Some(ref state) = auth_state {
             match backend.get_user(&state.user_id).await {
                 Ok(Some(user)) => {
-                    // Invalidate if the credential changed since login (e.g. password reset).
-                    if !ct_eq(&state.session_auth_hash, user.session_auth_hash()) {
+                    if session_expired(&backend, state) {
+                        let _ = session.delete().await;
+                        None
+                    } else if !ct_eq(&state.session_auth_hash, user.session_auth_hash()) {
                         tracing::warn!("Session auth hash mismatch — invalidating stale session");
                         let _ = session.delete().await;
                         None
@@ -366,6 +378,38 @@ mod tests {
         session.insert("anon", true).await.unwrap();
         session.save().await.unwrap();
         session
+    }
+
+    async fn dated_auth_session(age: chrono::Duration) -> Session {
+        let session = anon_session().await;
+        let mut state = AuthSessionState::new(42, true);
+        state.authenticated_at -= age;
+        state.session_auth_hash = vec![1, 2, 3];
+        session.insert(SESSION_KEY, &state).await.unwrap();
+        session.save().await.unwrap();
+        session
+    }
+
+    #[tokio::test]
+    async fn absolute_expiry_rejects_old_authentication_despite_live_store_record() {
+        for age in [chrono::Duration::hours(1), chrono::Duration::days(15)] {
+            let session = dated_auth_session(age).await;
+            let auth = AuthSession::new(MockBackend, session).await;
+            assert_eq!(auth.user.is_some(), age < chrono::Duration::days(14));
+        }
+    }
+
+    #[tokio::test]
+    async fn extractor_checks_absolute_age_independently_of_store_expiry() {
+        for age in [chrono::Duration::hours(1), chrono::Duration::days(15)] {
+            let session = dated_auth_session(age).await;
+            let (mut parts, _) = axum::http::Request::new(()).into_parts();
+            parts.extensions.insert(session);
+            let auth = AuthSession::<MockBackend>::from_request_parts(&mut parts, &MockBackend)
+                .await
+                .unwrap();
+            assert_eq!(auth.user.is_some(), age < chrono::Duration::days(14));
+        }
     }
 
     #[tokio::test]

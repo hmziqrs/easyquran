@@ -7,6 +7,7 @@ import { readRaw, writeRaw } from "#lib/storage/safe-storage.js";
 import { reader } from "#lib/stores/reader.svelte.js";
 import {
   registerDomain,
+  unregisterDomain,
   syncEngine,
   type RegisteredSyncDomain,
   type SyncDomain,
@@ -14,7 +15,12 @@ import {
   type SyncStatus,
 } from "#lib/sync/index.js";
 
-import { createBookmarksDomain, type BookmarkAuthLike } from "./domain";
+import {
+  BOOKMARKS_DOMAIN,
+  bookmarksDomainFor,
+  createBookmarksDomain,
+  type BookmarkAuthLike,
+} from "./domain";
 import {
   FOLDER_NAME_MAX,
   newBookmarkEntityId,
@@ -30,6 +36,7 @@ import {
 export interface SyncEngineLike {
   enqueue<P>(domain: string, payload: P): Promise<SyncMutation<P>>;
   clear(domain: string): Promise<void>;
+  pendingFor(domain: string): number;
   flush(domain?: string): Promise<void>;
   start(): () => void;
   readonly pending: number;
@@ -38,6 +45,7 @@ export interface SyncEngineLike {
 
 /** Legacy reader seam used for the anonymous view and login migration. */
 export interface ReaderLike {
+  hydrate?(): void;
   isBookmarked(key: VerseKey): boolean;
   toggleBookmark(key: VerseKey): void;
   readonly bookmarkedKeys: readonly VerseKey[];
@@ -53,15 +61,19 @@ export interface BookmarksStoreDeps {
   readonly engine: SyncEngineLike;
   readonly auth: BookmarkAuthLike;
   readonly reader: ReaderLike;
-  /** Auth status source; the default is the app singleton. */
   readonly state?: BookmarksAuthStateLike;
-  /** Domain registration seam; the default is the app-wide registry. */
   readonly register?: (domain: RegisteredSyncDomain) => void;
+  readonly unregister?: (name: string) => void;
 }
 
-/** Durable per-account "legacy bookmarks already migrated" marker (value "1"). */
 function legacyMigratedKey(userId: string): string {
   return `eq.bookmarks.legacy-migrated.${userId}`;
+}
+
+interface AccountGeneration {
+  readonly ownerId: number;
+  readonly generation: number;
+  readonly domain: string;
 }
 
 function nowIso(): string {
@@ -79,27 +91,21 @@ export class BookmarksStore {
   readonly #reader: ReaderLike;
   readonly #state: BookmarksAuthStateLike;
   readonly #register: (domain: RegisteredSyncDomain) => void;
+  readonly #unregister: (name: string) => void;
 
   #folders = $state.raw<readonly BookmarkFolder[]>([]);
   #bookmarks = $state.raw<readonly Bookmark[]>([]);
   #hydrated = false;
-  #syncActive = false;
-  /** Legacy keys already migrated this tab session (in-session guard on top of the durable per-account marker). */
+  #syncGeneration: number | null = null;
+  #ownerId: number | null;
+  #generation = 0;
+  #suspended = $state(false);
+  #legacyDiscard: Promise<void> | null = null;
   #migratedKeys = new Set<string>();
-  /** Optimistic upserts awaiting their drain ack, by bookmark entity id. */
   #pendingById = new Map<string, Bookmark>();
-  /** Entity ids optimistically deleted, awaiting their drain ack. */
   #pendingDeletes = new Set<string>();
-  /** Optimistic folder upserts awaiting their drain ack, by folder entity id. */
   #pendingFoldersById = new Map<string, BookmarkFolder>();
-  /** Folder entity ids optimistically deleted, awaiting their drain ack. */
   #pendingFolderDeletes = new Set<string>();
-  /**
-   * Last authed edge seen (null = no edge yet). AuthState boots "unknown"
-   * with authenticated === false, so a false edge before any true edge is the
-   * probe not having landed — never a logout.
-   */
-  #lastAuthed: boolean | null = null;
 
   constructor(deps: BookmarksStoreDeps) {
     this.#engine = deps.engine;
@@ -107,44 +113,45 @@ export class BookmarksStore {
     this.#reader = deps.reader;
     this.#state = deps.state ?? authState;
     this.#register = deps.register ?? registerDomain;
+    this.#unregister = deps.unregister ?? unregisterDomain;
+    this.#ownerId = this.#currentOwnerId();
   }
 
   get authed(): boolean {
-    return this.#state.authenticated;
+    return !this.#suspended && this.#currentOwnerId() !== null;
   }
 
   get folders(): readonly BookmarkFolder[] {
+    if (!this.#viewIsCurrent()) return [];
     return this.#folders;
   }
 
   get bookmarks(): readonly Bookmark[] {
+    if (!this.#viewIsCurrent()) return [];
     return this.#bookmarks;
   }
 
   get pending(): number {
-    return this.#engine.pending;
+    const ownerId = this.#currentOwnerId();
+    if (ownerId === null || this.#suspended) return 0;
+    return this.#engine.pendingFor(bookmarksDomainFor(ownerId));
   }
 
   get status(): SyncStatus {
-    return this.#engine.status;
+    return { ...this.#engine.status, pending: this.pending };
   }
 
   folderById(id: string): BookmarkFolder | undefined {
-    return this.#folders.find((folder) => folder.id === id);
+    return this.folders.find((folder) => folder.id === id);
   }
 
   bookmarksIn(folderId: string | null): readonly Bookmark[] {
-    return this.#bookmarks.filter((bookmark) => bookmark.folderId === folderId);
+    return this.bookmarks.filter((bookmark) => bookmark.folderId === folderId);
   }
 
-  /**
-   * Authed view grouping: every bookmark filed under its folder id, with rows
-   * whose folderId references a missing folder (orphans) grouped under null —
-   * no row ever disappears between groups.
-   */
   bookmarksByFolder(): Map<string | null, readonly Bookmark[]> {
     const groups = new Map<string | null, Bookmark[]>();
-    for (const bookmark of this.#bookmarks) {
+    for (const bookmark of this.bookmarks) {
       const folderId =
         bookmark.folderId !== null &&
         this.#folders.some((folder) => folder.id === bookmark.folderId)
@@ -157,31 +164,22 @@ export class BookmarksStore {
     return groups;
   }
 
-  /**
-   * Effective row for a verse: the pending overlay wins over the durable view,
-   * mirroring toggle's read. During the durability window (upsert enqueued but
-   * not yet applied) the verse already reads as marked, and once a delete
-   * retires the overlay row it reads as unmarked — so reads and toggle can
-   * never disagree about the same verse.
-   */
   #effectiveRow(surah: number, ayah: number): Bookmark | undefined {
+    if (!this.#viewIsCurrent()) return undefined;
     for (const pending of this.#pendingById.values()) {
       if (pending.surah === surah && pending.ayah === ayah) return pending;
     }
     return this.#bookmarks.find((b) => b.surah === surah && b.ayah === ayah);
   }
 
-  /** Authed server view (pending overlay included). */
   isBookmarked(surah: number, ayah: number): boolean {
     return this.#effectiveRow(surah, ayah) !== undefined;
   }
 
-  /** Legacy local view (anonymous users). */
   legacyBookmarked(key: VerseKey): boolean {
     return this.#reader.isBookmarked(key);
   }
 
-  /** Unified view: authed → server state, anon → legacy local state. */
   isMarkedKey(key: string): boolean {
     const coords = parseVerseKey(key);
     if (coords === null) return this.#reader.isBookmarked(key);
@@ -189,7 +187,6 @@ export class BookmarksStore {
     return this.#reader.isBookmarked(key);
   }
 
-  /** Unified toggle: authed → optimistic + enqueued sync op, anon → legacy local toggle. */
   toggleVerse(key: string): void {
     const coords = parseVerseKey(key);
     if (coords === null) {
@@ -200,13 +197,11 @@ export class BookmarksStore {
   }
 
   toggle(surah: number, ayah: number): void {
-    if (!this.authed) {
+    if (this.#suspended) return;
+    if (this.#captureAccount() === null) {
       this.#reader.toggleBookmark(verseKeyOf(surah, ayah));
       return;
     }
-    // Consult the pending overlay too: a double-fire before the optimistic row
-    // lands must read as "on", so the second fire cancels the same entity
-    // instead of minting a second upsert that the server would re-add.
     const existing = this.#effectiveRow(surah, ayah);
     if (existing) {
       this.remove(existing.id);
@@ -230,9 +225,6 @@ export class BookmarksStore {
         updatedAt: bookmark.updatedAt,
       },
       () => {
-        // A snapshot (or a rapid re-toggle) may have landed the verse already;
-        // the store keeps one row per verse. Durable view only — this row's
-        // overlay entry lives until its drain ack.
         if (this.#bookmarks.some((b) => b.surah === surah && b.ayah === ayah)) return;
         this.#bookmarks = [...this.#bookmarks, bookmark];
       },
@@ -241,11 +233,7 @@ export class BookmarksStore {
   }
 
   remove(bookmarkId: string): void {
-    if (!this.authed) return;
-    // A durable-but-unapplied row lives only in the pending overlay
-    // (#pendingById has it, #bookmarks does not): still enqueue the
-    // compensating bookmark.delete for that pending row's id — #enqueue's
-    // delete branch retires the overlay entry — instead of no-op'ing.
+    if (this.#captureAccount() === null) return;
     const durable = this.#bookmarks.find((b) => b.id === bookmarkId);
     if (durable === undefined && !this.#pendingById.has(bookmarkId)) return;
     this.#enqueue({ kind: "bookmark.delete", id: bookmarkId, updatedAt: nowIso() }, () => {
@@ -254,7 +242,7 @@ export class BookmarksStore {
   }
 
   moveToFolder(bookmarkId: string, folderId: string | null): void {
-    if (!this.authed) return;
+    if (this.#captureAccount() === null) return;
     if (folderId !== null && !this.#folders.some((folder) => folder.id === folderId)) return;
     const existing = this.#bookmarks.find((b) => b.id === bookmarkId);
     if (!existing || existing.folderId === folderId) return;
@@ -276,7 +264,7 @@ export class BookmarksStore {
   }
 
   createFolder(name: string): BookmarkFolder | null {
-    if (!this.authed || !isValidFolderName(name)) return null;
+    if (this.#captureAccount() === null || !isValidFolderName(name)) return null;
     const folder: BookmarkFolder = {
       id: newBookmarkEntityId(),
       name: name.trim(),
@@ -295,7 +283,7 @@ export class BookmarksStore {
   }
 
   renameFolder(id: string, name: string): void {
-    if (!this.authed || !isValidFolderName(name)) return;
+    if (this.#captureAccount() === null || !isValidFolderName(name)) return;
     const existing = this.#folders.find((folder) => folder.id === id);
     if (!existing) return;
     const renamed: BookmarkFolder = { ...existing, name: name.trim(), updatedAt: nowIso() };
@@ -309,42 +297,22 @@ export class BookmarksStore {
   }
 
   deleteFolder(id: string): void {
-    if (!this.authed) return;
+    if (this.#captureAccount() === null) return;
     if (!this.#folders.some((folder) => folder.id === id)) return;
     this.#enqueue({ kind: "folder.delete", id, updatedAt: nowIso() }, () => {
       this.#folders = this.#folders.filter((folder) => folder.id !== id);
-      // Server detaches children on folder.delete; mirror it.
       this.#bookmarks = this.#bookmarks.map((b) =>
         b.folderId === id ? { ...b, folderId: null } : b,
       );
     });
   }
 
-  /**
-   * Replace local state from a decoded server snapshot. Rows referencing a
-   * missing folder are kept (server order may race a folder.delete) and land in
-   * the unfiled group in the view; duplicates per verse collapse to the newest
-   * updatedAt so a cross-device migration never shows two rows for one verse.
-   *
-   * `drained` carries the mutations the engine just removed from the queue:
-   * their optimistic overlay entries (bookmarks and folders alike) are
-   * retired first, so only still-in-flight local edits survive the snapshot.
-   * The rest of the overlay is applied on top — snapshot rows for
-   * pending-deleted entities are dropped, pending upserts win their verse (or,
-   * for folders, their id) — so a stale snapshot can never flicker an
-   * optimistic toggle or folder edit away.
-   *
-   * No-op while signed out: a round that was mid-flight at logout must not
-   * repopulate the old account's view after the logout reset.
-   */
   applyServer(
     snapshot: BookmarksSnapshot,
     drained?: readonly SyncMutation<BookmarksMutation>[],
   ): void {
-    if (!this.authed) return;
+    if (!this.#viewIsCurrent()) return;
     if (drained !== undefined) {
-      // DEFERRED: a drain in another tab does not retire this tab's overlay
-      // entries (no cross-tab retire signal exists yet).
       for (const mutation of drained) {
         this.#pendingById.delete(mutation.payload.id);
         this.#pendingDeletes.delete(mutation.payload.id);
@@ -363,8 +331,6 @@ export class BookmarksStore {
     for (const pending of this.#pendingById.values()) {
       newestPerVerse.set(verseKeyOf(pending.surah, pending.ayah), pending);
     }
-    // Folder mirror of the bookmark overlay: a pull-only round whose snapshot
-    // predates a local create/rename/delete must not erase or resurrect it.
     this.#folders = [
       ...snapshot.folders.filter(
         (folder) =>
@@ -375,36 +341,59 @@ export class BookmarksStore {
     this.#bookmarks = [...newestPerVerse.values()];
   }
 
-  /** Idempotent, browser-only boot: starts sync when a session already exists. */
   hydrate(): void {
     if (!browser || this.#hydrated) return;
     this.#hydrated = true;
-    if (this.authed) void this.#beginSync();
+    void this.#discardUnownedQueue().catch(() => undefined);
+    this.onAuthChanged(this.#state.authenticated);
   }
 
-  /**
-   * Auth transition edge, driven by an $effect over authState in the app
-   * layout (which no-ops while the probe status is "unknown"). false→true:
-   * migrate legacy bookmarks + start syncing. true→false: drop the server view
-   * (the anon view owns the screen again), durably clear this domain's queue
-   * so nothing flushes into the next account, and reset the in-session
-   * migration guard (the durable per-account marker still gates re-login
-   * migration).
-   *
-   * Belt and braces for the layout's unknown-status guard: the logout path
-   * only runs on a true authenticated→unauthenticated transition. A false
-   * edge before any true edge is the boot-time "unknown" status resolving,
-   * not a logout — running the logout path there would wipe the durable outbox
-   * of an authed user on every cold load.
-   */
   onAuthChanged(authed: boolean): void {
-    if (authed) {
-      void this.#beginSync();
-      return;
-    }
-    if (this.#lastAuthed !== true) return;
-    this.#lastAuthed = false;
-    this.#syncActive = false;
+    this.#suspended = false;
+    const nextOwnerId = authed ? this.#currentOwnerId() : null;
+    if (nextOwnerId !== this.#ownerId) this.#resetAccount(nextOwnerId);
+    const account = this.#captureAccount();
+    if (account === null) return;
+    void this.#beginSync(account).catch(() => {
+      if (this.#isCurrent(account)) this.#syncGeneration = null;
+    });
+  }
+
+  suspendAuth(): void {
+    this.#suspended = true;
+    this.#resetAccount(null);
+  }
+
+  #currentOwnerId(): number | null {
+    if (!this.#state.authenticated) return null;
+    return this.#state.user?.id ?? null;
+  }
+
+  #viewIsCurrent(): boolean {
+    return !this.#suspended && this.#ownerId !== null && this.#ownerId === this.#currentOwnerId();
+  }
+
+  #captureAccount(): AccountGeneration | null {
+    if (this.#suspended) return null;
+    const ownerId = this.#currentOwnerId();
+    if (ownerId !== this.#ownerId) this.#resetAccount(ownerId);
+    if (ownerId === null) return null;
+    return { ownerId, generation: this.#generation, domain: bookmarksDomainFor(ownerId) };
+  }
+
+  #isCurrent(account: AccountGeneration): boolean {
+    return (
+      this.#viewIsCurrent() &&
+      this.#ownerId === account.ownerId &&
+      this.#generation === account.generation
+    );
+  }
+
+  #resetAccount(ownerId: number | null): void {
+    if (this.#ownerId !== null) this.#unregister(bookmarksDomainFor(this.#ownerId));
+    this.#generation += 1;
+    this.#ownerId = ownerId;
+    this.#syncGeneration = null;
     this.#folders = [];
     this.#bookmarks = [];
     this.#migratedKeys.clear();
@@ -412,84 +401,74 @@ export class BookmarksStore {
     this.#pendingDeletes.clear();
     this.#pendingFoldersById.clear();
     this.#pendingFolderDeletes.clear();
-    void this.#engine.clear("bookmarks").catch(() => undefined);
   }
 
-  async #beginSync(): Promise<void> {
-    this.#lastAuthed = true;
-    if (this.#syncActive) return;
-    this.#syncActive = true;
-    await this.#migrateLegacy();
-    const domain = createBookmarksDomain(this.#auth, this.#state);
-    // Method-syntax members keep the domain bivariant, so the typed adapter
-    // registers as the engine-erased RegisteredSyncDomain (see sync/types.ts).
+  #discardUnownedQueue(): Promise<void> {
+    if (this.#legacyDiscard !== null) return this.#legacyDiscard;
+    const discard = this.#engine.clear(BOOKMARKS_DOMAIN);
+    this.#legacyDiscard = discard;
+    void discard.catch(() => {
+      if (this.#legacyDiscard === discard) this.#legacyDiscard = null;
+    });
+    return discard;
+  }
+
+  async #beginSync(account: AccountGeneration): Promise<void> {
+    if (this.#syncGeneration === account.generation) return;
+    this.#syncGeneration = account.generation;
+    await this.#discardUnownedQueue();
+    if (!this.#isCurrent(account)) return;
+    await this.#migrateLegacy(account);
+    if (!this.#isCurrent(account)) return;
+    const domain = createBookmarksDomain(this.#auth, this.#state, account.ownerId, () =>
+      this.#isCurrent(account),
+    );
     const adapter: SyncDomain<BookmarksMutation, BookmarksSnapshot> = {
       name: domain.name,
       sync: (mutations, signal) => domain.sync(mutations, signal),
       applyServer: (state, drained) => {
-        this.applyServer(state, drained);
+        if (this.#isCurrent(account)) this.applyServer(state, drained);
       },
     };
     this.#register(adapter);
     this.#engine.start();
-    await this.#engine.flush("bookmarks");
+    await this.#engine.flush(account.domain);
   }
 
-  /**
-   * One-time-per-account import of legacy local bookmarks: enqueue an upsert
-   * per verse (fresh uuids, folderId null), then write the durable per-account
-   * marker — only after every enqueue resolved, so both are durable together.
-   * The marker survives reloads and logout (device+account truth: this browser
-   * already handed these keys to this account); the server's per-verse dedupe
-   * makes any partial-failure re-run convergent. Legacy data on disk is never
-   * deleted — the anon view keeps using it.
-   */
-  async #migrateLegacy(): Promise<void> {
-    const user = this.#state.user;
-    const markerKey = user !== null ? legacyMigratedKey(String(user.id)) : null;
-    if (markerKey !== null && readRaw("local", markerKey) === "1") return;
-    const payloads: BookmarksMutation[] = [];
+  async #migrateLegacy(account: AccountGeneration): Promise<void> {
+    const markerKey = legacyMigratedKey(String(account.ownerId));
+    if (readRaw("local", markerKey) === "1") return;
+    this.#reader.hydrate?.();
     for (const key of this.#reader.bookmarkedKeys) {
+      if (!this.#isCurrent(account)) return;
       if (this.#migratedKeys.has(key)) continue;
-      this.#migratedKeys.add(key);
       const coords = parseVerseKey(key);
       if (coords === null) continue;
-      payloads.push({
-        kind: "bookmark.upsert",
-        id: newBookmarkEntityId(),
-        folderId: null,
-        surah: coords.surah,
-        ayah: coords.ayah,
-        updatedAt: nowIso(),
-      });
+      try {
+        await this.#engine.enqueue(account.domain, {
+          kind: "bookmark.upsert",
+          id: newBookmarkEntityId(),
+          folderId: null,
+          surah: coords.surah,
+          ayah: coords.ayah,
+          updatedAt: nowIso(),
+        } satisfies BookmarksMutation);
+      } catch {
+        return;
+      }
+      if (!this.#isCurrent(account)) return;
+      this.#migratedKeys.add(key);
     }
-    if (markerKey === null) return;
-    if (payloads.length === 0) {
-      writeRaw("local", markerKey, "1");
-      return;
-    }
-    try {
-      await Promise.all(payloads.map((payload) => this.#engine.enqueue("bookmarks", payload)));
-      writeRaw("local", markerKey, "1");
-    } catch {
-      // Marker stays unwritten: the next session re-runs migration; the
-      // server's per-verse dedupe keeps that harmless.
-    }
+    if (this.#isCurrent(account)) writeRaw("local", markerKey, "1");
   }
 
-  /**
-   * Queue a mutation, then apply its optimistic view ONLY once the queue write
-   * is durable — engine.enqueue resolves after the outbox write, so the view
-   * can never run ahead of durability (a reload right after a toggle replays a
-   * queued mutation, never a lost one). A rejected enqueue (storage failure)
-   * applies nothing and retires the overlay entry, so view and queue stay in
-   * step; a logout before resolution drops the apply along with the queue.
-   */
   #enqueue(
     payload: BookmarksMutation,
     apply: () => void,
     overlay?: { bookmark?: Bookmark; folder?: BookmarkFolder },
   ): void {
+    const account = this.#captureAccount();
+    if (account === null) return;
     if (payload.kind === "bookmark.delete") {
       this.#pendingDeletes.add(payload.id);
       this.#pendingById.delete(payload.id);
@@ -502,11 +481,12 @@ export class BookmarksStore {
       this.#pendingFoldersById.set(payload.id, overlay.folder);
       this.#pendingFolderDeletes.delete(payload.id);
     }
-    void this.#engine.enqueue("bookmarks", payload).then(
+    void this.#engine.enqueue(account.domain, payload).then(
       () => {
-        if (this.authed) apply();
+        if (this.#isCurrent(account)) apply();
       },
       () => {
+        if (!this.#isCurrent(account)) return;
         this.#pendingById.delete(payload.id);
         this.#pendingDeletes.delete(payload.id);
         this.#pendingFoldersById.delete(payload.id);

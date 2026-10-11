@@ -60,9 +60,7 @@ pub struct SyncMutation {
 #[derive(Debug, Deserialize, Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct V1BookmarkSyncPayload {
-    /// FIFO queue from the offline client; applied in order. Absent = pure pull.
-    /// `nested` runs each item's own field validations (range/length/uuid);
-    /// without it a Vec's items are never validated.
+    pub expected_user_id: Option<i32>,
     #[validate(length(max = 200), nested)]
     pub mutations: Option<Vec<SyncMutation>>,
 }

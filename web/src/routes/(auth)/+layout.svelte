@@ -5,6 +5,7 @@
   import { Brand } from "#lib/components/brand/index.js";
   import { authState } from "#lib/auth/auth-state.svelte.js";
   import { authFooterLinkIds, authPageTitle, type AuthFooterLinkId } from "#lib/auth/auth-page-meta.js";
+  import AuthTopBar from "#lib/auth/components/AuthTopBar.svelte";
   import { installPurgeHook } from "#lib/auth/purge-hook.js";
   import { guestOnlyRedirect } from "#lib/auth/route-guard.js";
   import { getAuthCopy } from "#lib/i18n/auth-copy.js";
@@ -16,10 +17,7 @@
     footer_terms,
   } from "#lib/i18n/m/chrome.js";
   import { marketingHref, type MarketingPageId } from "#lib/i18n/marketing.js";
-  import {
-    marketingHomeHref,
-    marketingReaderHomeHref,
-  } from "#lib/i18n/marketing-copy.js";
+  import { marketingHomeHref } from "#lib/i18n/marketing-copy.js";
   import type { UiLocale } from "#lib/i18n/locales.js";
   import { publicHref } from "#lib/i18n/public-href.js";
 
@@ -89,41 +87,12 @@
   lang={copy.locale}
   dir={copy.direction}
 >
-  <!-- Identity band: below lg the aside is display:none, which used to leave mobile with a
-       chromeless dead end. Same composition compressed — brand + an explicit reader link,
-       the ayah, the description — and it renders unconditionally so the prerendered HTML
-       carries an exit before the session probe resolves. -->
-  <div
-    class="bg-primary px-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-6 text-primary-foreground sm:px-10 sm:pt-[calc(env(safe-area-inset-top)+1.5rem)] sm:pb-7 lg:hidden"
-  >
-    <div class="flex items-center justify-between gap-4">
-      <Brand tone="on-accent" homeHref={marketingHomeHref(copy.locale)} />
-      <a
-        href={publicHref(marketingReaderHomeHref(copy.locale))}
-        class="inline-flex min-h-11 items-center rounded-pill px-3 text-sm font-medium text-primary-foreground/80 transition-colors hover:text-primary-foreground"
-        >{readQuranLabel}</a
-      >
-    </div>
-    <figure class="mt-5 flex flex-col gap-3 sm:mt-6">
-      <blockquote
-        class="text-balance font-arabic text-[clamp(22px,5.5vw,30px)] leading-[1.9]"
-        lang="ar"
-        dir="rtl"
-      >
-        أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ
-      </blockquote>
-      <figcaption class="flex items-center gap-3 text-sm text-primary-foreground/70">
-        <span aria-hidden="true" class="h-px w-8 bg-primary-foreground/40"></span>
-        <span lang="ar" dir="rtl">سورة الرعد · ١٣:٢٨</span>
-      </figcaption>
-    </figure>
-    <p class="mt-5 hidden max-w-[38ch] text-sm leading-relaxed text-primary-foreground/70 sm:block">
-      {copy.dialogDescription}
-    </p>
-  </div>
+  <!-- Auth chrome is one slim row on mobile/tablet; the aside carries the identity on
+       desktop. Never a stacked identity block above the form. -->
+  <AuthTopBar class="lg:hidden" locale={copy.locale} readLabel={readQuranLabel} />
 
   <!-- Brand panel: the accent half carries the identity on auth pages so the form
-       column stays chrome-free. Hidden below lg — the band above takes over. -->
+       column stays chrome-free. Hidden below lg — the top bar above takes over. -->
   <aside
     class="relative hidden overflow-hidden bg-primary p-10 text-primary-foreground lg:flex lg:w-[45%] lg:flex-col lg:justify-between xl:p-16"
   >

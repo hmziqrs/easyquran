@@ -231,6 +231,7 @@ pub async fn link_identity_to_user(
 #[derive(Debug)]
 pub enum CallbackOutcome {
     Login(i32),
+    TotpRequired,
     Linked,
     AlreadyLinkedOtherUser,
 }
@@ -267,9 +268,15 @@ pub async fn finish_oauth_login(
     user: &user::Model,
     provider: OAuthProvider,
 ) -> Result<(), ErrorResponse> {
-    // W8D-001: fail-closed ban guard — same contract as password (auth_v1
-    // log_in), TOTP, and passkey login. A banned user must not evade the ban
-    // by signing in via OAuth, and a ban-lookup error must never grant access.
+    finish_oauth_login_with_db(&state.sea_db, auth, user, provider).await
+}
+
+pub async fn finish_oauth_login_with_db(
+    db: &sea_orm::DatabaseConnection,
+    auth: &mut AuthSession,
+    user: &user::Model,
+    provider: OAuthProvider,
+) -> Result<(), ErrorResponse> {
     match auth.backend().check_ban(&user.id).await {
         Ok(ban_status) if ban_status.is_banned() => {
             warn!(user_id = user.id, "Banned user attempted OAuth login");
@@ -283,17 +290,40 @@ pub async fn finish_oauth_login(
         }
     }
 
+    if user.two_fa_enabled {
+        if auth.user.is_some() {
+            auth.logout()
+                .await
+                .map_err(|_| ErrorResponse::new(ErrorCode::InternalServerError))?;
+        }
+        crate::services::pending_login::issue(auth, user).await?;
+        return Ok(());
+    }
+
     auth.login(user).await.map_err(|e| {
         error!(error = %e, user_id = user.id, "Failed to create OAuth session");
         ErrorResponse::new(ErrorCode::InternalServerError).with_message("Failed to create session")
     })?;
 
-    // W8e: durable binding with the same fail-closed contract as password login
-    // (create audit row -> save tower session -> record binding). On failure the
-    // tower session is destroyed and the audit row revoked so neither lingers.
     let device = Some(format!("{} OAuth", provider.label()));
     let ip: Option<String> = None;
-    create_bound_session(&state.sea_db, auth, user.id, device, ip).await
+    create_bound_session(db, auth, user.id, device, ip).await
+}
+
+pub async fn callback_login_outcome(
+    auth: &AuthSession,
+    user_id: i32,
+) -> Result<CallbackOutcome, ErrorResponse> {
+    if crate::services::pending_login::response(auth)
+        .await?
+        .is_some()
+    {
+        return Ok(CallbackOutcome::TotpRequired);
+    }
+    if auth.user.as_ref().is_some_and(|user| user.id == user_id) {
+        return Ok(CallbackOutcome::Login(user_id));
+    }
+    Err(ErrorResponse::new(ErrorCode::Unauthorized))
 }
 
 pub fn generate_oauth_nonce() -> String {

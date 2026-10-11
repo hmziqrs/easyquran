@@ -7,12 +7,12 @@ import { createSyncEngine, type RegisteredSyncDomain, type SyncEngine } from "./
  */
 export const syncEngine: SyncEngine = createSyncEngine();
 
-const registered = new Set<string>();
-
 /** Register a domain (idempotent by name) and refresh the pending count. */
 export function registerDomain(domain: RegisteredSyncDomain): void {
-  if (registered.has(domain.name)) return;
-  registered.add(domain.name);
   syncEngine.register(domain);
   void syncEngine.hydrate();
+}
+
+export function unregisterDomain(name: string): void {
+  syncEngine.unregister(name);
 }

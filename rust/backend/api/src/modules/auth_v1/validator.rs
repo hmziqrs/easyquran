@@ -65,8 +65,6 @@ pub struct V1TwoFADisablePayload {
     pub code: Option<String>,
 }
 
-// M2: only read when the account is already 2FA-enrolled — rotating the secret
-// disarms 2FA, so a current TOTP/backup code is required first.
 #[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct V1TwoFASetupPayload {
     #[validate(length(min = 6, max = 64))]

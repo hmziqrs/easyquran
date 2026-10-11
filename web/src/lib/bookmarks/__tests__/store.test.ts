@@ -60,6 +60,9 @@ function fakeEngine(): FakeEngine {
       async clear(domain?: string) {
         if (domain !== undefined) cleared.push(domain);
       },
+      pendingFor() {
+        return handle.status.pending;
+      },
       async flush(domain?: string) {
         flushed.push(domain);
       },
@@ -135,6 +138,7 @@ function makeRig(initialLegacyKeys: VerseKey[] = [], authed = false, userId = 7)
     reader: reader.reader,
     state,
     register: (domain) => registered.push(domain),
+    unregister: () => undefined,
   });
   return {
     store,
@@ -432,9 +436,9 @@ describe("BookmarksStore — auth transitions and migration", () => {
     await flush();
 
     expect(rig.registered).toHaveLength(1);
-    expect(rig.registered[0]!.name).toBe("bookmarks");
+    expect(rig.registered[0]!.name).toBe("bookmarks.user:7");
     expect(rig.engine.started).toBe(1);
-    expect(rig.engine.flushed).toEqual(["bookmarks"]);
+    expect(rig.engine.flushed).toEqual(["bookmarks.user:7"]);
     expect(rig.engine.enqueued).toEqual([
       expect.objectContaining({ kind: "bookmark.upsert", surah: 2, ayah: 255 }),
       expect.objectContaining({ kind: "bookmark.upsert", surah: 112, ayah: 1 }),
@@ -479,17 +483,15 @@ describe("BookmarksStore — auth transitions and migration", () => {
     await flush();
 
     expect(second.engine.enqueued).toEqual([]);
-    expect(second.engine.flushed).toEqual(["bookmarks"]);
+    expect(second.engine.flushed).toEqual(["bookmarks.user:7"]);
   });
 
-  it("a false edge before any true edge (cold-load unknown status) never wipes the durable queue", async () => {
+  it("cold-load unknown status discards only the unowned queue", async () => {
     const rig = makeRig(["2:255"], false);
     rig.store.hydrate(); // anon boot: no-op
-    // The layout effect maps status "unknown" → authenticated === false before
-    // the probe resolves; that edge must not run the logout path.
     rig.store.onAuthChanged(false);
 
-    expect(rig.engine.cleared).toEqual([]);
+    expect(rig.engine.cleared).toEqual(["bookmarks"]);
     expect(rig.engine.enqueued).toEqual([]);
 
     // The probe resolves authed afterwards: sync starts normally.
@@ -497,16 +499,15 @@ describe("BookmarksStore — auth transitions and migration", () => {
     rig.store.onAuthChanged(true);
     await flush();
 
-    expect(rig.engine.flushed).toEqual(["bookmarks"]);
+    expect(rig.engine.flushed).toEqual(["bookmarks.user:7"]);
     expect(rig.engine.enqueued).toHaveLength(1); // legacy migration ran
 
-    // A real true→false transition still clears.
     rig.setAuthed(false);
     rig.store.onAuthChanged(false);
     expect(rig.engine.cleared).toEqual(["bookmarks"]);
   });
 
-  it("logout clears the queue durably, resets the view and the in-session guard; re-login skips the marked account", async () => {
+  it("logout preserves the owner partition, resets the view; re-login skips the marked account", async () => {
     const rig = makeRig(["2:255"], true);
     rig.store.hydrate();
     await flush();
@@ -566,7 +567,9 @@ describe("BookmarksStore — optimistic overlay", () => {
   function drainedOf(rig: Rig, payload: BookmarksMutation): SyncMutation<BookmarksMutation>[] {
     const index = rig.engine.enqueued.indexOf(payload);
     // SAFETY: test builds this from a just-enqueued payload; the id mirrors the fake engine's allocation.
-    return [{ id: `m${index + 1}`, domain: "bookmarks", seq: index + 1, payload, queuedAt: 0 }];
+    return [
+      { id: `m${index + 1}`, domain: "bookmarks.user:7", seq: index + 1, payload, queuedAt: 0 },
+    ];
   }
 
   it("a stale snapshot cannot flicker away in-flight optimistic edits", async () => {
@@ -664,7 +667,7 @@ describe("BookmarksStore — optimistic overlay", () => {
       { folders: [{ ...folder!, name: "Tafsir 2" }], bookmarks: [] },
       acked.map((payload, index) => ({
         id: `m${index + 1}`,
-        domain: "bookmarks",
+        domain: "bookmarks.user:7",
         seq: index + 1,
         payload,
         queuedAt: 0,

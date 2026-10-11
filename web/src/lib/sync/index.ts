@@ -11,4 +11,4 @@ export { Outbox, createOutbox, idbQueueStorage, memoryQueueStorage } from "./out
 export type { QueueStorage, SyncMutationDraft } from "./outbox";
 export { SyncEngine, createSyncEngine, syncRetryDelayMs } from "./engine.svelte";
 export type { RegisteredSyncDomain, SyncEngineOptions } from "./engine.svelte";
-export { registerDomain, syncEngine } from "./registry.svelte";
+export { registerDomain, unregisterDomain, syncEngine } from "./registry.svelte";

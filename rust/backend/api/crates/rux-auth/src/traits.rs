@@ -50,6 +50,10 @@ pub trait AuthUser: Clone + Debug + Send + Sync + 'static {
 pub trait AuthBackend: Clone + Send + Sync + 'static {
     type User: AuthUser;
 
+    fn session_max_age(&self) -> chrono::Duration {
+        chrono::Duration::days(14)
+    }
+
     async fn get_user(
         &self,
         id: &<Self::User as AuthUser>::Id,

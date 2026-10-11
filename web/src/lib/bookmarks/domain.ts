@@ -8,46 +8,54 @@ import {
 
 import { decodeBookmarksEnvelope, type BookmarksMutation, type BookmarksSnapshot } from "./schema";
 
-/**
- * Transport seam over AuthClient.unsafeRequest (session cookie + CSRF handled
- * there). Tests inject a fake with the same single method.
- */
 export interface BookmarkAuthLike {
   unsafeRequest<T>(path: string, init: UnsafeRequestInit): Promise<AuthRequestResult<T>>;
 }
 
-/** Auth status seam the domain pauses itself on (logged out → no transport call). */
 export interface BookmarkAuthStateLike {
   readonly authenticated: boolean;
+  readonly user: { readonly id: number } | null;
 }
 
 const SYNC_PATH = "/bookmark/v1/sync";
 
 export const BOOKMARKS_DOMAIN = "bookmarks";
 
-/**
- * The bookmarks sync domain: pushes queued mutations (payloads verbatim, FIFO
- * order preserved by the engine) and returns the decoded server snapshot as the
- * round state. While signed out it throws SyncPausedError before any request —
- * the engine skips the domain without failure counts or backoff. Any non-2xx
- * throws so the engine keeps the queue and backs off; the same applies to an
- * unreadable body (treated as a failed round, not as an empty snapshot — an
- * empty snapshot would erase the local view).
- */
+export function bookmarksDomainFor(userId: number): string {
+  return `${BOOKMARKS_DOMAIN}.user:${userId}`;
+}
+
 export function createBookmarksDomain(
   auth: BookmarkAuthLike,
   state: BookmarkAuthStateLike,
+  ownerId: number,
+  isCurrent: () => boolean = () => true,
 ): SyncDomain<BookmarksMutation, BookmarksSnapshot> {
+  const name = bookmarksDomainFor(ownerId);
+  const assertCurrent = (signal?: AbortSignal): void => {
+    if (signal?.aborted || !isCurrent() || !state.authenticated || state.user?.id !== ownerId) {
+      throw new SyncPausedError("bookmarks sync paused: account changed");
+    }
+  };
   return {
-    name: BOOKMARKS_DOMAIN,
+    name,
     async sync(
       mutations: SyncMutation<BookmarksMutation>[],
+      signal?: AbortSignal,
     ): Promise<SyncRoundResult<BookmarksSnapshot>> {
-      if (!state.authenticated) throw new SyncPausedError("bookmarks sync paused: signed out");
+      assertCurrent(signal);
+      if (mutations.some((mutation) => mutation.domain !== name)) {
+        throw new SyncPausedError("bookmarks sync paused: mutation owner mismatch");
+      }
       const res = await auth.unsafeRequest<unknown>(SYNC_PATH, {
         method: "POST",
-        body: { mutations: mutations.map((mutation) => mutation.payload) },
+        body: {
+          expectedUserId: ownerId,
+          mutations: mutations.map((mutation) => mutation.payload),
+        },
+        signal,
       });
+      assertCurrent(signal);
       if (!res.ok) throw new Error(`bookmark sync failed (${res.status})`);
       const envelope = decodeBookmarksEnvelope(res.data);
       if (envelope === null) throw new Error("bookmark sync returned an unreadable snapshot");
@@ -57,9 +65,6 @@ export function createBookmarksDomain(
         state: { folders: envelope.folders, bookmarks: envelope.bookmarks },
       };
     },
-    applyServer(): void {
-      // The store registers an adapter that routes snapshots into its $state;
-      // the bare domain has no local view of its own.
-    },
+    applyServer(): void {},
   };
 }

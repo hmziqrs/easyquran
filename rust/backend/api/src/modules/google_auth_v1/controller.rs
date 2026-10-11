@@ -167,6 +167,11 @@ pub async fn google_callback(
             let url = oauth::redirect::build_success_redirect(oauth::OAuthProvider::Google)?;
             Ok(Redirect::temporary(&url))
         }
+        Ok(CallbackOutcome::TotpRequired) => {
+            tracing::Span::current().record("result", "totp_required");
+            let url = oauth::redirect::build_totp_redirect(oauth::OAuthProvider::Google)?;
+            Ok(Redirect::temporary(&url))
+        }
         Ok(CallbackOutcome::Linked) => {
             tracing::Span::current().record("result", "linked");
             info!("Google identity linked to the current account");
@@ -253,10 +258,12 @@ async fn run_google_callback(
         return Ok(outcome);
     }
 
-    finish_google_login(state, auth, token_result, oauth_state.nonce.as_deref())
+    let user = finish_google_login(state, auth, token_result, oauth_state.nonce.as_deref())
+        .await
+        .map_err(fail)?;
+    oauth::login::callback_login_outcome(auth, user.id)
         .await
         .map_err(fail)
-        .map(|user| CallbackOutcome::Login(user.id))
 }
 
 /// Completes the link branch of a Google callback: verify the flow belongs to the current session
@@ -337,6 +344,11 @@ pub async fn google_exchange(
         "Google login successful via client exchange"
     );
     tracing::Span::current().record("result", "success");
+
+    if let Some(body) = crate::services::pending_login::response(&auth).await? {
+        tracing::Span::current().record("result", "totp_required");
+        return Ok((StatusCode::OK, session_rotated_headers(false), Json(body)));
+    }
 
     Ok((
         StatusCode::OK,
@@ -426,6 +438,11 @@ pub async fn google_token(
 
     info!(user_id = user.id, "Google mobile login successful");
     tracing::Span::current().record("result", "success");
+
+    if let Some(body) = crate::services::pending_login::response(&auth).await? {
+        tracing::Span::current().record("result", "totp_required");
+        return Ok((StatusCode::OK, session_rotated_headers(false), Json(body)));
+    }
 
     Ok((
         StatusCode::OK,

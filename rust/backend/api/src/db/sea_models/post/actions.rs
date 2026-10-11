@@ -213,7 +213,10 @@ impl Entity {
             )
     }
 
-    async fn sanitized_tag_ids(conn: &DbConn, tag_ids: Vec<i32>) -> DbResult<Vec<i32>> {
+    async fn sanitized_tag_ids<C: ConnectionTrait>(
+        conn: &C,
+        tag_ids: Vec<i32>,
+    ) -> DbResult<Vec<i32>> {
         let mut sanitized_ids = Vec::new();
         tag::Entity::find()
             .filter(tag::Column::Id.is_in(tag_ids))
@@ -227,8 +230,8 @@ impl Entity {
     }
 
     #[instrument(skip(conn, new_post), fields(post_id, author_id = new_post.author_id, slug = %new_post.slug))]
-    pub async fn create(
-        conn: &DbConn,
+    pub async fn create<C: ConnectionTrait>(
+        conn: &C,
         public_url: &str,
         new_post: NewPost,
     ) -> DbResult<PostWithRelations> {
@@ -279,8 +282,8 @@ impl Entity {
     }
 
     #[instrument(skip(conn, update_post), fields(post_id))]
-    pub async fn update(
-        conn: &DbConn,
+    pub async fn update<C: ConnectionTrait>(
+        conn: &C,
         public_url: &str,
         post_id: i32,
         update_post: UpdatePost,
@@ -374,8 +377,8 @@ impl Entity {
     }
 
     #[instrument(skip(conn), fields(post_id, slug = post_slug.as_deref()))]
-    pub async fn find_by_id_or_slug(
-        conn: &DbConn,
+    pub async fn find_by_id_or_slug<C: ConnectionTrait>(
+        conn: &C,
         public_url: &str,
         post_id: Option<i32>,
         post_slug: Option<String>,

@@ -16,8 +16,6 @@
   import { marketingHomeHref } from "#lib/i18n/marketing-copy.js";
   import { deLocalizeUrl } from "#lib/paraglide/runtime.js";
   import { reader } from "#lib/stores/reader.svelte.js";
-  import { authState } from "#lib/auth/auth-state.svelte.js";
-  import { bookmarks } from "#lib/bookmarks/store.svelte.js";
   import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
   import { modeParamMatches, parseModeParam, withModeParam } from "#lib/reader/mode-param.js";
   import { moreParamMatches, parseMoreParam, withMoreParam } from "#lib/reader/more-param.js";
@@ -90,7 +88,6 @@
     // no-op read keeps users' localStorage free of the dead blob.
     removeJSON("easyquran.reader.source");
     reader.hydrate(parseModeParam(visibleUrl(page)) ?? undefined);
-    bookmarks.hydrate();
     const moreIds = knownMoreIds(parseMoreParam(visibleUrl(page)));
     if (moreIds.length) stackedTranslations.setIds(moreIds);
     document.documentElement.dataset.readerHydrated = "true";
@@ -158,21 +155,6 @@
     const routeTranslationId = lang && translator ? translationIdFromSegments(lang, translator) : null;
     const pinned = routeTranslationId ? [routeTranslationId, ...ids] : [...ids];
     void quranWorker.setPinnedTranslations(pinned).catch(() => {});
-  });
-
-  // Bookmark sync follows the session: anon→authed migrates legacy local
-  // bookmarks and starts the engine; authed→anon drops the server view. The
-  // effect body must not depend on store state, hence untrack. Status
-  // "unknown" (probe not yet resolved) is NOT an anon edge: acting on it would
-  // run the logout path — wiping the durable outbox — for every authed cold
-  // load; the store's onAuthChanged guards the same seam a second time.
-  // DEFERRED: an authed cold-load still shows the anon legacy view until the
-  // probe resolves.
-  $effect(() => {
-    const status = authState.status;
-    if (status === "unknown") return;
-    const authed = authState.authenticated;
-    untrack(() => bookmarks.onAuthChanged(authed));
   });
 
   // Registered asynchronously so `@tanstack/hotkeys` stays out of the initial bundle — same

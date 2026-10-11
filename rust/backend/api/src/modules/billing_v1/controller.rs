@@ -954,6 +954,10 @@ async fn process_webhook_event(
             tracing::info!(user_id, amount, "Payment recorded from invoice webhook");
         }
         "payment.confirmed" | "payment.pending" => {
+            if provider_name == "mercado_pago" && event.event_type == canonical::PAYMENT_PENDING {
+                // Pending notifications must leave the checkout intent available for approval.
+                return Ok(());
+            }
             // IDOR guard (V-MED-12): user_id comes ONLY from a server-bound checkout intent — never the attacker-shapeable `memo` field (old code parsed `rux-{user_id}` from it); provider is the dispatched provider_name, never a hardcoded literal.
             let session_id = resolve_intent_session_id(event);
 

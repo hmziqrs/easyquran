@@ -216,10 +216,22 @@ function legacyPrefixRedirect(event: RequestEvent): Response | null {
   let location = prefix + (aliased ?? local?.path ?? rel);
   if (local && !inboundHash) location += local.fragment;
   const tail = `${search}${inboundHash}`;
+  const destination = `${location}${tail}`;
+  const resolved = new URL(destination, event.url);
+  if (
+    !location.startsWith("/") ||
+    location.startsWith("//") ||
+    resolved.origin !== event.url.origin
+  ) {
+    return new Response("Invalid legacy path", {
+      status: 400,
+      headers: { "cache-control": "no-store" },
+    });
+  }
   return new Response(null, {
     status: 308,
     headers: {
-      location: `${location}${tail}`,
+      location: destination,
       "cache-control": "public, max-age=86400",
     },
   });

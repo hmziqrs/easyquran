@@ -81,7 +81,16 @@ pub async fn apple_callback(
             tracing::Span::current().record("user_id", user.id);
             info!(user_id = user.id, "Apple login successful");
             tracing::Span::current().record("result", "success");
-            let url = oauth::redirect::build_success_redirect(oauth::OAuthProvider::Apple)?;
+            let outcome = oauth::login::callback_login_outcome(&auth, user.id).await?;
+            let url = match outcome {
+                oauth::login::CallbackOutcome::TotpRequired => {
+                    oauth::redirect::build_totp_redirect(oauth::OAuthProvider::Apple)?
+                }
+                oauth::login::CallbackOutcome::Login(_) => {
+                    oauth::redirect::build_success_redirect(oauth::OAuthProvider::Apple)?
+                }
+                _ => return Err(ErrorResponse::new(ErrorCode::Unauthorized)),
+            };
             Ok(Redirect::temporary(&url))
         }
         Err(err) => {
@@ -121,6 +130,11 @@ pub async fn apple_exchange(
         "Apple login successful via client exchange"
     );
     tracing::Span::current().record("result", "success");
+
+    if let Some(body) = crate::services::pending_login::response(&auth).await? {
+        tracing::Span::current().record("result", "totp_required");
+        return Ok((StatusCode::OK, session_rotated_headers(false), Json(body)));
+    }
 
     Ok((
         StatusCode::OK,
@@ -206,6 +220,11 @@ pub async fn apple_token(
 
     info!(user_id = user.id, "Apple mobile login successful");
     tracing::Span::current().record("result", "success");
+
+    if let Some(body) = crate::services::pending_login::response(&auth).await? {
+        tracing::Span::current().record("result", "totp_required");
+        return Ok((StatusCode::OK, session_rotated_headers(false), Json(body)));
+    }
 
     Ok((
         StatusCode::OK,

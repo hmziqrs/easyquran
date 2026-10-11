@@ -10,7 +10,7 @@ use super::{slice::*, *};
 impl Entity {
     const PER_PAGE: u64 = 20;
 
-    pub async fn create(conn: &DbConn, new_flag: NewCommentFlag) -> DbResult<Model> {
+    pub async fn create<C: ConnectionTrait>(conn: &C, new_flag: NewCommentFlag) -> DbResult<Model> {
         let existing = Entity::find()
             .filter(Column::CommentId.eq(new_flag.comment_id))
             .filter(Column::UserId.eq(new_flag.user_id))
@@ -159,7 +159,7 @@ impl Entity {
         })
     }
 
-    pub async fn sync_flags_count(conn: &DbConn, comment_id: i32) -> DbResult<i64> {
+    pub async fn sync_flags_count<C: ConnectionTrait>(conn: &C, comment_id: i32) -> DbResult<i64> {
         use super::super::post_comment::Entity as PostCommentEntity;
 
         let count = Entity::find()
