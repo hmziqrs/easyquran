@@ -294,9 +294,7 @@ mod tests {
         // shipped in the repo's committed .env templates, so a copied template
         // can never boot as a "real" key.
         let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let templates = [
-            "../../../.env.example".to_string(),
-        ];
+        let templates = ["../../../.env.example".to_string()];
         let mut scanned = 0;
         for rel in templates {
             let path = manifest_dir.join(&rel);

@@ -26,7 +26,7 @@ use ruxlog::state::{build_http_client, AppState, QuranRuntimeMetrics, StorageSta
 // (non-CF) path, so pin the env to development once for the whole process.
 static DEV_ENV: std::sync::OnceLock<()> = std::sync::OnceLock::new();
 fn ensure_dev_env() {
-    DEV_ENV.get_or_init(|| std::env::set_var("RUST_ENV", "development"));
+    DEV_ENV.get_or_init(|| std::env::set_var("APP_ENV", "development"));
 }
 
 fn quran_settings() -> QuranSettings {

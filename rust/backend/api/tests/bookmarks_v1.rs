@@ -36,7 +36,7 @@ use sea_orm::{ActiveModelTrait, ConnectionTrait, DatabaseBackend, Statement};
 // binary; pin the env once so is_production() takes the dev path.
 static DEV_ENV: std::sync::OnceLock<()> = std::sync::OnceLock::new();
 fn ensure_dev_env() {
-    DEV_ENV.get_or_init(|| std::env::set_var("RUST_ENV", "development"));
+    DEV_ENV.get_or_init(|| std::env::set_var("APP_ENV", "development"));
 }
 
 fn quran_settings() -> QuranSettings {

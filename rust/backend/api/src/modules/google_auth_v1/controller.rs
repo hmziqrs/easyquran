@@ -635,48 +635,13 @@ async fn find_or_create_user(
             .with_message("Google has not verified this email address"));
     }
 
-    if let Some(existing_user) =
-        user::Entity::find_by_google_id(&state.sea_db, user_info.id.clone()).await?
-    {
-        info!(
-            user_id = existing_user.id,
-            "Existing user found by Google ID"
-        );
-        return Ok(existing_user);
-    }
-
-    if let Some(existing_user) = user::Entity::find_by_email(
+    oauth::find_or_create_user_for_oauth(
         &state.sea_db,
-        crate::utils::email::normalize_email(&user_info.email),
-    )
-    .await?
-    {
-        info!(
-            user_id = existing_user.id,
-            "Linking Google account to existing user"
-        );
-
-        use sea_orm::ActiveModelTrait;
-        let mut active: user::ActiveModel = existing_user.clone().into();
-        active.google_id = sea_orm::Set(Some(user_info.id.clone()));
-        active.oauth_provider = sea_orm::Set(Some("google".to_string()));
-        active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
-
-        let existing_user = active.update(&state.sea_db).await.map_err(|e| {
-            error!(error = ?e, "Failed to link Google account");
-            ErrorResponse::new(ErrorCode::InternalServerError)
-                .with_message("Failed to link Google account")
-        })?;
-
-        return Ok(existing_user);
-    }
-
-    info!("Creating new user from Google account");
-    user::Entity::create_from_google(
-        &state.sea_db,
-        user_info.id.clone(),
-        crate::utils::email::normalize_email(&user_info.email),
-        user_info.name.clone(),
+        oauth::OAuthProvider::Google,
+        &user_info.id,
+        Some(user_info.email),
+        user_info.name,
+        user_info.verified_email,
     )
     .await
 }

@@ -1,5 +1,5 @@
 use crate::error::DbResult;
-use sea_orm::{entity::prelude::*, Order, QueryOrder, Set};
+use sea_orm::{entity::prelude::*, prelude::Expr, Order, QueryOrder, Set};
 use tracing::{info, instrument, warn};
 
 use super::*;
@@ -23,15 +23,22 @@ impl Entity {
         user_id: i32,
         provider: &str,
     ) -> DbResult<u64> {
-        match Self::delete_many()
+        let removed = Self::delete_many()
             .filter(Column::UserId.eq(user_id))
             .filter(Column::Provider.eq(provider))
             .exec(conn)
-            .await
-        {
-            Ok(res) => Ok(res.rows_affected),
-            Err(err) => Err(err.into()),
+            .await?;
+        if removed.rows_affected > 0 && provider == "google" {
+            super::super::user::Entity::update_many()
+                .col_expr(
+                    super::super::user::Column::GoogleId,
+                    Expr::value(Option::<String>::None),
+                )
+                .filter(super::super::user::Column::Id.eq(user_id))
+                .exec(conn)
+                .await?;
         }
+        Ok(removed.rows_affected)
     }
 
     pub async fn find_by_provider<T: ConnectionTrait>(

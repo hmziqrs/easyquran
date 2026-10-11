@@ -615,10 +615,10 @@ impl SessionRevocation for AuthBackend {
             Err(e) => {
                 warn!(
                     error = %e,
-                    tower_session_id = %tower_session_id,
-                    "Revocation set lock poisoned (fail-open): session remains valid"
+                    "Revocation set lock poisoned; rejecting session"
                 );
-                Ok(false)
+                Err(AuthError::new(AuthErrorCode::BackendError)
+                    .with_message("Unable to verify session revocation"))
             }
         }
     }

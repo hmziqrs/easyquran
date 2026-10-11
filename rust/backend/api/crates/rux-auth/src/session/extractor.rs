@@ -202,10 +202,9 @@ where
         Err(e) => {
             tracing::warn!(
                 error = ?e,
-                tower_session_id = %tower_sid,
-                "Revocation check failed (fail-open): session remains valid until store recovers"
+                "Revocation check failed; rejecting session"
             );
-            false
+            true
         }
     }
 }
@@ -459,7 +458,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn revocation_check_failure_is_fail_open() {
+    async fn revocation_check_failure_rejects_session() {
         #[derive(Clone)]
         struct ErroringBackend;
         #[async_trait]
@@ -501,8 +500,8 @@ mod tests {
 
         let next: AuthSession<ErroringBackend> = AuthSession::new(ErroringBackend, live).await;
         assert!(
-            next.user.is_some(),
-            "revocation-store error must fail OPEN, not lock the user out"
+            next.user.is_none(),
+            "revocation-store error must reject authentication"
         );
     }
 }

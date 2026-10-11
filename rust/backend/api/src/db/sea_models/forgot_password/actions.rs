@@ -14,7 +14,10 @@ use super::*;
 const ADMIN_PER_PAGE: u64 = 20;
 
 impl Entity {
-    pub async fn create(conn: &DbConn, new_forgot_password: NewForgotPassword) -> DbResult<Model> {
+    pub async fn create<T: ConnectionTrait>(
+        conn: &T,
+        new_forgot_password: NewForgotPassword,
+    ) -> DbResult<Model> {
         let now = Utc::now().fixed_offset();
         let forgot_password = ActiveModel {
             user_id: Set(new_forgot_password.user_id),
@@ -30,8 +33,8 @@ impl Entity {
         }
     }
 
-    pub async fn find_query(
-        conn: &DbConn,
+    pub async fn find_query<T: ConnectionTrait>(
+        conn: &T,
         user_id: Option<i32>,
         email: Option<&str>,
         code_hash: Option<&str>,
@@ -61,8 +64,37 @@ impl Entity {
         }
     }
 
-    pub async fn reset(conn: &DbConn, user_id: i32, password: String) -> DbResult<u64> {
+    pub async fn verify_code(conn: &DbConn, email: &str, code_hash: &str) -> DbResult<user::Model> {
+        let transaction = conn.begin().await?;
+        let verification =
+            Self::find_query(&transaction, None, Some(email), Some(code_hash)).await?;
+        let account = user::Entity::find_by_id_with_404(&transaction, verification.user_id).await?;
+        if Self::consume_code(&transaction, &verification).await? != 1 {
+            return Err(ErrorResponse::new(ErrorCode::InvalidInput)
+                .with_message("The verification code is invalid or has expired"));
+        }
+        transaction.commit().await?;
+        Ok(account)
+    }
+
+    pub async fn reset(
+        conn: &DbConn,
+        user_id: i32,
+        password: String,
+        session_auth_secret: &str,
+    ) -> DbResult<u64> {
         let trx = conn.begin().await?;
+        let account = user::Entity::find_by_id_with_404(&trx, user_id).await?;
+        use subtle::ConstantTimeEq;
+        if !bool::from(
+            account
+                .session_auth_secret
+                .as_bytes()
+                .ct_eq(session_auth_secret.as_bytes()),
+        ) {
+            return Err(ErrorResponse::new(ErrorCode::InvalidInput)
+                .with_message("Reset token is invalid or has expired"));
+        }
 
         let delete_query = Self::delete_many()
             .filter(Column::UserId.eq(user_id))
@@ -87,32 +119,57 @@ impl Entity {
         Ok(1)
     }
 
-    pub async fn consume_code(conn: &DbConn, user_id: i32) -> DbResult<u64> {
+    pub async fn consume_code<T: ConnectionTrait>(conn: &T, verification: &Model) -> DbResult<u64> {
         Self::delete_many()
-            .filter(Column::UserId.eq(user_id))
+            .filter(Column::Id.eq(verification.id))
+            .filter(Column::UserId.eq(verification.user_id))
+            .filter(Column::CodeHash.eq(&verification.code_hash))
+            .filter(Column::UpdatedAt.eq(verification.updated_at))
+            .filter(Column::UpdatedAt.gt(Utc::now().fixed_offset() - Self::EXPIRY_TIME))
             .exec(conn)
             .await
             .map(|r| r.rows_affected)
             .map_err(Into::into)
     }
 
-    pub async fn regenerate(conn: &DbConn, user_id: i32, code_hash: String) -> DbResult<Model> {
+    pub async fn regenerate_for_email(
+        conn: &DbConn,
+        user_id: i32,
+        email: &str,
+        code_hash: String,
+    ) -> DbResult<Model> {
+        let transaction = conn.begin().await?;
+        let account = user::Entity::find_by_id_with_404(&transaction, user_id).await?;
+        if account.email != email {
+            return Err(ErrorResponse::new(ErrorCode::InvalidInput)
+                .with_message("Account email changed; request a new reset code"));
+        }
+        let verification = Self::regenerate(&transaction, user_id, code_hash).await?;
+        transaction.commit().await?;
+        Ok(verification)
+    }
+
+    pub async fn regenerate<T: ConnectionTrait>(
+        conn: &T,
+        user_id: i32,
+        code_hash: String,
+    ) -> DbResult<Model> {
         let now = Utc::now().fixed_offset();
 
         let existing = Self::find_query(conn, Some(user_id), None, None).await;
 
-        if let Ok(existing_model) = existing {
-            let mut active_model: ActiveModel = existing_model.into_active_model();
-            active_model.code_hash = Set(code_hash);
-            active_model.updated_at = Set(now);
-
-            match active_model.update(conn).await {
-                Ok(model) => Ok(model),
-                Err(err) => Err(err.into()),
+        match existing {
+            Ok(existing_model) => {
+                let mut active_model: ActiveModel = existing_model.into_active_model();
+                active_model.code_hash = Set(code_hash);
+                active_model.updated_at = Set(now);
+                active_model.update(conn).await.map_err(Into::into)
             }
-        } else {
-            let new_forgot_password = NewForgotPassword { user_id, code_hash };
-            Self::create(conn, new_forgot_password).await
+            Err(err) if err.code == ErrorCode::InvalidInput => {
+                let new_forgot_password = NewForgotPassword { user_id, code_hash };
+                Self::create(conn, new_forgot_password).await
+            }
+            Err(err) => Err(err),
         }
     }
 

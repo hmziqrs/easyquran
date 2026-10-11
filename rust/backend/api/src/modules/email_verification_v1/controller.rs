@@ -45,57 +45,19 @@ pub async fn verify(
     let user = auth.user_required()?;
     let user_id = user.id;
 
-    // Fail-closed: a store error must reject, not fall through — otherwise code-guessing is unbounded.
     let key_prefix = format!("email_verify:{}", user_id);
     abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
 
     let code = payload.0.code;
     let code_hash = crate::utils::code_hash::hash_code(&state.secret_key, &code);
 
-    let verification_result = email_verification::Entity::find_by_user_id_or_code(
-        &state.sea_db,
-        Some(user_id),
-        Some(code_hash),
-    )
-    .await;
-
-    match verification_result {
-        Ok(verification) => {
-            if verification.is_expired() {
-                warn!(user_id, "Email verification code expired");
-                return Err(ErrorResponse::new(ErrorCode::InvalidInput)
-                    .with_message("The verification code has expired"));
-            }
-        }
-        Err(err) => {
-            warn!(user_id, "Invalid email verification code");
-            return Err(err);
-        }
-    }
-
-    match user::Entity::verify(&state.sea_db, user_id).await {
-        Ok(_) => {
-            if let Err(err) = email_verification::Entity::consume(&state.sea_db, user_id).await {
-                warn!(user_id, "Failed to consume verification code: {}", err);
-            }
-            info!(user_id, "Email verified successfully");
-            Ok((
-                StatusCode::OK,
-                Json(json!({
-                    "message": "Email verified successfully",
-                })),
-            ))
-        }
-        Err(err) => {
-            error!(
-                user_id,
-                "Failed to update user verification status: {}", err
-            );
-            Err(ErrorResponse::new(ErrorCode::InternalServerError)
-                .with_message("Failed to update user verification status")
-                .with_details(err.to_string()))
-        }
-    }
+    email_verification::Entity::verify_code(&state.sea_db, user_id, &user.email, &code_hash)
+        .await?;
+    info!(user_id, "Email verified successfully");
+    Ok((
+        StatusCode::OK,
+        Json(json!({"message": "Email verified successfully"})),
+    ))
 }
 
 #[debug_handler]
@@ -134,10 +96,9 @@ pub async fn resend(
         }
     }
 
-    // Store only the keyed hash; plaintext in the DB would expose live codes on leak.
     let code = email_verification::Entity::generate_code();
     let code_hash = crate::utils::code_hash::hash_code(&state.secret_key, &code);
-    email_verification::Entity::regenerate(pool, user_id, code_hash).await?;
+    email_verification::Entity::regenerate_for_email(pool, user_id, &user.email, code_hash).await?;
 
     // ── DELIVERY: verification-code hand-off ──────────────────────────────────
     // Same contract as the forgot-password DELIVERY block: this is the single
@@ -300,7 +261,13 @@ pub async fn admin_issue_code(
 
     let code = email_verification::Entity::generate_code();
     let code_hash = crate::utils::code_hash::hash_code(&state.secret_key, &code);
-    email_verification::Entity::regenerate(&state.sea_db, user_id, code_hash).await?;
+    email_verification::Entity::regenerate_for_email(
+        &state.sea_db,
+        user_id,
+        &target.email,
+        code_hash,
+    )
+    .await?;
 
     if let Err(err) = send_email_verification_code(&state.mailer, &target.email, &code).await {
         error!(

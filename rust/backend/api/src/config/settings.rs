@@ -1353,9 +1353,7 @@ mod tests {
     #[test]
     fn internal_token_placeholders_cover_shipped_env_templates() {
         let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let templates = [
-            "../../../.env.example".to_string(),
-        ];
+        let templates = ["../../../.env.example".to_string()];
         let mut scanned = 0;
         for rel in templates {
             let path = manifest_dir.join(&rel);

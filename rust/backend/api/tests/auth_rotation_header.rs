@@ -76,7 +76,7 @@ use sea_orm::ActiveModelTrait;
 static DEV_ENV: std::sync::OnceLock<()> = std::sync::OnceLock::new();
 fn ensure_dev_env() {
     DEV_ENV.get_or_init(|| {
-        std::env::set_var("RUST_ENV", "development");
+        std::env::set_var("APP_ENV", "development");
         // csrf_guard derives its signing key from COOKIE_KEY; the integration
         // binary is not cfg(test), so there is no fallback key.
         std::env::set_var("COOKIE_KEY", "test-cookie-key-not-for-production-use-32+");

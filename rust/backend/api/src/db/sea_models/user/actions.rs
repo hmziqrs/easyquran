@@ -128,14 +128,14 @@ impl Entity {
         user_id: i32,
         update_user: UpdateUser,
     ) -> DbResult<Option<Model>> {
-        let user: Option<Model> = match Self::find_by_id(user_id).one(conn).await {
+        let transaction = conn.begin().await?;
+        let user: Option<Model> = match Self::find_by_id(user_id).one(&transaction).await {
             Ok(user) => user,
             Err(err) => return Err(err.into()),
         };
 
         if let Some(user_model) = user {
             let prev_email = user_model.email.clone();
-            let prev_verified = user_model.is_verified;
             let mut user_active: ActiveModel = user_model.into();
 
             if let Some(name) = update_user.name {
@@ -144,7 +144,6 @@ impl Entity {
 
             if let Some(email) = update_user.email {
                 if email != prev_email {
-                    // Trust reset on email change: clear is_verified and rotate session_auth_secret so the badge and prior sessions die with the old address.
                     user_active.email = Set(email);
                     user_active.is_verified = Set(false);
                     user_active.session_auth_secret = Set(super::model::new_session_auth_secret()
@@ -156,11 +155,14 @@ impl Entity {
                             ErrorResponse::new(ErrorCode::InternalServerError)
                                 .with_message(format!("session_auth_secret rotation failed: {err}"))
                         })?);
-                    info!(
-                        user_id,
-                        previously_verified = prev_verified,
-                        "Email changed: is_verified reset and prior sessions invalidated"
-                    );
+                    email_verification::Entity::delete_many()
+                        .filter(email_verification::Column::UserId.eq(user_id))
+                        .exec(&transaction)
+                        .await?;
+                    super::super::forgot_password::Entity::delete_many()
+                        .filter(super::super::forgot_password::Column::UserId.eq(user_id))
+                        .exec(&transaction)
+                        .await?;
                 } else {
                     user_active.email = Set(email);
                 }
@@ -168,8 +170,9 @@ impl Entity {
 
             user_active.updated_at = Set(update_user.updated_at);
 
-            match user_active.update(conn).await {
+            match user_active.update(&transaction).await {
                 Ok(updated_user) => {
+                    transaction.commit().await?;
                     info!(user_id, "User updated");
                     Ok(Some(updated_user))
                 }
@@ -397,13 +400,38 @@ impl Entity {
         user_id: i32,
         update_user: AdminUpdateUser,
     ) -> DbResult<Option<UserWithRelations>> {
-        let user: Option<Model> = Self::get_by_id(conn, user_id).await?;
+        let txn = conn.begin().await?;
+        let user: Option<Model> = Self::find_by_id(user_id).one(&txn).await?;
 
         if let Some(user_model) = user {
-            let txn = conn.begin().await?;
-
+            let email_changed = update_user
+                .email
+                .as_ref()
+                .is_some_and(|email| *email != user_model.email);
+            let trust_changed = email_changed
+                || update_user.password.is_some()
+                || update_user.role.is_some_and(|role| role != user_model.role)
+                || update_user
+                    .is_verified
+                    .is_some_and(|verified| verified != user_model.is_verified);
             let old_avatar_id = user_model.avatar_id;
             let mut user_active: ActiveModel = user_model.into();
+
+            if trust_changed {
+                user_active.session_auth_secret = Set(super::model::new_session_auth_secret()
+                    .map_err(|_| ErrorResponse::new(ErrorCode::InternalServerError))?);
+            }
+            if email_changed {
+                user_active.is_verified = Set(false);
+                email_verification::Entity::delete_many()
+                    .filter(email_verification::Column::UserId.eq(user_id))
+                    .exec(&txn)
+                    .await?;
+                super::super::forgot_password::Entity::delete_many()
+                    .filter(super::super::forgot_password::Column::UserId.eq(user_id))
+                    .exec(&txn)
+                    .await?;
+            }
 
             if let Some(name) = update_user.name {
                 user_active.name = Set(name);

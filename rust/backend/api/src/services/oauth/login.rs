@@ -1,4 +1,4 @@
-use sea_orm::{ActiveModelTrait, Set};
+use sea_orm::{ActiveModelTrait, ConnectionTrait, Set, TransactionTrait};
 use tracing::{error, info, instrument, warn};
 
 use rux_auth::AuthBackend as AuthBackendTrait;
@@ -76,6 +76,19 @@ pub async fn find_or_create_user_for_oauth(
         return Ok(user);
     }
 
+    if provider == OAuthProvider::Google {
+        if let Some(account) =
+            user::Entity::find_by_google_id(db, provider_user_id.to_string()).await?
+        {
+            let outcome = link_identity_to_user(db, account.id, provider, provider_user_id).await?;
+            if outcome == LinkOutcome::AlreadyLinkedOtherUser {
+                return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+                    .with_message("Google identity is linked to another account"));
+            }
+            return Ok(account);
+        }
+    }
+
     let email = email
         .filter(|value| !value.trim().is_empty())
         .map(|value| crate::utils::email::normalize_email(&value))
@@ -86,13 +99,15 @@ pub async fn find_or_create_user_for_oauth(
         })?;
     ensure_verified_oauth_email(email_verified)?;
 
-    if let Some(existing) = user::Entity::find_by_email(db, email.clone()).await? {
-        info!(
-            user_id = existing.id,
-            "Linking OAuth account to existing user"
+    if user::Entity::find_by_email(db, email.clone())
+        .await?
+        .is_some()
+    {
+        return Err(
+            ErrorResponse::new(ErrorCode::OperationNotAllowed).with_message(
+                "Sign in with your existing method, then link this provider from Account",
+            ),
         );
-        link_identity(db, existing.id, provider.as_str(), provider_user_id).await?;
-        return Ok(existing);
     }
 
     info!("Creating new user from OAuth account");
@@ -108,13 +123,15 @@ pub async fn find_or_create_user_for_oauth(
         updated_at: Set(now),
         ..Default::default()
     };
-    let user = active.insert(db).await.map_err(|e| {
+    let transaction = db.begin().await?;
+    let user = active.insert(&transaction).await.map_err(|e| {
         error!(error = ?e, "Failed to create user from OAuth");
         ErrorResponse::new(ErrorCode::InternalServerError)
             .with_message("Failed to create user account")
     })?;
 
-    link_identity(db, user.id, provider.as_str(), provider_user_id).await?;
+    link_identity(&transaction, user.id, provider.as_str(), provider_user_id).await?;
+    transaction.commit().await?;
     tracing::Span::current().record("user_id", user.id);
     Ok(user)
 }
@@ -128,8 +145,8 @@ fn ensure_verified_oauth_email(email_verified: bool) -> Result<(), ErrorResponse
     Ok(())
 }
 
-async fn link_identity(
-    db: &sea_orm::DatabaseConnection,
+async fn link_identity<T: ConnectionTrait>(
+    db: &T,
     user_id: i32,
     provider: &str,
     provider_user_id: &str,
@@ -173,6 +190,15 @@ pub async fn link_identity_to_user(
     provider: OAuthProvider,
     provider_user_id: &str,
 ) -> Result<LinkOutcome, ErrorResponse> {
+    if provider == OAuthProvider::Google {
+        if let Some(account) =
+            user::Entity::find_by_google_id(db, provider_user_id.to_string()).await?
+        {
+            if account.id != user_id {
+                return Ok(LinkOutcome::AlreadyLinkedOtherUser);
+            }
+        }
+    }
     if let Some(identity) =
         user_oauth_identity::Entity::find_by_provider(db, provider.as_str(), provider_user_id)
             .await?
@@ -293,6 +319,9 @@ mod tests {
         use migration::{Migrator, MigratorTrait};
         use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection};
 
+        let test_key: [u8; 32] =
+            std::array::from_fn(|i| (i as u8).wrapping_mul(7).wrapping_add(0x11));
+        crate::utils::field_crypto::set_key(&test_key).ok();
         let mut opt = ConnectOptions::new("sqlite::memory:".to_string());
         opt.max_connections(1);
         let db: DatabaseConnection = Database::connect(opt).await.unwrap();

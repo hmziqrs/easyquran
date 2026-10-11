@@ -38,7 +38,12 @@ mod reset_token {
 
     const TTL_SECS: u64 = 600;
 
-    type TokenMap = HashMap<String, (i32, Instant)>;
+    pub struct ResetGrant {
+        pub user_id: i32,
+        pub session_auth_secret: String,
+    }
+
+    type TokenMap = HashMap<String, (ResetGrant, Instant)>;
 
     static TOKENS: OnceLock<Mutex<TokenMap>> = OnceLock::new();
 
@@ -54,7 +59,7 @@ mod reset_token {
         format!("forgot_password:reset_token:{token}")
     }
 
-    pub async fn mint(user_id: i32) -> Result<String, ErrorResponse> {
+    pub async fn mint(account: &user::Model) -> Result<String, ErrorResponse> {
         let mut bytes = zeroize::Zeroizing::new([0u8; 32]);
         rand::rng().fill(bytes.as_mut());
         let token = hex::encode(*bytes);
@@ -65,18 +70,27 @@ mod reset_token {
             ErrorResponse::new(ErrorCode::InternalServerError)
         })?;
         reap_stale(&mut map);
-        map.insert(namespaced_key(&token), (user_id, Instant::now()));
+        map.retain(|_, (grant, _)| grant.user_id != account.id);
+        if map.len() >= 10_000 {
+            return Err(ErrorResponse::new(ErrorCode::ServiceUnavailable)
+                .with_message("Password recovery is temporarily unavailable"));
+        }
+        let grant = ResetGrant {
+            user_id: account.id,
+            session_auth_secret: account.session_auth_secret.clone(),
+        };
+        map.insert(namespaced_key(&token), (grant, Instant::now()));
         Ok(token)
     }
 
     /// Removal on take is required for single-use semantics — never a read (`get`), or a replayed `reset` could reuse the token.
-    pub async fn take(token: &str) -> Result<Option<i32>, ErrorResponse> {
+    pub async fn take(token: &str) -> Result<Option<ResetGrant>, ErrorResponse> {
         let mut map = tokens().lock().map_err(|e| {
             error!(error = %e, "reset_token map poisoned");
             ErrorResponse::new(ErrorCode::InternalServerError)
         })?;
         reap_stale(&mut map);
-        Ok(map.remove(&namespaced_key(token)).map(|(id, _)| id))
+        Ok(map.remove(&namespaced_key(token)).map(|(grant, _)| grant))
     }
 }
 
@@ -91,7 +105,6 @@ pub async fn generate(
     ClientIp(secure_ip): ClientIp,
     payload: ValidatedJson<V1GeneratePayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    // Run before the existence check so email-probing is throttled too.
     let ip = secure_ip.to_string();
     let key_prefix = format!("forgot_password:{}", ip);
     match abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await {
@@ -104,6 +117,12 @@ pub async fn generate(
 
     let pool = &state.sea_db;
     let normalized_email = crate::utils::email::normalize_email(&payload.email);
+    abuse_limiter::limiter(
+        &state.gate_store,
+        &format!("forgot_password_request:account:{normalized_email}"),
+        ABUSE_LIMITER_CONFIG,
+    )
+    .await?;
     let user = match user::Entity::find_by_email(pool, normalized_email.clone()).await {
         Ok(Some(user)) => user,
         Ok(None) => {
@@ -139,7 +158,10 @@ pub async fn generate(
     // Store only the keyed hash; the plaintext is emailed but never persisted.
     let code = forgot_password::Entity::generate_code();
     let code_hash = crate::utils::code_hash::hash_code(&state.secret_key, &code);
-    if let Err(err) = forgot_password::Entity::regenerate(pool, user_id, code_hash).await {
+    if let Err(err) =
+        forgot_password::Entity::regenerate_for_email(pool, user_id, &normalized_email, code_hash)
+            .await
+    {
         error!(user_id, "Failed to store forgot-password code: {}", err);
         return Err(err);
     }
@@ -189,38 +211,13 @@ pub async fn verify(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let key_prefix = format!("forgot_password_verify:{}", secure_ip);
     abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
+    let email = crate::utils::email::normalize_email(&payload.email);
+    limit_account_verification(&state.gate_store, &email).await?;
 
     let code_hash = crate::utils::code_hash::hash_code(&state.secret_key, &payload.code);
-    let result = forgot_password::Entity::find_query(
-        &state.sea_db,
-        None,
-        Some(&crate::utils::email::normalize_email(&payload.email)),
-        Some(&code_hash),
-    )
-    .await;
-
-    let verification = match result {
-        Ok(verification) => {
-            if verification.is_expired() {
-                warn!("Forgot password code expired");
-                return Err(ErrorResponse::new(ErrorCode::InvalidInput)
-                    .with_message("The verification code has expired"));
-            }
-            verification
-        }
-        Err(err) => {
-            warn!("Invalid forgot password code");
-            return Err(err);
-        }
-    };
-    let user_id = verification.user_id;
-
-    if let Err(err) = forgot_password::Entity::consume_code(&state.sea_db, user_id).await {
-        error!(user_id, "Failed to consume forgot-password code: {}", err);
-        return Err(err);
-    }
-
-    let reset_token = reset_token::mint(user_id).await?;
+    let account = forgot_password::Entity::verify_code(&state.sea_db, &email, &code_hash).await?;
+    let user_id = account.id;
+    let reset_token = reset_token::mint(&account).await?;
 
     info!(
         user_id,
@@ -246,9 +243,8 @@ pub async fn reset(
             .with_message("Password and confirm password do not match"));
     }
 
-    // Password change requires the single-use reset_token; never add a code+email fallback — that would let an email-interceptor skip /verify.
-    let user_id = match reset_token::take(&payload.reset_token).await? {
-        Some(id) => id,
+    let grant = match reset_token::take(&payload.reset_token).await? {
+        Some(grant) => grant,
         None => {
             warn!("Reset attempted with an unknown or already-used reset token");
             return Err(ErrorResponse::new(ErrorCode::InvalidInput)
@@ -256,7 +252,15 @@ pub async fn reset(
         }
     };
 
-    match forgot_password::Entity::reset(&state.sea_db, user_id, payload.password.clone()).await {
+    let user_id = grant.user_id;
+    match forgot_password::Entity::reset(
+        &state.sea_db,
+        user_id,
+        payload.password.clone(),
+        &grant.session_auth_secret,
+    )
+    .await
+    {
         Ok(_) => {
             info!(user_id, "Password reset in database");
             Ok((
@@ -273,8 +277,41 @@ pub async fn reset(
     }
 }
 
+async fn limit_account_verification(
+    store: &rux_request_gate::InMemoryStore,
+    email: &str,
+) -> Result<(), ErrorResponse> {
+    let email = crate::utils::email::normalize_email(email);
+    abuse_limiter::limiter(
+        store,
+        &format!("forgot_password_verify:account:{email}"),
+        ABUSE_LIMITER_CONFIG,
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn recovery_verification_budget_follows_account_across_clients() {
+        let store = rux_request_gate::InMemoryStore::default();
+        for _ in 0..2 {
+            super::limit_account_verification(&store, "Owner@Example.com")
+                .await
+                .unwrap();
+        }
+        assert_eq!(
+            super::limit_account_verification(&store, "owner@example.com")
+                .await
+                .unwrap_err()
+                .code,
+            crate::error::ErrorCode::TooManyAttempts,
+        );
+        super::limit_account_verification(&store, "another@example.com")
+            .await
+            .unwrap();
+    }
+
     // Guards only the handler source — each test's own text must not satisfy
     // its asserts, so the strings they pin appear in the asserts only.
     fn handler_src() -> &'static str {

@@ -1,7 +1,12 @@
-use crate::error::{DbResult, ErrorCode, ErrorResponse};
+use crate::{
+    db::sea_models::user,
+    error::{DbResult, ErrorCode, ErrorResponse},
+};
 use chrono::Utc;
 use ruxlog_types::PaginatedList;
-use sea_orm::{entity::prelude::*, IntoActiveModel, Order, QueryOrder, Set};
+use sea_orm::{
+    entity::prelude::*, prelude::Expr, IntoActiveModel, Order, QueryOrder, Set, TransactionTrait,
+};
 
 use super::*;
 
@@ -55,7 +60,63 @@ impl Entity {
         }
     }
 
-    pub async fn regenerate(conn: &DbConn, user_id: i32, code_hash: String) -> DbResult<Model> {
+    pub async fn verify_code(
+        conn: &DbConn,
+        user_id: i32,
+        email: &str,
+        code_hash: &str,
+    ) -> DbResult<()> {
+        let transaction = conn.begin().await?;
+        let removed = Self::delete_many()
+            .filter(Column::UserId.eq(user_id))
+            .filter(Column::CodeHash.eq(code_hash))
+            .filter(Column::UpdatedAt.gt(Utc::now().fixed_offset() - Self::EXPIRY_TIME))
+            .exec(&transaction)
+            .await?;
+        if removed.rows_affected != 1 {
+            return Err(ErrorResponse::new(ErrorCode::InvalidInput)
+                .with_message("The verification code is invalid or has expired"));
+        }
+        let verified = user::Entity::update_many()
+            .col_expr(user::Column::IsVerified, Expr::value(true))
+            .col_expr(
+                user::Column::UpdatedAt,
+                Expr::value(Utc::now().fixed_offset()),
+            )
+            .filter(user::Column::Id.eq(user_id))
+            .filter(user::Column::Email.eq(email))
+            .exec(&transaction)
+            .await?;
+        if verified.rows_affected != 1 {
+            return Err(ErrorResponse::new(ErrorCode::InvalidInput)
+                .with_message("Email address changed; request a new verification code"));
+        }
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    pub async fn regenerate_for_email(
+        conn: &DbConn,
+        user_id: i32,
+        email: &str,
+        code_hash: String,
+    ) -> DbResult<Model> {
+        let transaction = conn.begin().await?;
+        let account = user::Entity::find_by_id_with_404(&transaction, user_id).await?;
+        if account.email != email {
+            return Err(ErrorResponse::new(ErrorCode::InvalidInput)
+                .with_message("Email address changed; request a new verification code"));
+        }
+        let verification = Self::regenerate(&transaction, user_id, code_hash).await?;
+        transaction.commit().await?;
+        Ok(verification)
+    }
+
+    pub async fn regenerate<T: ConnectionTrait>(
+        conn: &T,
+        user_id: i32,
+        code_hash: String,
+    ) -> DbResult<Model> {
         let now = Utc::now().fixed_offset();
 
         // Find-then-update-or-insert (mirrors forgot_password::regenerate): the
