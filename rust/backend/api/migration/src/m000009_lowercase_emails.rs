@@ -82,14 +82,16 @@ async fn normalize_unicode_emails(conn: &impl sea_orm::ConnectionTrait) -> Resul
     Ok(changed)
 }
 
-// Safety valve only. Each row can change at most twice: once to its SQL-stable
-// ASCII-lowered form (pass 1), then at most once to its Rust-stable Unicode form
-// (pass 2; Rust-stable implies SQL-stable, so pass 1 never revisits it). Total
-// row updates are bounded by 2N, and every non-final loop iteration performs at
-// least one, so the loop reaches a fixpoint; a pathological blocker chain could
-// need more than the cap, and stopping there is harmless — both passes are
+// Safety valve only; unreachable in practice. The loop settles in at most
+// three iterations: after iteration 1's Rust pass every normalize-image is
+// held (the held set only ever grows — a removed old value is never a
+// normalize-image, since images are Rust-stable), so the Rust pass is a no-op
+// from iteration 2 on; iteration 2's SQL pass can only lower a value that is
+// still not SQL-stable, so iteration 3 changes nothing. (Fuzzed over ~10k
+// batches: max 3.) Should the cap ever be hit anyway, each pass remains
 // individually collision-safe and the one-reachable-normalized-row invariant
-// holds mid-loop (a normalized row is never moved, only created when absent).
+// holds mid-loop — but the run would stop short of the byte-fixpoint and a
+// later run would keep converging.
 const MAX_NORMALIZATION_PASSES: usize = 10;
 
 #[async_trait::async_trait]
@@ -539,7 +541,11 @@ mod tests {
             after_first, after_second,
             "fixpoint must be reached in the first run, not by a later one"
         );
-        assert_eq!(after_first[1].1, "ä@x.com", "lowest-id Unicode row wins");
+        assert_eq!(
+            after_first[0].1, "Ä@x.com",
+            "SQL pass pre-normalized id 2; id 1 stays blocked"
+        );
+        assert_eq!(after_first[1].1, "ä@x.com");
         assert_eq!(after_first[2].1, "ⱥ@q.com");
         assert_eq!(after_first[3].1, "Ⱥ@q.com");
         assert_eq!(after_first[4].1, "z@z.com");
