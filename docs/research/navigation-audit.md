@@ -7,6 +7,11 @@ schemes, redirects, sidebar/wayfinding, SEO head. Companion to
 [`ux-audit/01-navigation-and-wayfinding.md`](./ux-audit/01-navigation-and-wayfinding.md)
 (whose NAV-* findings are UI-level; this document owns the URL/numbering model).
 
+> **Stale (2026-10-11):** the M6 `/rub` routes were retired after this audit shipped (`5d54ca6b`):
+> `/rub/N` and `/t/…/rub/N` now 308 to the quarter's first ayah. All `rub` mentions below (D6, §3.3,
+> M6, inventory counts, helper exports) are historical — current route families are surah, global
+> page, juz, hizb. Current range/snippet planning: `docs/next-features.md` Feature 7.
+
 Every finding below was re-verified against the tree at the time of writing: code
 cited by path and line, numbers reproduced from the built
 `web/build/prerendered/sitemap.xml` (1307 `<loc>`, 548 surah-local, 604 global-page)

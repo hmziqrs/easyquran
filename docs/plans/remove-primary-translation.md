@@ -1,5 +1,10 @@
 # Primary translation removal
 
+> **Status: DONE** — implemented in `502effc2`, residue checks green. Archived product decision
+> record. The `TranslationModal`/`reading-text` surfaces it finalized are reworked by
+> `docs/next-features.md` Features 1 + 8; wording there is "reading translation"/"main", never
+> "primary".
+
 Product decision (final): remove the ENTIRE "primary translation" concept — nothing primary-related survives in behavior, code, copy, tests, or persisted state. Motivating bug: the primary-translation mechanism could REPLACE THE ARABIC TEXT in the ayah-by-ayah (verse) render mode.
 
 All line refs verified against the committed tree at `98445ccb`/`e8a5be87` (working tree clean at planning time; only untracked `.claude/launch.json`, `.v2c/`, `.video_agent/`). Planning was read-only: file reads, greps, `git show` only — no gates were run (see Verification).

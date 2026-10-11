@@ -4,6 +4,10 @@ Standalone visual studies using the existing white/black neutrals and four
 accent colors. Page order, reader navigation, Quran text and Arabic font remain
 unchanged. Production components and tokens are untouched.
 
+> **Not adopted (2026-10-11):** visual study only. Its specifics (font weights >600, 12–20 px radii)
+> violate the current design-system guards (`docs/design-system.md` §10/§13); see
+> `docs/next-features.md` §14.8. Homepage/card work proceeds in Feature 5 under the v2 constraints.
+
 Serve from the repository root:
 
 ```sh

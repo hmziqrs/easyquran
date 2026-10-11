@@ -184,7 +184,7 @@ SEO, and sitemap translation alternates exist, so this is partial rather than ab
 
 **Remaining:** decide whether standalone routes improve product/SEO enough to justify route count;
 define range grammar and cap; source-aware route helpers; canonical and hreflang; previous/next;
-SSR/SSG/cache implications; share/copy integration. Do not hand-build `/app/` URLs.
+SSR/SSG/cache implications; share/copy integration. Do not hand-build `/app/` URLs. (Grammar decision: `docs/next-features.md` §11.5; snippets: Feature 7.)
 
 ### R12 — Deeper navigation and context — Partial · P2
 
@@ -231,7 +231,7 @@ activity, collections, settings, and connected Quran Foundation products.
 Notes, reading position, and progress stay device-local.
 
 **Remaining:** sync domains for notes/history/progress; sign-in merge for anonymous local data;
-settings-doc sync.
+settings-doc sync. (Design: `docs/next-features.md` §9.)
 
 ### P02 — “My Quran” library — Partial · P1
 
@@ -244,7 +244,7 @@ Collections.
 preview) and `/app/bookmarks` (saved verses with folders). `/app` still opens the last-read surah;
 no notes tab, no discovery home.
 
-**Remaining:** notes management surface; sync for recents/history (P01).
+**Remaining:** notes management surface; sync for recents/history (P01). (Bundle: `docs/next-features.md` Features 3-5.)
 
 ### P03 — Explicit reading bookmark — Partial · P1
 
@@ -272,7 +272,7 @@ from daily activity.
 and show on `/app/yours`. No history UI, session model, or clear controls; `reader-history.ts` is
 still reload-only viewport restoration.
 
-**Remaining:** dedicated history surface; session coalescing; clear/delete controls.
+**Remaining:** dedicated history surface; session coalescing; clear/delete controls. (Model: `docs/next-features.md` Feature 4.)
 
 ### P05 — Saved verse collections — Partial · P1
 
@@ -385,7 +385,7 @@ The reader drawer is intentionally untouched and still calls one 20-result query
 
 **Remaining:** reader drawer surface for the new search; relevance ranking for translation hits;
 recent queries (privacy-gated); voice input with unsupported/permission/error states. Preserve
-existing Arabic normalization/parity contract.
+existing Arabic normalization/parity contract. (Recents + ranking: `docs/next-features.md` Feature 9.)
 
 ### D02 — Discovery home/dashboard — Missing · P2
 

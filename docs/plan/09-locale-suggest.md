@@ -1,7 +1,9 @@
 # 09 — Locale-suggest popup
 
-Status: **draft plan, not implemented.** Owner asked for a one-time, client-side
-"this app is also in your language — switch?" popup. Nothing in this plan may
+Status: **draft plan, not implemented.** Phase 1 is adopted as `docs/next-features.md` Feature 10
+(that doc wins on conflict). Phase 2 (translation suggest) is **superseded** — no catalogue
+`recommended` flag; derive-only per `docs/next-features.md` §14.6. Owner asked for a one-time,
+client-side "this app is also in your language — switch?" popup. Nothing in this plan may
 auto-redirect, set cookies, or move locale truth out of the URL.
 
 ## 0. Problem and the guarantee

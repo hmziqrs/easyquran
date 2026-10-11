@@ -4,6 +4,12 @@ EasyQuran is under active development. Entries below are expected placeholders o
 copy—not defects in a released product. Keep this standalone ledger for the pre-release content pass,
 when wording should be aligned with the features selected for launch.
 
+> **Partially stale (2026-10-11):** `web/src/lib/data/content.ts` no longer exists (copy lives in
+> `web/messages/*.json`), so its file links below are dead. C01's prescribed fix is superseded by
+> `docs/next-features.md` §9.8 (scope: bookmarks + reading sessions sync; notes stay local). C05 is
+> resolved (landing bands retired). C02/C03/C04/C06/C08 remain actionable; C07 describes the old
+> "cloud sync on the way" copy — bookmark sync shipped.
+
 ## C01 — Auth sync placeholder
 
 Current sign-in copy says:
@@ -22,7 +28,8 @@ Sources:
 Actual behavior: bookmark sync is real since 2026-08-27 (`POST /bookmark/v1/sync`), so the bookmarks
 claims are accurate. Notes and reading place/progress remain device-local only.
 
-**Before release:** scope sign-in/registration copy to bookmarks until notes/progress sync ships.
+**Before release:** scope sign-in/registration copy to the final sync scope — bookmarks + reading
+sessions sync, notes and position stay local (`docs/next-features.md` §9.8).
 
 ## C02 — Privacy sync and deletion placeholders
 
@@ -62,7 +69,7 @@ the answer to shipped offline reading behavior.
 
 ## C05 — Recitation preview placeholder on landing
 
-[`(marketing)/+page.svelte`](../../web/src/routes/(marketing)/+page.svelte) says search, bookmarks,
+[`(marketing)/+page.svelte`](<../../web/src/routes/(marketing)/+page.svelte>) says search, bookmarks,
 and recitation “are there when you need them,” then says the full player is “only a preview.” No
 working preview was found in production reader code; design variants are not product features.
 
@@ -80,8 +87,8 @@ Stale text says:
 
 Sources:
 
-- [`(marketing)/+page.svelte`](../../web/src/routes/(marketing)/+page.svelte)
-- [`about/+page.svelte`](../../web/src/routes/(marketing)/about/+page.svelte)
+- [`(marketing)/+page.svelte`](<../../web/src/routes/(marketing)/+page.svelte>)
+- [`about/+page.svelte`](<../../web/src/routes/(marketing)/about/+page.svelte>)
 - [`content.ts`](../../web/src/lib/data/content.ts)
 
 Actual behavior: all 114 surahs and 378 translation sources across 105 languages are shipped. Real

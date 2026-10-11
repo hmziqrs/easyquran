@@ -2,7 +2,7 @@
 
 [← Back to the index](README.md)
 
-> **Question this page answers:** *Beyond the basics in [04 · Translations](04-translations.md): does every kind of translation — right-to-left, commentary, transliteration, stacked, empty — display correctly, and does the picker help people choose among 378 translations in 105 languages?*
+> **Question this page answers:** _Beyond the basics in [04 · Translations](04-translations.md): does every kind of translation — right-to-left, commentary, transliteration, stacked, empty — display correctly, and does the picker help people choose among 378 translations in 105 languages?_
 
 Summary: the engine is capable — right-to-left translations align and are tagged correctly, up to five extras stack on surah, page and juz readers, reading mode explains its one-translation rule, and search understands native language names. But four things need fixing before release: **Arabic commentary (tafsir) chosen as the main "translation" sits exactly where the Qur'an text goes**, the **transliteration shows raw HTML tags**, the picker **lists the same translators twice** under different names, and the chosen-translation chips hide most of the choices. Smaller issues: switching translation loses your place, the serif font forgets itself, empty verses look broken.
 
@@ -16,11 +16,12 @@ Summary: the engine is capable — right-to-left translations align and are tagg
 
 ![Tafsir al-Muyassar in the verse slot with verse numbers and no 'tafsir' label](screenshots/translations-deep/tafsir-shown-where-verses-go.webp)
 
-**What's wrong.** The picker files *Tafsir al-Muyassar* and *Tafsir al-Jalalayn* under "Arabic" translations (and opens on that group). Choosing one as the main text replaces the Qur'an verses with Arabic commentary paragraphs, right-aligned, with the same verse-number markers, and nothing on the page says "commentary". Because the real Arabic is hidden on translated routes ([TR-01](04-translations.md#tr-01--picking-a-translation-removes-the-arabic-text-and-the-bismillah)), the commentary is the only Arabic on screen.
+**What's wrong.** The picker files _Tafsir al-Muyassar_ and _Tafsir al-Jalalayn_ under "Arabic" translations (and opens on that group). Choosing one as the main text replaces the Qur'an verses with Arabic commentary paragraphs, right-aligned, with the same verse-number markers, and nothing on the page says "commentary". Because the real Arabic is hidden on translated routes ([TR-01](04-translations.md#tr-01--picking-a-translation-removes-the-arabic-text-and-the-bismillah)), the commentary is the only Arabic on screen.
 
 **Why it matters.** A reader can take a scholar's explanation for the words of the Qur'an. For a Qur'an app this is the most serious possible content mix-up.
 
 **Fix.**
+
 - Treat tafsir as its own kind: a **"Commentary (tafsir)"** section in the picker, never offered as the main text.
 - If shown stacked, render it under the Arabic verse in a visibly different block, labelled "Tafsir al-Muyassar (commentary)", in the UI font, never in the Qur'an font or position.
 - Block `/t/ar/muyassar` and `/t/ar/jalalayn` as primary routes (redirect to the Arabic reader with the tafsir stacked).
@@ -35,7 +36,7 @@ Summary: the engine is capable — right-to-left translations align and are tagg
 
 ![Transliteration: 'Bismi All<u>a</U>hi a<b>l</B>rra…'](screenshots/translations-deep/transliteration-raw-tags.webp)
 
-**What's wrong.** The Tanzil transliteration marks long vowels and assimilated letters with `<u>…</U>` and `<b>…</B>`. The reader prints them as text: *"Bismi All&lt;u&gt;a&lt;/U&gt;hi a&lt;b&gt;l&lt;/B&gt;rra&lt;u&gt;h&lt;/U&gt;m…"*. Every verse is unreadable. (The same text goes into copy/share output.)
+**What's wrong.** The Tanzil transliteration marks long vowels and assimilated letters with `<u>…</U>` and `<b>…</B>`. The reader prints them as text: _"Bismi All&lt;u&gt;a&lt;/U&gt;hi a&lt;b&gt;l&lt;/B&gt;rra&lt;u&gt;h&lt;/U&gt;m…"_. Every verse is unreadable. (The same text goes into copy/share output.)
 
 **Fix.** The source data is immutable (repo rule) — fix it in the view, the same way Tajweed markup is parsed (`lib/quran/view/tajweed.ts`): parse the `<u>`/`<b>` runs (case-insensitive closing tags) into styled spans (underline = long vowel, bold = silent/assimilated letter, or a single consistent style) and strip them in copy text. Add a legend line "underlined = stretch the vowel".
 
@@ -50,6 +51,7 @@ Summary: the engine is capable — right-to-left translations align and are tagg
 ![English list: 'A. J. Arberry' and 'Arberry / A. J. Arberry'; 'Abdul Majid Daryabadi' and 'Daryabadi'](screenshots/translations-deep/duplicate-english-entries.webp)
 
 **What's wrong.** The catalogue merges two sources (Tanzil and QUL/Tarteel) without de-duplicating:
+
 - English: **A. J. Arberry** and **Arberry (A. J. Arberry)**; **Abdul Majid Daryabadi** and **Daryabadi (Abdul Majid Daryabadi)**; **Pickthall** twice; French **Muhammad Hamidullah** twice.
 - Languages split in two: **Azerbaijani (Azərbaycanca, 3)** and **Azeri (Azərbaycanca, 2)**; **Divehi (1)** and **Divehi, Dhivehi, Maldivian (2)**.
 
@@ -67,12 +69,12 @@ Summary: the engine is capable — right-to-left translations align and are tagg
 
 ![Search 'sahih' returns a Kurdish translator, not 'Saheeh International'](screenshots/translations-deep/sahih-search-misses-saheeh.webp)
 
-| Query | Result |
-| --- | --- |
-| `sahih` (how most people spell it) | only *Muhammad Salih Bamoki* (Kurdish) — **Saheeh International** not found |
-| `pikthal` | "No translations match your search." |
-| `tafsir` | 2 hits; *تفسير الميسر* is not found |
-| `urdu`, `اردو`, `Français`, `Pickthall`, `jalal` | work |
+| Query                                            | Result                                                                      |
+| ------------------------------------------------ | --------------------------------------------------------------------------- |
+| `sahih` (how most people spell it)               | only _Muhammad Salih Bamoki_ (Kurdish) — **Saheeh International** not found |
+| `pikthal`                                        | "No translations match your search."                                        |
+| `tafsir`                                         | 2 hits; _تفسير الميسر_ is not found                                         |
+| `urdu`, `اردو`, `Français`, `Pickthall`, `jalal` | work                                                                        |
 
 **Fix.** Add aliases for well-known names (Sahih/Saheeh, Yusuf Ali/Yusufali, Pickthall/Pickthal, Hilali-Khan/Muhsin Khan), match accent- and case-insensitively, and allow small typos (edit distance ≤ 1 for queries ≥ 5 letters). Search both the Latin and native titles ("tafsir" ↔ "تفسير").
 
@@ -108,7 +110,7 @@ Summary: the engine is capable — right-to-left translations align and are tagg
 
 **P3** · `TranslationModal.svelte:507, 800-806`
 
-When 5 extras are chosen, every other checkbox is disabled, but they look almost identical to enabled ones (see the screenshot in TRX-05), so taps seem to do nothing. The footer says *"5/5 full. Remove one to add another. Offline cache holds many more."* — the last sentence is internal. **Fix:** grey out the rows (label at `--muted`, 50% opacity), show a lock/"Full" hint on tap, and end the message after "Remove one to add another."
+When 5 extras are chosen, every other checkbox is disabled, but they look almost identical to enabled ones (see the screenshot in TRX-05), so taps seem to do nothing. The footer says _"5/5 full. Remove one to add another. Offline cache holds many more."_ — the last sentence is internal. **Fix:** grey out the rows (label at `--muted`, 50% opacity), show a lock/"Full" hint on tap, and end the message after "Remove one to add another."
 
 ---
 
@@ -122,7 +124,7 @@ Ticking a box updates the URL and the reader immediately; Escape, ✕ and "Done"
 
 ### TRX-09 · Switching the main translation mid-surah loses your place
 
-**P2** · readers comparing translations · translated surah routes · `TranslationModal.svelte:287-295` (`onPrimary` → navigation)
+**P2** · readers comparing translations · translated surah routes · `TranslationModal.svelte:287-295` (route translation → navigation; `onPrimary` removed in `502effc2`)
 
 **What's wrong.** Reading English (Sahih) at **2:43** (local page 6), then choosing "Switch to this translation: Abdul Haleem" lands at **2:30** (page 5) — about a page earlier. Reproduced twice. The new URL is `/en/app/al-baqarah/t/qul/r85.en-haleem/page/5`: the translator slug is an internal id (`qul/r85.en-haleem`), not a readable name.
 

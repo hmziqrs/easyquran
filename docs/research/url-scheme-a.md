@@ -6,6 +6,10 @@ translation-model changes. Companion to
 scheme replaces. Owner decision: exactly two UI locales exist — `en` (default,
 **unprefixed**) and `ar` (**`/ar/`-prefixed**). The `/{ui}/app` double prefix dies.
 
+> **Stale (2026-10-11):** the `/rub/{n}` rows below (goal-grammar table, route-tree moves, reserved
+> sets, entry counts) are historical — rub routes were retired (`5d54ca6b`) and 308 to the quarter's
+> first ayah. Current route families: surah, global page, juz, hizb.
+
 Every claim below cites code read in this session (paths + lines). Nothing here touches
 the Quran DBs or adds any hash over Quran data.
 
@@ -13,19 +17,19 @@ the Quran DBs or adds any hash over Quran data.
 
 ## 1. Goal grammar
 
-| Family | Today (verified) | Target |
-| --- | --- | --- |
-| Surah (en) | `/en/app/al-baqarah` | `/al-baqarah` |
-| Surah translated | `/en/app/ar-rum/t/ms/basmeih` | `/ar-rum/t/ms/basmeih` |
-| Global page | `/en/app/page/13` | `/page/13` |
-| Juz / hizb / rub | `/en/app/juz/1`, `/en/app/hizb/44`, `/en/app/rub/174` | `/juz/1`, `/hizb/44`, `/rub/174` |
-| Translated ranges | `/en/app/t/{lang}/{translator}/page/13` | `/t/{lang}/{translator}/page/13` |
-| Indexes | `/en/app/surah`, `/en/app/juz`, `/en/app/pages` | `/surah`, `/juz`, `/pages` |
-| Product pages | `/app/search`, `/app/settings`, `/app/bookmarks`, `/app/yours` | `/search`, `/settings`, `/bookmarks`, `/yours` |
-| Arabic UI | `/ar/app/al-baqarah`, `/ar/app/page/13` | `/ar/al-baqarah`, `/ar/page/13` |
-| Reader home hub | `/en/app` (noindex hub) | **removed** — `308 /app → /surah`; resume card already lives at `/yours` (see §4) |
-| Scroll position | `?v={surah}:{ayah}` (D2, shipped) | unchanged — stays in `?v=`, never the path |
-| Numeric alias | `/en/app/2 → 308 /en/app/al-baqarah` (D14, `hooks.server.ts:201-214`) | `/2 → 308 /al-baqarah`, `/ar/2 → 308 /ar/al-baqarah` |
+| Family            | Today (verified)                                                      | Target                                                                            |
+| ----------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Surah (en)        | `/en/app/al-baqarah`                                                  | `/al-baqarah`                                                                     |
+| Surah translated  | `/en/app/ar-rum/t/ms/basmeih`                                         | `/ar-rum/t/ms/basmeih`                                                            |
+| Global page       | `/en/app/page/13`                                                     | `/page/13`                                                                        |
+| Juz / hizb / rub  | `/en/app/juz/1`, `/en/app/hizb/44`, `/en/app/rub/174`                 | `/juz/1`, `/hizb/44`, `/rub/174`                                                  |
+| Translated ranges | `/en/app/t/{lang}/{translator}/page/13`                               | `/t/{lang}/{translator}/page/13`                                                  |
+| Indexes           | `/en/app/surah`, `/en/app/juz`, `/en/app/pages`                       | `/surah`, `/juz`, `/pages`                                                        |
+| Product pages     | `/app/search`, `/app/settings`, `/app/bookmarks`, `/app/yours`        | `/search`, `/settings`, `/bookmarks`, `/yours`                                    |
+| Arabic UI         | `/ar/app/al-baqarah`, `/ar/app/page/13`                               | `/ar/al-baqarah`, `/ar/page/13`                                                   |
+| Reader home hub   | `/en/app` (noindex hub)                                               | **removed** — `308 /app → /surah`; resume card already lives at `/yours` (see §4) |
+| Scroll position   | `?v={surah}:{ayah}` (D2, shipped)                                     | unchanged — stays in `?v=`, never the path                                        |
+| Numeric alias     | `/en/app/2 → 308 /en/app/al-baqarah` (D14, `hooks.server.ts:201-214`) | `/2 → 308 /al-baqarah`, `/ar/2 → 308 /ar/al-baqarah`                              |
 
 Content addressing (surah/range/translation segments) is untouched — only the UI-locale
 prefix and the `/app` marker segment change. The `surah*For(ctx, …)` helper family
@@ -39,26 +43,26 @@ remains the only sanctioned way to build reader hrefs (AGENTS.md invariant).
 path — `(marketing)` already proves the pattern: `/(marketing)/about` serves `/about`).
 The group's three layout files move with it and become the group root:
 
-| Today (verified by `find web/src/routes -type d`) | After |
-| --- | --- |
-| `(application)/app/+layout.{ts,svelte,server.ts}` | `(application)/+layout.{ts,svelte,server.ts}` |
-| `(application)/app/+page.{server.ts,svelte}` (the noindex hub) | **deleted** (§4) |
-| `(application)/app/[surah]/` | `(application)/[surah]/` |
-| `(application)/app/[surah].md/` | `(application)/[surah=surahSlug].md/` (§3) |
-| `(application)/app/[surah]/t/[lang]/[translator]/` (+ `.md`) | `(application)/[surah]/t/[lang]/[translator]/` (+ `.md`) |
-| `(application)/app/page/[n]/` (+ `.md`) | `(application)/page/[n]/` (+ `.md`) |
-| `(application)/app/pages/` | `(application)/pages/` |
-| `(application)/app/juz/`, `juz/[n]/` (+ `.md`) | `(application)/juz/`, `juz/[n]/` (+ `.md`) |
-| `(application)/app/hizb/`, `hizb/[n]/` (+ `.md`) | `(application)/hizb/`, `hizb/[n]/` (+ `.md`) |
-| `(application)/app/rub/`, `rub/[n]/` (+ `.md`) | `(application)/rub/`, `rub/[n]/` (+ `.md`) |
-| `(application)/app/t/[lang]/[translator]/{page,juz,hizb,rub}/[n]/` | `(application)/t/[lang]/[translator]/{page,juz,hizb,rub}/[n]/` |
-| `(application)/app/surah/` (index) | `(application)/surah/` |
-| `(application)/app/search/` (+ `_components`, `__tests__`) | `(application)/search/` |
-| `(application)/app/settings/` (+ `_components`, `__tests__`) | `(application)/settings/` |
-| `(application)/app/bookmarks/` (+ `_components`) | `(application)/bookmarks/` |
-| `(application)/app/yours/` | `(application)/yours/` |
+| Today (verified by `find web/src/routes -type d`)                  | After                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `(application)/app/+layout.{ts,svelte,server.ts}`                  | `(application)/+layout.{ts,svelte,server.ts}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `(application)/app/+page.{server.ts,svelte}` (the noindex hub)     | **deleted** (§4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `(application)/app/[surah]/`                                       | `(application)/[surah]/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `(application)/app/[surah].md/`                                    | `(application)/[surah=surahSlug].md/` (§3)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `(application)/app/[surah]/t/[lang]/[translator]/` (+ `.md`)       | `(application)/[surah]/t/[lang]/[translator]/` (+ `.md`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `(application)/app/page/[n]/` (+ `.md`)                            | `(application)/page/[n]/` (+ `.md`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `(application)/app/pages/`                                         | `(application)/pages/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `(application)/app/juz/`, `juz/[n]/` (+ `.md`)                     | `(application)/juz/`, `juz/[n]/` (+ `.md`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `(application)/app/hizb/`, `hizb/[n]/` (+ `.md`)                   | `(application)/hizb/`, `hizb/[n]/` (+ `.md`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `(application)/app/rub/`, `rub/[n]/` (+ `.md`)                     | `(application)/rub/`, `rub/[n]/` (+ `.md`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `(application)/app/t/[lang]/[translator]/{page,juz,hizb,rub}/[n]/` | `(application)/t/[lang]/[translator]/{page,juz,hizb,rub}/[n]/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `(application)/app/surah/` (index)                                 | `(application)/surah/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `(application)/app/search/` (+ `_components`, `__tests__`)         | `(application)/search/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `(application)/app/settings/` (+ `_components`, `__tests__`)       | `(application)/settings/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `(application)/app/bookmarks/` (+ `_components`)                   | `(application)/bookmarks/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `(application)/app/yours/`                                         | `(application)/yours/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `(application)/app/_reader/` (+ `__tests__`, `translation-nav.ts`) | `(application)/_reader/` — stays non-routable for the concrete reason that it contains **no `+`-prefixed files** (verified: 0). SvelteKit has no underscore rule: kit 2.70.2's `create_manifest_data` only makes route nodes from `+`-prefixed files, and `parse_route_id` never filters `_` — proof by precedent, `web/src/routes/_quran/[...artifact]/+server.ts` is a live endpoint served at `/_quran/...`. The move keeps the `_` convention; the §2.1 collision proof must not (and does not) lean on privacy-by-underscore. |
-| `(application)/app/__tests__/` | `(application)/__tests__/` |
+| `(application)/app/__tests__/`                                     | `(application)/__tests__/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 `git mv` preserves history; route ids change shape (`/(application)/app/settings` →
 `/settings`), which is load-bearing for `(application)/app/+layout.svelte:36-39` (the
@@ -123,7 +127,7 @@ files change:
 - `web/src/routes/[slug=marketingText].md/+server.ts` — the current marketing handler,
   unchanged (`fetch(pagePath(params.slug))` → turndown). Matcher
   `web/src/params/marketingText.ts`: `param` ∈ `{index, about, faq, contact, privacy,
-  terms}` (derived from `MARKETING_PAGES`, `lib/config/site-structure.ts:20-27`).
+terms}` (derived from `MARKETING_PAGES`, `lib/config/site-structure.ts:20-27`).
 - `web/src/routes/(application)/[surah=surahSlug].md/+server.ts` — the current reader
   handler, unchanged (`requireSurah` + `readSurahLocalPageData` +
   `renderSurahPageMarkdown`, entries over the 114 baked slugs). Matcher
@@ -140,8 +144,8 @@ dotted dirs (`sitemap.xml` precedent) outrank dynamic ones. Each route's prerend
 matcher admits, so the built output is identical to today's (6 marketing `.md` + 114
 surah `.md`, plus the multi-segment reader twins).
 
-*Fallback if SvelteKit's route sorter rejects the same-depth dynamic pair at compile
-time:* convert the six marketing variants to static dirs (`index.md/`, `about.md/`,
+_Fallback if SvelteKit's route sorter rejects the same-depth dynamic pair at compile
+time:_ convert the six marketing variants to static dirs (`index.md/`, `about.md/`,
 `faq.md/`, `contact.md/`, `privacy.md/`, `terms.md/`, each a 10-line `+server.ts`
 delegating to a shared `marketingTextVariant(kind, id)` helper extracted from the
 current handler). Static > dynamic is guaranteed specificity; `[surah].md` then has no
@@ -212,8 +216,7 @@ Decision (owner default):
     inputs must drop `/app`).
   - **Type literals re-typed**: `RangeReader.svelte:152`
     (`let quranHref: \`/app/${string}\``) and `TranslationModal.svelte:308`
-    (`rowHref(...): \`/app/${string}\` | null`) → `` `/${string}` `` — matching the
-    `quran.ts` return-type change; they must not keep a dead type shape.
+    (`rowHref(...): \`/app/${string}\` | null`) → `` `/${string}` `` — matching the `quran.ts` return-type change; they must not keep a dead type shape.
   - `(application)/app/+layout.svelte:52` chrome fallback (`"/app"` → `"/surah"`).
   - **Scripts (plan was silent — blocker):**
     - `scripts/assert-headers.sh:48-99` hard-asserts today's scheme (`/en/app` is
@@ -253,6 +256,7 @@ leave every `/ar/**` reader page resolving en and `localizeReaderHref`
 **Decision: delete `urlPatterns` entirely.** With no custom patterns the generated
 runtime flips to the default `/:locale/...` semantics, which is byte-for-byte the
 wanted grammar (verified in the generated file):
+
 - `localizeUrlDefaultPattern` (`runtime.js:1018-1036`): base locale (`en`) → path
   returned **prefix-less**; any other locale → `/{locale}` + path. So
   `localizeHref("/al-baqarah","en") = "/al-baqarah"`,
@@ -265,7 +269,7 @@ wanted grammar (verified in the generated file):
 `web/paraglide.config.js` loses the whole `urlPatterns` array; `strategy:
 ["url", "baseLocale"]` stays. `getReaderUiCopy()` (`lib/i18n/reader-copy.ts:743`)
 resolves off the URL via `getLocale()` and follows automatically.
-*Alternative kept in pocket:* a single catch-all
+_Alternative kept in pocket:_ a single catch-all
 `{ pattern: "/:path(.*)", localized: [["en", "/:path(.*)"], ["ar", "/ar/:path(.*)"]]
 }` mirrors today's `/app/:path(.*)` pattern if the default-pattern path ever misbehaves
 — same semantics, explicit config. **Risk pin (test):** round-trip fixtures asserting
@@ -297,15 +301,15 @@ chrome — `lib/i18n/app-locale.ts` header comment).
   Location in **one hop** (normalize, then numeric-alias + surah-local applied to the
   normalized path inside the same pass — no 308 chains):
 
-  | Inbound | Location | Notes |
-  | --- | --- | --- |
-  | `/en/app/…rest` | `/{rest}` after §6 rewrites | covers every `en` URL ever published |
-  | `/en` | `/` | bare prefix |
-  | `/en/…rest` | `/{rest}` | per owner decision, whole-`/en` strip; only reader paths ever existed under `/en` |
-  | `/ar/app/…rest` | `/ar/{rest}` after §6 rewrites | |
-  | `/ar/app` | `/ar/surah` | hub |
-  | `/app` | `/surah` | hub |
-  | `/app/…rest` | `/{rest}` | |
+  | Inbound         | Location                       | Notes                                                                             |
+  | --------------- | ------------------------------ | --------------------------------------------------------------------------------- |
+  | `/en/app/…rest` | `/{rest}` after §6 rewrites    | covers every `en` URL ever published                                              |
+  | `/en`           | `/`                            | bare prefix                                                                       |
+  | `/en/…rest`     | `/{rest}`                      | per owner decision, whole-`/en` strip; only reader paths ever existed under `/en` |
+  | `/ar/app/…rest` | `/ar/{rest}` after §6 rewrites |                                                                                   |
+  | `/ar/app`       | `/ar/surah`                    | hub                                                                               |
+  | `/app`          | `/surah`                       | hub                                                                               |
+  | `/app/…rest`    | `/{rest}`                      |                                                                                   |
 
   All 308 + `cache-control: public, max-age=86400` (existing policy,
   `hooks.server.ts:176-182`; audit D15/Q4). Query + hash preserved
@@ -314,6 +318,7 @@ chrome — `lib/i18n/app-locale.ts` header comment).
   (`hooks.server.ts:362` vs the `:376-388` `useI18n` branch), and the outputs of the
   table match no rule input — no redirect cycle (loop-trace in §9; holds only under
   the §5.1 default-pattern fix).
+
 - `readerRequestBase` (`hooks.server.ts:189-194`): prefix union becomes `{"" , "/ar"}`
   (`{prefix: "/en"}` branch dies). `numericChapterRedirect` (`:201-214`) regex
   `/^\/app\/([1-9][0-9]*)$/` → `^\/([1-9][0-9]*)$` against the prefix-less `rel`, so
@@ -323,7 +328,7 @@ chrome — `lib/i18n/app-locale.ts` header comment).
   `readerRequestBase`; `surahLocalRedirectTarget` (`reader-route.ts:175-200`) regexes
   lose `/app` (`:166-167`) and build `/…` paths (`:188,191`).
 - `useI18n` gate (`hooks.server.ts:371-372`): `readerLocale !== null ||
-  isLocalizedMarketingPath(pathname)` becomes
+isLocalizedMarketingPath(pathname)` becomes
   `useI18n = pathname === "/" || pathname === "/ar" || pathname.startsWith("/ar/")`.
   The bare `/ar` must stay inside the gate: `isLocalizedMarketingPath`
   (`hooks.server.ts:328-330`) admits it today, and `paraglideMiddleware` is what 307s
@@ -404,31 +409,31 @@ falling back to the reader home.
 
 ## 7. Builders — every href producer learns the new shapes
 
-| File | Change |
-| --- | --- |
-| `web/src/lib/data/quran.ts:49-142` | All path literals drop `/app`: `surahPath` → `` `/${slug}` ``, `translationSurahPath` → `` `/${slug}/t/${lang}/${translator}` ``, `translationGlobalPagePath` → `` `/t/…/page/${n}` ``, `globalPagePathFor` → `` `/page/${n}` `` / `` `/t/…/page/${n}` ``, same for `juzPathFor`/`hizbPathFor`/`rubPathFor` and their `translation*Path` twins. Return types `` `/app/${string}` `` → `` `/${string}` ``. Arabic-only helpers (`surahPath`, `surahAyahPath`, `translation*Path`) keep their component-import ban (nav-guard). |
-| `web/src/lib/i18n/reader.ts` | `QuranReaderHref` = `` `/${string}` `` (validated); `LocalizedReaderHref<en>` = `QuranReaderHref`, `<ar>` = `` `/ar${string}` ``; `readerHrefFor` stops calling paraglide for `en` (identity after validation) and prefix-strips-in for `ar` via `localizeHref` with the same byte-equality assert (`:142-157`); `readerHomeHrefFor` deleted (§4); `bookmarksPageHref`/`yoursPageHref` → `"/bookmarks"`/`"/yours"` (`:172-183`); `RESERVED_SURAH_SEGMENTS` unchanged, `isReaderPathname` (`:92-122`) re-based onto prefix-less shapes. |
-| `web/src/lib/i18n/seo.ts` | `READER_CANONICAL_UI_LOCALE` removed; `readerCanonicalPath` identity; `ENTRY_PATHS` (`:64-69`) → `/juz`, `/surah`, `/pages`; `home` removed from `ReaderEntryPage`. |
-| `web/src/lib/i18n/marketing-copy.ts` | `marketingReaderHomeHref` (`:207-209`) → `/surah`-`/ar/surah` (or replaced by `readerHrefFor` at its 3 call sites). |
-| `web/src/routes/(application)/app/_reader/translation-nav.ts` | `positionOf` strip regex `/^\/app\/?/` (`:35`) → de-localize then optional `/ar` strip then `/` ; `arabicHrefFor`/`hrefFor` inherit helper output (`:86-111` no literal change). `liveReaderPosition` (`:77-83`) already `deLocalizeUrl`s. |
-| `web/src/lib/server/reader-route.ts` | `parseReaderPath` (`:132-157`): all shapes prefix-less; `parseReaderRoute` (`:212-268`): route-id switch re-based to new ids; `surahLocalRedirectTarget` regexes/targets (`:166-200`); `localizedReaderLocale` (`:41-44`). |
-| `src/hooks.ts` / `src/hooks.server.ts` | §5.2, §5.3, §6 rule table. |
-| `web/src/lib/accept-parse.ts`, `web/server.ts` | §5.4. |
-| `web/src/lib/components/nav/Nav.svelte:138-140` | `/app/settings|search|bookmarks` → `/settings|search|bookmarks`. |
-| `web/src/lib/search/palette/sources/{site,search,settings}-routes.ts` | same re-path (`:26`, `:8`, `:8`). |
-| `web/src/routes/(marketing)/+page.svelte:33-35,93` | index links + search form action → `/search` etc. |
-| `web/src/routes/(marketing)/_components/MarketingHeader.svelte:68-70` | index links re-pathed via unchanged `readerHrefFor`. |
-| `web/src/lib/seo/render.ts:77-83` (llms.txt) | re-path all route examples; **also delete the stale "Surah page N (N ≥ 2): `/app/<slug>/page/N`" line (`:78`) — dead since D1; llms.txt currently advertises removed URLs.** |
-| `web/src/service-worker.ts` | `:55` precache `"/en/app"` → `"/surah"` (or drop); `:400-411` `isLegacyReaderPath` purge family extended to `/en/**`, `/app/**`, `/ar/app/**` so PAGES/DATA caches self-clean old-shape entries on activate. |
-| `web/src/lib/seo/render.ts:123` `pagePath` | unchanged (marketing only). |
-| `web/src/lib/auth/{post-auth-path,route-guard}.ts` | `"/app"` → `"/surah"` (§4). |
-| `web/src/lib/components/auth/AuthModal.svelte:35`, `(auth)/{login,register,verify-email}/+page.svelte`, `auth/[provider]/failure/+page.svelte:28`, `auth/[provider]/success/success-destination.ts:10` | full goto/href re-point list in §4. |
-| `web/src/routes/design/_variants/copy.ts:7`, `web/src/routes/(application)/app/search/_components/TranslationPicker.svelte:12` | re-path (§4 — both outside nav-guard visibility). |
-| `web/src/routes/(application)/app/yours/+page.svelte:32-36` | `readerHrefFor` inputs drop `/app`. |
-| `web/src/routes/(application)/app/_reader/{RangeReader.svelte:152,TranslationModal.svelte:308}` | type literals `` `/app/${string}` `` → `` `/${string}` ``. |
-| `scripts/assert-headers.sh:48-99`, `scripts/gen-offline-pack.ts:62` | scheme-A rework / legacy-set inversion (§4, Scripts). |
-| `web/src/routes/+layout.svelte:34` | canonicalPath `/app` guard → dropped with the hub (or `/surah`). |
-| `web/src/lib/i18n/base-english-copy.ts:58` | `case "app"` + `path === "/app"` branch deleted with the hub. |
+| File                                                                                                                                                                                                   | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `web/src/lib/data/quran.ts:49-142`                                                                                                                                                                     | All path literals drop `/app`: `surahPath` → `` `/${slug}` ``, `translationSurahPath` → `` `/${slug}/t/${lang}/${translator}` ``, `translationGlobalPagePath` → `` `/t/…/page/${n}` ``, `globalPagePathFor` → `` `/page/${n}` `` / `` `/t/…/page/${n}` ``, same for `juzPathFor`/`hizbPathFor`/`rubPathFor` and their `translation*Path` twins. Return types `` `/app/${string}` `` → `` `/${string}` ``. Arabic-only helpers (`surahPath`, `surahAyahPath`, `translation*Path`) keep their component-import ban (nav-guard).          |
+| `web/src/lib/i18n/reader.ts`                                                                                                                                                                           | `QuranReaderHref` = `` `/${string}` `` (validated); `LocalizedReaderHref<en>` = `QuranReaderHref`, `<ar>` = `` `/ar${string}` ``; `readerHrefFor` stops calling paraglide for `en` (identity after validation) and prefix-strips-in for `ar` via `localizeHref` with the same byte-equality assert (`:142-157`); `readerHomeHrefFor` deleted (§4); `bookmarksPageHref`/`yoursPageHref` → `"/bookmarks"`/`"/yours"` (`:172-183`); `RESERVED_SURAH_SEGMENTS` unchanged, `isReaderPathname` (`:92-122`) re-based onto prefix-less shapes. |
+| `web/src/lib/i18n/seo.ts`                                                                                                                                                                              | `READER_CANONICAL_UI_LOCALE` removed; `readerCanonicalPath` identity; `ENTRY_PATHS` (`:64-69`) → `/juz`, `/surah`, `/pages`; `home` removed from `ReaderEntryPage`.                                                                                                                                                                                                                                                                                                                                                                    |
+| `web/src/lib/i18n/marketing-copy.ts`                                                                                                                                                                   | `marketingReaderHomeHref` (`:207-209`) → `/surah`-`/ar/surah` (or replaced by `readerHrefFor` at its 3 call sites).                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `web/src/routes/(application)/app/_reader/translation-nav.ts`                                                                                                                                          | `positionOf` strip regex `/^\/app\/?/` (`:35`) → de-localize then optional `/ar` strip then `/` ; `arabicHrefFor`/`hrefFor` inherit helper output (`:86-111` no literal change). `liveReaderPosition` (`:77-83`) already `deLocalizeUrl`s.                                                                                                                                                                                                                                                                                             |
+| `web/src/lib/server/reader-route.ts`                                                                                                                                                                   | `parseReaderPath` (`:132-157`): all shapes prefix-less; `parseReaderRoute` (`:212-268`): route-id switch re-based to new ids; `surahLocalRedirectTarget` regexes/targets (`:166-200`); `localizedReaderLocale` (`:41-44`).                                                                                                                                                                                                                                                                                                             |
+| `src/hooks.ts` / `src/hooks.server.ts`                                                                                                                                                                 | §5.2, §5.3, §6 rule table.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `web/src/lib/accept-parse.ts`, `web/server.ts`                                                                                                                                                         | §5.4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `web/src/lib/components/nav/Nav.svelte:138-140`                                                                                                                                                        | `/app/settings                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | search | bookmarks`→`/settings | search | bookmarks`. |
+| `web/src/lib/search/palette/sources/{site,search,settings}-routes.ts`                                                                                                                                  | same re-path (`:26`, `:8`, `:8`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `web/src/routes/(marketing)/+page.svelte:33-35,93`                                                                                                                                                     | index links + search form action → `/search` etc.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `web/src/routes/(marketing)/_components/MarketingHeader.svelte:68-70`                                                                                                                                  | index links re-pathed via unchanged `readerHrefFor`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `web/src/lib/seo/render.ts:77-83` (llms.txt)                                                                                                                                                           | re-path all route examples; **also delete the stale "Surah page N (N ≥ 2): `/app/<slug>/page/N`" line (`:78`) — dead since D1; llms.txt currently advertises removed URLs.**                                                                                                                                                                                                                                                                                                                                                           |
+| `web/src/service-worker.ts`                                                                                                                                                                            | `:55` precache `"/en/app"` → `"/surah"` (or drop); `:400-411` `isLegacyReaderPath` purge family extended to `/en/**`, `/app/**`, `/ar/app/**` so PAGES/DATA caches self-clean old-shape entries on activate.                                                                                                                                                                                                                                                                                                                           |
+| `web/src/lib/seo/render.ts:123` `pagePath`                                                                                                                                                             | unchanged (marketing only).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `web/src/lib/auth/{post-auth-path,route-guard}.ts`                                                                                                                                                     | `"/app"` → `"/surah"` (§4).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `web/src/lib/components/auth/AuthModal.svelte:35`, `(auth)/{login,register,verify-email}/+page.svelte`, `auth/[provider]/failure/+page.svelte:28`, `auth/[provider]/success/success-destination.ts:10` | full goto/href re-point list in §4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `web/src/routes/design/_variants/copy.ts:7`, `web/src/routes/(application)/app/search/_components/TranslationPicker.svelte:12`                                                                         | re-path (§4 — both outside nav-guard visibility).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `web/src/routes/(application)/app/yours/+page.svelte:32-36`                                                                                                                                            | `readerHrefFor` inputs drop `/app`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `web/src/routes/(application)/app/_reader/{RangeReader.svelte:152,TranslationModal.svelte:308}`                                                                                                        | type literals `` `/app/${string}` `` → `` `/${string}` ``.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `scripts/assert-headers.sh:48-99`, `scripts/gen-offline-pack.ts:62`                                                                                                                                    | scheme-A rework / legacy-set inversion (§4, Scripts).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `web/src/routes/+layout.svelte:34`                                                                                                                                                                     | canonicalPath `/app` guard → dropped with the hub (or `/surah`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `web/src/lib/i18n/base-english-copy.ts:58`                                                                                                                                                             | `case "app"` + `path === "/app"` branch deleted with the hub.                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 **Filesystem path strings (blocker class, distinct from URL literals):** nine files
 read source files by the physical `src/routes/(application)/app` path and break at
@@ -455,10 +460,10 @@ two regexes over the same `NAV_SIGNAL`-scoped lines after `stripComments`
 `footer-links.ts:5-6`, `m/search.ts:3`, `reader-copy.ts:305`, `aliases.ts:3`,
 `match.ts:118`, `engine.svelte.ts:87`, `quran-page-shape.ts:35`, `app-locale.ts:6`,
 bookmarks `:26`, yours `:23,28`, `capture.ts:47`): (a) any literal `/app` on a
-nav-signal line (catches stale code in *globbed* files — must be zero-hit there), and
+nav-signal line (catches stale code in _globbed_ files — must be zero-hit there), and
 (b) a reserved-segment ban — a range/translation literal immediately after a string
 boundary followed by a path continuation, i.e. `href={"/page/" + n}` or
-`` goto(`/t/en/sahih/juz/${n}`) `` is flagged, while the type-placeholder escape keeps
+``goto(`/t/en/sahih/juz/${n}`)`` is flagged, while the type-placeholder escape keeps
 working exactly as today's `(?!${string})` exemption does (`:105-108`). Exact regex
 wording is settled against the false-positive fixture cases (`:110-116`) at
 implementation; the fixtures re-pin to the new shapes. **Guard blind spots are
@@ -483,7 +488,9 @@ from the same builders and the physical tree (single source of truth), so each
 milestone carries its own re-path; M3 is hreflang + docs + exhaustive test sweep.
 
 ### M1 — locale flip inside the existing `/app` tree
+
 en loses only the `/en` prefix; `/app` segment stays. Ships:
+
 - paraglide: delete the whole `urlPatterns` array (`paraglide.config.js`) — the
   default `/:locale/...` pattern (§5.1) then yields exactly M1's grammar:
   `readerHrefFor("en", "/app/x") = "/app/x"`, `readerHrefFor("ar", …) = /ar/app/x`,
@@ -503,6 +510,7 @@ en loses only the `/en` prefix; `/app` segment stays. Ships:
   prerender-locales re-pinned; new paraglide round-trip fixtures.
 
 ### M2 — drop the `/app` segment (tree move + redirect map + hub removal)
+
 - `git mv` `(application)/app/**` → `(application)/**`; layout route-id checks,
   `parseReaderRoute` ids, nav-guard globs re-based.
 - All builders drop `/app` (§7 table); `parseReaderPath` shapes prefix-less;
@@ -525,6 +533,7 @@ en loses only the `/en` prefix; `/app` segment stays. Ships:
   only, no new route files.
 
 ### M3 — hreflang + docs + test sweep
+
 - hreflang lines in sitemap `readerUrl` (§6).
 - Docs: `docs/quran-system.md` Part 1 ("Public reader paths begin with `/{ui}/app`",
   ~line 172) and Part 2 ("Canonical reader paths use `/en/app/**` and `/ar/app/**`",
@@ -673,8 +682,8 @@ en loses only the `/en` prefix; `/app` segment stays. Ships:
 
 ## 11. Docs that must move with the code
 
-- `docs/quran-system.md` Part 1 Web delivery bullet (~`:172-175`) and Part 2 bullets
-  (~`:195-199`) — path grammar rewritten; Part 5 gains divergence #10 (scheme A:
+- `docs/quran-system.md` Part 1 Web delivery bullet (~~`:172-175`) and Part 2 bullets
+  (~~`:195-199`) — path grammar rewritten; Part 5 gains divergence #10 (scheme A:
   unprefixed en, `/ar` ar, `/app`+`/en` 308 maps, `/en` reserved-word note).
 - `web/README.md` layout comment (routes tree) — `(application)/app/` →
   `(application)/`, `[slug].md` note gains the matcher split.
