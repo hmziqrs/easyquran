@@ -19,6 +19,7 @@ import {
 } from "#lib/auth/auth-copy.js";
 import { authState } from "#lib/auth/auth-state.svelte.js";
 import type { AuthTransitionContext } from "#lib/auth/auth-state.svelte.js";
+import { FRESH_AUTH_REQUIRED, isFreshAuthenticationRequired } from "#lib/auth/fresh-auth-client.js";
 
 export interface PasskeyInfo {
   readonly id: string;
@@ -156,6 +157,7 @@ export class PasskeyFlow {
   readonly #credentials: NavigatorCredentials;
   pending = $state(false);
   cancelled = $state(false);
+  twoFaPending = $state(false);
   genericError = $state<string | null>(null);
   fieldErrors = $state<Readonly<Record<string, string>>>({});
   passkeys = $state<ReadonlyArray<PasskeyInfo>>([]);
@@ -175,9 +177,15 @@ export class PasskeyFlow {
   clearSecrets(): void {
     this.#loginHandle = null;
     this.#registerHandle = null;
+    this.twoFaPending = false;
   }
 
   private fail(status: number, error: AuthErrorEnvelope | null): void {
+    if (isFreshAuthenticationRequired(error)) {
+      this.genericError = FRESH_AUTH_REQUIRED;
+      this.fieldErrors = {};
+      return;
+    }
     if (status === 0) {
       this.genericError = NETWORK_ERROR;
       this.fieldErrors = {};
@@ -195,6 +203,7 @@ export class PasskeyFlow {
       return false;
     }
     this.pending = true;
+    this.twoFaPending = false;
     this.cancelled = false;
     this.genericError = null;
     this.fieldErrors = {};
@@ -236,18 +245,28 @@ export class PasskeyFlow {
         this.cancelled = true;
         return false;
       }
-      const finish = await this.client.unsafeRequest<{ status?: string; user?: unknown }>(
-        "/passkey/v1/login/finish",
-        {
-          method: "POST",
-          body: {
-            credential: this.#serializeAssertion(assertion),
-            state_handle: this.#loginHandle,
-          },
+      const finish = await this.client.unsafeRequest<{
+        status?: string;
+        user?: unknown;
+        totp_token?: string;
+      }>("/passkey/v1/login/finish", {
+        method: "POST",
+        body: {
+          credential: this.#serializeAssertion(assertion),
+          state_handle: this.#loginHandle,
         },
-      );
+      });
       if (!finish.ok) {
         this.fail(finish.status, finish.error);
+        return false;
+      }
+      if (finish.data?.status === "totp_required") {
+        if (!finish.data.totp_token || !/^[a-f0-9]{64}$/.test(finish.data.totp_token)) {
+          this.genericError = GENERIC_TRY_AGAIN;
+          return false;
+        }
+        this.twoFaPending = true;
+        this.state.setTwoFaPending(true);
         return false;
       }
       const user = decodeUserProfile(finish.data?.user);
@@ -289,7 +308,9 @@ export class PasskeyFlow {
         state_handle?: JsonValue;
       }>("/passkey/v1/register/begin", { method: "POST" });
       if (!begin.ok) {
-        if (begin.status === 403 || isVerifiedOnlyError(begin.error)) {
+        if (isFreshAuthenticationRequired(begin.error)) {
+          this.fail(begin.status, begin.error);
+        } else if (begin.status === 403 || isVerifiedOnlyError(begin.error)) {
           this.genericError = VERIFY_EMAIL_NEXT;
         } else {
           this.fail(begin.status, begin.error);
@@ -341,7 +362,9 @@ export class PasskeyFlow {
         },
       );
       if (!finish.ok) {
-        if (finish.status === 403 || isVerifiedOnlyError(finish.error)) {
+        if (isFreshAuthenticationRequired(finish.error)) {
+          this.fail(finish.status, finish.error);
+        } else if (finish.status === 403 || isVerifiedOnlyError(finish.error)) {
           this.genericError = VERIFY_EMAIL_NEXT;
         } else {
           this.fail(finish.status, finish.error);

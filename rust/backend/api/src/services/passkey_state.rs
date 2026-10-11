@@ -1,26 +1,62 @@
+use crate::db::sea_models::user;
 use base64::prelude::*;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
+use subtle::ConstantTimeEq;
 use tracing::{error, warn};
-use webauthn_rs::prelude::{PasskeyAuthentication, PasskeyRegistration};
+use webauthn_rs::prelude::{DiscoverableAuthentication, PasskeyRegistration};
 
 use crate::error::{ErrorCode, ErrorResponse};
 
 const STATE_TTL_SECS: u64 = 300;
 const MAX_STATES: usize = 10_000;
 
+#[derive(Serialize, Deserialize)]
+struct RegistrationBinding {
+    user_id: i32,
+    session_id: String,
+    credential_secret: String,
+    factor_secret: Option<String>,
+    factor_enabled: bool,
+}
+
+impl RegistrationBinding {
+    fn from_user(user: &user::Model, session_id: &str) -> Self {
+        Self {
+            user_id: user.id,
+            session_id: session_id.to_owned(),
+            credential_secret: user.session_auth_secret.clone(),
+            factor_secret: user.two_fa_secret.clone(),
+            factor_enabled: user.two_fa_enabled,
+        }
+    }
+
+    fn matches(&self, user: &user::Model, session_id: &str) -> bool {
+        self.user_id == user.id
+            && self.session_id == session_id
+            && self.factor_enabled == user.two_fa_enabled
+            && bool::from(
+                self.credential_secret
+                    .as_bytes()
+                    .ct_eq(user.session_auth_secret.as_bytes()),
+            )
+            && self.factor_secret == user.two_fa_secret
+    }
+}
+
 #[derive(Serialize)]
 #[serde(tag = "kind")]
 enum EntryRef<'a> {
     Registration {
         state: &'a PasskeyRegistration,
-        user_id: i32,
+        binding: RegistrationBinding,
     },
     Authentication {
-        state: &'a PasskeyAuthentication,
+        state: &'a DiscoverableAuthentication,
+        session_id: &'a str,
     },
 }
 
@@ -29,10 +65,11 @@ enum EntryRef<'a> {
 enum EntryOwned {
     Registration {
         state: PasskeyRegistration,
-        user_id: i32,
+        binding: RegistrationBinding,
     },
     Authentication {
-        state: PasskeyAuthentication,
+        state: DiscoverableAuthentication,
+        session_id: String,
     },
 }
 
@@ -109,34 +146,45 @@ fn invalid_state() -> ErrorResponse {
 }
 
 pub fn issue_registration(
-    user_id: i32,
+    user: &user::Model,
+    session_id: &str,
     state: &PasskeyRegistration,
 ) -> Result<String, ErrorResponse> {
-    issue(&EntryRef::Registration { state, user_id })
+    issue(&EntryRef::Registration {
+        state,
+        binding: RegistrationBinding::from_user(user, session_id),
+    })
 }
 
-/// The registration state is bound to the user that started registration, so a
-/// handle issued in one user's session cannot finish under another's.
 pub fn consume_registration(
     handle: &str,
-    user_id: i32,
+    user: &user::Model,
+    session_id: &str,
 ) -> Result<PasskeyRegistration, ErrorResponse> {
     match consume(handle)? {
-        EntryOwned::Registration {
-            state,
-            user_id: bound_user_id,
-        } if bound_user_id == user_id => Ok(state),
+        EntryOwned::Registration { state, binding } if binding.matches(user, session_id) => {
+            Ok(state)
+        }
         _ => Err(invalid_state()),
     }
 }
 
-pub fn issue_authentication(state: &PasskeyAuthentication) -> Result<String, ErrorResponse> {
-    issue(&EntryRef::Authentication { state })
+pub fn issue_authentication(
+    state: &DiscoverableAuthentication,
+    session_id: &str,
+) -> Result<String, ErrorResponse> {
+    issue(&EntryRef::Authentication { state, session_id })
 }
 
-pub fn consume_authentication(handle: &str) -> Result<PasskeyAuthentication, ErrorResponse> {
+pub fn consume_authentication(
+    handle: &str,
+    session_id: &str,
+) -> Result<DiscoverableAuthentication, ErrorResponse> {
     match consume(handle)? {
-        EntryOwned::Authentication { state } => Ok(state),
+        EntryOwned::Authentication {
+            state,
+            session_id: bound,
+        } if bound == session_id => Ok(state),
         _ => Err(invalid_state()),
     }
 }
@@ -181,12 +229,12 @@ mod tests {
     #[test]
     fn authentication_state_round_trips_once() {
         let (_challenge, state) = svc().start_login().unwrap();
-        let handle = issue_authentication(&state).unwrap();
+        let handle = issue_authentication(&state, "session").unwrap();
 
-        consume_authentication(&handle).unwrap();
+        consume_authentication(&handle, "session").unwrap();
 
         assert!(
-            consume_authentication(&handle).is_err(),
+            consume_authentication(&handle, "session").is_err(),
             "replayed handle must fail"
         );
     }
@@ -194,12 +242,12 @@ mod tests {
     #[test]
     fn registration_state_round_trips_once_and_binds_user() {
         let (_challenge, state) = svc().start_registration(&make_user()).unwrap();
-        let handle = issue_registration(1, &state).unwrap();
+        let handle = issue_registration(&make_user(), "session", &state).unwrap();
 
-        consume_registration(&handle, 1).unwrap();
+        consume_registration(&handle, &make_user(), "session").unwrap();
 
         assert!(
-            consume_registration(&handle, 1).is_err(),
+            consume_registration(&handle, &make_user(), "session").is_err(),
             "replayed handle must fail"
         );
     }
@@ -207,30 +255,29 @@ mod tests {
     #[test]
     fn registration_handle_rejects_other_user() {
         let (_challenge, state) = svc().start_registration(&make_user()).unwrap();
-        let handle = issue_registration(1, &state).unwrap();
+        let handle = issue_registration(&make_user(), "session", &state).unwrap();
 
-        assert!(
-            consume_registration(&handle, 2).is_err(),
-            "a handle issued for user 1 must not finish under user 2"
-        );
+        let mut other_user = make_user();
+        other_user.id = 2;
+        assert!(consume_registration(&handle, &other_user, "session").is_err());
     }
 
     #[test]
     fn unknown_handle_rejected() {
-        assert!(consume_authentication("does-not-exist").is_err());
-        assert!(consume_registration("does-not-exist", 1).is_err());
+        assert!(consume_authentication("does-not-exist", "session").is_err());
+        assert!(consume_registration("does-not-exist", &make_user(), "session").is_err());
     }
 
     #[test]
     fn empty_handle_rejected() {
-        assert!(consume_authentication("").is_err());
-        assert!(consume_authentication("   ").is_err());
+        assert!(consume_authentication("", "session").is_err());
+        assert!(consume_authentication("   ", "session").is_err());
     }
 
     #[test]
     fn handle_is_opaque_and_bounded() {
         let (_challenge, state) = svc().start_login().unwrap();
-        let handle = issue_authentication(&state).unwrap();
+        let handle = issue_authentication(&state, "session").unwrap();
 
         assert_eq!(handle.len(), 43, "32 random bytes base64url-encoded");
         assert!(
@@ -244,11 +291,36 @@ mod tests {
     #[test]
     fn authentication_handle_cannot_be_consumed_as_registration() {
         let (_challenge, state) = svc().start_login().unwrap();
-        let handle = issue_authentication(&state).unwrap();
+        let handle = issue_authentication(&state, "session").unwrap();
 
         assert!(
-            consume_registration(&handle, 1).is_err(),
+            consume_registration(&handle, &make_user(), "session").is_err(),
             "kind mismatch must fail"
         );
+    }
+    #[test]
+    fn registration_rejects_changed_credentials_factor_or_session() {
+        let user = make_user();
+        let (_, state) = svc().start_registration(&user).unwrap();
+        let mut credential_changed = user.clone();
+        credential_changed.session_auth_secret = "changed".into();
+        let mut factor_changed = user.clone();
+        factor_changed.two_fa_enabled = true;
+        factor_changed.two_fa_secret = Some("new-factor".into());
+        for (current, session_id) in [
+            (credential_changed, "session"),
+            (factor_changed, "session"),
+            (user.clone(), "other-session"),
+        ] {
+            let handle = issue_registration(&user, "session", &state).unwrap();
+            assert!(consume_registration(&handle, &current, session_id).is_err());
+        }
+    }
+
+    #[test]
+    fn authentication_challenge_rejects_other_session() {
+        let (_, state) = svc().start_login().unwrap();
+        let handle = issue_authentication(&state, "session").unwrap();
+        assert!(consume_authentication(&handle, "other-session").is_err());
     }
 }

@@ -96,29 +96,39 @@ impl Entity {
         }
     }
 
-    pub async fn touch_counter<T: ConnectionTrait>(
+    pub async fn touch_counter_if_unchanged<T: ConnectionTrait>(
         conn: &T,
-        id: i32,
+        expected: &Model,
+        passkey: &webauthn_rs::prelude::Passkey,
         new_counter: u32,
-    ) -> DbResult<()> {
-        let now = Utc::now().fixed_offset();
-        let mut active: ActiveModel = Self::find()
-            .filter(Column::Id.eq(id))
-            .one(conn)
-            .await
-            .map_err(ErrorResponse::from)?
-            .ok_or_else(|| {
-                ErrorResponse::new(ErrorCode::RecordNotFound)
-                    .with_message("Passkey credential not found")
-            })?
-            .into();
-        active.counter = Set(new_counter as i64);
-        active.last_used_at = Set(Some(now));
-        active
-            .update(conn)
-            .await
-            .map(|_| ())
-            .map_err(ErrorResponse::from)
+    ) -> DbResult<bool> {
+        let public_key = serde_json::to_vec(passkey).map_err(|_| {
+            ErrorResponse::new(ErrorCode::InternalServerError)
+                .with_message("Unable to persist passkey")
+        })?;
+        let mut update = Self::update_many()
+            .col_expr(
+                Column::PublicKey,
+                sea_orm::sea_query::Expr::value(public_key),
+            )
+            .col_expr(
+                Column::Counter,
+                sea_orm::sea_query::Expr::value(i64::from(new_counter)),
+            )
+            .col_expr(
+                Column::LastUsedAt,
+                sea_orm::sea_query::Expr::value(Utc::now().fixed_offset()),
+            )
+            .filter(Column::Id.eq(expected.id))
+            .filter(Column::UserId.eq(expected.user_id))
+            .filter(Column::CredentialId.eq(&expected.credential_id))
+            .filter(Column::Counter.eq(expected.counter))
+            .filter(Column::PublicKey.eq(expected.public_key.clone()));
+        update = match expected.last_used_at {
+            Some(last_used) => update.filter(Column::LastUsedAt.eq(last_used)),
+            None => update.filter(Column::LastUsedAt.is_null()),
+        };
+        Ok(update.exec(conn).await?.rows_affected == 1)
     }
 
     pub async fn delete_by_credential_id_for_user<T: ConnectionTrait>(

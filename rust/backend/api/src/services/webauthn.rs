@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use sea_orm::DatabaseConnection;
+use sea_orm::{DatabaseConnection, EntityTrait, TransactionError, TransactionTrait};
 use tracing::warn;
 use webauthn_rs::prelude::*;
+use webauthn_rs_proto::ResidentKeyRequirement;
 
 use crate::db::sea_models::{passkey_credential, user};
 use crate::error::{ErrorCode, ErrorResponse};
@@ -90,17 +91,21 @@ impl WebauthnService {
         user: &user::Model,
     ) -> Result<(CreationChallengeResponse, PasskeyRegistration), ErrorResponse> {
         let user_uuid = user_handle_for(user.id);
-        let (challenge, state) = self
+        let (mut challenge, state) = self
             .core
             .start_passkey_registration(user_uuid, &user.email, &user.name, None)
             .map_err(map_webauthn_err)?;
+        if let Some(selection) = challenge.public_key.authenticator_selection.as_mut() {
+            selection.resident_key = Some(ResidentKeyRequirement::Required);
+            selection.require_resident_key = true;
+        }
         Ok((challenge, state))
     }
 
     pub async fn finish_registration(
         &self,
         db: &DatabaseConnection,
-        user_id: i32,
+        owner: &user::Model,
         reg: &RegisterPublicKeyCredential,
         state: &PasskeyRegistration,
         device_type: Option<String>,
@@ -110,15 +115,37 @@ impl WebauthnService {
             .core
             .finish_passkey_registration(reg, state)
             .map_err(map_webauthn_err)?;
-        passkey_credential::Entity::create(db, user_id, &passkey, device_type, transports).await
+        let owner = owner.clone();
+        db.transaction::<_, passkey_credential::Model, ErrorResponse>(|txn| {
+            Box::pin(async move {
+                let current = user::Entity::find_by_id(owner.id)
+                    .one(txn)
+                    .await?
+                    .ok_or_else(authentication_failed)?;
+                if !current.is_verified
+                    || current.session_auth_secret != owner.session_auth_secret
+                    || current.two_fa_enabled != owner.two_fa_enabled
+                    || current.two_fa_secret != owner.two_fa_secret
+                {
+                    return Err(authentication_failed());
+                }
+                passkey_credential::Entity::create(txn, owner.id, &passkey, device_type, transports)
+                    .await
+            })
+        })
+        .await
+        .map_err(|err| match err {
+            TransactionError::Connection(err) => ErrorResponse::from(err),
+            TransactionError::Transaction(err) => err,
+        })
     }
 
     pub fn start_login(
         &self,
-    ) -> Result<(RequestChallengeResponse, PasskeyAuthentication), ErrorResponse> {
+    ) -> Result<(RequestChallengeResponse, DiscoverableAuthentication), ErrorResponse> {
         let (challenge, state) = self
             .core
-            .start_passkey_authentication(&[])
+            .start_discoverable_authentication()
             .map_err(map_webauthn_err)?;
         Ok((challenge, state))
     }
@@ -127,60 +154,65 @@ impl WebauthnService {
         &self,
         db: &DatabaseConnection,
         cred: &PublicKeyCredential,
-        state: &PasskeyAuthentication,
+        state: &DiscoverableAuthentication,
     ) -> Result<(passkey_credential::Model, user::Model), ErrorResponse> {
-        let result = self
+        let (user_handle, credential_bytes) = self
             .core
-            .finish_passkey_authentication(cred, state)
+            .identify_discoverable_authentication(cred)
             .map_err(map_webauthn_err)?;
-
-        if !result.user_verified() {
-            warn!("passkey login rejected: user_verified is false");
-            return Err(
-                ErrorResponse::new(ErrorCode::Unauthorized).with_message("Authentication failed")
-            );
-        }
-
-        let credential_id = passkey_credential::encode_credential_id(result.cred_id().as_slice());
+        let credential_id = passkey_credential::encode_credential_id(credential_bytes);
         let stored = passkey_credential::Entity::find_by_credential_id(db, &credential_id)
             .await?
-            .ok_or_else(|| {
-                warn!(credential_id = %credential_id, "passkey login: unknown credential id");
-                ErrorResponse::new(ErrorCode::Unauthorized).with_message("Authentication failed")
-            })?;
-
-        // Counter==0 authenticators have no counter support; the exemption is required or every login from them is rejected (WebAuthn §6.1.17).
-        let counter = result.counter();
-        if counter != 0 && (counter as i64) <= stored.counter {
-            warn!(
-                credential_id = %stored.credential_id,
-                user_id = stored.user_id,
-                stored_counter = stored.counter,
-                asserted_counter = counter,
-                "passkey login rejected: signature counter did not advance (possible cloned credential)"
-            );
-            return Err(
-                ErrorResponse::new(ErrorCode::Unauthorized).with_message("Authentication failed")
-            );
+            .ok_or_else(authentication_failed)?;
+        if user_handle != user_handle_for(stored.user_id) {
+            return Err(authentication_failed());
         }
-
+        let mut passkey: Passkey = serde_json::from_slice(&stored.public_key).map_err(|_| {
+            ErrorResponse::new(ErrorCode::InternalServerError)
+                .with_message("Unable to verify passkey")
+        })?;
+        if passkey.cred_id().as_slice() != credential_bytes {
+            return Err(authentication_failed());
+        }
+        let result = self
+            .core
+            .finish_discoverable_authentication(
+                cred,
+                state.clone(),
+                &[DiscoverableKey::from(&passkey)],
+            )
+            .map_err(map_webauthn_err)?;
+        if !result.user_verified() || result.cred_id().as_slice() != credential_bytes {
+            return Err(authentication_failed());
+        }
+        let counter = result.counter();
+        if (counter != 0 || stored.counter != 0) && i64::from(counter) <= stored.counter {
+            warn!(
+                user_id = stored.user_id,
+                "passkey counter failed to advance"
+            );
+            return Err(authentication_failed());
+        }
         let user_model = user::Entity::get_by_id(db, stored.user_id)
             .await?
-            .ok_or_else(|| {
-                warn!(
-                    user_id = stored.user_id,
-                    "passkey login: credential points at missing user"
-                );
-                ErrorResponse::new(ErrorCode::Unauthorized).with_message("Authentication failed")
-            })?;
-
-        passkey_credential::Entity::touch_counter(db, stored.id, counter).await?;
+            .ok_or_else(authentication_failed)?;
+        if passkey.update_credential(&result).is_none() {
+            return Err(authentication_failed());
+        }
+        if !passkey_credential::Entity::touch_counter_if_unchanged(db, &stored, &passkey, counter)
+            .await?
+        {
+            return Err(authentication_failed());
+        }
 
         Ok((stored, user_model))
     }
 }
 
-// Keep the client error generic; the specific failure is logged only — surfacing it leaks signal to attackers.
+fn authentication_failed() -> ErrorResponse {
+    ErrorResponse::new(ErrorCode::Unauthorized).with_message("Authentication failed")
+}
+
 fn map_webauthn_err(err: WebauthnError) -> ErrorResponse {
     warn!(error = ?err, "WebAuthn operation failed");
     ErrorResponse::new(ErrorCode::InvalidToken).with_message("WebAuthn operation failed")

@@ -34,10 +34,11 @@ pub async fn register_begin(
     let user = auth.user_required()?;
     tracing::Span::current().record("user_id", user.id);
 
-    let svc = webauthn_service(&state)?;
-    let (challenge, registration_state) = svc.start_registration(user)?;
+    crate::services::fresh_auth::consume(&auth, &state.sea_db).await?;
+    let session_id = passkey_session_id(&auth).await?;
+    let (challenge, registration_state) = webauthn_service(&state)?.start_registration(user)?;
     let state_handle =
-        crate::services::passkey_state::issue_registration(user.id, &registration_state)?;
+        crate::services::passkey_state::issue_registration(user, &session_id, &registration_state)?;
 
     info!(user_id = user.id, "passkey registration begun");
     Ok((
@@ -61,12 +62,15 @@ pub async fn register_finish(
     let payload = payload.0;
 
     let svc = webauthn_service(&state)?;
-    let registration_state =
-        crate::services::passkey_state::consume_registration(&payload.state_handle, user.id)?;
+    let registration_state = crate::services::passkey_state::consume_registration(
+        &payload.state_handle,
+        user,
+        &passkey_session_id(&auth).await?,
+    )?;
     let model = svc
         .finish_registration(
             &state.sea_db,
-            user.id,
+            user,
             &payload.credential,
             &registration_state,
             payload.device_type.clone(),
@@ -110,6 +114,7 @@ pub async fn remove(
     tracing::Span::current().record("user_id", user.id);
     let payload = payload.0;
 
+    crate::services::fresh_auth::consume(&auth, &state.sea_db).await?;
     let user_id = user.id;
     let credential_id = payload.credential_id.clone();
 
@@ -181,13 +186,17 @@ pub async fn remove(
 }
 
 #[debug_handler]
-#[instrument(skip(state))]
+#[instrument(skip(state, auth))]
 pub async fn login_begin(
     State(state): State<AppState>,
+    auth: AuthSession,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let svc = webauthn_service(&state)?;
     let (challenge, authentication_state) = svc.start_login()?;
-    let state_handle = crate::services::passkey_state::issue_authentication(&authentication_state)?;
+    let state_handle = crate::services::passkey_state::issue_authentication(
+        &authentication_state,
+        &passkey_session_id(&auth).await?,
+    )?;
 
     info!("passkey login begun");
     Ok((
@@ -209,14 +218,25 @@ pub async fn login_finish(
     let payload = payload.0;
 
     let svc = webauthn_service(&state)?;
-    let authentication_state =
-        crate::services::passkey_state::consume_authentication(&payload.state_handle)?;
+    let authentication_state = crate::services::passkey_state::consume_authentication(
+        &payload.state_handle,
+        &passkey_session_id(&auth).await?,
+    )?;
     let (credential, user) = svc
         .finish_login(&state.sea_db, &payload.credential, &authentication_state)
         .await?;
+    complete_passkey_login(&state.sea_db, &mut auth, &credential, &user).await
+}
+
+/// Issues login after verified WebAuthn assertion, retaining bans and enrolled TOTP policy.
+pub async fn complete_passkey_login(
+    db: &sea_orm::DatabaseConnection,
+    auth: &mut AuthSession,
+    credential: &passkey_credential::Model,
+    user: &crate::db::sea_models::user::Model,
+) -> Result<(StatusCode, axum::http::HeaderMap, Json<serde_json::Value>), ErrorResponse> {
     tracing::Span::current().record("user_id", user.id);
 
-    // Fail-closed: a banned user must not obtain a session via passkey.
     match auth.backend().check_ban(&user.id).await {
         Ok(ban_status) if ban_status.is_banned() => {
             warn!(user_id = user.id, "passkey login: banned user");
@@ -230,10 +250,19 @@ pub async fn login_finish(
         }
     }
 
+    if user.two_fa_enabled {
+        let token = crate::services::pending_login::issue(auth, user).await?;
+        return Ok((
+            StatusCode::OK,
+            session_rotated_headers(false),
+            Json(json!({ "status": "totp_required", "totp_token": token })),
+        ));
+    }
+
     let device = credential.device_type.clone();
     let ip: Option<String> = None;
     match auth
-        .login_with_metadata(&user, device.clone(), ip.clone())
+        .login_with_metadata(user, device.clone(), ip.clone())
         .await
     {
         Ok(_) => {
@@ -244,14 +273,9 @@ pub async fn login_finish(
             );
             tracing::Span::current().record("result", "success");
 
-            // W8e: durable binding with the same fail-closed contract as password
-            // login. On failure create_bound_session destroys the tower session and
-            // revokes the audit row so neither lingers unbound.
-            match create_bound_session(&state.sea_db, &mut auth, user.id, device, ip).await {
+            match create_bound_session(db, auth, user.id, device, ip).await {
                 Ok(()) => Ok((
                     StatusCode::OK,
-                    // W8B-001: login_with_metadata cycled the session id (see
-                    // auth_v1 log_in) — emit the header so the web client refreshes CSRF.
                     session_rotated_headers(true),
                     Json(json!({ "status": "ok", "user": user })),
                 )),
@@ -269,6 +293,27 @@ pub async fn login_finish(
                 .with_details(err.to_string()))
         }
     }
+}
+
+async fn passkey_session_id(auth: &AuthSession) -> Result<String, ErrorResponse> {
+    if auth.session().id().is_none() {
+        auth.session()
+            .insert("passkey_challenge_session", true)
+            .await
+            .map_err(|_| ErrorResponse::new(ErrorCode::InternalServerError))?;
+        auth.session()
+            .save()
+            .await
+            .map_err(|_| ErrorResponse::new(ErrorCode::InternalServerError))?;
+        auth.session()
+            .remove::<bool>("passkey_challenge_session")
+            .await
+            .map_err(|_| ErrorResponse::new(ErrorCode::InternalServerError))?;
+    }
+    auth.session()
+        .id()
+        .map(|id| id.to_string())
+        .ok_or_else(|| ErrorResponse::new(ErrorCode::InternalServerError))
 }
 
 #[cfg(test)]
@@ -313,7 +358,8 @@ mod tests {
     fn login_begin_envelope_shape_matches_wire_contract() {
         let svc = svc();
         let (challenge, authentication_state) = svc.start_login().unwrap();
-        let state_handle = passkey_state::issue_authentication(&authentication_state).unwrap();
+        let state_handle =
+            passkey_state::issue_authentication(&authentication_state, "session").unwrap();
         let body = json!({
             "challenge": challenge,
             "state_handle": state_handle,
@@ -337,7 +383,9 @@ mod tests {
     fn register_begin_envelope_shape_matches_wire_contract() {
         let svc = svc();
         let (challenge, registration_state) = svc.start_registration(&make_user()).unwrap();
-        let state_handle = passkey_state::issue_registration(1, &registration_state).unwrap();
+        let state_handle =
+            passkey_state::issue_registration(&make_user(), "session", &registration_state)
+                .unwrap();
         let body = json!({
             "challenge": challenge,
             "state_handle": state_handle,
@@ -361,7 +409,8 @@ mod tests {
     fn login_finish_payload_takes_handle_not_state() {
         let svc = svc();
         let (_challenge, authentication_state) = svc.start_login().unwrap();
-        let state_handle = passkey_state::issue_authentication(&authentication_state).unwrap();
+        let state_handle =
+            passkey_state::issue_authentication(&authentication_state, "session").unwrap();
 
         let body = json!({
             "credential": {
@@ -380,11 +429,11 @@ mod tests {
             serde_json::from_value(body).expect("handle-based login finish must round-trip");
         assert_eq!(payload.credential.type_, "public-key");
         assert!(
-            passkey_state::consume_authentication(&payload.state_handle).is_ok(),
+            passkey_state::consume_authentication(&payload.state_handle, "session").is_ok(),
             "handle must resolve to the stored state"
         );
         assert!(
-            passkey_state::consume_authentication(&payload.state_handle).is_err(),
+            passkey_state::consume_authentication(&payload.state_handle, "session").is_err(),
             "replayed handle must be rejected"
         );
     }
@@ -418,7 +467,9 @@ mod tests {
     fn register_finish_payload_takes_handle_not_state() {
         let svc = svc();
         let (_challenge, registration_state) = svc.start_registration(&make_user()).unwrap();
-        let state_handle = passkey_state::issue_registration(1, &registration_state).unwrap();
+        let state_handle =
+            passkey_state::issue_registration(&make_user(), "session", &registration_state)
+                .unwrap();
 
         let body = json!({
             "credential": {
@@ -439,11 +490,13 @@ mod tests {
         assert_eq!(payload.credential.type_, "public-key");
         assert_eq!(payload.device_type.as_deref(), Some("MacBook"));
         assert!(
-            passkey_state::consume_registration(&payload.state_handle, 1).is_ok(),
+            passkey_state::consume_registration(&payload.state_handle, &make_user(), "session")
+                .is_ok(),
             "handle must resolve to the stored state for the bound user"
         );
         assert!(
-            passkey_state::consume_registration(&payload.state_handle, 1).is_err(),
+            passkey_state::consume_registration(&payload.state_handle, &make_user(), "session")
+                .is_err(),
             "replayed handle must be rejected"
         );
     }

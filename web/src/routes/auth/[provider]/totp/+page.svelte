@@ -19,7 +19,7 @@
     failed = false;
     try {
       const provider = page.params.provider;
-      if (!provider || !isOAuthProvider(provider)) {
+      if (!provider || (provider !== "passkey" && !isOAuthProvider(provider))) {
         await goto("/login");
         return;
       }
@@ -43,8 +43,12 @@
 
   async function complete(): Promise<void> {
     const provider = page.params.provider;
-    if (!provider || !isOAuthProvider(provider)) {
+    if (!provider || (provider !== "passkey" && !isOAuthProvider(provider))) {
       await goto("/login");
+      return;
+    }
+    if (provider === "passkey") {
+      await goto("/");
       return;
     }
     await goto(`/auth/${provider}/success`);

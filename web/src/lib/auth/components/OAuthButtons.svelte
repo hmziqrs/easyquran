@@ -57,6 +57,11 @@
 
   async function passkeyLogin(): Promise<void> {
     const ok = await passkey.login();
+    if (passkey.twoFaPending) {
+      authModal.close();
+      await goto("/auth/passkey/totp");
+      return;
+    }
     if (!ok) return;
     await onPasskeySuccess?.();
   }

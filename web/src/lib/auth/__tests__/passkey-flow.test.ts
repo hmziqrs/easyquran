@@ -474,3 +474,62 @@ describe("PasskeyFlow unsupported environment", () => {
     expect(flow.genericError).toBeTruthy();
   });
 });
+
+describe("PasskeyFlow local second factor", () => {
+  it("keeps session anonymous until enrolled TOTP completes", async () => {
+    const client = mockClient();
+    client.unsafeRequest.mockResolvedValueOnce(ok(fakeLoginBegin()));
+    client.unsafeRequest.mockResolvedValueOnce(
+      ok({ status: "totp_required", totp_token: "a".repeat(64) }),
+    );
+    const state = mockState();
+    const creds = fakeCredentialsGet(() => Promise.resolve(fakeAssertion()));
+    const flow = createPasskeyFlow({ client, state, credentials: creds });
+    expect(await flow.login()).toBe(false);
+    expect(flow.twoFaPending).toBe(true);
+    expect(state.setTwoFaPending).toHaveBeenCalledWith(true);
+    expect(state.setUser).not.toHaveBeenCalled();
+    expect(state.transition).not.toHaveBeenCalled();
+    expect(flow.genericError).toBeNull();
+  });
+
+  it("rejects malformed second factor response", async () => {
+    const client = mockClient();
+    client.unsafeRequest.mockResolvedValueOnce(ok(fakeLoginBegin()));
+    client.unsafeRequest.mockResolvedValueOnce(
+      ok({ status: "totp_required", totp_token: "invalid" }),
+    );
+    const state = mockState();
+    const creds = fakeCredentialsGet(() => Promise.resolve(fakeAssertion()));
+    const flow = createPasskeyFlow({ client, state, credentials: creds });
+    expect(await flow.login()).toBe(false);
+    expect(flow.twoFaPending).toBe(false);
+    expect(state.setUser).not.toHaveBeenCalled();
+    expect(state.setTwoFaPending).not.toHaveBeenCalled();
+    expect(flow.genericError).not.toBeNull();
+  });
+});
+
+describe("PasskeyFlow fresh authentication", () => {
+  it("shows security confirmation instead of verification-email copy", async () => {
+    const client = mockClient();
+    client.unsafeRequest.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      data: null,
+      error: {
+        status: 403,
+        message: "Fresh authentication required",
+        context: { reason: "fresh_auth_required" },
+      },
+      rotated: false,
+    });
+    const creds = fakeCredentialsCreate(() => Promise.resolve(fakeAttestation()));
+    const flow = createPasskeyFlow({ client, state: mockState(), credentials: creds });
+    expect(await flow.register()).toBe(false);
+    expect(flow.genericError).toBe(
+      "Confirm your identity in Security confirmation, then try again.",
+    );
+    expect(creds.create).not.toHaveBeenCalled();
+  });
+});
