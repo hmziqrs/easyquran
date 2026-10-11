@@ -124,7 +124,11 @@ export class OAuthFlow {
     this.lastErrorCode = null;
     // The marker lives in this tab's sessionStorage (shared with the popup) and
     // tells the landing page it is our popup; it never outlives the attempt.
-    markOAuthPopupPending();
+    // Storage-blocked browsers can never carry it, so fall back immediately.
+    if (!markOAuthPopupPending()) {
+      this.pending = false;
+      return "unavailable";
+    }
     try {
       let popup: OAuthPopupHandle | null;
       try {

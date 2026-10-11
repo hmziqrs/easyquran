@@ -217,6 +217,36 @@ describe("OAuthFlow.beginPopup", () => {
     expect(sessionStorage.getItem(OAUTH_POPUP_PENDING_KEY)).toBeNull();
   });
 
+  it("returns unavailable without opening when the pending marker cannot be written", async () => {
+    const client = mockClient();
+    const popup = new FakePopup();
+    const openPopup = vi.fn().mockReturnValue(popup);
+    const flow = createOAuthFlow("google", {
+      client,
+      state: mockState(),
+      navigate: vi.fn(),
+      openPopup,
+    });
+
+    const setItem = vi.spyOn(sessionStorage, "setItem").mockImplementation(() => {
+      throw new Error("storage blocked");
+    });
+    await expect(flow.beginPopup()).resolves.toBe("unavailable");
+    expect(openPopup).not.toHaveBeenCalled();
+    expect(flow.pending).toBe(false);
+    expect(sessionStorage.getItem(OAUTH_POPUP_PENDING_KEY)).toBeNull();
+    setItem.mockRestore();
+
+    // The classic full-page flow (and a later popup attempt) still works.
+    const retry = flow.beginPopup();
+    await vi.waitFor(() => expect(popup.navigate).toHaveBeenCalled());
+    dispatchPopupMessage(
+      { source: OAUTH_POPUP_SOURCE, provider: "google", outcome: "success" },
+      popup,
+    );
+    await expect(retry).resolves.toBe("completed");
+  });
+
   it("returns blocked and resets pending when the popup opener throws", async () => {
     const client = mockClient();
     const popup = new FakePopup();

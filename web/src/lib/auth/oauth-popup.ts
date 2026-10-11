@@ -8,7 +8,7 @@ import { browser } from "$app/env";
  */
 export const OAUTH_POPUP_SOURCE = "eq:oauth-popup";
 
-/** window.open name prefix; the landing pages use it to recognize the popup. */
+/** window.open name prefix; each attempt gets a unique name so a later popup never reuses an earlier window. */
 export const OAUTH_POPUP_NAME_PREFIX = "eq-oauth-";
 
 export type OAuthPopupOutcome =
@@ -59,15 +59,26 @@ export function oauthPopupName(provider: string): string {
  */
 export const OAUTH_POPUP_PENDING_KEY = "eq:oauth-popup-pending";
 
-export function markOAuthPopupPending(): void {
-  if (!browser) return;
+// Concurrent attempts (modal + /login OAuthButtons) share one storage key, so
+// the marker is refcounted: it only disappears when the last attempt settles.
+let pendingCount = 0;
+
+/** Returns false when the marker could not be written (storage-blocked browser). */
+export function markOAuthPopupPending(): boolean {
+  if (!browser) return false;
   try {
     sessionStorage.setItem(OAUTH_POPUP_PENDING_KEY, "1");
-  } catch {}
+  } catch {
+    return false;
+  }
+  pendingCount += 1;
+  return true;
 }
 
 export function clearOAuthPopupPending(): void {
   if (!browser) return;
+  pendingCount = Math.max(0, pendingCount - 1);
+  if (pendingCount > 0) return;
   try {
     sessionStorage.removeItem(OAUTH_POPUP_PENDING_KEY);
   } catch {}

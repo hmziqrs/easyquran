@@ -4,7 +4,9 @@ vi.mock("$app/env", () => ({ browser: true }));
 
 import {
   awaitOAuthPopup,
+  clearOAuthPopupPending,
   isOAuthPopupMessage,
+  markOAuthPopupPending,
   notifyOAuthPopupOpener,
   oauthPopupFeatures,
   oauthPopupName,
@@ -395,5 +397,27 @@ describe("oauthPopupName", () => {
     expect(first.startsWith(`${OAUTH_POPUP_NAME_PREFIX}google-`)).toBe(true);
     expect(second.startsWith(`${OAUTH_POPUP_NAME_PREFIX}google-`)).toBe(true);
     expect(first).not.toBe(second);
+  });
+});
+
+describe("pending marker refcount", () => {
+  it("keeps the marker while another attempt is still pending", () => {
+    expect(markOAuthPopupPending()).toBe(true);
+    expect(markOAuthPopupPending()).toBe(true);
+    expect(sessionStorage.getItem(OAUTH_POPUP_PENDING_KEY)).toBe("1");
+
+    clearOAuthPopupPending();
+    expect(sessionStorage.getItem(OAUTH_POPUP_PENDING_KEY)).toBe("1");
+
+    clearOAuthPopupPending();
+    expect(sessionStorage.getItem(OAUTH_POPUP_PENDING_KEY)).toBeNull();
+  });
+
+  it("returns false when the marker cannot be written", () => {
+    const setItem = vi.spyOn(sessionStorage, "setItem").mockImplementation(() => {
+      throw new Error("storage blocked");
+    });
+    expect(markOAuthPopupPending()).toBe(false);
+    setItem.mockRestore();
   });
 });
