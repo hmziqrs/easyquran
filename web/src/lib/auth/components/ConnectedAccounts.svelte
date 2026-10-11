@@ -99,8 +99,12 @@
     pendingProvider = null;
     confirmingProvider = null;
     if (res.status === "ok") {
-      if (res.data) summary = res.data;
-      else await load();
+      if (res.data) {
+        // The unlink response is a newer authoritative snapshot; invalidate any
+        // in-flight load so its pre-unlink payload cannot overwrite it.
+        loadSeq += 1;
+        summary = res.data;
+      } else await load();
       return;
     }
     await tick();

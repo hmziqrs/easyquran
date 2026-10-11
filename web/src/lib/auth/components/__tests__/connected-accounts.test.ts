@@ -250,6 +250,41 @@ describe("ConnectedAccounts unlink flow", () => {
     expect(target.textContent).toContain("Google");
   });
 
+  it("keeps the post-unlink summary when an older load resolves last", async () => {
+    const stale = deferred<AccountResult<IdentitySummary>>();
+    const preUnlink = summary({ identities: [identity("github"), identity("google")] });
+    const postUnlink = summary({ identities: [identity("google")] });
+    const getIdentities = vi
+      .fn()
+      .mockResolvedValueOnce(ok(preUnlink))
+      .mockReturnValueOnce(stale.promise);
+    const unlinkIdentity = vi.fn().mockResolvedValue(ok(postUnlink));
+    const client = mockClient(getIdentities, unlinkIdentity);
+    const instance = mount(RefreshHarness, { target, props: { client } });
+    unmountComponent = () => {
+      void unmount(instance);
+    };
+    await settle();
+    expect(getIdentities).toHaveBeenCalledTimes(1);
+
+    // Refresh starts while the unlink is about to land; its response is stale.
+    button("bump").click();
+    await settle();
+    expect(getIdentities).toHaveBeenCalledTimes(2);
+
+    button("Unlink").click();
+    await settle();
+    button("Confirm unlink").click();
+    await settle();
+    expect(unlinkIdentity).toHaveBeenCalledWith("github");
+    expect(target.textContent).not.toContain("GitHub");
+
+    stale.resolve(ok(preUnlink));
+    await settle();
+    expect(target.textContent).not.toContain("GitHub");
+    expect(target.textContent).toContain("Google");
+  });
+
   it("moves focus to the confirm button on open and back to the row button on cancel", async () => {
     await mountComponent(
       summary({ identities: [identity("github"), identity("google")] }),
