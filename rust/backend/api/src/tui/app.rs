@@ -13,11 +13,9 @@ use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::Style,
-    Terminal,
 };
 use sea_orm::{DatabaseConnection, EntityTrait, QueryOrder};
 use tokio::{sync::mpsc, time::sleep};
-use tuirealm::terminal::TerminalBridge;
 
 use crate::{
     db::{
@@ -892,17 +890,14 @@ pub async fn run_tui(theme: ThemeKind) -> Result<(), Box<dyn Error>> {
         .map_err(|e| format!("Database connection failed: {}", e))?;
     let core = Arc::new(CoreState { db });
 
-    let mut bridge =
-        TerminalBridge::init_crossterm().map_err(|e| format!("terminal init error: {e}"))?;
-    let res = run_app(bridge.raw_mut(), core, theme).await;
-    bridge
-        .restore()
-        .map_err(|e| format!("terminal restore error: {e}"))?;
+    let mut terminal = ratatui::try_init().map_err(|e| format!("terminal init error: {e}"))?;
+    let res = run_app(&mut terminal, core, theme).await;
+    ratatui::try_restore().map_err(|e| format!("terminal restore error: {e}"))?;
     res
 }
 
-async fn run_app<B: ratatui::backend::Backend>(
-    terminal: &mut Terminal<B>,
+async fn run_app(
+    terminal: &mut ratatui::DefaultTerminal,
     core: Arc<CoreState>,
     theme: ThemeKind,
 ) -> Result<(), Box<dyn Error>> {

@@ -82,7 +82,7 @@ unaffected. These previews return 404 in production and are linked from `/design
 - shadcn names declared twice (`:root` + `@theme inline`); one half -> renders unstyled.
 - no FOUC: `app.html` inline script applies theme pre-paint.
 - Firebase config hardcoded `lib/firebase/index.ts` (public by design). Push native in SW, no gstatic `importScripts`.
-- Image CI only (`.github/workflows/images.yml`): builds+pushes both images on arm64 runners on master
-  push/tag; no deploy step (a Dokploy Schedule Job pulls them — deploy/README.md) and no check/lint/test
-  job — those stay local gates before push. sidebar lists
-  virtualized (`@tanstack/svelte-virtual`); only visible rows render.
+- Image CI (`.github/workflows/images.yml`): web check/lint/test and dependency audit gate image
+  publication. Rust checks and dependency audit gate API publication. Both images build on arm64;
+  master publication triggers Dokploy redeployment. PRs cannot publish images.
+- Sidebar lists virtualized (`@tanstack/svelte-virtual`); only visible rows render.

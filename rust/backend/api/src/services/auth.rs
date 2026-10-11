@@ -10,7 +10,6 @@ use sea_orm::{
 use std::collections::HashSet;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use tokio::task;
 use tower_sessions::SessionStore;
 use tracing::{error, info, instrument, warn};
 
@@ -21,7 +20,6 @@ use crate::{
 };
 
 const DUMMY_VERIFY_PASSWORD: &str = "timing-equalization-dummy-fixture";
-// Timing-oracle mitigation: not-found and OAuth login branches run a dummy Argon2id verify against this fixed hash to cost the same as a real wrong-password attempt; removing it leaks account existence via request latency.
 static DUMMY_VERIFY_HASH: LazyLock<String> =
     LazyLock::new(|| password_auth::generate_hash(DUMMY_VERIFY_PASSWORD));
 
@@ -77,13 +75,6 @@ impl AuthBackend {
     }
 
     pub fn check_password(password: String, hash: &str) -> Result<bool, AuthError> {
-        // A verification failure IS the "wrong password" answer — argon2 signals
-        // plain mismatches as errors, so any Err here means "did not verify"
-        // (wrong password or unusable hash) and must surface as Ok(false).
-        // Returning Err propagated through authenticate_password into the login
-        // handler's catch-all 500 "Authentication error" arm for every wrong
-        // password (and the dummy-verify twin below did the same for unknown
-        // emails).
         Ok(verify_password(password, hash).is_ok())
     }
 
@@ -93,14 +84,8 @@ impl AuthBackend {
     }
 
     async fn run_blocking_dummy_verify(password: String) -> Result<(), AuthError> {
-        match task::spawn_blocking(move || Self::run_dummy_password_verify(password)).await {
-            Ok(_) => Ok(()),
-            Err(join_err) => {
-                error!(error = %join_err, "Dummy password verification task failed");
-                Err(AuthError::new(AuthErrorCode::InternalError)
-                    .with_message("Password verification failed"))
-            }
-        }
+        super::password_work::run(move || Self::run_dummy_password_verify(password)).await??;
+        Ok(())
     }
 
     #[instrument(skip(self, password, email), fields(result))]
@@ -155,17 +140,7 @@ impl AuthBackend {
 
         let verify_start = Instant::now();
         let password_valid =
-            match task::spawn_blocking(move || Self::check_password(password, &pwd_hash)).await {
-                Ok(result) => result?,
-                Err(join_err) => {
-                    error!(error = %join_err, "Password verification task failed");
-                    metrics
-                        .login_failure
-                        .add(1, &[opentelemetry::KeyValue::new("reason", "task_error")]);
-                    return Err(AuthError::new(AuthErrorCode::InternalError)
-                        .with_message("Password verification failed"));
-                }
-            };
+            super::password_work::run(move || Self::check_password(password, &pwd_hash)).await??;
 
         let verify_duration = verify_start.elapsed().as_millis() as f64;
         metrics
@@ -586,11 +561,7 @@ impl RuxAuthBackend for AuthBackend {
         };
 
         let password = password.to_string();
-        match task::spawn_blocking(move || Self::check_password(password, &pwd_hash)).await {
-            Ok(result) => result.map_err(|_| AuthError::new(AuthErrorCode::InvalidCredentials)),
-            Err(_) => Err(AuthError::new(AuthErrorCode::InternalError)
-                .with_message("Password verification task failed")),
-        }
+        super::password_work::run(move || Self::check_password(password, &pwd_hash)).await?
     }
 
     async fn on_login(&self, user: &Self::User) -> Result<(), AuthError> {

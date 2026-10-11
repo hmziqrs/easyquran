@@ -216,13 +216,12 @@ impl HttpSettings {
         let trusted_proxy_cidrs =
             parse_trusted_proxy_cidrs(&std::env::var("TRUSTED_PROXY_CIDRS").unwrap_or_default())?;
         if trusted_proxy_cidrs.is_empty() && is_prod {
-            tracing::warn!(
-                "TRUSTED_PROXY_CIDRS is unset in production: CF-Connecting-IP is trusted on \
-                 header presence alone. List the proxy network CIDRs (or the published \
-                 Cloudflare ranges for a directly-terminated edge) so the TCP peer is validated."
-            );
+            return Err("TRUSTED_PROXY_CIDRS must name trusted ingress peers in production".into());
         }
         let cookie_secure = env_bool("COOKIE_SECURE", true);
+        if is_prod && !cookie_secure {
+            return Err("COOKIE_SECURE must be true in production".into());
+        }
         Ok(Self {
             host,
             port,
@@ -1089,6 +1088,7 @@ mod tests {
         health_rpm: Option<String>,
         allowed_origins: Option<String>,
         trusted_proxy_cidrs: Option<String>,
+        cookie_secure: Option<String>,
     }
 
     fn snapshot_env() -> EnvSnapshot {
@@ -1100,6 +1100,7 @@ mod tests {
             health_rpm: std::env::var("QURAN_HEALTH_REQUESTS_PER_MINUTE").ok(),
             allowed_origins: std::env::var("ALLOWED_ORIGINS").ok(),
             trusted_proxy_cidrs: std::env::var("TRUSTED_PROXY_CIDRS").ok(),
+            cookie_secure: std::env::var("COOKIE_SECURE").ok(),
         }
     }
 
@@ -1112,6 +1113,7 @@ mod tests {
             "QURAN_HEALTH_REQUESTS_PER_MINUTE",
             "ALLOWED_ORIGINS",
             "TRUSTED_PROXY_CIDRS",
+            "COOKIE_SECURE",
         ] {
             std::env::remove_var(k);
         }
@@ -1145,6 +1147,10 @@ mod tests {
         match snap.trusted_proxy_cidrs {
             Some(v) => std::env::set_var("TRUSTED_PROXY_CIDRS", v),
             None => std::env::remove_var("TRUSTED_PROXY_CIDRS"),
+        }
+        match snap.cookie_secure {
+            Some(v) => std::env::set_var("COOKIE_SECURE", v),
+            None => std::env::remove_var("COOKIE_SECURE"),
         }
     }
 
@@ -1249,6 +1255,7 @@ mod tests {
         clear_env_vars();
         std::env::set_var("APP_ENV", "production");
         std::env::set_var("IP_SOURCE", "CfConnectingIp");
+        std::env::set_var("TRUSTED_PROXY_CIDRS", "10.0.0.0/8");
         let s = HttpSettings::from_env().expect("prod + CfConnectingIp must succeed");
         assert!(matches!(s.ip_source, ClientIpSource::CfConnectingIp));
         restore_env(snap);
@@ -1397,16 +1404,33 @@ mod tests {
     }
 
     #[test]
-    fn http_settings_prod_warns_but_boots_without_trusted_cidrs() {
+    fn http_settings_production_rejects_missing_trusted_cidrs() {
         let _g = TEST_ENV_MUTEX.lock().unwrap();
         let snap = snapshot_env();
         clear_env_vars();
         std::env::remove_var("TRUSTED_PROXY_CIDRS");
         std::env::set_var("APP_ENV", "production");
         std::env::set_var("IP_SOURCE", "CfConnectingIp");
-        let s = HttpSettings::from_env().expect("unset list must keep presence-only behavior");
-        assert!(s.trusted_proxy_cidrs.is_empty());
+        let result = HttpSettings::from_env();
         restore_env(snap);
+        drop(_g);
+        assert!(result.unwrap_err().contains("TRUSTED_PROXY_CIDRS"));
+    }
+
+    #[test]
+    fn http_settings_production_rejects_insecure_cookies() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        std::env::set_var("APP_ENV", "production");
+        std::env::set_var("IP_SOURCE", "CfConnectingIp");
+        std::env::set_var("TRUSTED_PROXY_CIDRS", "10.0.0.0/8");
+        std::env::set_var("COOKIE_SECURE", "false");
+        let result = HttpSettings::from_env();
+        std::env::remove_var("COOKIE_SECURE");
+        restore_env(snap);
+        drop(_g);
+        assert!(result.unwrap_err().contains("COOKIE_SECURE"));
     }
 
     #[test]

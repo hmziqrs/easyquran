@@ -13,10 +13,9 @@ struct SiteverifyResponse {
     success: bool,
 }
 
-/// Turnstile enforcement is active only while `TURNSTILE_SECRET_KEY` is set, so
-/// dev stays frictionless and production turns the gate on by configuring env.
+/// Production signup requires captcha; development enables it when configured.
 pub fn turnstile_enabled() -> bool {
-    secret().is_some()
+    secret().is_some() || crate::config::settings::is_production().unwrap_or(true)
 }
 
 fn secret() -> Option<SecretString> {
@@ -35,13 +34,15 @@ fn verify_url() -> String {
         .unwrap_or_else(|| DEFAULT_VERIFY_URL.to_string())
 }
 
-/// Register-flow gate: a no-op when Turnstile is unconfigured; otherwise the
-/// token is mandatory and must pass siteverify. Transport failures fail closed.
+/// Requires siteverify in production or when configured; configuration and transport failures deny signup.
 pub async fn verify_registration(
     token: Option<&str>,
     remote_ip: Option<&str>,
 ) -> Result<(), ErrorResponse> {
     let Some(secret) = secret() else {
+        if crate::config::settings::is_production().unwrap_or(true) {
+            return Err(captcha_unavailable());
+        }
         return Ok(());
     };
     let token = token
@@ -102,6 +103,7 @@ mod tests {
     struct EnvGuard {
         _lock: std::sync::MutexGuard<'static, ()>,
         secret: Option<String>,
+        app_env: Option<String>,
         verify_url: Option<String>,
     }
 
@@ -111,8 +113,10 @@ mod tests {
             let guard = Self {
                 _lock: lock,
                 secret: std::env::var("TURNSTILE_SECRET_KEY").ok(),
+                app_env: std::env::var("APP_ENV").ok(),
                 verify_url: std::env::var("TURNSTILE_VERIFY_URL").ok(),
             };
+            std::env::set_var("APP_ENV", "development");
             match secret {
                 Some(value) => std::env::set_var("TURNSTILE_SECRET_KEY", value),
                 None => std::env::remove_var("TURNSTILE_SECRET_KEY"),
@@ -127,6 +131,10 @@ mod tests {
 
     impl Drop for EnvGuard {
         fn drop(&mut self) {
+            match &self.app_env {
+                Some(value) => std::env::set_var("APP_ENV", value),
+                None => std::env::remove_var("APP_ENV"),
+            }
             match &self.secret {
                 Some(value) => std::env::set_var("TURNSTILE_SECRET_KEY", value),
                 None => std::env::remove_var("TURNSTILE_SECRET_KEY"),
@@ -143,6 +151,15 @@ mod tests {
         let _env = EnvGuard::set(None, None);
         assert!(!turnstile_enabled());
         assert!(verify_registration(None, None).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn production_registration_rejects_unconfigured_captcha() {
+        let _env = EnvGuard::set(None, None);
+        std::env::set_var("APP_ENV", "production");
+        assert!(turnstile_enabled());
+        let error = verify_registration(None, None).await.unwrap_err();
+        assert_eq!(error.code, ErrorCode::ServiceUnavailable);
     }
 
     #[tokio::test]

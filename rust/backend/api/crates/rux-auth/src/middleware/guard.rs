@@ -1,83 +1,18 @@
-use std::marker::PhantomData;
-use std::task::{Context, Poll};
-
-use axum::extract::{FromRef, Request};
+use axum::extract::Request;
 use axum::response::Response;
-use futures_util::future::BoxFuture;
-use tower::{Layer, Service};
 
 use crate::error::{AuthError, AuthErrorCode};
 use crate::requirements::AuthRequirements;
 use crate::session::AuthSession;
 use crate::traits::{AuthBackend, AuthUser};
 
-#[derive(Clone)]
-pub struct AuthGuardLayer<B: AuthBackend> {
-    requirements: AuthRequirements,
-    _marker: PhantomData<B>,
-}
-
-impl<B: AuthBackend> AuthGuardLayer<B> {
-    pub fn new(requirements: AuthRequirements) -> Self {
-        Self {
-            requirements,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<S, B: AuthBackend> Layer<S> for AuthGuardLayer<B> {
-    type Service = AuthGuard<S, B>;
-
-    fn layer(&self, inner: S) -> Self::Service {
-        AuthGuard {
-            inner,
-            requirements: self.requirements.clone(),
-            _marker: PhantomData,
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct AuthGuard<S, B: AuthBackend> {
-    inner: S,
-    requirements: AuthRequirements,
-    _marker: PhantomData<B>,
-}
-
-impl<S, B> Service<Request> for AuthGuard<S, B>
-where
-    S: Service<Request, Response = Response> + Clone + Send + 'static,
-    S::Future: Send,
-    B: AuthBackend + FromRef<()> + Send + 'static,
-{
-    type Response = Response;
-    type Error = S::Error;
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, req: Request) -> Self::Future {
-        let inner = self.inner.clone();
-        let _requirements = self.requirements.clone();
-
-        Box::pin(async move {
-            let mut inner = inner;
-            inner.call(req).await
-        })
-    }
-}
-
-pub fn auth_guard<B: AuthBackend>(requirements: AuthRequirements) -> AuthGuardLayer<B> {
-    AuthGuardLayer::new(requirements)
-}
-
 pub async fn check_requirements<B: AuthBackend>(
     auth: &mut AuthSession<B>,
     requirements: &AuthRequirements,
 ) -> Result<(), AuthError> {
+    if requirements.requires_unauth() && requirements.requires_auth() {
+        return Err(AuthError::new(AuthErrorCode::PermissionDenied));
+    }
     if requirements.authenticated == Some(false) {
         if auth.user.is_some() {
             return Err(AuthError::new(AuthErrorCode::AlreadyAuthenticated));
@@ -85,14 +20,14 @@ pub async fn check_requirements<B: AuthBackend>(
         return Ok(());
     }
 
-    if requirements.authenticated == Some(true) && auth.user.is_none() {
+    if requirements.requires_auth() && auth.user.is_none() {
         return Err(AuthError::new(AuthErrorCode::Unauthenticated));
     }
 
     let (user, state) = match (&auth.user, &auth.state) {
         (Some(u), Some(s)) => (u.clone(), s.clone()),
         _ => {
-            if requirements.authenticated != Some(true) {
+            if !requirements.requires_auth() {
                 return Ok(());
             }
             return Err(AuthError::new(AuthErrorCode::Unauthenticated));

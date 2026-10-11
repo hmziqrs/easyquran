@@ -7,7 +7,6 @@ use sea_orm::{
     entity::prelude::*, prelude::Expr, sea_query::Alias, JoinType, Order, QueryOrder, QuerySelect,
     Set, TransactionTrait,
 };
-use tokio::task;
 use tracing::{error, info, instrument, warn};
 
 use super::*;
@@ -79,12 +78,10 @@ impl Entity {
         email_code_hash: String,
     ) -> DbResult<Model> {
         let now = chrono::Utc::now().fixed_offset();
-        let hash = task::spawn_blocking(move || password_auth::generate_hash(new_user.password))
-            .await
-            .map_err(|_| {
-                ErrorResponse::new(ErrorCode::InternalServerError)
-                    .with_message("Failed to generate password hash")
-            })?;
+        let hash = crate::services::password_work::run(move || {
+            password_auth::generate_hash(new_user.password)
+        })
+        .await?;
 
         let user = ActiveModel {
             name: Set(new_user.name),
@@ -216,12 +213,9 @@ impl Entity {
         let user = Self::find_by_id_with_404(conn, user_id).await?;
         let mut user_active: ActiveModel = user.into();
 
-        let hash = task::spawn_blocking(move || password_auth::generate_hash(new_password))
-            .await
-            .map_err(|_| {
-                ErrorResponse::new(ErrorCode::InternalServerError)
-                    .with_message("Failed to generate password hash")
-            })?;
+        let hash =
+            crate::services::password_work::run(move || password_auth::generate_hash(new_password))
+                .await?;
 
         user_active.password = Set(Some(hash));
         user_active.updated_at = Set(chrono::Utc::now().fixed_offset());
@@ -295,7 +289,10 @@ impl Entity {
     }
 
     /// google_id is encrypted at rest; encrypt here or the lookup can't match.
-    pub async fn find_by_google_id(conn: &DbConn, google_id: String) -> DbResult<Option<Model>> {
+    pub async fn find_by_google_id<T: ConnectionTrait>(
+        conn: &T,
+        google_id: String,
+    ) -> DbResult<Option<Model>> {
         let lookup =
             crate::utils::field_crypto::encrypt_deterministic(&google_id).map_err(|err| {
                 ErrorResponse::new(ErrorCode::InternalServerError)
@@ -355,12 +352,10 @@ impl Entity {
         let txn = conn.begin().await?;
 
         let now = chrono::Utc::now().fixed_offset();
-        let hash = task::spawn_blocking(move || password_auth::generate_hash(new_user.password))
-            .await
-            .map_err(|_| {
-                ErrorResponse::new(ErrorCode::InternalServerError)
-                    .with_message("Failed to generate password hash")
-            })?;
+        let hash = crate::services::password_work::run(move || {
+            password_auth::generate_hash(new_user.password)
+        })
+        .await?;
 
         let avatar_id = new_user.avatar_id;
 
@@ -442,12 +437,10 @@ impl Entity {
             }
 
             if let Some(password) = update_user.password {
-                let hash = task::spawn_blocking(move || password_auth::generate_hash(password))
-                    .await
-                    .map_err(|_| {
-                        ErrorResponse::new(ErrorCode::InternalServerError)
-                            .with_message("Failed to generate password hash")
-                    })?;
+                let hash = crate::services::password_work::run(move || {
+                    password_auth::generate_hash(password)
+                })
+                .await?;
                 user_active.password = Set(Some(hash));
             }
 

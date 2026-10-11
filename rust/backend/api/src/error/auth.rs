@@ -34,6 +34,7 @@ impl IntoErrorResponse for AuthError {
             AuthErrorCode::CsrfInvalid => ErrorResponse::new(ErrorCode::InvalidToken),
             AuthErrorCode::BackendError => ErrorResponse::new(ErrorCode::InternalServerError),
             AuthErrorCode::InternalError => ErrorResponse::new(ErrorCode::InternalServerError),
+            AuthErrorCode::RateLimited => ErrorResponse::new(ErrorCode::RateLimited),
         }
     }
 }

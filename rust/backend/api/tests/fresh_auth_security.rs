@@ -349,6 +349,7 @@ async fn http_email_change_requires_fresh_proof_but_name_edit_keeps_existing_ses
     use axum::body::Body;
     use axum::extract::State;
     use axum::http::{Request, StatusCode};
+    use axum::response::{IntoResponse, Response};
     use axum::{Json, Router};
     use tower::ServiceExt;
 
@@ -358,14 +359,17 @@ async fn http_email_change_requires_fresh_proof_but_name_edit_keeps_existing_ses
         payload: ruxlog::extractors::ValidatedJson<
             ruxlog::modules::user_v1::validator::V1UpdateProfilePayload,
         >,
-    ) -> Result<Json<Option<user::Model>>, ruxlog::error::ErrorResponse> {
-        ruxlog::modules::user_v1::controller::update_profile_with_auth(
+    ) -> Response {
+        let result = ruxlog::modules::user_v1::controller::update_profile_with_auth(
             &backend.pool,
             &auth,
             payload.0,
         )
-        .await
-        .map(Json)
+        .await;
+        match result {
+            Ok(model) => Json(model).into_response(),
+            Err(error) => error.into_response(),
+        }
     }
 
     let _guard = TEST_LOCK.lock().await;

@@ -1,5 +1,7 @@
 # Additional security audit rounds — 2026-10-11
 
+**Follow-through:** [remaining application hardening implemented](security-hardening-2026-10-11.md). Findings and validation below describe this earlier audit snapshot.
+
 This continues [the first audit](security-audit-2026-10-11.md). Internet research and independent reviews found nine additional security weaknesses, plus a passkey availability defect and a conditional notification privacy concern. The fixes below are local changes until the API and web application are redeployed.
 
 ## Research priorities

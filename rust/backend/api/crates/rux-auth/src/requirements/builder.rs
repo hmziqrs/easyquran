@@ -38,18 +38,6 @@ impl AuthRequirements {
         self
     }
 
-    pub fn totp_verified(self) -> Self {
-        self
-    }
-
-    pub fn totp_if_enabled(self) -> Self {
-        self
-    }
-
-    pub fn reauth_within(self, _duration: Duration) -> Self {
-        self
-    }
-
     pub fn not_banned(mut self) -> Self {
         self.not_banned = true;
         self
@@ -67,6 +55,9 @@ impl AuthRequirements {
 
     pub fn requires_auth(&self) -> bool {
         self.authenticated == Some(true)
+            || self.verified
+            || self.unverified
+            || self.min_role.is_some()
     }
 
     pub fn requires_unauth(&self) -> bool {
@@ -119,17 +110,5 @@ mod tests {
         assert_eq!(req.authenticated, Some(true));
         assert!(req.unverified);
         assert!(!req.verified);
-    }
-
-    #[test]
-    fn test_stepup_builders_are_noops() {
-        let strict = auth_requirements().totp_verified();
-        assert!(!strict.requires_auth());
-
-        let conditional = auth_requirements().totp_if_enabled();
-        assert!(!conditional.requires_auth());
-
-        let req = auth_requirements().reauth_within(Duration::minutes(5));
-        assert!(!req.requires_auth());
     }
 }

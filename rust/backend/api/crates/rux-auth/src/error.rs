@@ -56,6 +56,9 @@ pub enum AuthErrorCode {
 
     #[serde(rename = "AUTH_INTERNAL_ERROR")]
     InternalError,
+
+    #[serde(rename = "AUTH_RATE_LIMITED")]
+    RateLimited,
 }
 
 impl AuthErrorCode {
@@ -78,6 +81,7 @@ impl AuthErrorCode {
             Self::CsrfInvalid => StatusCode::UNAUTHORIZED,
             Self::BackendError => StatusCode::INTERNAL_SERVER_ERROR,
             Self::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::RateLimited => StatusCode::TOO_MANY_REQUESTS,
         }
     }
 
@@ -100,6 +104,7 @@ impl AuthErrorCode {
             Self::CsrfInvalid => "Invalid CSRF token",
             Self::BackendError => "Backend error",
             Self::InternalError => "Internal error",
+            Self::RateLimited => "Too many requests, please try again later",
         }
     }
 }

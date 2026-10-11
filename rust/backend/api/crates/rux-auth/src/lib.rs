@@ -11,4 +11,4 @@ pub use session::{AuthSession, AuthSessionState, SessionRevocation};
 
 pub use requirements::{auth_requirements, AuthRequirements};
 
-pub use middleware::{auth_guard, auth_guard_fn, check_requirements, AuthGuard, AuthGuardLayer};
+pub use middleware::{auth_guard_fn, check_requirements};

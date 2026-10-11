@@ -31,6 +31,11 @@ Dokploy` → step 3).
 All CI runners use Ubuntu 26.04. Before publishing, CI loads the API image and runs
 its runtime linker against `ruxlog` to verify compatibility with Debian trixie.
 
+Publication also requires warning-free web check/lint/test, Bun audit, Rust format,
+strict Clippy, complete workspace tests and dependency policy checks. Rust CI uses
+1.98.1; the audit policy keeps the unpatched RSA lockfile finding visible and blocks
+publication if that crate becomes reachable in the shipped arm64 feature graph.
+
 **Manual fallback: a dev machine** (Apple Silicon → arm64 Ubuntu server, so same arch, no
 qemu), for when CI can't ship it:
 
@@ -51,7 +56,7 @@ What the fallback recipes do — the same steps CI runs on the runner:
 
 | recipe           | host step (dev-machine fallback)                                                     | image step                                |
 | ---------------- | ------------------------------------------------------------------------------------ | ----------------------------------------- |
-| `just image-web` | `bun run --filter web build` (PUBLIC_ENV=prod)                                          | COPY `web/build` + `web/server.ts` (~10s) |
+| `just image-web` | `bun run --filter web build` (PUBLIC_ENV=prod)                                       | COPY `web/build` + `web/server.ts` (~10s) |
 | `just image-api` | `cargo zigbuild --target aarch64-unknown-linux-gnu.2.36 --features vendored-openssl` | COPY the one binary                       |
 
 `vendored-openssl` is required on **both** build paths: the runtime image
@@ -201,6 +206,34 @@ Deployment failure remains visible in Actions; retry deploy after fixing
 connectivity or Dokploy. VPS performs no image polling.
 
 ### 4. First deploy + verify
+
+Before deploying the authentication hardening:
+
+- Set `TURNSTILE_SECRET_KEY` and matching `PUBLIC_TURNSTILE_SITE_KEY`; allow the
+  production hostname in Cloudflare Turnstile. Missing API secret makes production
+  password registration return 503. OAuth login remains available.
+- Keep `COOKIE_SECURE=true` and configure `TRUSTED_PROXY_CIDRS` for actual ingress
+  peers. Production rejects insecure cookies or an empty trusted-proxy list. Compose
+  supplies private-network defaults; narrow them to the actual proxy network where
+  possible. Restrict origin ingress so clients cannot impersonate trusted forwarding
+  headers; confirm effective Cloudflare quotas and WAF rules in the console.
+- Apply application migration `m000011_device_token_ownership` through the normal
+  API migration path. It revokes tokens formerly shared between accounts, consolidates
+  same-account duplicates and enforces unique token ownership. Affected browsers must
+  enable notifications again. Existing Quran databases remain untouched.
+- `PASSWORD_WORK_CONCURRENCY` defaults to 2 and accepts 1–32. Set it against container
+  CPU/memory capacity; password and backup-code operations return 429 when full.
+- Deploy web and API together. OAuth linking now uses CSRF-protected POST; device
+  registration includes an expected account ID. Older clients fail closed. Security
+  changes require one five-minute, single-use authentication confirmation. Sessions
+  carrying in-memory proof must reach the same API process; a restart safely requires
+  confirmation again.
+
+Use an owned test account to verify password/OAuth/passkey login, enrolled MFA,
+email change, factor/provider/passkey changes, logout/account switch and recovery
+retry after 429. Check secure session cookies, CSP, private cache responses and
+origin restrictions on the deployed service. Cloudflare 403 responses during the
+audit prevented verification of those live controls.
 
 Deploy from the Dokploy UI, wait for both services to report healthy, then:
 

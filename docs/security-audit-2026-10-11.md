@@ -1,5 +1,7 @@
 # Authentication security audit — 2026-10-11
 
+**Follow-through:** [remaining application hardening implemented](security-hardening-2026-10-11.md). Findings and validation below describe this earlier audit snapshot.
+
 Confirmed authentication weaknesses were reproduced locally and patched. These changes need a new API deployment before they protect the published application. Infrastructure and cloud account settings remain unverified.
 
 ## Scope and limits
