@@ -1,5 +1,5 @@
-import { TRANSLATION_CATALOGUE } from "#lib/quran/catalogue.js";
 import type { AboutCounts } from "#lib/i18n/about-copy.js";
+import { TRANSLATION_CATALOGUE } from "#lib/quran/catalogue.js";
 
 /**
  * Prerendered: the totals are counted from the baked catalogue at build time, so the copy

@@ -29,7 +29,7 @@ function mirrorScriptPath(file: string): string {
   ];
   return (
     candidates.find((candidate) => existsSync(candidate)) ??
-    error(503, "quran.com mirror missing — run pnpm quran:mirror")
+    error(503, "quran.com mirror missing — run bun run quran:mirror")
   );
 }
 

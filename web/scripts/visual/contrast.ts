@@ -1,7 +1,7 @@
 /**
  * Contrast gate core (docs/plan/README.md (phase specs in git history) — "the single highest-value
  * artefact in the plan"). Pure: takes layout.css as a string, returns one row per
- * (palette block × token pair). Consumed by `token-contrast.test.ts` (part of `pnpm test`)
+ * (palette block × token pair). Consumed by `token-contrast.test.ts` (part of `bun run test`)
  * and by the CLI below for a human-readable table.
  *
  * Usage: node scripts/visual/contrast.ts [--json]

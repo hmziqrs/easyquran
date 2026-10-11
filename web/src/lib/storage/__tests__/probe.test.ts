@@ -1,11 +1,11 @@
 import { flushSync } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
-import { describe, it, expect } from "vite-plus/test";
+import { describe, it, expect } from "vitest";
 
 import { observeMapSize } from "./reactive.probe.svelte";
 
 describe("probe", () => {
-  it("runs and exposes vite-plus/test", () => {
+  it("runs and exposes vitest", () => {
     expect(1 + 1).toBe(2);
   });
   it("SvelteMap mutates readably in node env", () => {

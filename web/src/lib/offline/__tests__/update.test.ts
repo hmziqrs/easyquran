@@ -8,7 +8,7 @@ import { flushSync } from "svelte";
 // is test-only and typed structurally by usage below.
 // @ts-expect-error no declaration file for svelte/internal/client
 import { effect, effect_root } from "svelte/internal/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   PREPARE_RELOAD,

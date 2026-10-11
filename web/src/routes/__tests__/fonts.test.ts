@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vitest";
 
 /**
  * The fonts gate (docs/plan/README.md (phase specs in git history)). Fonts are self-hosted only —

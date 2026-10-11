@@ -11,7 +11,7 @@ against `web/` and `rust/` except for env vars and a disposable cache dir.
 **Amendment (2026-10, SvelteKit 3 migration).** The original design compared node and bun
 executing one `adapter-node` build. Production is now adapter-bun: `web/server.ts` is a custom
 `Bun.serve` entry over the adapter's `build/adapter-bun.js` hand-off, and the build itself runs
-under bun (`pnpm build` → `bun run --bun vp build`; `adapt()` calls `Bun.build`). Node cannot
+under bun (`bun run build` → `bun run --bun vite build`; `adapt()` calls `Bun.build`). Node cannot
 execute that output, so the cross-runtime A/B is dead. Facts below (URL shapes, adapter names,
 build command) are updated; sections that still encode the dead premise (§3 matrix, §8
 interleave) are marked historical pending a redesign call — single-runtime characterization or
@@ -84,8 +84,8 @@ not made here.
 | ------- | -------------------------------------------------- | ----------------- |
 | `bun14` | `bun` ≥ 1.4 (deployed image `oven/bun:1.4.2-slim`) | already installed |
 
-What survives unchanged: the build is produced once by one `pnpm build` (which runs
-`bun run --bun vp build` under `PUBLIC_ENV=prod`), its build-id recorded, and never rebuilt
+What survives unchanged: the build is produced once by one `bun run build` (which runs
+`bun run --bun vite build` under `PUBLIC_ENV=prod`), its build-id recorded, and never rebuilt
 mid-matrix — the disk cache key is namespaced by SvelteKit's build id (`build-${version}` in
 `web/src/lib/server/quran-disk-cache.ts`), so a rebuild would silently invalidate every
 scenario's cache.

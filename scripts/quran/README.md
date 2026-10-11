@@ -17,7 +17,7 @@ field is the stripped Tanzil text our default DB already carries. Deterministic
 one-shot build; identity = plain id string + byte size, never a hash. Run:
 
 ```bash
-pnpm exec tsx scripts/quran/build-uthmani-annotated.ts
+bunx tsx scripts/quran/build-uthmani-annotated.ts
 ```
 
 Paths, expected byte sizes, and catalogue come from tracked baked maps/constants. Publisher
@@ -25,9 +25,9 @@ validates each local file and checks SQLite headers before contacting R2. It nev
 modifies Quran data.
 
 ```bash
-pnpm install --frozen-lockfile
+bun install --frozen-lockfile
 just quran-fetch all
-pnpm quran:check
+bun run quran:check
 just upload-sqlite --dry-run
 just upload-sqlite
 ```

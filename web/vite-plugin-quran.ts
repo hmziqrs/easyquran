@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 
 import type { Plugin } from "vite";
 
-import { TRANSLATIONS } from "./src/lib/data/translations";
-import { QuranDataEnvironment, resolveQuranDataEnvironment } from "./src/lib/quran/environment";
-import { registeredSourceProfiles } from "./src/lib/quran/view/source-profiles";
+import { TRANSLATIONS } from "./src/lib/data/translations.ts";
+import { QuranDataEnvironment, resolveQuranDataEnvironment } from "./src/lib/quran/environment.ts";
+import { registeredSourceProfiles } from "./src/lib/quran/view/source-profiles.ts";
 
 const WEB_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const LOCAL_ARTIFACT_PREFIX = "/_quran/";

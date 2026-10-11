@@ -2,66 +2,13 @@ import { paraglideVitePlugin } from "@inlang/paraglide-js";
 import adapter from "@sveltejs/adapter-bun";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig, lazyPlugins } from "vite-plus";
+import { defineConfig } from "vite";
 
 import { paraglideOptions } from "./paraglide.config.js";
-import { previewSecurityHeaders } from "./vite-plugin-preview-headers";
-import { quranArtifacts } from "./vite-plugin-quran";
+import { previewSecurityHeaders } from "./vite-plugin-preview-headers.ts";
+import { quranArtifacts } from "./vite-plugin-quran.ts";
 
 export default defineConfig({
-  fmt: {
-    // Width: Oxfmt default — 100, not Prettier's 80 (TS is longer under annotations).
-    printWidth: 100,
-    tabWidth: 2,
-    semi: true,
-    singleQuote: false,
-    trailingComma: "all",
-    // Determinism: stable import + Tailwind class order across edits.
-    sortImports: {},
-    sortTailwindcss: {},
-    // quran.com mirror payloads must stay byte-verbatim (id + byte-size identity;
-    // docs/qurancom-mirror.md). Formatting them breaks verify — never remove.
-    ignorePatterns: ["static/qurancom/**"],
-  },
-  lint: {
-    jsPlugins: [
-      { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
-      { name: "anti-slop", specifier: "./.cache/anti-slop/index.ts" },
-    ],
-    rules: {
-      "vite-plus/prefer-vite-plus-imports": "error",
-      // Readability: a `?:` inside another `?:` is always a named function with early returns,
-      // a lookup table, or a first-match helper instead. See AGENTS.MD.
-      "no-nested-ternary": "error",
-      "unicorn/no-nested-ternary": "error",
-      // Correctness: a shadowed binding silently rebinds the outer name on any later edit.
-      "no-shadow": "error",
-      // Correctness: IndexedDB's `tx.error` is nullable, so a raw reject drops the reason.
-      "prefer-promise-reject-errors": "error",
-      // Correctness: `arr.map(fn)` hands fn the index as a second argument.
-      "unicorn/no-array-callback-reference": "error",
-      "unicorn/prefer-number-properties": "error",
-      // Correctness: an unawaited promise loses its rejection and races whatever runs next.
-      "no-floating-promises": "error",
-      "no-misused-promises": "error",
-      "anti-slop/no-chained-type-assertions": "error",
-      "anti-slop/no-conditional-empty-object-spread": "error",
-      "anti-slop/no-known-value-widening": "error",
-      "anti-slop/no-module-mocking": "error",
-      "anti-slop/no-object-parameters": "error",
-      "anti-slop/no-reflect-apply": "error",
-      "anti-slop/no-reflect-get": "error",
-      "anti-slop/no-runtime-typeof": "error",
-      "anti-slop/no-shape-in-symbol-names": "error",
-      "anti-slop/no-unknown-parameters": "error",
-      "anti-slop/no-unknown-returns": "error",
-      "anti-slop/no-unknown-type-aliases": "error",
-      "anti-slop/no-unsafe-dictionary-type": "error",
-      "anti-slop/no-widen-then-assert": "error",
-      "anti-slop/require-safety-comment-for-type-assertion": "error",
-    },
-    options: { typeAware: true, typeCheck: true },
-  },
   // adapter-bun externalizes package.json `dependencies` in the SSR build (they must
   // exist in node_modules at runtime). The web image deliberately ships NO node_modules:
   // everything the server bundle imports must be bundled in. gen-offline-pack.ts (postbuild)
@@ -101,7 +48,7 @@ export default defineConfig({
       },
     },
   },
-  plugins: lazyPlugins(() => [
+  plugins: [
     previewSecurityHeaders(),
     quranArtifacts(),
     tailwindcss(),
@@ -133,5 +80,5 @@ export default defineConfig({
         handleMissingId: "fail",
       },
     }),
-  ]),
+  ],
 });

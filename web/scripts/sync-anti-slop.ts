@@ -7,7 +7,7 @@ const source = join(webRoot, "node_modules", "oxlint-plugin-anti-slop", "src");
 const target = join(webRoot, ".cache", "anti-slop");
 
 if (!existsSync(source)) {
-  throw new Error("oxlint-plugin-anti-slop is not installed; run pnpm install first.");
+  throw new Error("oxlint-plugin-anti-slop is not installed; run bun install first.");
 }
 
 mkdirSync(target, { recursive: true });

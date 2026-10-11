@@ -1,5 +1,5 @@
 import { uniq } from "es-toolkit";
-import { describe, it, expect } from "vite-plus/test";
+import { describe, it, expect } from "vitest";
 
 import { STACKED_MAX_EXTRAS } from "#lib/stores/stacked-translations.svelte.js";
 

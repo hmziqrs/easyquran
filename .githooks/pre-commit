@@ -1,0 +1,37 @@
+#!/usr/bin/env sh
+# Format + lint staged files. Replaces the old `vp staged` hook
+# (vite.config.ts `staged: { "*": "vp check --fix" }`).
+#
+# Lint runs per workspace root: `web/` files run with cwd=web so
+# web/.oxlintrc.json is oxlint's root config (nested configs may not carry
+# `options`), root-level files run with cwd=repo root (oxlint defaults).
+set -e
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$staged" ] && exit 0
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+fmt_files=$(printf '%s\n' "$staged" | grep -E '\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|svelte|json|jsonc|css|md|html|yml|yaml)$' || true)
+lint_files=$(printf '%s\n' "$staged" | grep -E '\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|svelte)$' || true)
+
+if [ -n "$fmt_files" ]; then
+  printf '%s\n' "$fmt_files" | tr '\n' '\0' | xargs -0 bunx oxfmt
+fi
+
+root_lint_files=$(printf '%s\n' "$lint_files" | grep -v '^web/' || true)
+web_lint_files=$(printf '%s\n' "$lint_files" | grep '^web/' | sed 's|^web/||' || true)
+
+if [ -n "$root_lint_files" ]; then
+  printf '%s\n' "$root_lint_files" | tr '\n' '\0' |
+    xargs -0 bunx oxlint --fix --deny-warnings --type-aware --type-check
+fi
+if [ -n "$web_lint_files" ]; then
+  cd web
+  printf '%s\n' "$web_lint_files" | tr '\n' '\0' |
+    xargs -0 bunx oxlint --fix --deny-warnings --type-aware --type-check
+fi
+
+cd "$root"
+printf '%s\n' "$staged" | tr '\n' '\0' | xargs -0 git add --

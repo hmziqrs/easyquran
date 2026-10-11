@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import { mount, unmount } from "svelte";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vitest";
 
 import AppLocaleHarness from "./app-locale-harness.svelte";
 

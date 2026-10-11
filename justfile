@@ -23,29 +23,29 @@ _env:
     @if [ ! -f web/.env ]; then cp web/.env.example web/.env; echo "Created web/.env."; fi
 
 setup: _env
-    cd web && pnpm install
+    bun install
 
 web-install:
-    cd web && pnpm install
+    bun install
 
 web-dev environment="local":
     @case "{{environment}}" in local|prod) ;; *) echo "environment must be local or prod (received: {{environment}})" >&2; exit 2;; esac
-    cd web && PUBLIC_ENV="{{environment}}" pnpm dev
+    cd web && PUBLIC_ENV="{{environment}}" bun run dev
 
 # SvelteKit build (host). adapter-bun runs Bun.build during adapt(), so the
-# build script shells out to `bun run --bun vp build` — the host needs bun >= 1.4
+# build script shells out to `bun run --bun vite build` — the host needs bun >= 1.4
 # on PATH (the sqlite prerender also runs under bun; 1.4+ implements node:sqlite).
 web-build environment="prod":
     @case "{{environment}}" in local|prod) ;; *) echo "environment must be local or prod (received: {{environment}})" >&2; exit 2;; esac
-    cd web && PUBLIC_ENV="{{environment}}" pnpm build
+    cd web && PUBLIC_ENV="{{environment}}" bun run build
 
 web-preview environment="prod":
     @case "{{environment}}" in local|prod) ;; *) echo "environment must be local or prod (received: {{environment}})" >&2; exit 2;; esac
-    cd web && PUBLIC_ENV="{{environment}}" pnpm build
-    cd web && pnpm preview
+    cd web && PUBLIC_ENV="{{environment}}" bun run build
+    cd web && bun run preview
 
 web-check:
-    cd web && pnpm check
+    cd web && bun run check
 
 web-baseline label="phase0":
     cd web && node scripts/measure-baselines.ts "{{label}}"
@@ -95,7 +95,7 @@ quran-fetch mode="arabic":
 # and merged catalogue. `--dry-run` needs no R2 credentials.
 upload-sqlite *args='':
     @if [ -f ./.env ]; then set -a && . ./.env && set +a; fi; \
-    pnpm quran:upload -- {{args}}
+    bun run quran:upload -- {{args}}
 
 # --- Images -------------------------------------------------------------------------------
 # Both images are packaging-only: everything is compiled outside Docker, and the
@@ -104,7 +104,7 @@ upload-sqlite *args='':
 # tags CI (.github/workflows/images.yml) pushes on every master push; `just push` remains
 # the by-hand path.
 
-# SvelteKit build (host) -> web image. ~10s of Docker on top of the normal pnpm build.
+# SvelteKit build (host) -> web image. ~10s of Docker on top of the normal bun build.
 image-web version="dev":
     just web-build prod
     docker build --platform {{PLATFORM}} -f deploy/Dockerfile.web \

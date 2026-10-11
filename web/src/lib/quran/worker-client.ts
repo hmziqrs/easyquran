@@ -32,6 +32,7 @@ import type {
   WorkerRequest,
   WorkerStatus,
 } from "./protocol";
+import { isScriptEnabled } from "./script-availability";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET } from "./search/normalize";
 import {
   SearchProvider,
@@ -40,7 +41,6 @@ import {
   type TranslationSearchResponse,
 } from "./search/types";
 import { DEFAULT_QURAN_SOURCE_PLAN } from "./source-plan";
-import { isScriptEnabled } from "./script-availability";
 import {
   decodeQuranRangeText,
   decodeQuranSurahText,

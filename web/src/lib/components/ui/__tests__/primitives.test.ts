@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vitest";
 
 import { buttonVariants } from "#lib/components/ui/button/button-variants.js";
 import { cn, RAMP_TEXT_ROLES } from "#lib/utils.js";

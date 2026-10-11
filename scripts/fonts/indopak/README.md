@@ -8,7 +8,7 @@ See [font/data evidence](../../../docs/indopak-font-compatibility.md) and
 [Quran.com comparison](../../../docs/indopak-qurancom-comparison.md),
 [deep audit/source discrepancies](../../../docs/indopak-deep-audit.md).
 
-Run from repository root with Python 3.9+, Node 24+, and pnpm dependencies:
+Run from repository root with Python 3.9+, Node 24+, and bun dependencies:
 
 ```sh
 python3 -m venv .cache/indopak-venv
@@ -23,8 +23,8 @@ python3 -m venv .cache/indopak-venv
 ```
 
 Equivalent commands when pinned Python dependencies are installed globally:
-`pnpm font:indopak:preview` (the retained command accepts `--preview`),
-`pnpm font:indopak:audit`, `pnpm font:indopak:test`.
+`bun run font:indopak:preview` (the retained command accepts `--preview`),
+`bun run font:indopak:audit`, `bun run font:indopak:test`.
 
 The build verifies font/license checksums and pinned dependency versions. It rejects
 unresolved/conflicting mappings, absent glyphs, altered original cmaps and inventory/context
@@ -38,8 +38,8 @@ inventoried. No DB, restricted font, outlines or reference layout enter this pac
 For actual browser checks, start the development server and run:
 
 ```sh
-pnpm --dir web dev --port 5391
-pnpm font:indopak:browser
+cd web && bun run dev --port 5391
+bun run font:indopak:browser
 ```
 
 Override host with `INDOPAK_SPECIMEN_BASE`, output with `INDOPAK_SPECIMEN_OUTPUT`; default

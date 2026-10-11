@@ -67,19 +67,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Root package.json declares pnpm under devEngines (not packageManager), which
-      # action-setup cannot read — keep this pinned to the same version.
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 11.21.0
-
+      # Bun owns the workspace: bun.lock carries catalog + patchedDependencies
+      # (root package.json). Node 24 still runs svelte-check, vitest and tsx.
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: pnpm
 
       # adapter-bun calls Bun.build during adapt(), so the web build itself must
-      # run under bun (`bun run --bun vp build` in the build script). Pinned to the
+      # run under bun (`bun run --bun vite build` in the build script). Pinned to the
       # runtime the image ships (oven/bun:1.4.2-slim).
       - uses: oven-sh/setup-bun@v2
         with:
@@ -95,15 +90,15 @@ jobs:
 
       - run: deploy/fetch-quran-db.sh
 
-      - run: pnpm install --frozen-lockfile
+      - run: bun install --frozen-lockfile
 
       - name: Check Quran publisher
-        run: pnpm quran:check
+        run: bun run quran:check
 
       # adapter-bun output is pure JS (arch-independent). The whole build — vite,
       # the Arabic sqlite prerender (bun 1.4+ implements node:sqlite), and the
       # adapter's Bun.build pass — runs under bun via the build script.
-      - run: pnpm --filter web build
+      - run: bun run --filter web build
         env:
           PUBLIC_ENV: prod
 

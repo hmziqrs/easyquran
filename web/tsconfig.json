@@ -17,7 +17,7 @@
   // plugins, server.ts, paraglide.config.js) — kit 2's generated tsconfig included
   // `*.js`/`*.ts` at the root, and `*` is the shape the kit 3 migration guide shows.
   // `scripts` keeps the build-time generators (gen-offline-pack, gen-message-namespaces,
-  // …) under the same project config so `pnpm check` and the pre-commit hook cover them.
+  // …) under the same project config so `bun run check` and the pre-commit hook cover them.
   "include": ["src", "scripts", "*"],
   // The service worker is type-checked separately by tsconfig.worker.json (webworker lib).
   "exclude": ["src/service-worker.ts"]

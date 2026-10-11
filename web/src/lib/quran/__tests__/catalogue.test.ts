@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vitest";
 
 import { TRANSLATION_BY_ARTIFACT_PATH, TRANSLATION_BY_ID } from "#lib/data/translations.js";
 import {

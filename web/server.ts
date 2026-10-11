@@ -148,7 +148,7 @@ try {
 } catch (cause: unknown) {
   if (!(cause instanceof Error) || !isMissingModule(cause)) throw cause;
   // No build output on disk (fresh clone / unit-test import): handoff stays
-  // null; requests would 503, but only `pnpm start` serves traffic.
+  // null; requests would 503, but only `bun start` serves traffic.
 }
 
 const kitServer = handoff?.server ?? null;

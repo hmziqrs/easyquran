@@ -9,7 +9,7 @@ import {
   pageCandidates,
   parseStaticCsp,
   scriptHashTokens,
-} from "./src/lib/server/preview-headers";
+} from "./src/lib/server/preview-headers.ts";
 
 const WEB_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PAGES_DIR = path.join(WEB_ROOT, ".svelte-kit/output/prerendered/pages");

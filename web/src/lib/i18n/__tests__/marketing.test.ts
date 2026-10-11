@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from "vite-plus/test";
+import { describe, expect, expectTypeOf, it } from "vitest";
 
 import type { UiLocale } from "#lib/i18n/locales.js";
 import {

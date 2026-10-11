@@ -12,8 +12,8 @@
  * folded) match the plain Tanzil name already baked in web/static/quran-meta/quran-data.json.
  * Any mismatch fails the run instead of writing.
  *
- *   pnpm quran:names            # use local mirror if present
- *   pnpm quran:names --refresh  # re-fetch upstream, replace the mirror
+ *   bun run quran:names            # use local mirror if present
+ *   bun run quran:names --refresh  # re-fetch upstream, replace the mirror
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";

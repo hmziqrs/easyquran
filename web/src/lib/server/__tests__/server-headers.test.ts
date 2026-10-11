@@ -1,8 +1,7 @@
 import { createHash } from "node:crypto";
 
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vitest";
 
-import { variables } from "../../../env";
 import {
   applyHeaders,
   buildEnvModule,
@@ -11,6 +10,7 @@ import {
   isMissingModule,
   isStaticMethod,
 } from "../../../../server";
+import { variables } from "../../../env";
 
 const THEME_SCRIPT = `const theme = localStorage.getItem("theme");document.dir = "ltr";`;
 

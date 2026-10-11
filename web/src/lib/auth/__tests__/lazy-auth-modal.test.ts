@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vitest";
 
 // SAFETY: glob with query "?raw" + import "default" + eager loads each module's raw source text, so every value is a string keyed by its path.
 const sources = import.meta.glob("../../../**/*.{svelte,ts}", {

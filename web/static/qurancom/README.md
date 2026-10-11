@@ -7,9 +7,9 @@ reference for parity checks. Catalogue, licence register, scope, and production 
 Refresh:
 
 ```bash
-pnpm quran:mirror             # verify; fetch missing or size-mismatched files
-pnpm quran:mirror --dry-run   # report only
-pnpm quran:mirror --record    # fetch all; print sizes to rebake into the registry
+bun run quran:mirror             # verify; fetch missing or size-mismatched files
+bun run quran:mirror --dry-run   # report only
+bun run quran:mirror --record    # fetch all; print sizes to rebake into the registry
 ```
 
 Nothing here is served by the app; every entry is production-disabled until its licence clears

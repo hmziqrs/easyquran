@@ -1,5 +1,5 @@
 import init, { type Database, type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
-import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { QuranSourceId } from "#lib/data/quran-types.js";
 import { QURAN_ROW_COUNT } from "#lib/workers/opfs-cache.js";

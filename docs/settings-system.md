@@ -269,7 +269,7 @@ Settings changes preserve:
 - Settings route-isolation and delete-flow source guards.
 - Service-worker storage-stat and API-bypass tests.
 - TanStack Hotkeys dynamic-import contract.
-- `pnpm check`, `pnpm lint`, `pnpm test`, and production build.
+- `bun run check`, `bun run lint`, `bun run test`, and production build.
 
 ---
 

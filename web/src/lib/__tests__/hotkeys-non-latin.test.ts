@@ -1,5 +1,5 @@
 import { matchesKeyboardEvent } from "@tanstack/hotkeys";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vitest";
 
 // Guards patches/@tanstack__hotkeys@0.8.0.patch: isSingleLetterKey matched any
 // Unicode letter (\p{Letter}), so a non-Latin input method produced a localized

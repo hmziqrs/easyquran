@@ -22,7 +22,7 @@
 # opens each DB and validates row counts and packaging).
 #
 # Usage:
-#   deploy/fetch-quran-db.sh          # arabic + metadata: everything `pnpm --filter web build` needs
+#   deploy/fetch-quran-db.sh          # arabic + metadata: everything `bun run --filter web build` needs
 #   deploy/fetch-quran-db.sh all      # the above + every translation sqlite (~140 files, for the api)
 #   FORCE=1 deploy/fetch-quran-db.sh  # refetch even if present
 #   QURAN_ARTIFACT_BASE=… deploy/fetch-quran-db.sh   # point at a different origin

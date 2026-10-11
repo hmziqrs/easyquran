@@ -1,7 +1,7 @@
 /**
  * quran.com ↔ local DB parity audit (report tool, never a gate).
  *
- * Usage: pnpm quran:audit [--out <path>]
+ * Usage: bun run quran:audit [--out <path>]
  *
  * Runner: tsx (package.json "quran:audit"). node:sqlite is available under tsx on this
  * toolchain — `node -e "import('node:sqlite').then(m => console.log(typeof m.DatabaseSync))"`
@@ -11,7 +11,7 @@
  * gitignored DBs (db/quran/arabic/*.sqlite, read-only, immutable). Writes a markdown report
  * to .zflow/evidence/qurancom-parity-report.md by default (gitignored session material).
  * Identity is id + byte size; this script never hashes and never touches db/.
- * Exit 0 always — except a missing mirror exits 1 with the pnpm quran:mirror instruction.
+ * Exit 0 always — except a missing mirror exits 1 with the bun run quran:mirror instruction.
  */
 
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -233,7 +233,7 @@ function mirrorFileRows(): readonly { file: string; bytes: number; registry: num
 function registryState(row: { bytes: number; registry: number | null }): string {
   if (row.registry === null) return "not in registry";
   if (row.registry === row.bytes) return "ok";
-  return `drift — registry ${row.registry}, rebake with pnpm quran:mirror --record`;
+  return `drift — registry ${row.registry}, rebake with bun run quran:mirror --record`;
 }
 
 function buildReport(
@@ -354,7 +354,7 @@ function main(): void {
   );
   if (missing.length > 0) {
     process.stderr.write(
-      `quran.com mirror incomplete (${missing.join(", ")}); run pnpm quran:mirror\n`,
+      `quran.com mirror incomplete (${missing.join(", ")}); run bun run quran:mirror\n`,
     );
     process.exitCode = 1;
     return;

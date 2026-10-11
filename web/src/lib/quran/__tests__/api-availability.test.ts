@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vitest";
 
 import { QuranApiAvailability, QuranApiUnavailableError } from "#lib/quran/api-availability.js";
 import { FetchHttpError, FetchTimeoutError, MalformedDataError } from "#lib/quran/fetch.js";

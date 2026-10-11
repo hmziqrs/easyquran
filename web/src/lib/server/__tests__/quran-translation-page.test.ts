@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RangeKind } from "#lib/data/quran-data.js";
 import { OpenerKind, OpenerPackaging, QuranScript } from "#lib/data/quran-types.js";

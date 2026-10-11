@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/unbound-method */
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("$app/env/public", () => ({
   PUBLIC_API_BASE_URL: "https://eq.test/api",
   PUBLIC_QURAN_API_BASE: undefined,

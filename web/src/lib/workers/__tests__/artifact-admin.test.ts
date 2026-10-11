@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from "vite-plus/test";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
 
 const MB = 1024 * 1024;
 const opLog: string[] = [];

@@ -5,8 +5,8 @@
  * dependency-pure: the web route and the root tsx audit both import it directly.
  */
 
-import { asArray, asObject, asString } from "../../../lib/storage/decoders.ts";
 import { stripTajweedMarkup } from "../../../lib/quran/view/tajweed.ts";
+import { asArray, asObject, asString } from "../../../lib/storage/decoders.ts";
 
 export type QurancomScriptSlug =
   | "uthmani"

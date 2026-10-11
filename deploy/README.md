@@ -20,8 +20,8 @@ no network calls. Everything is built outside the deploy and COPYed in.
 
 **Primary publisher + deploy trigger: CI** (`.github/workflows/images.yml`). On every master push and `v*`
 tag (PRs build without pushing) it builds both images natively on `ubuntu-26.04-arm`
-runners — no zig, no qemu anywhere: web = `deploy/fetch-quran-db.sh` + `pnpm --filter web
-build` (PUBLIC_ENV=prod, Node 24 + pnpm 11.21.0), api = `cargo build --release --locked
+runners — no zig, no qemu anywhere: web = `deploy/fetch-quran-db.sh` + `bun run --filter web
+build` (PUBLIC_ENV=prod, Node 24 + bun 1.4), api = `cargo build --release --locked
 -p ruxlog --features vendored-openssl --target aarch64-unknown-linux-gnu`. It pushes
 `ghcr.io/hmziqrs/easyquran-{web,api}` tagged `latest` + short sha (plus `v*` on tags,
 `pr-N` on PRs). After both images from a master push publish, CI calls Dokploy's
@@ -43,7 +43,7 @@ Fallback needs `zig` + `cargo-zigbuild` (`brew install zig`, `cargo install
 cargo-zigbuild`), `rustup target add aarch64-unknown-linux-gnu`, and a one-time
 `docker login ghcr.io` with a PAT carrying `write:packages`.
 
-Why: the old `Dockerfile.web` re-installed pnpm + the whole toolchain, needed CA certs added
+Why: the old `Dockerfile.web` re-installed the JS toolchain, needed CA certs added
 to `node:24-slim`, and re-ran the sqlite prerender inside the image on every build. That step
 failed repeatedly and opaquely (a bare `Exit status 1` with no error text). It is gone.
 
@@ -51,7 +51,7 @@ What the fallback recipes do — the same steps CI runs on the runner:
 
 | recipe           | host step (dev-machine fallback)                                                     | image step                                |
 | ---------------- | ------------------------------------------------------------------------------------ | ----------------------------------------- |
-| `just image-web` | `pnpm --filter web build` (PUBLIC_ENV=prod)                                          | COPY `web/build` + `web/server.ts` (~10s) |
+| `just image-web` | `bun run --filter web build` (PUBLIC_ENV=prod)                                          | COPY `web/build` + `web/server.ts` (~10s) |
 | `just image-api` | `cargo zigbuild --target aarch64-unknown-linux-gnu.2.36 --features vendored-openssl` | COPY the one binary                       |
 
 `vendored-openssl` is required on **both** build paths: the runtime image
@@ -289,7 +289,7 @@ Run against the running web origin to confirm the delivery contract holds:
 ```bash
 just docker-up local          # builds both images on the host, then `compose up`
 web/scripts/assert-headers.sh http://localhost:8080 http://localhost:8888
-# same thing via the wired script: cd web && pnpm assert:headers http://localhost:8080 http://localhost:8888
+# same thing via the wired script: cd web && bun run assert:headers http://localhost:8080 http://localhost:8888
 ```
 
 It verifies: `/_app/immutable/*` and allowlisted `/_quran/*` artifacts are `immutable`; `_app/version.json`, HTML

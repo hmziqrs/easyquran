@@ -209,7 +209,7 @@ Search changes keep these contracts green:
 - Real-WASM worker translation-search tests and wire coordinate validation.
 - Palette source ordering, dedupe, lazy-loading, and navigation guards.
 - Quran catalogue no-hash guard.
-- `pnpm check`, `pnpm lint`, and `pnpm test`.
+- `bun run check`, `bun run lint`, and `bun run test`.
 
 ---
 

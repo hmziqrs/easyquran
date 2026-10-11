@@ -1,6 +1,6 @@
 # EasyQuran — web
 
-SvelteKit 3 + Svelte 5 (runes). TS strict. Tailwind v4. shadcn-svelte. Firebase. Vite+ (`vp`). `adapter-bun`: Arabic reader routes stay prerendered; translation routes render on demand and use bounded 7-day disk-TTL HTML caching (see `docs/quran-system.md`). Build and serve both run on Bun — `pnpm build` shells out to `bun run --bun vp build` (adapter-bun's `adapt()` calls `Bun.build`) and `pnpm start` is `bun server.ts`, so builds need bun ≥ 1.4 on PATH even from Node shells.
+SvelteKit 3 + Svelte 5 (runes). TS strict. Tailwind v4. shadcn-svelte. Firebase. Vite 8 + `adapter-bun`: Arabic reader routes stay prerendered; translation routes render on demand and use bounded 7-day disk-TTL HTML caching (see `docs/quran-system.md`). Build and serve both run on Bun — `bun run build` shells out to `bun run --bun vite build` (adapter-bun's `adapt()` calls `Bun.build`) and `bun start` is `bun server.ts`, so builds need bun ≥ 1.4 on PATH even from Node shells.
 
 ## Run
 
@@ -14,23 +14,25 @@ Repo root (`just` picks DB source):
     just web-build prod    # SvelteKit 3 build under bun (adapter-bun) + Arabic prerender output
     just docker-up local   # Bun web + Axum API, localhost:8080 / :8888
 
-`PUBLIC_ENV` = `local|prod`. Selects DB origin only. `pnpm dev`->local, `pnpm build`->prod, Docker always prod.
+`PUBLIC_ENV` = `local|prod`. Selects DB origin only. `bun run dev`->local, `bun run build`->prod, Docker always prod.
 Local development serves SQLite from the gitignored `db/quran/` at `/_quran`; production uses the same URL
 space as an allowlisted streaming gateway to R2, so OPFS downloads never depend on cross-origin bucket CORS.
 
 In `web/`:
 
-    pnpm dev | build | preview
-    pnpm start      # bun server.ts — production build + static/dynamic header policy
-    pnpm check      # svelte-check + worker tsconfig
-    vp lint | fmt | check
-    pnpm icons:generate  # regenerate favicon, app, Apple, pinned-tab, badge and logo exports
+    bun run dev | build | preview
+    bun start       # bun server.ts — production build + static/dynamic header policy
+    bun run check   # svelte-check + worker tsconfig
+    bun run lint    # oxlint --deny-warnings (config: .oxlintrc.json)
+    bun run format  # oxfmt (config: .oxfmtrc.json)
+    bun run test    # vitest
+    bun run icons:generate  # regenerate favicon, app, Apple, pinned-tab, badge and logo exports
 
-Deps from repo root (pnpm workspace). `vite` / `vite-plus` pinned via `catalog:`.
+Deps from repo root (bun workspace, `bun.lock`). `vite` pinned via `catalog:` in the root `package.json`.
 
 Brand artwork lives in `src/lib/assets/open-pages.svg`. `BrandMark` uses that SVG with
 the surrounding component's CSS color; web components draw their own square and corner
-radius. `pnpm icons:generate` renders committed exports under `static/` from this master.
+radius. `bun run icons:generate` renders committed exports under `static/` from this master.
 Maskable app icons keep artwork inside the safe circle; Apple icons have an opaque square
 background for the OS to mask. Notification badges use white artwork on transparency.
 OAuth upload PNGs live under `static/icons/oauth/`: GitHub (512px), Google (120px),
@@ -47,7 +49,7 @@ Build/audit/browser commands and evidence: [font tooling](../scripts/fonts/indop
 
 Development-only quran.com parity specimen: `/design/qurancom`, comparing mirrored quran.com
 script text and fonts against our provisioned DBs per verse (`?script=`, `?verses=`); 404 in
-production. Mirror verify/fetch: `pnpm quran:mirror` (root); parity report: `pnpm quran:audit`
+production. Mirror verify/fetch: `bun run quran:mirror` (root); parity report: `bun run quran:audit`
 (root); lane and licence register: [quran.com reference mirror](../docs/qurancom-mirror.md).
 
 Development-only homepage comparisons: `/design/home/cobalt`, `/design/home/mono`,

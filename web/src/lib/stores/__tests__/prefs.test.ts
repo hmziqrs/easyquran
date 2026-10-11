@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vite-plus/test";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 vi.mock("$app/env", () => ({ browser: true, dev: false }));
 vi.mock("$app/env/public", () => ({

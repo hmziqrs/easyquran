@@ -1,5 +1,5 @@
-import type { TranslationDirection } from "./quran-types";
-import rawTranslations from "./translations.json";
+import type { TranslationDirection } from "./quran-types.ts";
+import rawTranslations from "./translations.json" with { type: "json" };
 
 export const TRANSLATION_ARTIFACT_PREFIX = "tanzil/translations/";
 

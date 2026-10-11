@@ -1,5 +1,5 @@
 import init, { type Sqlite3Static } from "@sqlite.org/sqlite-wasm";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TranslationCatalogueEntry } from "#lib/data/quran-types.js";
 

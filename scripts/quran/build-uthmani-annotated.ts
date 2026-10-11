@@ -14,7 +14,7 @@
  * Every other DB under db/ is immutable: this tool writes ONLY the new artifact
  * (and reads the Tanzil DB read-only for the F4 adjudication report).
  *
- * Usage: pnpm exec tsx scripts/quran/build-uthmani-annotated.ts [--out PATH] [--force]
+ * Usage: bunx tsx scripts/quran/build-uthmani-annotated.ts [--out PATH] [--force]
  *
  * Guards (all exit 1 before any write or network fetch): --out rejects
  * option-shaped values in both the separated and `--out=` forms, refuses paths

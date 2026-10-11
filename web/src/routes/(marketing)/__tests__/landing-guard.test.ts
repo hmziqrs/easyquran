@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vitest";
 
 /**
  * Landing guard (plan 05): the marketing surface draws colour ONLY through the
@@ -11,7 +11,7 @@ import { describe, expect, it } from "vite-plus/test";
  * the parts a screenshot cannot.
  *
  * Paths are cwd-relative (tests run from web/) — import.meta.url is not a
- * file: URL under the vite-plus test runner, so new URL(...) walking fails.
+ * file: URL under the vitest test runner, so new URL(...) walking fails.
  */
 
 function walk(dir: string, extension: string, out: string[] = []): string[] {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vite-plus/test";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const flag = vi.hoisted(() => ({ value: true }));
 vi.mock("$app/env", () => ({

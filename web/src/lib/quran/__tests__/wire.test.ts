@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("#lib/config/site.js", () => ({
   QURAN: { apiBase: "https://api.test/quran", artifactBase: "/_quran", scripts: [] },

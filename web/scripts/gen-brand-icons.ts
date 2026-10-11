@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+
 import sharp from "sharp";
 
 const staticRoot = new URL("../static/", import.meta.url);

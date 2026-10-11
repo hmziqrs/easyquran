@@ -23,8 +23,8 @@ Parts 1–5 are settled contracts. Part 6 lists current gaps and product decisio
 - `db/` is gitignored. Databases live in R2 and are provisioned onto disk; nothing required
   after a fresh clone may live under `db/`.
 - Database identity is its id (`uthmani`, `simple-clean`, `en.sahih`, …), never a digest.
-- SHA-256 over Quran data is manual audit only: `just quran-audit`, `pnpm audit:arabic`, and
-  `pnpm verify` inside `db/quran/translations`. Build, boot, runtime, ETag, cache, and catalogue
+- SHA-256 over Quran data is manual audit only: `just quran-audit`, `bun run audit:arabic` (in `web/`), and
+  `bun run verify` inside `db/quran/translations`. Build, boot, runtime, ETag, cache, and catalogue
   paths never hash Quran data. Cryptographic use for CSRF, HMAC, Argon2, PKCE, and normalized
   search-query variance is unrelated.
 - Ayah text remains verbatim from SQLite through API, SSG, and display. Never normalize,
@@ -73,7 +73,7 @@ Parts 1–5 are settled contracts. Part 6 lists current gaps and product decisio
 - Diacritized surah display names are a separate baked source: Al Quran Cloud (Islamic
   Network, `api.alquran.cloud/v1/surah`), mirrored verbatim under gitignored
   `db/quran/surah-names/` and baked into tracked `web/src/lib/data/surah-names.json` by
-  `pnpm quran:names` (run in `web/`). Tanzil's plain names stay the search-matching form
+  `bun run quran:names` (run in `web/`). Tanzil's plain names stay the search-matching form
   (`CatalogEntry.arabicPlain`); reader and index render the diacritized form
   (`CatalogEntry.arabic`). The generator folds both to base letters and refuses to write on
   any mismatch; redistribution is non-commercial with acknowledgement (about page lists it).
@@ -124,7 +124,7 @@ the mutable catalogue publishes last only after the full immutable set succeeds.
   and settings-document apply refuse a disabled script in production, so a stale preference
   cannot activate one.
 - The quran.com script-level mirror under committed `web/static/qurancom/` is the audit lane,
-  not an app dependency: `pnpm quran:mirror` verifies/fetches, `pnpm quran:audit` writes the
+  not an app dependency: `bun run quran:mirror` verifies/fetches, `bun run quran:audit` writes the
   parity report, and QCF v1/v2 page fonts plus `code_v1`/`code_v2` page-glyph scripts are
   excluded. Licence register and restricted-asset policy:
   [`qurancom-mirror.md`](./qurancom-mirror.md).
@@ -285,7 +285,7 @@ changes Arabic scripture or translation-content semantics.
 - Page copy stays in page namespaces; shared chrome resolves once in layout.
 - Appearance/settings panel copy loads lazily when its surface opens.
 - Catalog files stay coarse; prefixes organize chunk ownership.
-- `pnpm i18n:check` runs before check, lint, test, and build.
+- `bun run i18n:check` runs before check, lint, test, and build.
 - Paraglide currently embeds all locales in each imported message module. Namespace chunking
   contains cost; revisit per-locale builds when locale count reaches four or five.
 

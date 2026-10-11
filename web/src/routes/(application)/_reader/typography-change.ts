@@ -1,4 +1,5 @@
 import { tick } from "svelte";
+
 import { stickyNav } from "#lib/stores/sticky-nav.svelte.js";
 
 /**

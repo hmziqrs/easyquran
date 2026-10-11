@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vitest";
 
 import { resolveAboutCopy } from "#lib/i18n/about-copy.js";
 import { resolveContactCopy } from "#lib/i18n/contact-copy.js";

@@ -8,7 +8,7 @@
  *   node scripts/visual/capture.ts --report                     # also write .visual/index.html
  *
  * Output: web/.visual/<check>/<route>__<palette>__<mode>__<width>.png (gitignored).
- * Start the dev server first (`pnpm dev`) or pass --base http://localhost:4173.
+ * Start the dev server first (`bun run dev`) or pass --base http://localhost:4173.
  */
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";

@@ -13,7 +13,7 @@ Nothing in the mirror is app-referenced in production. Every catalogue entry in
 loads these files (the dev-only `/design/qurancom` specimen reads them). They live under
 `web/static/`, so the raw files do ship inside the static bundle
 and remain fetchable by direct URL — that presence is accepted by campaign decision (gating is
-env-var only; no middleware or build-exclusion machinery). `pnpm quran:mirror` proves the
+env-var only; no middleware or build-exclusion machinery). `bun run quran:mirror` proves the
 on-disk mirror matches the catalogue by id + byte size.
 
 ## Production policy
@@ -51,9 +51,9 @@ retries. The live alternate `/fonts/lang/dhivehi/DhivehiAkuru.woff2` is mirrored
 ## Refresh
 
 ```bash
-pnpm quran:mirror             # verify; fetch missing or size-mismatched files
-pnpm quran:mirror --dry-run   # report only, no writes, no network
-pnpm quran:mirror --record    # fetch all; print id -> bytes to rebake sizeBytes
+bun run quran:mirror             # verify; fetch missing or size-mismatched files
+bun run quran:mirror --dry-run   # report only, no writes, no network
+bun run quran:mirror --record    # fetch all; print id -> bytes to rebake sizeBytes
 ```
 
 Node 24 + tsx + global `fetch`. Writes go to `web/static/qurancom/` through `.part` + rename;
@@ -61,7 +61,7 @@ Node 24 + tsx + global `fetch`. Writes go to `web/static/qurancom/` through `.pa
 path (AGENTS.MD hard rule). Any size mismatch exits non-zero listing id/expected/actual, and
 mismatched bytes never land on disk.
 
-`web/static/qurancom/**` is excluded from `vp fmt` / `vp check` formatting
+`web/static/qurancom/**` is excluded from `oxfmt` / `oxlint` formatting
 (`fmt.ignorePatterns` in `web/vite.config.ts` and in the root `vite.config.ts` — the staged
 hook formats through the root config) so payloads stay byte-verbatim through commit hooks.
 Never remove those ignores — the mirror verify (and its `quran:check` test) fails on any byte

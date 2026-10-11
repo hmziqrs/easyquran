@@ -88,7 +88,7 @@ Every machine guard landed with the change it guards and is enumerated in §61.
 4. **Separation without shadow.** Hairline borders and surface luminance steps.
    The elevation tokens exist and resolve to `none`.
 5. **Contrast is a gate, not a hope.** 96 token pairs across all 8 palette×mode
-   blocks are asserted in `pnpm test` (§9).
+   blocks are asserted in `bun run test` (§9).
 6. **RTL is a first-class mode.** Logical properties; directional icons mirror in
    the icon component, not at call sites (§50).
 7. **Semantic tokens only in components** (§61). No hex, no Tailwind default-palette
@@ -677,8 +677,8 @@ For anyone (human or AI) changing UI code:
     `settings-document`, `surah-reader`, `VerseRow.stacking`, `page-heights`,
     `catalogue-sha-guard`, `route-isolation`, `usage-bar-guard`,
     `auth-form-focus`.
-14. Three gates green before every commit: `pnpm check`, `pnpm lint`, `pnpm test`
-    (run in `web/`; if lint reports TS2307 on `server.ts`, run `pnpm build` first —
+14. Three gates green before every commit: `bun run check`, `bun run lint`, `bun run test`
+    (run in `web/`; if lint reports TS2307 on `server.ts`, run `bun run build` first —
     the adapter output is a gitignored build artifact).
 
 Visual verification harness: `web/scripts/visual/` (capture / states / contrast /

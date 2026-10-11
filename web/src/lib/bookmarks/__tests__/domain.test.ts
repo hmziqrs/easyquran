@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vitest";
 
 import type { AuthRequestResult, UnsafeRequestInit } from "#lib/auth/auth-client.js";
 import { SyncPausedError, type SyncMutation } from "#lib/sync/index.js";

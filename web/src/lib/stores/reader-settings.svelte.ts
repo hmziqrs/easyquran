@@ -2,6 +2,7 @@ import type { ArabicFontId, TranslationFamily } from "#lib/config/reader-fonts.j
 import type { QuranSourceId } from "#lib/data/quran-types.js";
 import { clientQuranEnvironment } from "#lib/quran/client-environment.js";
 import { isScriptEnabled } from "#lib/quran/script-availability.js";
+
 import {
   ARABIC_FONT_MAX,
   ARABIC_FONT_MIN,

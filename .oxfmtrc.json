@@ -1,0 +1,4 @@
+{
+  "$schema": "https://unpkg.com/oxfmt@0.70.0/configuration_schema.json",
+  "ignorePatterns": ["web/static/qurancom/**", "rust/backend/api/src/services/mail/templates/**"]
+}

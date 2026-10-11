@@ -1,5 +1,5 @@
 import { mount, unmount } from "svelte";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getSettingsCopy } from "#lib/i18n/settings-copy.js";
 import type { StorageArtifactInfo } from "#lib/quran/protocol.js";

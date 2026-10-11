@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vitest";
 
 /**
  * Machine guard for the plan 04 RTL contract (docs/plan/README.md (phase specs in git history)):
@@ -96,7 +96,7 @@ describe("plan 04 ramp reaches COMPILED css (judge round-1 major regression guar
   // so a fresh clone skips — locally and in CI-with-build it runs.
   const clientDir = "build/client";
   const built = existsSync(resolve(process.cwd(), clientDir));
-  it.skipIf(!built)("build/client exists (run pnpm build to enable this guard)", () => {
+  it.skipIf(!built)("build/client exists (run bun run build to enable this guard)", () => {
     const css = walk(clientDir, ".css")
       .map((file) => read(file))
       .join("\n");

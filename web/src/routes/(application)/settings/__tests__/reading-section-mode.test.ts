@@ -1,5 +1,5 @@
 import { mount, unmount } from "svelte";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => {
   const setModeSpy = vi.fn();
@@ -51,8 +51,8 @@ vi.mock("#lib/stores/reader.svelte.js", () => ({
 }));
 vi.mock("#lib/fonts/arabic-fonts.js", () => ({ loadArabicFont: vi.fn() }));
 
-import { getSettingsCopy } from "#lib/i18n/settings-copy.js";
 import { loadArabicFont } from "#lib/fonts/arabic-fonts.js";
+import { getSettingsCopy } from "#lib/i18n/settings-copy.js";
 import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
 
 import ReadingSection from "../_components/ReadingSection.svelte";

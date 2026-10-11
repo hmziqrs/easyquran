@@ -256,8 +256,8 @@ const verify = await agent(
   [
     'Run the project type/a11y/lint gate and report whether the comment cleanup caused regressions.',
     'Run this command (use a 300000ms timeout):',
-    '   pnpm -C web run check 2>&1 | tail -80',
-    'If pnpm is missing, fall back to: cd web && npx svelte-check --tsconfig ./tsconfig.json',
+    '   (cd web && bun run check) 2>&1 | tail -80',
+    'If bun is missing, fall back to: cd web && bunx svelte-check --tsconfig ./tsconfig.json',
     'The baseline BEFORE this cleanup was CLEAN (0 errors, 0 warnings). So ANY error or warning now is a',
     'regression introduced by a removed comment (most likely a removed svelte-ignore / @ts-ignore / consumed',
     'JSDoc). Report pass/fail, counts, and every issue with file + line + message. Do NOT fix; just report.',

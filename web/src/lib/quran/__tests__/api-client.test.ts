@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { OpenerKind, OpenerPackaging, QuranScript } from "#lib/data/quran-types.js";
 import type { Ayah, QuranRangeText, SurahNormalization } from "#lib/data/quran-types.js";

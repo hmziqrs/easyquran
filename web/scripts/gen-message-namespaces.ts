@@ -149,7 +149,7 @@ const orphaned = [...existing.keys()].filter((file) => !expected.has(file));
 if (check) {
   if (stale.length > 0 || orphaned.length > 0) {
     console.error(
-      `[i18n-ns] generated barrels are stale. Run: pnpm i18n:namespaces\n` +
+      `[i18n-ns] generated barrels are stale. Run: bun run i18n:namespaces\n` +
         (stale.length > 0 ? `  outdated: ${stale.join(", ")}\n` : "") +
         (orphaned.length > 0 ? `  orphaned: ${orphaned.join(", ")}\n` : ""),
     );

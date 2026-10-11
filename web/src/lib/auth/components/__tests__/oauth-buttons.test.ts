@@ -1,5 +1,5 @@
 import { mount, unmount } from "svelte";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("$app/env", () => ({ browser: true }));
 vi.mock("$app/env/public", () => ({
   PUBLIC_API_BASE_URL: "https://eq.test/api",

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { DownloadableSpec } from "#lib/data/quran-types.js";
 import { unsafeDownloadSpec, verifyBytes, type DownloadSpec } from "#lib/workers/download.js";

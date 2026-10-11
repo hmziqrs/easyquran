@@ -46,7 +46,7 @@ strings as expectations. Reference fonts and screenshots stay outside tracked pr
 ## 2. Prepare and reproduce WebKit baseline
 
 - [x] Record candidate commit and environment metadata; retain previous audit evidence.
-- [x] Use repository-pinned Node/pnpm/Playwright and Python audit dependencies. Reuse
+- [x] Use repository-pinned Node/bun/Playwright and Python audit dependencies. Reuse
       `.cache/indopak-venv`; create it if absent, then install
       `scripts/fonts/indopak/audit-requirements.txt` into that environment when needed.
 - [x] Start or reuse dev server at `http://localhost:5391`. Check specimen controls hydrate.
@@ -56,7 +56,7 @@ strings as expectations. Reference fonts and screenshots stay outside tracked pr
 Run from repository root, with dev server running in another terminal:
 
 ```sh
-pnpm --dir web dev --port 5391
+bun run --cwd web dev --port 5391
 ```
 
 ```sh
@@ -185,8 +185,8 @@ of device testing.
 - [ ] Check internal navigation/font resources resolve and translation context persists.
       `/design/indopak`, `?audit=all`, `?audit=flow` must each return 404 in production.
 
-For implementation/fix candidates, complete `pnpm --dir web check`, `pnpm --dir web lint`,
-`pnpm --dir web test`, font audits/tests and production build before browser approval.
+For implementation/fix candidates, complete `bun run --cwd web check`, `bun run --cwd web lint`,
+`bun run --cwd web test`, font audits/tests and production build before browser approval.
 Documentation-only planning does not constitute a new implementation test run.
 
 ## 6. Quran.com verification and completion

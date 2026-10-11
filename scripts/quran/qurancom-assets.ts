@@ -48,7 +48,7 @@ const PROBED = "2026-10-11";
 export const QURANWBW_NOTICE =
   "NOT FOR SALE, NOT FOR MODIFICATION, NOT FOR DISTRIBUTION OR NOT FOR DEVELOPMENT WITHOUT WRITTEN NOTICE BY QURANWBW.COM";
 
-/** Baked byte sizes recorded by `pnpm quran:mirror --record` (2026-10-10). Identity, not hash. */
+/** Baked byte sizes recorded by `bun run quran:mirror --record` (2026-10-10). Identity, not hash. */
 const RECORDED_SIZES: Readonly<Record<string, number>> = {
   "script-uthmani": 1654246,
   "script-indopak": 1721053,
