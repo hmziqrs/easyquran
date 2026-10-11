@@ -22,17 +22,18 @@
 # opens each DB and validates row counts and packaging).
 #
 # Usage:
-#   deploy/fetch-quran-db.sh          # arabic + metadata: everything `bun run --filter web build` needs
-#   deploy/fetch-quran-db.sh all      # the above + every translation sqlite (~140 files, for the api)
-#   FORCE=1 deploy/fetch-quran-db.sh  # refetch even if present
+#   deploy/fetch-quran-db.sh            # arabic + metadata: everything `bun run --filter web build` needs
+#   deploy/fetch-quran-db.sh all        # the above + every translation sqlite (for the api)
+#   deploy/fetch-quran-db.sh catalogue  # only the generated runtime catalogue (offline; CI sha guard)
+#   FORCE=1 deploy/fetch-quran-db.sh    # refetch even if present
 #   QURAN_ARTIFACT_BASE=… deploy/fetch-quran-db.sh   # point at a different origin
 set -euo pipefail
 
 MODE="${1:-arabic}"
 case "$MODE" in
-arabic | all) ;;
+arabic | catalogue | all) ;;
 *)
-  echo "mode must be 'arabic' or 'all' (received: $MODE)" >&2
+  echo "mode must be 'arabic', 'catalogue' or 'all' (received: $MODE)" >&2
   exit 2
   ;;
 esac
@@ -159,6 +160,16 @@ assert_size() {
 }
 
 echo "$BASE → $DEST (mode: $MODE)"
+
+# `catalogue` is offline and self-contained: it materialises the runtime catalogue from
+# the tracked map and touches no sqlite object — what the web sha-guard test reads on a
+# runner that never fetched the corpus.
+if [ "$MODE" = "catalogue" ]; then
+  write_catalogue
+  echo "done"
+  exit 0
+fi
+
 get "tanzil/arabic/quran-uthmani.sqlite" "$DEST/arabic/quran-uthmani.sqlite"
 if get_optional "tanzil/arabic/quran-uthmani-annotated.sqlite" "$DEST/arabic/quran-uthmani-annotated.sqlite"; then
   assert_sqlite "$DEST/arabic/quran-uthmani-annotated.sqlite"

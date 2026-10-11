@@ -9,9 +9,10 @@
 # a packages:write token. A pull_request run executes the PR's own copy of this file, so
 # it must never be handed a token that can move `latest` or reach Dokploy.
 #
-# db/ is gitignored, so the web build's Arabic prerender has no databases in a fresh clone:
-# deploy/fetch-quran-db.sh pulls them from the public R2 base (see that script), cached
-# between runs because the corpus is immutable.
+# db/ is gitignored, so a fresh clone has no databases: deploy/fetch-quran-db.sh pulls them
+# from the public R2 base (see that script), cached between runs because the corpus is
+# immutable. Web needs the Arabic set plus the generated catalogue (the sha-guard test's
+# input); the Rust gates need `all` — cargo test opens the corpus through db/quran.
 name: images
 
 on:
@@ -90,7 +91,13 @@ jobs:
           path: db/quran
           key: quran-db-${{ hashFiles('web/src/lib/quran/view/source-profiles.ts') }}
 
-      - run: deploy/fetch-quran-db.sh
+      # Arabic + metadata is all the prerender needs; the catalogue step is offline and
+      # only writes the generated runtime catalogue the web sha-guard test reads (db/ is
+      # gitignored, so a fresh runner has neither).
+      - name: Provision Quran databases
+        run: |
+          deploy/fetch-quran-db.sh
+          deploy/fetch-quran-db.sh catalogue
 
       - run: bun install --frozen-lockfile
 
@@ -169,6 +176,19 @@ jobs:
           # The vendored OpenSSL build lives in target/ and is expensive; keep it cached
           # even when a build fails partway.
           cache-on-failure: true
+
+      # cargo test opens the corpus through CARGO_MANIFEST_DIR/../../../db/quran, and db/
+      # is gitignored — the runner needs the full set (arabic + metadata + every
+      # translation sqlite + the generated catalogue) before the gates. Same immutable
+      # files as the web job, so the key tracks the baked maps, not the bytes.
+      - name: Cache Quran databases
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: db/quran
+          key: quran-db-all-${{ hashFiles('web/src/lib/data/translations.json', 'web/src/lib/quran/view/source-profiles.ts') }}
+
+      - name: Provision Quran databases
+        run: deploy/fetch-quran-db.sh all
 
       # `--target` (rather than a bare release build) puts the binary at the path
       # Dockerfile.api COPYs. `vendored-openssl` is not a cross-build workaround here — the
