@@ -4,16 +4,63 @@
   import { onMount } from "svelte";
   import { Brand } from "#lib/components/brand/index.js";
   import { authState } from "#lib/auth/auth-state.svelte.js";
+  import { authFooterLinkIds, authPageTitle, type AuthFooterLinkId } from "#lib/auth/auth-page-meta.js";
   import { installPurgeHook } from "#lib/auth/purge-hook.js";
   import { guestOnlyRedirect } from "#lib/auth/route-guard.js";
   import { getAuthCopy } from "#lib/i18n/auth-copy.js";
+  import {
+    footer_contact,
+    footer_faq,
+    footer_privacy,
+    footer_read_quran,
+    footer_terms,
+  } from "#lib/i18n/m/chrome.js";
+  import { marketingHref, type MarketingPageId } from "#lib/i18n/marketing.js";
+  import {
+    marketingHomeHref,
+    marketingReaderHomeHref,
+  } from "#lib/i18n/marketing-copy.js";
+  import type { UiLocale } from "#lib/i18n/locales.js";
   import { publicHref } from "#lib/i18n/public-href.js";
-  import { marketingHomeHref } from "#lib/i18n/marketing-copy.js";
 
   let { children } = $props();
   let ready = $state(false);
 
   const copy = getAuthCopy();
+  const readQuranLabel = footer_read_quran(undefined, { locale: copy.locale });
+
+  const FOOTER_LINK_META = {
+    privacy: { page: "privacy", label: (locale: UiLocale) => footer_privacy(undefined, { locale }) },
+    terms: { page: "terms", label: (locale: UiLocale) => footer_terms(undefined, { locale }) },
+    contact: {
+      page: "contact",
+      label: (locale: UiLocale) => footer_contact(undefined, { locale }),
+    },
+    faq: { page: "faq", label: (locale: UiLocale) => footer_faq(undefined, { locale }) },
+  } satisfies Record<
+    AuthFooterLinkId,
+    { readonly page: MarketingPageId; readonly label: (locale: UiLocale) => string }
+  >;
+
+  interface AuthFooterLink {
+    readonly href: string;
+    readonly label: string;
+  }
+
+  const footerLinks = $derived(
+    authFooterLinkIds(page.url.pathname)
+      .map((id): AuthFooterLink | null => {
+        const meta = FOOTER_LINK_META[id];
+        const href = marketingHref(meta.page, copy.locale);
+        if (href === null) return null;
+        return { href: publicHref(href), label: meta.label(copy.locale) };
+      })
+      .filter((link): link is AuthFooterLink => link !== null),
+  );
+
+  // Title lives here, not in each +page.svelte: children are gated behind `ready`,
+  // so a page-level title would be missing from the prerendered HTML.
+  const pageTitle = $derived(authPageTitle(page.url.pathname));
 
   async function hydrateRouteAuth(): Promise<void> {
     installPurgeHook(authState);
@@ -33,9 +80,50 @@
   });
 </script>
 
-<div class="flex min-h-dvh bg-background" lang={copy.locale} dir={copy.direction}>
+<svelte:head>
+  {#if pageTitle}<title>{pageTitle}</title>{/if}
+</svelte:head>
+
+<div
+  class="flex min-h-dvh flex-col bg-background lg:flex-row"
+  lang={copy.locale}
+  dir={copy.direction}
+>
+  <!-- Identity band: below lg the aside is display:none, which used to leave mobile with a
+       chromeless dead end. Same composition compressed — brand + an explicit reader link,
+       the ayah, the description — and it renders unconditionally so the prerendered HTML
+       carries an exit before the session probe resolves. -->
+  <div
+    class="bg-primary px-5 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-6 text-primary-foreground sm:px-10 sm:pt-[calc(env(safe-area-inset-top)+1.5rem)] sm:pb-7 lg:hidden"
+  >
+    <div class="flex items-center justify-between gap-4">
+      <Brand tone="on-accent" homeHref={marketingHomeHref(copy.locale)} />
+      <a
+        href={publicHref(marketingReaderHomeHref(copy.locale))}
+        class="inline-flex min-h-11 items-center rounded-pill px-3 text-sm font-medium text-primary-foreground/80 transition-colors hover:text-primary-foreground"
+        >{readQuranLabel}</a
+      >
+    </div>
+    <figure class="mt-5 flex flex-col gap-3 sm:mt-6">
+      <blockquote
+        class="text-balance font-arabic text-[clamp(22px,5.5vw,30px)] leading-[1.9]"
+        lang="ar"
+        dir="rtl"
+      >
+        أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ
+      </blockquote>
+      <figcaption class="flex items-center gap-3 text-sm text-primary-foreground/70">
+        <span aria-hidden="true" class="h-px w-8 bg-primary-foreground/40"></span>
+        <span lang="ar" dir="rtl">سورة الرعد · ١٣:٢٨</span>
+      </figcaption>
+    </figure>
+    <p class="mt-5 hidden max-w-[38ch] text-sm leading-relaxed text-primary-foreground/70 sm:block">
+      {copy.dialogDescription}
+    </p>
+  </div>
+
   <!-- Brand panel: the accent half carries the identity on auth pages so the form
-       column stays chrome-free. Hidden below lg — mobile gets the bare form. -->
+       column stays chrome-free. Hidden below lg — the band above takes over. -->
   <aside
     class="relative hidden overflow-hidden bg-primary p-10 text-primary-foreground lg:flex lg:w-[45%] lg:flex-col lg:justify-between xl:p-16"
   >
@@ -60,17 +148,33 @@
     </p>
   </aside>
 
-  <div class="flex min-w-0 flex-1 items-center justify-center px-5 py-14 sm:px-10">
+  <div class="flex min-w-0 flex-1 items-center justify-center px-5 py-10 sm:px-10 lg:py-14">
     <!-- `main#main` renders unconditionally: the root layout's skip link targets #main, and
          gating it behind `ready` left prerendered auth pages without the anchor, failing the
-         build with `no element with id="main" exists`. -->
-    <main id="main" class="w-full max-w-[420px]">
+         build with `no element with id="main" exists`. `tabindex="-1"` makes the skip-link
+         focus move land reliably. -->
+    <main id="main" tabindex="-1" class="w-full max-w-[420px]">
       {#if ready}
         {@render children()}
       {:else}
         <p class="text-center text-sm text-fg-2" role="status" aria-live="polite">
           Checking your session…
         </p>
+      {/if}
+      {#if footerLinks.length > 0}
+        <!-- Purpose-scoped exits, outside the ready gate so they exist in the prerendered
+             HTML too: legal at account creation, support at recovery. -->
+        <div
+          class="mt-8 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-fg-2"
+        >
+          {#each footerLinks as link (link.href)}
+            <a
+              href={link.href}
+              class="inline-flex min-h-11 items-center transition-colors hover:text-foreground"
+              >{link.label}</a
+            >
+          {/each}
+        </div>
       {/if}
     </main>
   </div>

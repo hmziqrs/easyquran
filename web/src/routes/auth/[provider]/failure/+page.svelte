@@ -26,6 +26,10 @@
   }
 </script>
 
+<svelte:head>
+  <title>Sign-in failed · EasyQuran</title>
+</svelte:head>
+
 <AuthForm
   heading={OAUTH_FAILURE_HEADING}
   submitLabel="Back to sign in"
