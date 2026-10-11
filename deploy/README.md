@@ -73,7 +73,7 @@ fails on pull.
   root `.dockerignore`, which is what lets these builds see `web/build` and `rust/target/…`
   (both blanket-excluded at the root) while shipping nothing else.
 - `Dockerfile.web` runs the adapter-bun server **on the bun runtime**
-  (`oven/bun:1.4.2-slim`). The SvelteKit build also runs under bun — on the host/CI now:
+  (`oven/bun:1.4.3-slim`). The SvelteKit build also runs under bun — on the host/CI now:
   adapter-bun calls `Bun.build` during `adapt()`, and bun 1.4+ implements `node:sqlite`,
   so the Arabic prerender reads the sqlite corpus under bun too. `web/server.ts` is a
   custom `Bun.serve` entry over the adapter's emitted hand-off (`build/adapter-bun.js`:

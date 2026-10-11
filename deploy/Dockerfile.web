@@ -21,7 +21,7 @@
 # Context = repo root, filtered by deploy/Dockerfile.web.dockerignore (BuildKit reads the
 # per-Dockerfile ignore file in preference to the root .dockerignore, which excludes
 # web/build for the api/source builds).
-FROM oven/bun:1.4.2-slim
+FROM oven/bun:1.4.3-slim
 WORKDIR /app
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
