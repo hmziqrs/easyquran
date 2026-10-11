@@ -9,6 +9,7 @@ import {
   oauthPopupFeatures,
   oauthPopupName,
   OAUTH_POPUP_NAME_PREFIX,
+  OAUTH_POPUP_PENDING_KEY,
   OAUTH_POPUP_SOURCE,
   type OAuthPopupHandle,
   type OAuthPopupMessage,
@@ -29,6 +30,7 @@ function popupMessage(provider: string, outcome: "success" | "failure"): OAuthPo
 interface OpenerStub {
   readonly location?: { readonly origin?: string };
   postMessage?: (message: OAuthPopupMessage, targetOrigin: string) => void;
+  readonly sessionStorage?: { getItem(key: string): string | null };
 }
 
 /* eslint-disable anti-slop/no-unknown-parameters -- test helper deliberately forwards malformed payloads into the parser boundary */
@@ -50,6 +52,7 @@ function setOpener(value: OpenerStub | null): void {
 afterEach(() => {
   setOpener(null);
   window.name = "";
+  sessionStorage.clear();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -254,6 +257,26 @@ describe("awaitOAuthPopup", () => {
     expect(popup.closed).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it("still settles unavailable at the deadline when the popup close throws", async () => {
+    vi.useFakeTimers();
+    const popup = new FakePopup();
+    popup.close = vi.fn(() => {
+      throw new Error("close refused");
+    });
+    const outcome = awaitOAuthPopup({
+      provider: "google",
+      url: "/login",
+      open: () => popup,
+      features: "",
+      pollMs: 10,
+      closeGraceMs: 5,
+      deadlineMs: 50,
+    });
+    await vi.advanceTimersByTimeAsync(60);
+    await expect(outcome).resolves.toBe("unavailable");
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });
 
 describe("notifyOAuthPopupOpener", () => {
@@ -261,9 +284,10 @@ describe("notifyOAuthPopupOpener", () => {
     expect(notifyOAuthPopupOpener("google", "success")).toBe(false);
   });
 
-  it("posts the completion signal to the same-origin opener and closes the popup", () => {
+  it("posts the completion signal to a same-origin opener with a pending marker and closes the popup", () => {
+    sessionStorage.setItem(OAUTH_POPUP_PENDING_KEY, "1");
     const postMessage = vi.fn();
-    setOpener({ location: { origin: window.location.origin }, postMessage });
+    setOpener({ location: { origin: window.location.origin }, postMessage, sessionStorage });
     const close = vi.spyOn(window, "close").mockImplementation(() => {});
 
     expect(notifyOAuthPopupOpener("google", "success")).toBe(true);
@@ -274,9 +298,44 @@ describe("notifyOAuthPopupOpener", () => {
     expect(close).toHaveBeenCalled();
   });
 
-  it("refuses a foreign-origin opener without posting or closing", () => {
+  it("ignores window.name — a pending marker still completes with a replaced name", () => {
+    window.name = "some-other-window";
+    sessionStorage.setItem(OAUTH_POPUP_PENDING_KEY, "1");
     const postMessage = vi.fn();
-    setOpener({ location: { origin: "https://evil.test" }, postMessage });
+    setOpener({ location: { origin: window.location.origin }, postMessage, sessionStorage });
+    const close = vi.spyOn(window, "close").mockImplementation(() => {});
+
+    expect(notifyOAuthPopupOpener("google", "success")).toBe(true);
+    expect(postMessage).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+  });
+
+  it("refuses a same-origin opener with no pending marker without posting or closing", () => {
+    const postMessage = vi.fn();
+    setOpener({ location: { origin: window.location.origin }, postMessage, sessionStorage });
+    const close = vi.spyOn(window, "close").mockImplementation(() => {});
+
+    expect(notifyOAuthPopupOpener("google", "success")).toBe(false);
+    expect(postMessage).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the opener's pending marker was already settled (cleared)", () => {
+    const postMessage = vi.fn();
+    setOpener({ location: { origin: window.location.origin }, postMessage, sessionStorage });
+    const close = vi.spyOn(window, "close").mockImplementation(() => {});
+    sessionStorage.setItem(OAUTH_POPUP_PENDING_KEY, "1");
+    sessionStorage.removeItem(OAUTH_POPUP_PENDING_KEY);
+
+    expect(notifyOAuthPopupOpener("google", "success")).toBe(false);
+    expect(postMessage).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it("refuses a foreign-origin opener without posting or closing", () => {
+    sessionStorage.setItem(OAUTH_POPUP_PENDING_KEY, "1");
+    const postMessage = vi.fn();
+    setOpener({ location: { origin: "https://evil.test" }, postMessage, sessionStorage });
     const close = vi.spyOn(window, "close").mockImplementation(() => {});
 
     expect(notifyOAuthPopupOpener("google", "success")).toBe(false);
@@ -285,12 +344,14 @@ describe("notifyOAuthPopupOpener", () => {
   });
 
   it("refuses an opener whose location throws (cross-origin access)", () => {
+    sessionStorage.setItem(OAUTH_POPUP_PENDING_KEY, "1");
     const postMessage = vi.fn();
     const opener = {
       get location(): { origin: string } {
         throw new Error("blocked cross-origin access");
       },
       postMessage,
+      sessionStorage,
     };
     setOpener(opener);
     const close = vi.spyOn(window, "close").mockImplementation(() => {});
@@ -300,26 +361,21 @@ describe("notifyOAuthPopupOpener", () => {
     expect(close).not.toHaveBeenCalled();
   });
 
-  it("refuses a same-origin opener when window.name is not a popup name", () => {
-    window.name = "some-other-window";
+  it("refuses when the opener's sessionStorage cannot be read", () => {
     const postMessage = vi.fn();
-    setOpener({ location: { origin: window.location.origin }, postMessage });
+    const opener = {
+      location: { origin: window.location.origin },
+      postMessage,
+      get sessionStorage(): { getItem(key: string): string | null } {
+        throw new Error("storage denied");
+      },
+    };
+    setOpener(opener);
     const close = vi.spyOn(window, "close").mockImplementation(() => {});
 
     expect(notifyOAuthPopupOpener("google", "success")).toBe(false);
     expect(postMessage).not.toHaveBeenCalled();
     expect(close).not.toHaveBeenCalled();
-  });
-
-  it("accepts a window carrying the eq-oauth popup name", () => {
-    window.name = `${OAUTH_POPUP_NAME_PREFIX}google-abc-1`;
-    const postMessage = vi.fn();
-    setOpener({ location: { origin: window.location.origin }, postMessage });
-    const close = vi.spyOn(window, "close").mockImplementation(() => {});
-
-    expect(notifyOAuthPopupOpener("google", "success")).toBe(true);
-    expect(postMessage).toHaveBeenCalled();
-    expect(close).toHaveBeenCalled();
   });
 });
 

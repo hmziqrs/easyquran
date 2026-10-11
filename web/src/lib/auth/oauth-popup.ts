@@ -50,23 +50,40 @@ export function oauthPopupName(provider: string): string {
   return `${OAUTH_POPUP_NAME_PREFIX}${provider}-${Date.now().toString(36)}-${popupNameSeq}`;
 }
 
-function isOAuthPopupWindow(): boolean {
-  // Some browsers clear window.name across origins, so only enforce the popup
-  // prefix when a name survived the roundtrip.
-  return window.name.length === 0 || window.name.startsWith(OAUTH_POPUP_NAME_PREFIX);
+/**
+ * Marker the opener writes to its own sessionStorage while a popup attempt is
+ * pending (cleared when the attempt settles). The popup shares the opener's
+ * sessionStorage, so the landing page can tell "I am the popup this tab just
+ * opened" without relying on window.name, which any page in the provider
+ * roundtrip may replace.
+ */
+export const OAUTH_POPUP_PENDING_KEY = "eq:oauth-popup-pending";
+
+export function markOAuthPopupPending(): void {
+  if (!browser) return;
+  try {
+    sessionStorage.setItem(OAUTH_POPUP_PENDING_KEY, "1");
+  } catch {}
+}
+
+export function clearOAuthPopupPending(): void {
+  if (!browser) return;
+  try {
+    sessionStorage.removeItem(OAUTH_POPUP_PENDING_KEY);
+  } catch {}
 }
 
 /**
  * Runs inside the popup's landing page. Returns true only when this window is
- * the popup our app opened (same-origin opener, plus the eq-oauth name when the
- * browser kept one); the caller then skips normal completion (the opener owns
- * the finish() probe and destination navigation) and the popup closes itself.
- * Any other window — an app tab opened from a foreign site, a same-origin tab
- * that is not our popup — returns false and completes normally.
+ * the popup our app opened: same-origin opener that still carries the pending
+ * marker in its sessionStorage. The caller then skips normal completion (the
+ * opener owns the finish() probe and destination navigation) and the popup
+ * closes itself. Any other window — an app tab opened from a foreign site, a
+ * same-origin tab with no pending attempt — returns false and completes
+ * normally.
  */
 export function notifyOAuthPopupOpener(provider: string, outcome: "success" | "failure"): boolean {
   if (!browser) return false;
-  if (!isOAuthPopupWindow()) return false;
   const opener: Window | null = window.opener;
   if (!opener) return false;
   let sameOrigin = false;
@@ -77,6 +94,12 @@ export function notifyOAuthPopupOpener(provider: string, outcome: "success" | "f
     return false;
   }
   if (!sameOrigin) return false;
+  try {
+    if (opener.sessionStorage.getItem(OAUTH_POPUP_PENDING_KEY) === null) return false;
+  } catch {
+    // Unreadable opener storage is not our popup host either.
+    return false;
+  }
   const message: OAuthPopupMessage = { source: OAUTH_POPUP_SOURCE, provider, outcome };
   // Same-origin target: a foreign opener never receives app state, and this page
   // never trusts the opener beyond delivering the one-shot signal.
@@ -202,7 +225,11 @@ export function awaitOAuthPopup(options: AwaitOAuthPopupOptions): Promise<OAuthP
     // A popup that neither messages nor closes must not leave the attempt (and
     // its listener/timers) hanging forever; the caller falls back after this.
     const deadlineTimer = setTimeout(() => {
-      popup.close();
+      try {
+        popup.close();
+      } catch {
+        // A throwing close must not skip the settle below.
+      }
       settle("unavailable");
     }, deadlineMs);
 

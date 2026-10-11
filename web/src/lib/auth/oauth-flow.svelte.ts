@@ -11,10 +11,13 @@ import { authState } from "#lib/auth/auth-state.svelte.js";
 import type { AuthTransitionContext } from "#lib/auth/auth-state.svelte.js";
 import {
   awaitOAuthPopup,
+  clearOAuthPopupPending,
   defaultPopupOpen,
+  markOAuthPopupPending,
   navigateOAuthPopup,
   oauthPopupFeatures,
   oauthPopupName,
+  type OAuthPopupHandle,
   type OAuthPopupOpen,
   type OAuthPopupOutcome,
 } from "#lib/auth/oauth-popup.js";
@@ -112,33 +115,43 @@ export class OAuthFlow {
    * Popup variant of begin(): the popup opens synchronously (about:blank) while
    * the click's user gesture is still active, then receives the authorize URL
    * once the session bootstrap settles. Resolves with the popup outcome;
-   * callers fall back to begin() on anything but "completed".
+   * callers fall back to begin() on any outcome except completed/in_flight.
    */
   async beginPopup(returnTarget?: string): Promise<OAuthPopupOutcome> {
     if (this.pending) return "in_flight";
     if (!browser) return "unavailable";
     this.pending = true;
     this.lastErrorCode = null;
-    // window.open after an await is blocked once transient activation expires,
-    // so the window is opened first and pointed at the login URL afterwards.
-    const popup = (this.#openPopup ?? defaultPopupOpen)(
-      "about:blank",
-      oauthPopupName(this.provider),
-      oauthPopupFeatures(),
-    );
-    if (!popup) {
-      this.pending = false;
-      return "blocked";
-    }
+    // The marker lives in this tab's sessionStorage (shared with the popup) and
+    // tells the landing page it is our popup; it never outlives the attempt.
+    markOAuthPopupPending();
     try {
-      await this.client.ensureAnonymousSession();
-      if (returnTarget) setReturnTarget(returnTarget);
-      navigateOAuthPopup(popup, this.loginUrl);
-      return await awaitOAuthPopup({ provider: this.provider, url: this.loginUrl, popup });
-    } catch {
-      popup.close();
-      return "unavailable";
+      let popup: OAuthPopupHandle | null;
+      try {
+        popup = (this.#openPopup ?? defaultPopupOpen)(
+          "about:blank",
+          oauthPopupName(this.provider),
+          oauthPopupFeatures(),
+        );
+      } catch {
+        return "blocked";
+      }
+      if (!popup) return "blocked";
+      try {
+        await this.client.ensureAnonymousSession();
+        if (returnTarget) setReturnTarget(returnTarget);
+        navigateOAuthPopup(popup, this.loginUrl);
+        return await awaitOAuthPopup({ provider: this.provider, url: this.loginUrl, popup });
+      } catch {
+        try {
+          popup.close();
+        } catch {
+          // A throwing close must not turn "unavailable" into a rejection.
+        }
+        return "unavailable";
+      }
     } finally {
+      clearOAuthPopupPending();
       this.pending = false;
     }
   }

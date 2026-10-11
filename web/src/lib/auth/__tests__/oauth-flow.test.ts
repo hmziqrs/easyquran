@@ -14,7 +14,11 @@ import {
   type OAuthFlowStateLike,
   type OAuthProvider,
 } from "#lib/auth/oauth-flow.svelte.js";
-import { OAUTH_POPUP_SOURCE, type OAuthPopupHandle } from "#lib/auth/oauth-popup.js";
+import {
+  OAUTH_POPUP_PENDING_KEY,
+  OAUTH_POPUP_SOURCE,
+  type OAuthPopupHandle,
+} from "#lib/auth/oauth-popup.js";
 import type { OAuthPopupMessage } from "#lib/auth/oauth-popup.js";
 import { consumeReturnTarget, getReturnTarget } from "#lib/auth/return-target.js";
 
@@ -157,6 +161,8 @@ describe("OAuthFlow.beginPopup", () => {
       expect.stringMatching(/^eq-oauth-google-/),
       expect.any(String),
     );
+    // The pending marker lets the landing page recognize this popup.
+    expect(sessionStorage.getItem(OAUTH_POPUP_PENDING_KEY)).not.toBeNull();
     await vi.waitFor(() =>
       expect(popup.navigate).toHaveBeenCalledWith("https://eq.test/api/auth/google/v1/login"),
     );
@@ -169,6 +175,7 @@ describe("OAuthFlow.beginPopup", () => {
     );
     await expect(outcome).resolves.toBe("completed");
     expect(flow.pending).toBe(false);
+    expect(sessionStorage.getItem(OAUTH_POPUP_PENDING_KEY)).toBeNull();
   });
 
   it("closes the synchronously opened popup when the session bootstrap fails", async () => {
@@ -188,6 +195,56 @@ describe("OAuthFlow.beginPopup", () => {
     expect(popup.navigate).not.toHaveBeenCalled();
     expect(popup.closed).toBe(true);
     expect(flow.pending).toBe(false);
+    expect(sessionStorage.getItem(OAUTH_POPUP_PENDING_KEY)).toBeNull();
+  });
+
+  it("settles unavailable when the bootstrap fails and the popup close throws", async () => {
+    const client = mockClient();
+    client.ensureAnonymousSession.mockRejectedValueOnce(new Error("csrf down"));
+    const popup = new FakePopup();
+    popup.close = vi.fn(() => {
+      throw new Error("close refused");
+    });
+    const flow = createOAuthFlow("google", {
+      client,
+      state: mockState(),
+      navigate: vi.fn(),
+      openPopup: () => popup,
+    });
+
+    await expect(flow.beginPopup()).resolves.toBe("unavailable");
+    expect(flow.pending).toBe(false);
+    expect(sessionStorage.getItem(OAUTH_POPUP_PENDING_KEY)).toBeNull();
+  });
+
+  it("returns blocked and resets pending when the popup opener throws", async () => {
+    const client = mockClient();
+    const popup = new FakePopup();
+    const openPopup = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error("open refused");
+      })
+      .mockReturnValueOnce(popup);
+    const flow = createOAuthFlow("google", {
+      client,
+      state: mockState(),
+      navigate: vi.fn(),
+      openPopup,
+    });
+
+    await expect(flow.beginPopup()).resolves.toBe("blocked");
+    expect(flow.pending).toBe(false);
+    expect(sessionStorage.getItem(OAUTH_POPUP_PENDING_KEY)).toBeNull();
+
+    // A subsequent attempt proceeds normally.
+    const second = flow.beginPopup();
+    await vi.waitFor(() => expect(popup.navigate).toHaveBeenCalled());
+    dispatchPopupMessage(
+      { source: OAUTH_POPUP_SOURCE, provider: "google", outcome: "success" },
+      popup,
+    );
+    await expect(second).resolves.toBe("completed");
   });
 
   it("returns blocked when the browser refuses the popup", async () => {
