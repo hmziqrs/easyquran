@@ -46,8 +46,8 @@ fn normalize(email: &str) -> String {
 /// Unicode-aware normalization pass. `held` starts as every row's current email
 /// and gains each value this pass claims, so a candidate can only take a value
 /// no other row holds and no earlier candidate claimed — an UPDATE can never
-/// violate the UNIQUE index.
-async fn normalize_unicode_emails(conn: &impl sea_orm::ConnectionTrait) -> Result<(), DbErr> {
+/// violate the UNIQUE index. Returns whether any row was updated.
+async fn normalize_unicode_emails(conn: &impl sea_orm::ConnectionTrait) -> Result<bool, DbErr> {
     let raw = conn
         .query_all(sea_orm::Statement::from_string(
             sea_orm::DbBackend::Sqlite,
@@ -59,6 +59,7 @@ async fn normalize_unicode_emails(conn: &impl sea_orm::ConnectionTrait) -> Resul
         rows.push((row.try_get_by_index(0)?, row.try_get_by_index(1)?));
     }
 
+    let mut changed = false;
     let mut held: std::collections::HashSet<String> =
         rows.iter().map(|(_, email)| email.clone()).collect();
     for (id, email) in rows {
@@ -76,16 +77,40 @@ async fn normalize_unicode_emails(conn: &impl sea_orm::ConnectionTrait) -> Resul
         .await?;
         held.remove(&email);
         held.insert(normalized);
+        changed = true;
     }
-    Ok(())
+    Ok(changed)
 }
+
+// Safety valve only. Each row can change at most twice: once to its SQL-stable
+// ASCII-lowered form (pass 1), then at most once to its Rust-stable Unicode form
+// (pass 2; Rust-stable implies SQL-stable, so pass 1 never revisits it). Total
+// row updates are bounded by 2N, and every non-final loop iteration performs at
+// least one, so the loop reaches a fixpoint; a pathological blocker chain could
+// need more than the cap, and stopping there is harmless — both passes are
+// individually collision-safe and the one-reachable-normalized-row invariant
+// holds mid-loop (a normalized row is never moved, only created when absent).
+const MAX_NORMALIZATION_PASSES: usize = 10;
 
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let conn = manager.get_connection();
-        conn.execute_unprepared(LOWERCASE_EMAILS).await?;
-        normalize_unicode_emails(conn).await?;
+        // Loop both passes to a fixpoint in ONE run: pass 1 lowers the ASCII
+        // part of a leftover that pass 2's first sweep left alone (its mailbox
+        // was already claimed), so a single pair of passes is not idempotent
+        // (e.g. 'Ⱥ@q.com' + 'Ⱥ@Q.COM'). Repeat until neither pass changes a row.
+        for _ in 0..MAX_NORMALIZATION_PASSES {
+            let sql_changed = conn
+                .execute_unprepared(LOWERCASE_EMAILS)
+                .await?
+                .rows_affected()
+                > 0;
+            let rust_changed = normalize_unicode_emails(conn).await?;
+            if !sql_changed && !rust_changed {
+                break;
+            }
+        }
         Ok(())
     }
 
@@ -118,6 +143,25 @@ mod tests {
         .unwrap()
         .try_get_by_index::<String>(0)
         .unwrap()
+    }
+
+    /// Every row as (id, email), ordered by id — byte-level comparison basis.
+    async fn snapshot(db: &sea_orm::DatabaseConnection) -> Vec<(i32, String)> {
+        let rows = db
+            .query_all(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT id, email FROM users ORDER BY id",
+            ))
+            .await
+            .unwrap();
+        rows.iter()
+            .map(|row| {
+                (
+                    row.try_get_by_index::<i32>(0).unwrap(),
+                    row.try_get_by_index::<String>(1).unwrap(),
+                )
+            })
+            .collect()
     }
 
     #[tokio::test]
@@ -224,29 +268,20 @@ mod tests {
 
         let mgr = SchemaManager::new(&db);
         Migration.up(&mgr).await.unwrap();
-        let after_first = [
-            email_of(&db, 1).await,
-            email_of(&db, 2).await,
-            email_of(&db, 3).await,
-            email_of(&db, 4).await,
-            email_of(&db, 5).await,
-        ];
+        let after_first = snapshot(&db).await;
+        assert_eq!(after_first[0].1, "foo@example.com");
+        assert_eq!(after_first[1].1, "foo@x.com");
+        assert_eq!(after_first[2].1, "Foo@x.com");
+        assert_eq!(after_first[3].1, "Dup@X.com");
+        assert_eq!(after_first[4].1, "dup@x.com");
 
         Migration.up(&mgr).await.unwrap();
-        let after_second = [
-            email_of(&db, 1).await,
-            email_of(&db, 2).await,
-            email_of(&db, 3).await,
-            email_of(&db, 4).await,
-            email_of(&db, 5).await,
-        ];
+        let after_second = snapshot(&db).await;
 
-        assert_eq!(after_first, after_second, "second run must be a no-op");
-        assert_eq!(after_first[0], "foo@example.com");
-        assert_eq!(after_first[1], "foo@x.com");
-        assert_eq!(after_first[2], "Foo@x.com");
-        assert_eq!(after_first[3], "Dup@X.com");
-        assert_eq!(after_first[4], "dup@x.com");
+        assert_eq!(
+            after_first, after_second,
+            "second run must be byte-identical (true fixpoint)"
+        );
     }
 
     #[tokio::test]
@@ -415,22 +450,100 @@ mod tests {
 
         let mgr = SchemaManager::new(&db);
         Migration.up(&mgr).await.unwrap();
-        let after_first = [
-            email_of(&db, 1).await,
-            email_of(&db, 2).await,
-            email_of(&db, 3).await,
-        ];
+        let after_first = snapshot(&db).await;
+        assert_eq!(after_first[0].1, "ä@x.com");
+        assert_eq!(after_first[1].1, "ö@y.com");
+        assert_eq!(after_first[2].1, "ü@z.com");
 
         Migration.up(&mgr).await.unwrap();
-        let after_second = [
-            email_of(&db, 1).await,
-            email_of(&db, 2).await,
-            email_of(&db, 3).await,
-        ];
+        let after_second = snapshot(&db).await;
 
-        assert_eq!(after_first, after_second, "second run must be a no-op");
-        assert_eq!(after_first[0], "ä@x.com");
-        assert_eq!(after_first[1], "ö@y.com");
-        assert_eq!(after_first[2], "ü@z.com");
+        assert_eq!(
+            after_first, after_second,
+            "second run must be byte-identical (true fixpoint)"
+        );
+    }
+
+    #[tokio::test]
+    async fn unicode_leftover_ascii_lowering_is_fixed_in_one_run() {
+        let db = mem_db().await;
+        db.execute_unprepared(
+            "CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, \
+             name TEXT NOT NULL, email TEXT NOT NULL UNIQUE)",
+        )
+        .await
+        .unwrap();
+        // Round-3 repro: run #1 pass 2 normalizes id 1 and leaves id 2 alone
+        // (its mailbox is claimed), then a second run's pass 1 used to lower
+        // id 2's ASCII part. One up() must already reach that fixpoint.
+        db.execute_unprepared(
+            "INSERT INTO users (id, name, email) VALUES \
+             (1, 'a', 'Ⱥ@q.com'), \
+             (2, 'b', 'Ⱥ@Q.COM')",
+        )
+        .await
+        .unwrap();
+
+        let mgr = SchemaManager::new(&db);
+        Migration.up(&mgr).await.unwrap();
+
+        assert_eq!(email_of(&db, 1).await, "ⱥ@q.com");
+        assert_eq!(
+            email_of(&db, 2).await,
+            "Ⱥ@q.com",
+            "leftover keeps only its ASCII-lowered form after one run"
+        );
+
+        let after_first = snapshot(&db).await;
+        Migration.up(&mgr).await.unwrap();
+        assert_eq!(
+            after_first,
+            snapshot(&db).await,
+            "second run must change zero rows anywhere"
+        );
+    }
+
+    #[tokio::test]
+    async fn mixed_batch_reaches_fixpoint_in_one_run() {
+        let db = mem_db().await;
+        db.execute_unprepared(
+            "CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, \
+             name TEXT NOT NULL, email TEXT NOT NULL UNIQUE)",
+        )
+        .await
+        .unwrap();
+        // Nasty mix: Unicode pair, the repro pair, ASCII pair, whitespace, and
+        // an already-normalized row. One up() must settle all of it without
+        // hitting the iteration cap (observable: a second up() is a no-op).
+        db.execute_unprepared(
+            "INSERT INTO users (id, name, email) VALUES \
+             (1, 'a', 'Ä@X.com'), \
+             (2, 'b', 'ä@X.com'), \
+             (3, 'c', 'Ⱥ@q.com'), \
+             (4, 'd', 'Ⱥ@Q.COM'), \
+             (5, 'e', ' Z@z.com '), \
+             (6, 'f', 'z@Z.com'), \
+             (7, 'g', 'ok@x.com')",
+        )
+        .await
+        .unwrap();
+
+        let mgr = SchemaManager::new(&db);
+        Migration.up(&mgr).await.unwrap();
+        let after_first = snapshot(&db).await;
+
+        Migration.up(&mgr).await.unwrap();
+        let after_second = snapshot(&db).await;
+
+        assert_eq!(
+            after_first, after_second,
+            "fixpoint must be reached in the first run, not by a later one"
+        );
+        assert_eq!(after_first[1].1, "ä@x.com", "lowest-id Unicode row wins");
+        assert_eq!(after_first[2].1, "ⱥ@q.com");
+        assert_eq!(after_first[3].1, "Ⱥ@q.com");
+        assert_eq!(after_first[4].1, "z@z.com");
+        assert_eq!(after_first[5].1, "z@Z.com");
+        assert_eq!(after_first[6].1, "ok@x.com");
     }
 }
