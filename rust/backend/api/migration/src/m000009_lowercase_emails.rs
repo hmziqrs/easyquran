@@ -83,15 +83,17 @@ async fn normalize_unicode_emails(conn: &impl sea_orm::ConnectionTrait) -> Resul
 }
 
 // Safety valve only; unreachable in practice. The loop settles in at most
-// three iterations: after iteration 1's Rust pass every normalize-image is
-// held (the held set only ever grows — a removed old value is never a
-// normalize-image, since images are Rust-stable), so the Rust pass is a no-op
-// from iteration 2 on; iteration 2's SQL pass can only lower a value that is
-// still not SQL-stable, so iteration 3 changes nothing. (Fuzzed over ~10k
-// batches: max 3.) Should the cap ever be hit anyway, each pass remains
-// individually collision-safe and the one-reachable-normalized-row invariant
-// holds mid-loop — but the run would stop short of the byte-fixpoint and a
-// later run would keep converging.
+// three iterations. No normalize-image ever leaves the held set: the Rust
+// pass only removes values it is about to update, an updated value is not a
+// fixed point of normalize, and every image is one. So after iteration 1's
+// Rust pass every row's image is held and the Rust pass is a no-op from
+// iteration 2 on. After any SQL pass, every still-not-SQL-stable row's
+// SQL-image is held (the MIN-id row took it, or a pre-existing holder has it
+// and is SQL-stable, hence never released), so iteration 3's SQL pass has no
+// candidates; both passes no-op and the loop breaks. Should the cap ever be
+// hit anyway, each pass remains individually collision-safe and the
+// one-reachable-normalized-row invariant holds mid-loop — but the run would
+// stop short of the byte-fixpoint and a later run would keep converging.
 const MAX_NORMALIZATION_PASSES: usize = 10;
 
 #[async_trait::async_trait]
