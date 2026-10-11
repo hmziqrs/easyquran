@@ -15,6 +15,7 @@ import type {
   IdentitySummary,
   LinkedIdentity,
 } from "#lib/auth/account-client.js";
+import { GENERIC_TRY_AGAIN } from "#lib/auth/auth-copy.js";
 import { getAuthCopy } from "#lib/i18n/auth-copy.js";
 
 import ConnectedAccounts from "../ConnectedAccounts.svelte";
@@ -283,6 +284,48 @@ describe("ConnectedAccounts unlink flow", () => {
     await settle();
     expect(target.textContent).not.toContain("GitHub");
     expect(target.textContent).toContain("Google");
+  });
+
+  it("clears a refreshKey load error when a successful unlink response lands", async () => {
+    const failedLoad = deferred<AccountResult<IdentitySummary>>();
+    const unlinkResult = deferred<AccountResult<IdentitySummary>>();
+    const preUnlink = summary({ identities: [identity("github"), identity("google")] });
+    const postUnlink = summary({ identities: [identity("google")] });
+    const getIdentities = vi
+      .fn()
+      .mockResolvedValueOnce(ok(preUnlink))
+      .mockReturnValueOnce(failedLoad.promise);
+    const unlinkIdentity = vi.fn().mockReturnValue(unlinkResult.promise);
+    const client = mockClient(getIdentities, unlinkIdentity);
+    const instance = mount(RefreshHarness, { target, props: { client } });
+    unmountComponent = () => {
+      void unmount(instance);
+    };
+    await settle();
+    expect(getIdentities).toHaveBeenCalledTimes(1);
+
+    button("Unlink").click();
+    await settle();
+    button("bump").click();
+    await settle();
+    expect(getIdentities).toHaveBeenCalledTimes(2);
+
+    button("Confirm unlink").click();
+    await settle();
+    expect(unlinkIdentity).toHaveBeenCalledWith("github");
+
+    // The refresh fails while the unlink is in flight; the error affordance must
+    // not outlive the newer unlink snapshot.
+    failedLoad.resolve({ status: "error", httpStatus: 500, data: null, error: null });
+    await settle();
+    expect(errorTexts()).toContain(GENERIC_TRY_AGAIN);
+
+    unlinkResult.resolve(ok(postUnlink));
+    await settle();
+    expect(errorTexts()).toEqual([]);
+    expect(buttons().some((b) => b.textContent?.trim() === "Retry")).toBe(false);
+    expect(target.textContent).toContain("Google");
+    expect(target.textContent).not.toContain("GitHub");
   });
 
   it("moves focus to the confirm button on open and back to the row button on cancel", async () => {

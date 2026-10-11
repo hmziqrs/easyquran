@@ -100,9 +100,13 @@
     confirmingProvider = null;
     if (res.status === "ok") {
       if (res.data) {
-        // The unlink response is a newer authoritative snapshot; invalidate any
-        // in-flight load so its pre-unlink payload cannot overwrite it.
+        // The unlink response is a newer authoritative snapshot: invalidate any
+        // in-flight load (seq bump) and settle its pending flags, so neither a
+        // stale payload nor a stale error/Retry affordance can overwrite the
+        // fresh post-unlink state.
         loadSeq += 1;
+        loading = false;
+        loadError = null;
         summary = res.data;
       } else await load();
       return;
