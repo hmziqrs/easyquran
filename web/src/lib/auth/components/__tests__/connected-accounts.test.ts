@@ -437,3 +437,42 @@ describe("ConnectedAccounts link flow", () => {
     expect(navigate).toHaveBeenCalledWith(`${API_BASE}/auth/discord/v1/link`);
   });
 });
+
+describe("ConnectedAccounts transport failures", () => {
+  it("recovers from a thrown load via Retry instead of spinning forever", async () => {
+    const getIdentities = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("transport"))
+      .mockResolvedValueOnce(ok(summary({ identities: [identity("github")], passkeyCount: 1 })));
+    await mountWith(getIdentities, vi.fn());
+
+    expect(errorTexts()).toContain(GENERIC_TRY_AGAIN);
+    expect(target.textContent).not.toContain(copy.connectedLoading);
+
+    button("Retry").click();
+    await settle();
+    expect(getIdentities).toHaveBeenCalledTimes(2);
+    expect(errorTexts()).toEqual([]);
+    expect(target.textContent).toContain("GitHub");
+  });
+
+  it("settles the confirm state when unlink throws", async () => {
+    const getIdentities = vi
+      .fn()
+      .mockResolvedValue(ok(summary({ identities: [identity("github"), identity("google")] })));
+    const unlinkIdentity = vi.fn().mockRejectedValueOnce(new Error("transport"));
+    await mountWith(getIdentities, unlinkIdentity);
+
+    button("Unlink").click();
+    await settle();
+    button("Confirm unlink").click();
+    await settle();
+
+    expect(unlinkIdentity).toHaveBeenCalledWith("github");
+    expect(errorTexts()).toContain(copy.connectedUnlinkError);
+    expect(buttons().some((b) => b.textContent?.trim() === "Confirm unlink")).toBe(false);
+    expect(target.textContent).not.toContain(copy.pleaseWait);
+    expect(button("Unlink").disabled).toBe(false);
+    expect(focusedUnlinkProvider()).toBe("github");
+  });
+});

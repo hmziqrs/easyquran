@@ -6,6 +6,7 @@
     canUnlinkIdentity,
     identityProviderLabel,
     type AccountClient,
+    type AccountResult,
     type IdentityProvider,
     type IdentitySummary,
   } from "#lib/auth/account-client.js";
@@ -66,11 +67,23 @@
     const seq = ++loadSeq;
     loading = true;
     loadError = null;
-    const res = await client.getIdentities();
-    // A newer load (refreshKey flip, unlink refresh, Retry) wins; a late response
-    // must never overwrite its summary or error.
+    let res: AccountResult<IdentitySummary> | null = null;
+    try {
+      res = await client.getIdentities();
+    } catch {
+      // auth-client throws AuthTransportError on fetch reject/abort (timeout).
+      res = null;
+    } finally {
+      // A stale call must not clear a newer call's loading state.
+      if (seq === loadSeq) loading = false;
+    }
+    // A newer load (refreshKey flip, unlink refresh, Retry) wins; a late or
+    // thrown response must never overwrite its summary or error.
     if (seq !== loadSeq) return;
-    loading = false;
+    if (res === null) {
+      loadError = GENERIC_TRY_AGAIN;
+      return;
+    }
     if (res.status === "ok" && res.data) {
       summary = res.data;
       return;
@@ -95,9 +108,24 @@
     if (pendingProvider) return;
     pendingProvider = provider;
     unlinkError = null;
-    const res = await client.unlinkIdentity(provider);
-    pendingProvider = null;
-    confirmingProvider = null;
+    let res: AccountResult<IdentitySummary> | null = null;
+    try {
+      res = await client.unlinkIdentity(provider);
+    } catch {
+      // auth-client throws AuthTransportError on fetch reject/abort (timeout).
+      res = null;
+    } finally {
+      // Single-flight via pendingProvider, so settling both flags is safe even
+      // when the request throws instead of returning a result.
+      pendingProvider = null;
+      confirmingProvider = null;
+    }
+    if (res === null) {
+      await tick();
+      focusUnlinkButton(provider);
+      unlinkError = copy.connectedUnlinkError;
+      return;
+    }
     if (res.status === "ok") {
       if (res.data) {
         // The unlink response is a newer authoritative snapshot: invalidate any
