@@ -2,8 +2,13 @@
 
 Grounded in current code. Implementation brief for the next feature batch: translation recents/labels,
 bookmark collections with context, reading sessions, homepage widgets, personal analytics, azkar
-snippets, and author/source grouping — plus a committed sync design for bookmarks + reading sessions
-(§9) and a testable edge-case catalogue (§10).
+snippets, author/source grouping, search recents/ranking, and locale suggest — plus a committed sync
+design for bookmarks + reading sessions (§9) and a testable edge-case catalogue (§10).
+
+**Authority**: this document is the latest direction. Where an older doc conflicts, this document
+wins — see §14 (Superseded directions). Pending work absorbed from `ux-audit`,
+`plan/09-locale-suggest.md`, `settings-system.md`, `search-system.md`, `copy-corrections.md`, the
+security audits, and research docs is mapped in §13.
 
 ---
 
@@ -32,13 +37,17 @@ snippets, and author/source grouping — plus a committed sync design for bookma
   explicit-field write `:181-210`. Only bookmarks+folders sync. Migrations end at `m000010`; next is
   `m000011`.
 - Gap IDs to align with: `docs/remaining/feature-gap-catalogue.md` — P01/P02/P03/P04/P05/P08, R04,
-  R10, R11, D06, D08.
+  R10, R11, D01, D06, D08.
 - **Never repurpose `translation_popularity`**
   (`rust/backend/api/src/services/translation_popularity_store.rs`) as reader popularity — docs
   explicitly say it measures API demand (`docs/quran-system.md:330,346`).
 - Sync design is normative in **§9**; every behavior in §9 has a scenario in **§10** (EC-xx).
   FIX-marked scenarios are current-behavior bugs found in the audit and must be fixed as part of this
   batch.
+- **Security coordination**: the R2-08 account-isolation work (outbox partitioned by account,
+  `expectedUserId`, generation guards) is in flight in the working tree. §9.5 adopts it as the basis
+  with one divergence: legacy unowned entries are **quarantined, never discarded** (EC-48). Land R2-08
+  first; this design rebases on it, never around it.
 
 ---
 
@@ -65,16 +74,34 @@ snippets, and author/source grouping — plus a committed sync design for bookma
    `initial.normalization.sourceId`).
 2. Modal: add a pinned "Recent" group (global, above rails) + recency boost inside the active rail.
    Untouched users see today's behavior exactly (no reorder until real usage exists).
-3. Labels: visible secondary line = `translator — name · Provenance`; show provenance badge
-   (Tanzil / QuranEnc / QUL). Handle the attribution-mismatch case (`quranenc.en.saheeh`: name
+3. Labels (TRX-13/15/16): visible secondary line = `translator — name · Provenance`; provenance badge
+   (Tanzil / QuranEnc / QUL). **Display name always from the catalogue, never reconstructed from URL
+   segments** (TRX-15). Credit on its own line with `<bdi lang="en">` (TRX-13). Short language tags
+   per line (EN · UR · FR · ID · BN), full credits once per page (TRX-14). Hover card = full name +
+   translator + one-line description ("Modern, easy English") + "Downloaded" / "Needs internet"
+   instead of byte size (TRX-16). Handle the attribution-mismatch case (`quranenc.en.saheeh`: name
    "Saheeh International", translator "Noor International Center") without merging them.
 4. Persist per-author last-used variant (pairs with Feature 8): `Map<normalizedTranslator, id>`.
+5. Picker search (TRX-04): accent/case-insensitive matching + aliases (Sahih/Saheeh,
+   Pickthall/Pickthal) + bounded edit distance ≤ 1.
+6. Chip strip (TRX-05/06): wrap chips or collapse to "Main: Saheeh International · +5 more ▾"; the
+   reading chip has no ×; wording uses "reading translation"/"main", **never "primary"** (the primary
+   concept was removed end to end in `502effc2`).
+7. Transliteration rendering (TRX-02): view-layer parse `<u>`/`<b>`; legend "underlined = stretch the
+   vowel"; strip markup in copy.
+8. Empty translation verses (TRX-11 + `docs/research/translation-empty-verses.md`): show Arabic plus
+   "No translation for this verse in {translator}."; set `dir` from the declared direction, not
+   `auto`. Four known upstream blanks: `fa.safavi` 80:39, `ku.asan` 108:3, `sq.mehdiu` 21:56 +
+   77:14. DBs stay immutable — never "fix" the rows. EC-45.
 
 **Acceptance**: recents survive reload; ranking only changes on explicit selection; no new catalogue
-fields required (derivation only); modal labels show author + source for every row.
+fields required (derivation only); modal labels show author + source for every row; picker search
+finds "Saheeh" from "sahih"; empty verses render the placeholder + declared `dir`; chip strip never
+overflows without a summary; gates green.
 
 **Touch**: `TranslationModal.svelte`, new store, `reading-text.svelte.ts` (keep its 8-cap chips,
-delegate ordering to MRU), `reading-flow.ts`.
+delegate ordering to MRU), `reading-flow.ts`, `VerseRow.svelte`/`ReadingAyah.svelte` (transliteration +
+empty verse), copy strings.
 
 ---
 
@@ -99,15 +126,28 @@ delegate ordering to MRU), `reading-flow.ts`.
 3. UI: folder sections sorted by `position` then name; per-folder count (exists); bulk move/delete
    (P05); folder kind picker in `FoldersPanel.svelte`; per-folder progress bar derived from session
    progress (Feature 4) when `kind:"daily"`.
-4. Anon: decide either "folders require sign-in" (keep) or a local-only folder mode; don't silently
+4. Folder UI polish (ACCT-04): full-width "New folder" field + pill **Add** button; per-row selects
+   replaced with a "Move to…" menu (folder icon + chevron); one row component shared between
+   signed-in and anonymous bookmarks.
+5. Bookmark rows (BM-01/BM-02): single row component on Yours / Bookmarks / Home; one verse format
+   everywhere — **"Al-Baqarah · verse 1"**; row shows the first ~80 characters of the verse (Arabic,
+   plus translation if the reader uses one), the saved date ("Saved 3 days ago"), and a note icon when
+   a note exists.
+6. Remove flow (BM-04): optimistic remove + toast "Bookmark removed · Undo" for 5 seconds; applies to
+   signed-in and offline removals alike.
+7. List controls (FLOW-08): sort by date / folder / surah; filter by folder; group headers.
+8. Sync status line (ACCT-05): `text-caption` (13.5 px) instead of 12 px grey; offline banner above
+   the list.
+9. Anon: decide either "folders require sign-in" (keep) or a local-only folder mode; don't silently
    degrade.
 
-**Acceptance**: manual order survives sync; `kind` round-trips LWW; tombstone deletion (EC-07); no
-change to per-verse uniqueness in this feature (that's Feature 3).
+**Acceptance**: manual order survives sync; `kind` round-trips LWW; tombstone deletion (EC-07); one
+row component reused across surfaces; undo restores the row; anon sort-by-date works once Feature 4's
+v5 gives legacy anon bookmarks timestamps (EC-46).
 
 **Touch**: `web/src/lib/bookmarks/schema.ts`, `store.svelte.ts`, `domain.ts`, `FoldersPanel.svelte`,
 `BookmarkRow.svelte`, `bookmarks/+page.svelte`, Rust `migration/src/m000011_*.rs`,
-`db/sea_models/bookmark_folder/*`, `bookmark_v1/*`.
+`db/sea_models/bookmark_folder/*`, `bookmark_v1/*`, toast/undo primitive.
 
 ---
 
@@ -134,14 +174,17 @@ change to per-verse uniqueness in this feature (that's Feature 3).
    `m000008_bookmark_verse_unique.rs`). Update wire slices, `bookmark_v1/validator.rs` ranges, client
    `schema.ts` decoders. Deletes become tombstones (§9.3).
 4. Capture at toggle time: read current `sourceId` from route context (`routeContextFromParams` /
-   `SurahReader` initial) and active session id; store both.
+   `SurahReader` initial) and active session id; store both. Capture surface = verse mode (VerseTools);
+   reading mode does not instantiate verse actions (accepted, EC-47).
 5. List/resume: build hrefs with `surahAyahPathFor(surahRouteContext(bookmark.sourceId ?? "uthmani"), …)`
    so bookmarks reopen in their saved translation; show source badge on `BookmarkRow`.
-6. Share seam: keep `reader-share.svelte.ts` untouched here; range/copy work is Feature 7.
+6. Count + sync label (ACCT-03): home/bookmarks card shows the real count and "3 saved · synced" once
+   sync is live.
+7. Share seam: keep `reader-share.svelte.ts` untouched here; range/copy work is Feature 7.
 
 **Acceptance**: bookmark created on a `/t/…` route reopens in that translation; session-scoped
 bookmarks filter by active session; deletions are tombstones so stale queued upserts cannot resurrect
-(EC-02); anon path unchanged.
+(EC-02); anon path unchanged; saved translation missing from catalogue falls back to Arabic (EC-38).
 
 **Touch**: `schema.ts`, `store.svelte.ts`, `domain.ts`, `VerseTools.svelte`, `BookmarkRow.svelte`,
 `bookmarks/+page.svelte`, `yours/+page.svelte`, Rust migration + `bookmark_v1` +
@@ -173,28 +216,37 @@ bookmarks filter by active session; deletions are tombstones so stale queued ups
    migrate into a default `free` session named "Reading" with a **deterministic id** derived from the
    user id (UUIDv5-style, fixed namespace; EC-22) so two devices of the same account migrate to the
    same session instead of duplicating it.
-3. Writers take/derive `sessionId`: `openVerse`, `markRead`, `recordProgress`, `pushRecent`,
+3. Schema v5 also absorbs three pending reader-state items:
+   - persist `translationFamily` (TRX-10; today session-only per `settings-system.md` §4);
+   - give anonymous bookmarks a `savedAt` timestamp so sort-by-date works (BM-02 second pass);
+   - scope notes per account (privacy fix, EC-17).
+4. Writers take/derive `sessionId`: `openVerse`, `markRead`, `recordProgress`, `pushRecent`,
    `clearReadingPosition`; range readers start calling `markRead` with the range's first/last visible
    verse.
-4. Surfaces: session switcher (in `/yours` header + settings), `/yours` continue card reads active
+5. Surfaces: session switcher (in `/yours` header + settings), `/yours` continue card reads active
    session; palette `continueReading` (`app-actions.ts:39-67`), global hotkey,
    `resumeToVerse/resumeToLastRead` (`web/src/lib/reader/resume.ts`) become session-aware;
    `resumeCtxFor` call sites on index pages.
-5. **Sync (committed, not optional)**: new `reading-session` domain → `reading_session_v1` module +
+6. Position preservation on context switch (FLOW-07): switching translation/language from the reader
+   keeps the current position (`translation-nav.ts` `hrefFor` path), never resets to surah top.
+7. **Sync (committed, not optional)**: new `reading-session` domain → `reading_session_v1` module +
    tables (§9.1–9.2). Sessions, positions, and per-surah progress all sync; **recents stay
    device-local** (navigation convenience, no sync value). Client store modeled on `BookmarksStore`;
    register via `registerDomain`. Logout/expiry follows the quarantine policy (§9.5).
-6. Daily/weekly semantics: `kind:"daily"` = day buckets derived per **device-local day** (reuse
+8. Daily/weekly semantics: `kind:"daily"` = day buckets derived per **device-local day** (reuse
    `todayLocal()` from `engagement-state.ts:41-46`); `kind:"weekly"` = week bucket; buckets stay
    derived, never stored computed state (EC-36).
+9. Per-script typography (TRX-12): per-script size ×1.25 and Nastaliq for `ur` — reader settings
+   surface, rides the v5 bump.
 
 **Acceptance**: switching sessions never clobbers another session's position/recents/progress;
 page/juz/hizb reading updates the active session (EC-42); sync round-trips sessions/positions/progress;
-progress never regresses across devices (EC-05); anon fully functional; gates green.
+progress never regresses across devices (EC-05); translation switch keeps position (FLOW-07); anon
+fully functional; gates green.
 
 **Touch**: `reader-core.svelte.ts`, `reader-persistence.svelte.ts`, `reader-session.svelte.ts`,
-`annotations.svelte.ts`, `resume.ts`, `RangeReader.svelte`, `/yours`, palette sources,
-`purge-hook.ts`; new `web/src/lib/sessions/{schema,store,domain}.svelte.ts` + Rust
+`annotations.svelte.ts`, `resume.ts`, `RangeReader.svelte`, `translation-nav.ts`, `/yours`, palette
+sources, `purge-hook.ts`; new `web/src/lib/sessions/{schema,store,domain}.svelte.ts` + Rust
 `reading_session_v1` module + migrations.
 
 ---
@@ -213,27 +265,49 @@ progress never regresses across devices (EC-05); anon fully functional; gates gr
   forward-compat slot (`settings-document.ts:29-44`) — no production consumer.
 - Marketing `/` stays prerendered static — widgets are an **app-home** feature; don't touch marketing
   (D02 note).
+- Design-system constraints (`docs/design-system.md` is normative): §6 hue slots
+  (`var(--hue-N)`/`-soft`/`-legible`/`--on-hue-N`, never a colour prop), §13 radii (blocks 10 px,
+  large panels 14 px, pills 999, `rounded-[Npx]` banned in `ui/`), §14 no elevation/shadows, §34
+  `MetricCard` is non-interactive by design, §61 semantic tokens only. `Card` and `MetricCard` have
+  **zero live consumers** and `MetricCard` is hue-capped `1|2|3|4` — widget primitives must extend
+  the card grammar within these rules, not invent a parallel one.
 
 **Build**
 
 1. Widget registry: `web/src/lib/home/widgets.ts` —
    `{id, title, component, defaultSpan, settingsSchema}`. V1 widgets: `continue-reading`, `bookmarks`,
-   `recents`, `most-read` (consumes Feature 6 when ready), `daily-ayah` (backend `/quran/random`
-   already deterministic date-seeded — D07).
+   `notes` (BM-03), `recents`, `most-read` (consumes Feature 6 when ready), `daily-ayah` (backend
+   `/quran/random` already deterministic date-seeded — D07).
 2. Layout model persisted under new key `easyquran.home` (v1):
-   `{v, widgets:[{id, visible, span, settings}]}`; default = exactly today's `/yours` order. Unknown
-   ids dropped on decode; missing ids appended.
+   `{v, widgets:[{id, visible, span, settings}]}`; default = exactly today's `/yours` order (Continue
+   first — this satisfies HOME-01 without touching the marketing hero). Unknown ids dropped on decode;
+   missing ids appended.
 3. Edit mode: show/hide toggles + move up/down (buttons first; drag optional, no new dep without
    approval). Per-widget settings (e.g. bookmarks widget: folder filter; recents: count).
 4. Every widget needs explicit empty state (fix the vanishing-sections issue).
-5. Keep `/yours` `prerender = false`, client hydration via `onMount` as today; hrefs via `*For(ctx,…)`
-   only.
+5. First-run card (HOME-04 adapted to `/yours`): one-line choice "Read in: Arabic only · Arabic +
+   English · Arabic + اردو …" (default to browser language, remember the choice) and show the chosen
+   translation name on the Continue card.
+6. Home polish (HOME-02): centre column, stretch cards, real bookmark **count** in the numeral slot,
+   icon fixes, 2560 px width no longer clamps at 1024 px.
+7. Yours as the single hub (BM-01): Continue → Bookmarks → Notes → Recent, one verse format
+   everywhere ("Al-Baqarah · verse 1"), same row component as `/bookmarks` (Feature 2.5).
+8. Notes surfacing (BM-03): Notes widget on Yours (verse + first line of note + date); small note icon
+   on verses in the reader; the verse panel opens straight to the note.
+9. Wire the dormant `prefs.instantResume` (exists in `prefs.svelte.ts:85,203-205` but no UI consumer):
+   "Resume instantly" becomes a Settings → Reading toggle (HOME-01 second pass).
+10. Keep `/yours` `prerender = false`, client hydration via `onMount` as today; hrefs via `*For(ctx,…)`
+    only.
+11. Sync input: `settings-system.md` §7 says prefs sync has "no storage, endpoint, or conflict
+    policy" — that gap is the cost of the synced-widget option (open decision §11.3).
 
 **Acceptance**: default layout = today's `/yours` pixel-order; toggling/reordering persists; widget
-decode is forward-compatible; no SSR/prerender regressions; marketing untouched.
+decode is forward-compatible; no SSR/prerender regressions; marketing untouched; widgets obey
+design-system §6/§13/§14/§34/§61; every widget has an empty state.
 
 **Touch**: `yours/+page.svelte`, new `web/src/lib/home/*`, `prefs.svelte.ts` or new store, i18n
-messages (`web/messages/reader/*.json`), possibly `settings-document.ts` if synced later (decide).
+messages (`web/messages/reader/*.json`), `settings-document.ts` only if synced later (decide), card
+primitives under `web/src/lib/components/card/*`.
 
 ---
 
@@ -266,11 +340,15 @@ messages (`web/messages/reader/*.json`), possibly `settings-document.ts` if sync
    registration bug for what happens when you do). Queued events follow §9.5 quarantine on logout;
    consent revoke drops queued events. Update privacy copy (`web/messages/en.json`, settings privacy
    section) and resolve SCR-05 contradiction.
-5. Local fallback: compute the same summary client-side from the reader blob for anon users; server
+5. GA4 honesty (SCR-05 + SET-04): either scrub surah paths from `page_view` or make product analytics
+   opt-in, so the landing copy ("nothing tracks your reading") is true. Consent default is an open
+   decision (§11.4); current defaults are analytics ON (`consent.svelte.ts:16`).
+6. Local fallback: compute the same summary client-side from the reader blob for anon users; server
    summary takes over when signed in.
 
 **Acceptance**: summary returns real most-read surah/ayah for a test user; consent off = no events
-leave device; admin analytics untouched; no sha/Quran DB writes; rate limits + validation tested.
+leave device; admin analytics untouched; no sha/Quran DB writes; rate limits + validation tested; GA4
+paths scrubbed or consent default flipped.
 
 **Touch**: Rust module + migration + sea-models + tests; web store/emit + consent + copy.
 
@@ -289,6 +367,21 @@ leave device; admin analytics untouched; no sha/Quran DB writes; rate limits + v
   (`quran_v1/controller.rs:1258-1329`) and `GET /quran/ayahs?keys=2:285,2:286` or
   `fromGlobal/toGlobal` (`:466-546`); web stitches spans via `range-fetch.ts` (300-ayah chunks, cap
   2).
+- Route-grammar constraints (from `navigation-audit.md` + `url-scheme-a.md`, both implemented; stale
+  `rub` rows there are superseded, §14):
+  - `parseReaderPath` is **path-only** — no query or fragment enters the parser. Range permalinks must
+    be additive query/fragment, never a new path shape.
+  - `?v={surah}:{ayah}` is the scroll-position mirror and stays `{s}:{a}` — do not overload it for
+    ranges; use a distinct param or extend deliberately at all three read sites + the write site
+    (`SurahReader.writeHistoryState`).
+  - `#ayah-{s}-{a}` is read as exactly **one** ayah in three places; range reveal needs new parsing.
+  - Reserved-segment machinery must learn `azkar`: `RESERVED_SURAH_SEGMENTS` +
+    `RANGE_SEGMENT_KINDS` (`web/src/lib/i18n/reader.ts:19-54`), `REJECT` (`web/src/params.ts:28-49`),
+    `RANGE_SEGMENT`/`READER_ROUTE_PATTERNS` (`web/src/hooks.ts:12-19`), `isReaderPathname` segment
+    cases (`reader.ts:131-149`).
+  - `nav-guard.test.ts` `HAND_BUILT_RESERVED_SEGMENT` regex bans only `page|juz|hizb|rub|t` — extend
+    it with the snippet segment so hand-built `/azkar/...` literals fail; keep new components inside
+    the guarded glob roots (`(application)/**/*.svelte`, `#lib/components`, `#lib/search`).
 
 **Build**
 
@@ -308,17 +401,21 @@ leave device; admin analytics untouched; no sha/Quran DB writes; rate limits + v
    uniqueness per §9.1 (range columns not in the key), decoders, `BookmarkRow` range label
    ("2:285–286"), and resume via `surahAyahPathFor` + range highlight.
 5. Copy/share ranges: extend `reader-share.svelte.ts` with a range variant (loop `verseRef`, joined
-   text + canonical URL). Permalink grammar (R11 open decision): either `?ayah=2:255-2:286` (extend
-   the three `?v=` regex sites) or keep fragment-based `#ayah-2-285`..`#ayah-2-286` + snippet route.
-   Decide once, then update R11 note.
-6. Optional: "save snippet to folder" = bookmark all refs with a shared folder (Feature 2 synergy).
+   text + canonical URL). Permalink grammar (R11): either `?ayah=2:255-2:286` (extend the three `?v=`
+   regex sites) or keep fragment-based `#ayah-2-285`..`#ayah-2-286` + snippet route. Decide once
+   (§11.5), then update the R11 note in the gap catalogue.
+6. Search coordinate parsing (R12): teach `TRAILING_REF` (`web/src/lib/search/nav/parse.ts:27`) the
+   range form `2:255-286` once the grammar is fixed; today `-` is a separator and `2-255` parses as a
+   single ayah.
+7. Optional: "save snippet to folder" = bookmark all refs with a shared folder (Feature 2 synergy).
 
 **Acceptance**: Ayat al-Kursi and last-two-of-Baqarah pages render Arabic + any chosen translation;
-bookmarking a snippet stores the range; share includes permalink; nav-guard green; caps enforced.
+bookmarking a snippet stores the range; share includes permalink; nav-guard green; reserved segments
+updated; caps enforced.
 
-**Touch**: new snippets data + routes + i18n; `quran.ts` helpers + nav-guard; `RangeReader`/
-`SurahReader` as needed; `reader-share.svelte.ts`; `schema.ts`/`store.svelte.ts`/`domain.ts`; Rust
-migration + `bookmark_v1` validator/slice/tests.
+**Touch**: new snippets data + routes + i18n; `quran.ts` helpers + nav-guard + reserved-segment
+machinery; `RangeReader`/`SurahReader`/`Sidebar` as needed; `reader-share.svelte.ts`;
+`schema.ts`/`store.svelte.ts`/`domain.ts`; Rust migration + `bookmark_v1` validator/slice/tests.
 
 ---
 
@@ -340,12 +437,14 @@ migration + `bookmark_v1` validator/slice/tests.
 
 **Build**
 
-1. Preferred: **derive** grouping client-side — normalized translator key
+1. **Derive grouping client-side** — normalized translator key
    (trim/casefold/whitespace-collapse, `"Unknown"` bucket) + `translationSourceOf(id)`. No catalogue
-   schema change, no Rust change, no upload/deploy ripple.
+   schema change, no Rust change, no upload/deploy ripple. This supersedes the build-time dedupe +
+   alias-id direction from ux-audit TRX-03 (§14).
 2. Modal: one row per author (within language rail) → expandable source variants with provenance
    badges + size; "show all sources" toggle for exact-dup works; selection resolves to a concrete id
-   and records MRU per author (Feature 1.4).
+   and records MRU per author (Feature 1.4). Picker search uses the alias/fuzzy rules from Feature 1.5
+   (TRX-04).
 3. Only if the user approves a catalogue change (authorId/publisher fields), the full ripple must be
    done together: `db/quran/translations/scripts/lib.ts` (`writeCatalog` :331-344),
    `db/quran/qul/scripts/catalog.ts` (:91-112), `web/src/lib/data/translations.ts`
@@ -353,10 +452,85 @@ migration + `bookmark_v1` validator/slice/tests.
    `loader.rs`/`store.rs`, and sha-guard tests must stay green. Default recommendation: **don't** —
    derive.
 4. URL grammar stays `/[surah]/t/[lang]/[translator]` (first-dot split, `quran.ts:60-67`); grouping
-   is presentation-only.
+   is presentation-only. Readable slugs (`/t/en/haleem`, TRX-09) are superseded — not adopted (§14).
+5. Labels come from the catalogue (`translator`, `name`, provenance), never from URL segments
+   (TRX-15).
 
 **Acceptance**: picker shows grouped authors with source variants; selecting a variant opens the
-right id; recents rank the author not the variant; no catalogue break; gates green.
+right id; recents rank the author not the variant; no catalogue break; gates green; catalogue guard
+test extended for duplicate `(language, translator)` groups (ux-audit guardrail) with a frozen
+allow-list for the 7 known exact-dup works.
+
+---
+
+## Feature 9 — Search: recent queries + relevance ranking (absorbed)
+
+**Current state** (`docs/search-system.md`)
+
+- Search shipped Aug 2026: palette discovery, Arabic worker→Rust fallback, translation full-text.
+  Selection persistence already shipped (`web/src/lib/stores/search-selection.svelte.ts`,
+  `easyquran.search.selection`, cross-tab) — the doc's §5 does not list it (doc-sync gap, fix in the
+  same commit as this feature).
+- Pending per search-system §5 + §8: reader-drawer integration, richer relevance ranking, recent-query
+  history, Arabic-script typo tolerance, RTL-script translation search, Turkish dotted/dotless-i
+  rules, palette cold-source second keystroke, localized group labels.
+
+**Build**
+
+1. Recent queries: new persisted store `easyquran.search.recent` v1
+   (`{v, entries:[{q, at}]}`, cap ~10, dedupe consecutive). Display on empty palette + `/search`
+   (when `?q` absent). Privacy-gated: local-only, no sync, explicit clear control; never record
+   queries when the user is in a private/no-persist mode.
+2. Relevance ranking: add a scoring pass for translation hits (today mushaf order, §8) — term
+   frequency + early-verse bias + exact-phrase boost; keep the existing Arabic normalization contract
+   untouched.
+3. Palette polish: cold-source search should not require a second keystroke (warm the resolved
+   source); localized group labels.
+4. Reader drawer integration for the new search surface (D01 remaining) — lowest priority; ship after
+   recents + ranking.
+5. RTL-script translation search + Turkish `i`/`ı` folding; Arabic-script typo tolerance stays out
+   unless bounded (document as known limit if not done).
+
+**Acceptance**: recents persist + clear; ranking demonstrably improves translation-hit ordering vs
+mushaf order in a fixture test; no regression to the Arabic parity contract; `search-system.md` §5/§8
+updated to reflect selection persistence + shipped items.
+
+**Touch**: new store + palette/search page components, `web/src/lib/quran/search/*`,
+`web/src/lib/search/**`, `web/messages/*`, `docs/search-system.md`.
+
+---
+
+## Feature 10 — Locale suggest (Phase 1, absorbed)
+
+**Source**: `docs/plan/09-locale-suggest.md` (draft, not implemented) — adopted as-is for Phase 1,
+with the Phase 2 conflict resolved below.
+
+**Build**
+
+1. Detection: `suggestedUiLocale()` from first-match `navigator.languages`; `currentUiLocale(pathname)`;
+   target URL via `localizeHref(deLocalizeHref(...))` + `/ar` normalization + same-path guard. Never
+   redirect, never set cookies, never use geo/server signals.
+2. Trigger matrix + dismissal contract from the plan §3: one-time popup, 6 trigger conditions,
+   dismissal permanent per locale, forced-close writes nothing, re-check at fire, cross-tab
+   `onStorageKey`.
+3. Storage `easyquran.localeSuggest` v1 `{v, resolved:{locale:"accepted"|"dismissed"}}` (literal-union
+   decode, in-memory write-through).
+4. UI: `LocaleSuggest.svelte` (bits-ui Dialog copied from AuthModal, `z-[92]`, SSR-safe `{#if open}`),
+   current-locale `lang`/`dir` + endonym, 5 message ids with Unicode isolation characters, 1500 ms
+   double-rAF + `afterNavigate` re-eval + shown-latch + retry-once.
+5. Analytics: `locale_suggest_shown|accepted|dismissed` + `dismiss_reason` — consent-gated, same
+   pipeline as Feature 6.
+6. Phase 2 (translation suggest): **superseded** — no `recommended` flag in the bake pipeline
+   (§14). If revisited, derive recommendations client-side from browser languages + the existing
+   catalogue (Feature 8 grouping gives the data).
+7. Docs to amend in the same commit: `docs/quran-system.md` Part 2 (if it lists locale behavior) and
+   gap catalogue L01 shipped-evidence.
+
+**Acceptance**: first-run popup fires only under the trigger matrix; "dismiss" is permanent per
+locale and cross-tab; no redirect ever; gates green; analytics events respect consent.
+
+**Touch**: `web/src/lib/components/i18n/LocaleSuggest.svelte`, `web/src/lib/i18n/locale-suggest.svelte.ts`,
+root layout mount, messages, tests per plan §8.
 
 ---
 
@@ -395,11 +569,13 @@ hex). Every query user-scoped.
 ### 9.2 Modules + client domains
 
 - `POST /bookmark/v1/sync` — extended mutation fields; same envelope + verified guard + 100/60
-  limiter; batch ≤ 200; same LWW helpers (`db/sea_models/bookmark/actions.rs` pattern).
+  limiter; batch ≤ 200; same LWW helpers (`db/sea_models/bookmark/actions.rs` pattern). Adopt the
+  in-flight R2-08 hardening: `expectedUserId` on the request, server rejects cookie-owner mismatch
+  before reads or writes.
 - New `reading_session_v1`: `POST /reading-session/v1/sync` — mutations `session.upsert`,
   `session.delete`, `position.upsert`, `progress.upsert`; response
   `{applied, skipped, sessions, positions, progress}` (full snapshot per user, same as bookmarks);
-  `auth_guard::verified`; 100/60 limiter; batch ≤ 200.
+  `auth_guard::verified`; 100/60 limiter; batch ≤ 200; same `expectedUserId` guard.
 - Client: `web/src/lib/sessions/{schema,store,domain}.svelte.ts` modeled on
   `web/src/lib/bookmarks/*`; register via `registerDomain`. `SyncPausedError` before any request when
   signed out (contract: `sync/types.ts:58-63`).
@@ -421,7 +597,7 @@ hex). Every query user-scoped.
   happens on the next flush trigger: online poll 5s, periodic 30s, visibilitychange, online event,
   debounce 2s (`engine.svelte.ts:22-28,173-220`).
 - **Clock skew**: server validator normalizes incoming `updatedAt = min(updatedAt, server_now + 60s)`
-  so a device with a fast clock cannot dominate LWW forever (EC-33).
+  so a device with a fast clock cannot dominate LWW forever (EC-34).
 - **Ties**: snapshot queries gain secondary ordering `ORDER BY updated_at ASC, id ASC`; the client
   collapse uses the same deterministic rule (today tie order is undefined — FIX, EC-35).
 - **Tombstones**: delete sets `deleted_at` (LWW compared on `updated_at`). A newer upsert clears the
@@ -444,7 +620,8 @@ Replaces today's silent `#migrateLegacy` (`bookmarks/store.svelte.ts:447-478`).
   ("Account has a newer version — account wins" / "Device version is newer — device wins"); counts of
   new vs conflicting vs duplicate.
 - Merge executes: enqueue local items as upserts **with their existing timestamps** (LWW decides);
-  flush; result toast "Merged X, skipped Y (newer account versions kept)".
+  flush; result toast "Merged X, skipped Y (newer account versions kept)" (ACCT-09 wording: promise
+  "Keep your bookmarks and reading sessions safe and on all your devices" — notes stay local).
 - **Not now**: nothing enqueued; marker `eq.merge.deferred.{userId}`; re-prompt on next app start (not
   every reload). **Don't ask again** sets `eq.merge.reviewed.{userId}`. Markers are per-account.
 - Failure handling: markers are written only after enqueues resolve — fixes the current bug where
@@ -455,16 +632,26 @@ Replaces today's silent `#migrateLegacy` (`bookmarks/store.svelte.ts:447-478`).
 
 ### 9.5 Logout, expiry, cache policy — **never destroy unsynced user data silently**
 
+- **R2-08 basis**: adopt the in-flight account-isolation design — the durable outbox is partitioned by
+  account, transport/response/optimistic work is guarded by generation/owner, and the server rejects
+  `expectedUserId` mismatches before reads or writes. Divergence (this doc wins): legacy unowned
+  entries are **quarantined, not discarded** — attribute them to the last known account when
+  determinable (`eq.auth.session-hint`), else park them in `eq.sync.quarantine.legacy` and surface a
+  one-time review on the next login (EC-48).
 - **Explicit logout**: account view cleared from memory (privacy — the next user on the browser sees
   nothing); pending unsynced mutations move to a per-user quarantine key
   `eq.sync.quarantine.{userId}` (never destroyed — fixes today's `engine.clear("bookmarks")` data
   loss at `store.svelte.ts:415`); device-local reader data (position, "on this device" session, notes)
-  kept so offline reading continues; synced sessions hidden until re-login.
+  kept so offline reading continues; synced sessions hidden until re-login. If pending/quarantined
+  data exists, show a one-line notice on sign-out: "Your unsynced changes are kept on this device for
+  your next sign-in" (ACCT-01 adapted — no copy-into-local prompt).
 - **Session expiry / remote terminate / ban** (401/403 or probe → anonymous): same as logout for sync
   purposes + banner "Session expired — sign in to resume sync" (new copy). Wire the
   `current-session-terminated` transition — it is a dead kind today (no producer in `web/src`;
   `purge-hook.ts:7` branch unreachable). Detect via auth-client on 401/403 (`AUTH_004`/`AUTH_009`)
   and probe; also clear the stale in-memory CSRF token and retry once (FIX: stale-CSRF wedge, EC-15).
+  Note R2-04: sessions now have a 14-day **absolute** age on top of inactivity expiry — expiry is
+  bounded and reachable; the banner must be ready for it.
 - **Re-login same user**: quarantine auto-resumes (visible via `SyncIndicator` + toast). No merge
   dialog for your own pending mutations.
 - **Re-login different user**: quarantine untouched and hidden; resumes when its owner logs in
@@ -480,7 +667,7 @@ Replaces today's silent `#migrateLegacy` (`bookmarks/store.svelte.ts:447-478`).
 ### 9.6 Multi-tab
 
 - **Auth cross-tab**: add a `storage` listener on `eq.auth.session-hint` → other tabs re-probe and
-  fire transitions (none today — FIX, EC-30).
+  fire transitions (none today — FIX, EC-31).
 - **Overlay retire cross-tab**: BroadcastChannel `easyquran-sync`, messages
   `{domain, drainedIds, userId}` → other tabs retire optimistic overlays (fixes the DEFERRED note at
   `store.svelte.ts:346-347`). Payloads are ids only, never user content.
@@ -491,7 +678,8 @@ Replaces today's silent `#migrateLegacy` (`bookmarks/store.svelte.ts:447-478`).
 ### 9.7 Audit fixes this design must land (each has an EC scenario)
 
 - Per-user gating: `applyServer` and enqueue callbacks gate on a boolean `authed`, not user id — a
-  round from user A can land in user B's view on fast account switches (FIX, EC-17).
+  round from user A can land in user B's view on fast account switches (FIX, EC-17). R2-08's
+  generation/owner guards are the adopted mechanism.
 - Outbox destroyed on logout/expiry (FIX, EC-14/EC-15); quarantine replaces it.
 - No tombstones (FIX, EC-02); tombstone model above.
 - Pending-delete matching is id-scoped, not verse-scoped — a same-verse rival from a stale snapshot
@@ -506,13 +694,29 @@ Replaces today's silent `#migrateLegacy` (`bookmarks/store.svelte.ts:447-478`).
 - `SyncPausedError` can clear a real `lastError`; paused + no failures → phase "idle" (FIX, EC-43).
 - Coalesced flush with a different domain filter drops the second filter (latent today; keep the
   guard when a second domain lands) (FIX, EC-44).
+- Legacy unowned outbox entries: R2-08 discards; this doc quarantines (FIX, EC-48).
+
+### 9.8 Sync UI + copy (absorbed)
+
+- `SyncIndicator` typography: 12 px grey → `text-caption` (13.5 px); offline banner above the list
+  (ACCT-05).
+- Sign-out notice copy when quarantined data exists (§9.5, ACCT-01 adapted).
+- Merge toast copy (ACCT-09): "2 bookmarks from this device were added to your account" style —
+  honest promise wording that matches final scope (bookmarks + sessions sync; notes local).
+- Bookmark local-only copy (BM-05): "Your bookmarks are saved on this device. Sign in (free) to keep
+  them safe and see them on your other devices."
+- Copy ledger pass (same phase): C01 (auth copy promises notes/progress sync — rewrite to match final
+  scope), C02 (privacy/delete-account claims), C06/C07 (stale "on the way" FAQ copy — bookmark sync
+  and 378 sources/105 languages are shipped), C08 (feature-truth review). Update
+  `docs/remaining/copy-corrections.md` as entries resolve.
 
 ---
 
 ## 10. Edge-case catalogue — testable scenarios
 
 Format: **EC-nn · title** — Given / When / Then + resolution. FIX = current-behavior bug this batch
-fixes. Test targets: Rust integration (`rust/backend/api/tests/*.rs`), web unit (`web/src/lib/**/__tests__/*.test.ts`), manual QA.
+fixes. Test targets: Rust integration (`rust/backend/api/tests/*.rs`), web unit
+(`web/src/lib/**/__tests__/*.test.ts`), manual QA.
 
 ### A. Multi-device conflicts
 
@@ -587,7 +791,8 @@ component test / manual QA.
 **EC-14 · Explicit logout keeps unsynced data (FIX: engine.clear loss)**
 Given pending unsynced mutations. When the user logs out. Then account view is cleared, mutations are
 quarantined under `eq.sync.quarantine.{userId}`, device-local reader data remains, re-login resumes
-the queue. Nothing is destroyed. Test: `store.test.ts` + `engine.test.ts`.
+the queue, and the sign-out notice is shown. Nothing is destroyed. Test: `store.test.ts` +
+`engine.test.ts`.
 
 **EC-15 · Session expiry mid-use (FIX: dead event + stale CSRF)**
 Given an expired session (401 `AUTH_009` / 403 `AUTH_004`) while mutations are queued. When the next
@@ -742,6 +947,37 @@ Given `flush("a")` in flight and `flush("b")` called. When the drain loops. Then
 (today: b is never drained by that call). Latent until a second domain exists — fix before adding the
 sessions/analytics domains. Test: `engine.test.ts`.
 
+### I. Absorbed edge cases (from ux-audit / research)
+
+**EC-45 · Empty translation verse (TRX-11)**
+Given a verse blank in the selected translation (`fa.safavi` 80:39, `ku.asan` 108:3, `sq.mehdiu`
+21:56 + 77:14). When it renders. Then Arabic shows with "No translation for this verse in
+{translator}."; the translation span uses the declared direction, not `dir="auto"`; copy/share
+strips the placeholder. DB rows stay untouched (immutable). Test: `ReadingAyah`/`VerseRow`
+component test + copy test.
+
+**EC-46 · Anonymous bookmark sort-by-date after v5 (BM-02)**
+Given legacy anonymous bookmarks with no timestamps. When schema v5 hydrates them with `savedAt`.
+Then they sort deterministically (legacy entries without a known time sort last, stable); newly
+saved anon bookmarks carry real timestamps. Test: `reader-persistence.test.ts` + `store.test.ts`.
+
+**EC-47 · Reading-mode bookmark capture (accepted)**
+Given the user reads in reading mode (no verse actions instantiated by design,
+`reader-virtualization.md`). When they want to bookmark. Then capture stays verse-mode-only —
+documented accepted behavior, no invisible dead control. Test: manual QA.
+
+**EC-48 · Legacy unowned outbox entries (FIX: R2-08 divergence)**
+Given outbox entries with no account owner (pre-partition legacy). When the next login runs. Then
+entries are attributed to the last known account when determinable, else parked in
+`eq.sync.quarantine.legacy` and surfaced once for review — never silently discarded (R2-08 discards;
+this doc wins). Test: `store.test.ts` + `outbox.test.ts`.
+
+**EC-49 · Locale suggest dismissal (Feature 10)**
+Given the locale-suggest dialog shown for locale `ur`. When the user dismisses. Then
+`easyquran.localeSuggest.resolved.ur = "dismissed"` persists across reload and tabs; forced-close
+writes nothing; no redirect ever fires; re-trigger only for a different, still-unsuggested locale.
+Test: `locale-suggest.test.ts` + manual QA.
+
 ---
 
 ## 11. Open decisions (ask the user before building these)
@@ -751,27 +987,91 @@ sessions/analytics domains. Test: `engine.test.ts`.
 2. ~~Reading sessions sync~~ **Resolved (§9.2)**: sessions + positions + progress sync; recents stay
    device-local.
 3. Widget layout: local-only (`easyquran.home`) or synced (wire `settings-document.ts` + backend)?
+   Cost input: `settings-system.md` §7 — prefs sync currently has no storage, endpoint, or conflict
+   policy.
 4. Analytics: consent default (GA currently defaults analytics ON) and granularity sent (surah only vs
-   surah+ayah)?
+   surah+ayah)? Includes SCR-05/SET-04: scrub GA paths vs opt-in.
 5. Range permalink grammar + span cap (Feature 7.5 / EC-39).
 6. Azkar route name/scope: `/azkar` vs `/duas`; editorial governance for the curated list.
 7. Folder `kind:"daily"` semantics: name-only label vs real goal metadata (`targetAyahsPerDay`) +
    progress bar.
 8. Accepted losses to confirm: session row-level LWW (EC-06) and verse-collapse context loss (EC-04) —
    field-level merge is out of scope; confirm acceptable.
+9. ~~Locale-suggest Phase 2 catalogue flag~~ **Resolved (§14)**: superseded — derive-only, no bake
+   pipeline change.
+10. ~~Search recents/ranking~~ **Resolved**: bundled as Feature 9.
 
 ## 12. Suggested sequencing
 
-1. **Feature 1 + 8** — translation UX, no schema risk.
+1. **Feature 1 + 8** — translation UX, no schema risk (absorbed TRX items + EC-45).
 2. **Feature 3 + 4 + §9.1–9.3** — bookmark context + sessions: migrations (`m000011`+), tombstones,
-   new `reading_session_v1` module, client domains, LWW/merge rules. (Keep the existing silent
-   bookmarks migration until step 3 lands.)
-3. **§9.4–9.7 + §10 FIX items** — merge review (non-silent), quarantine, cross-tab auth + overlay
-   retire, and every FIX scenario (EC-02, 11, 14–17, 25–30, 40, 42–44).
-4. **Feature 2** — folders enrich on top (kind/position/bulk).
-5. **Feature 7** — snippets; extends the bookmark model with ranges.
-6. **Feature 5** — widgets; consumes sessions.
-7. **Feature 6** — analytics; consumes session emit points.
+   new `reading_session_v1` module, client domains, LWW/merge rules; schema v5 (translationFamily,
+   anon timestamps, notes scoping). (Keep the existing silent bookmarks migration until step 3 lands.)
+3. **§9.4–9.8 + §10 FIX items** — merge review (non-silent), quarantine, cross-tab auth + overlay
+   retire, R2-08 rebase (EC-48), copy pass (C01/C02/C06/C07/C08 + merge/session copy), and every FIX
+   scenario (EC-02, 11, 14–17, 25–30, 40, 42–44).
+4. **Feature 2** — folders enrich on top (kind/position/bulk + absorbed UI items).
+5. **Feature 7** — snippets; extends the bookmark model with ranges (reserved-segment machinery first).
+6. **Feature 5** — widgets; consumes sessions (design-system constraints; HOME-01/02/04; BM-01/03).
+7. **Feature 6** — analytics; consumes session emit points (SCR-05/SET-04 included).
+8. **Feature 9** — search recents + ranking (after F6 consent pipeline exists).
+9. **Feature 10** — locale suggest Phase 1 (independent; can slot anywhere after F6 for its events).
 
 Each phase ends with all three gates green and its own commit(s) on the current branch. Every phase
 lands its EC scenarios as tests (Rust integration + web unit) in the same commit.
+
+---
+
+## 13. Absorbed work map
+
+| Source                                                                                             | Items                                                                                                      | Absorbed into                                                                                      |
+| -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `research/ux-audit`                                                                                | BM-01, BM-02, BM-03, BM-04, BM-05                                                                          | Features 2, 3, 5, §9.8                                                                             |
+|                                                                                                    | ACCT-01, ACCT-03, ACCT-04, ACCT-05, ACCT-07, ACCT-08, ACCT-09                                              | §9.5, §9.8, Features 2, 3                                                                          |
+|                                                                                                    | HOME-01, HOME-02, HOME-04                                                                                  | Feature 5                                                                                          |
+|                                                                                                    | TRX-02, TRX-04, TRX-05, TRX-06, TRX-10, TRX-11, TRX-12, TRX-13, TRX-14, TRX-15, TRX-16                     | Features 1, 4, 8, EC-45                                                                            |
+|                                                                                                    | TRX-03, TRX-09                                                                                             | Superseded (§14)                                                                                   |
+|                                                                                                    | FLOW-07, FLOW-08                                                                                           | Features 4, 2                                                                                      |
+|                                                                                                    | SCR-05, SET-04                                                                                             | Feature 6                                                                                          |
+|                                                                                                    | Guardrails: catalogue duplicate `(language, translator)` test; round-trip persistence test                 | Feature 8 acceptance, §10                                                                          |
+| `plan/09-locale-suggest.md`                                                                        | Phase 1 (all)                                                                                              | Feature 10                                                                                         |
+|                                                                                                    | Phase 2 + open q2 (catalogue flag)                                                                         | Superseded (§14)                                                                                   |
+| `settings-system.md`                                                                               | §4 translationFamily persistence; §7 prefs-sync gap                                                        | Feature 4.3, §11.3                                                                                 |
+| `search-system.md`                                                                                 | recent queries, relevance ranking, drawer integration, §8 known limits; selection-persistence doc-sync gap | Feature 9                                                                                          |
+| `remaining/copy-corrections.md`                                                                    | C01, C02, C06, C07, C08                                                                                    | §9.8 copy pass                                                                                     |
+| `security-audit-2026-10-11.md`                                                                     | deploy validation, recent-auth, Argon2 semaphore, CI gates                                                 | **Not product features** — tracked in the audit; only auth-lifecycle items referenced (§9.5, §9.7) |
+| `security-audit-rounds-2026-10-11.md`                                                              | R2-08 account isolation (adopted + divergence), R2-04 absolute age                                         | §9.2, §9.5, §9.7, EC-48                                                                            |
+| `research/translation-empty-verses.md`                                                             | 4 blank verses + display decision                                                                          | Feature 1.8, EC-45                                                                                 |
+| `research/navigation-audit.md` + `url-scheme-a.md`                                                 | path-only parser, `?v=` scope, fragment single-ayah, reserved segments, nav-guard regex                    | Feature 7 constraints                                                                              |
+| `design-system.md`                                                                                 | §6/§13/§14/§34/§61 constraints; Card/MetricCard unused + hue cap                                           | Feature 5                                                                                          |
+| `reader-virtualization.md`                                                                         | reading mode has no verse actions                                                                          | EC-47                                                                                              |
+| `plan/README.md`                                                                                   | 10 owner items (Section.svelte delete, CI workflow, dead tokens, accents)                                  | **Not absorbed** — separate small backlog                                                          |
+| `plans/remove-primary-translation.md`                                                              | done (`502effc2`)                                                                                          | Archive; "never primary wording" noted in Feature 1.6                                              |
+| `research/mushaf-rendering-research.md`, `indopak-*`, `qurancom-mirror.md`, `design-enhancements/` | orthogonal projects/proposals                                                                              | **Not absorbed** — separate tracks                                                                 |
+
+## 14. Superseded directions (this doc wins)
+
+1. **ux-audit TRX-03** (build-time dedupe by `(language, translator)` + alias ids) → superseded by
+   Feature 8 runtime grouping. Alias-id machinery is not needed; no catalogue rewrite.
+2. **ux-audit TRX-09** (readable QUL slugs `/t/en/haleem`) → superseded by Feature 8.4; URL grammar
+   unchanged.
+3. **ux-audit ACCT-01** (copy bookmarks into the local store on sign-out) → superseded by §9.5
+   quarantine + sign-out notice.
+4. **security rounds R2-08 "discard legacy unowned entries"** → superseded by §9.5/EC-48: quarantine
+   and attribute, never discard silently. The rest of R2-08 (partition, `expectedUserId`, generation
+   guards) is adopted.
+5. **ux-audit HOME-01** (continue card above the marketing hero) → superseded by Feature 5: widgets on
+   `/yours`, marketing stays static; HOME-04's first-run choice lands on `/yours`.
+6. **`plan/09-locale-suggest.md` Phase 2 + open q2** (catalogue `recommended` flag) → superseded by
+   Feature 8 derive-only. Phase 1 adopted as-is.
+7. **`copy-corrections.md` C01 prescribed fix** ("scope the promise to bookmarks") → superseded by the
+   new scope: bookmarks + sessions sync; notes stay local. Copy pass in §9.8.
+8. **`design-enhancements/`** (card/outline studies) → not adopted; its specifics (font weights >600,
+   radii 12–20 px) violate current design-system guards.
+9. **`navigation-audit.md` D6 / `url-scheme-a.md` §1–2 rub rows** (`/rub/N` live) → stale; rub routes
+   were retired (`5d54ca6b`), 308 to the quarter's first ayah. Code wins.
+
+Doc status after absorption: `plans/remove-primary-translation.md` archive (done); `plan/README.md`
+keep (separate backlog); `plan/09-locale-suggest.md` keep (Feature 10 is its implementation contract);
+`feature-gap-catalogue.md` keep (parity register; R11 note to update when §11.5 is decided);
+`ux-audit` keep (checklist; absorbed items are cross-referenced here).
