@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { FRESH_AUTH_REQUIRED, isFreshAuthenticationRequired } from "#lib/auth/fresh-auth-client.js";
   import { tick } from "svelte";
   import { Button } from "#lib/components/ui/button/index.js";
   import {
@@ -99,9 +100,27 @@
     loadError = GENERIC_TRY_AGAIN;
   }
 
-  function link(provider: IdentityProvider): void {
-    rememberLinkProvider(provider);
-    navigate(`${client.auth.apiBase}/auth/${provider}/v1/link`);
+  async function link(provider: IdentityProvider): Promise<void> {
+    if (pendingProvider) return;
+    pendingProvider = provider;
+    unlinkError = null;
+    try {
+      const result = await client.startIdentityLink(provider);
+      if (result.status === "ok" && result.data) {
+        rememberLinkProvider(provider);
+        navigate(result.data);
+      } else if (result.status === "anonymous" && onAnonymous) {
+        await onAnonymous();
+      } else if (isFreshAuthenticationRequired(result.error)) {
+        unlinkError = FRESH_AUTH_REQUIRED;
+      } else {
+        unlinkError = GENERIC_TRY_AGAIN;
+      }
+    } catch {
+      unlinkError = GENERIC_TRY_AGAIN;
+    } finally {
+      pendingProvider = null;
+    }
   }
 
   async function unlink(provider: IdentityProvider): Promise<void> {
@@ -149,7 +168,7 @@
       unlinkError = copy.connectedSessionExpiredError;
       return;
     }
-    unlinkError = res.error?.message ?? copy.connectedUnlinkError;
+    unlinkError = isFreshAuthenticationRequired(res.error) ? FRESH_AUTH_REQUIRED : res.error?.message ?? copy.connectedUnlinkError;
   }
 
   async function openConfirm(provider: IdentityProvider): Promise<void> {
@@ -259,7 +278,7 @@
     {#if linkableProviders.length > 0}
       <div class="flex flex-wrap gap-2">
         {#each linkableProviders as provider (provider)}
-          <Button variant="secondary" size="sm" onclick={() => link(provider)}>
+          <Button variant="secondary" size="sm" disabled={pendingProvider !== null} onclick={() => link(provider)}>
             {copy.connectedLinkProvider(identityProviderLabel(provider))}
           </Button>
         {/each}

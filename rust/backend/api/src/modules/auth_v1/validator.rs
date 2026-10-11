@@ -80,6 +80,14 @@ pub struct V1LoginTotpPayload {
 }
 
 #[derive(Debug, Deserialize, Serialize, Validate)]
+pub struct V1ReauthenticatePayload {
+    #[validate(length(min = PASSWORD_MIN, max = PASSWORD_MAX))]
+    pub password: String,
+    #[validate(length(min = 6, max = 64))]
+    pub code: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct V1TerminateSessionPath {
     pub id: i32,
 }

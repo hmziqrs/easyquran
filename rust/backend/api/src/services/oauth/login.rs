@@ -1,4 +1,6 @@
-use sea_orm::{ActiveModelTrait, ConnectionTrait, Set, TransactionTrait};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, Set, TransactionTrait,
+};
 use tracing::{error, info, instrument, warn};
 
 use rux_auth::AuthBackend as AuthBackendTrait;
@@ -181,11 +183,10 @@ fn classify_existing_link(identity_user_id: i32, user_id: i32) -> LinkOutcome {
     }
 }
 
-/// Attach `provider_user_id` to `user_id` without touching users, sessions, or provider metadata.
-/// A duplicate-entry insert (concurrent link of the same identity) is re-checked so the outcome
-/// stays deterministic instead of surfacing a constraint error.
-pub async fn link_identity_to_user(
-    db: &sea_orm::DatabaseConnection,
+/// Attaches a provider identity without changing sessions or provider metadata.
+/// Rechecks duplicate identities to distinguish existing ownership.
+pub async fn link_identity_to_user<T: ConnectionTrait>(
+    db: &T,
     user_id: i32,
     provider: OAuthProvider,
     provider_user_id: &str,
@@ -223,6 +224,43 @@ pub async fn link_identity_to_user(
             }
         }
     }
+}
+
+/// Keeps the confirmed credential and factor state locked through identity linking.
+pub async fn link_identity_to_unchanged_user(
+    db: &sea_orm::DatabaseConnection,
+    confirmed: &user::Model,
+    provider: OAuthProvider,
+    provider_user_id: &str,
+) -> Result<LinkOutcome, ErrorResponse> {
+    let transaction = db.begin().await?;
+    let password_matches = match &confirmed.password {
+        Some(password) => user::Column::Password.eq(password.clone()),
+        None => user::Column::Password.is_null(),
+    };
+    let factor_matches = match &confirmed.two_fa_secret {
+        Some(secret) => user::Column::TwoFaSecret.eq(secret.clone()),
+        None => user::Column::TwoFaSecret.is_null(),
+    };
+    let locked = user::Entity::update_many()
+        .col_expr(
+            user::Column::UpdatedAt,
+            sea_orm::sea_query::Expr::col(user::Column::UpdatedAt).into(),
+        )
+        .filter(user::Column::Id.eq(confirmed.id))
+        .filter(user::Column::SessionAuthSecret.eq(confirmed.session_auth_secret.clone()))
+        .filter(password_matches)
+        .filter(user::Column::TwoFaEnabled.eq(confirmed.two_fa_enabled))
+        .filter(factor_matches)
+        .exec(&transaction)
+        .await?;
+    if locked.rows_affected != 1 {
+        return Err(crate::services::fresh_auth::required());
+    }
+    let outcome =
+        link_identity_to_user(&transaction, confirmed.id, provider, provider_user_id).await?;
+    transaction.commit().await?;
+    Ok(outcome)
 }
 
 /// Outcome of a provider web callback: a login session for the given user id, a successful link

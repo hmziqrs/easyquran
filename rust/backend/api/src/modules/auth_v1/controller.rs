@@ -9,7 +9,7 @@ use axum_macros::debug_handler;
 use axum_client_ip::ClientIp;
 
 use rux_auth::AuthBackend as AuthBackendTrait;
-use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use tracing::{error, info, instrument, warn};
@@ -20,8 +20,8 @@ use crate::{
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
     modules::auth_v1::validator::{
-        V1LoginPayload, V1LoginTotpPayload, V1RegisterPayload, V1TwoFADisablePayload,
-        V1TwoFASetupPayload, V1TwoFAVerifyPayload,
+        V1LoginPayload, V1LoginTotpPayload, V1ReauthenticatePayload, V1RegisterPayload,
+        V1TwoFADisablePayload, V1TwoFASetupPayload, V1TwoFAVerifyPayload,
     },
     services::{abuse_limiter, auth::AuthSession, mail::send_email_verification_code, turnstile},
     utils::twofa,
@@ -230,8 +230,7 @@ pub async fn log_in(
         Err(err) => {
             error!(error = ?err, client_ip = %secure_ip, "Authentication error");
             tracing::Span::current().record("result", "auth_error");
-            Err(ErrorResponse::new(ErrorCode::InternalServerError)
-                .with_message("Authentication error"))
+            Err(ErrorResponse::from(err))
         }
     }
 }
@@ -381,6 +380,81 @@ pub async fn pending_login(auth: AuthSession) -> Result<impl IntoResponse, Error
 }
 
 #[debug_handler]
+pub async fn fresh_auth_status(
+    State(state): State<AppState>,
+    auth: AuthSession,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let user = auth.user_required()?;
+    let ready = crate::services::fresh_auth::available(&auth, &state.sea_db).await?;
+    Ok(Json(
+        json!({ "ready": ready, "has_password": user.password.is_some(), "two_fa_enabled": user.two_fa_enabled }),
+    ))
+}
+
+#[debug_handler]
+pub async fn reauthenticate(
+    State(state): State<AppState>,
+    auth: AuthSession,
+    payload: ValidatedJson<V1ReauthenticatePayload>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    confirm_password_authentication(&state.sea_db, &state.gate_store, &auth, payload.0).await?;
+    Ok(Json(json!({ "ready": true })))
+}
+
+pub async fn confirm_password_authentication(
+    db: &DatabaseConnection,
+    gate: &rux_request_gate::InMemoryStore,
+    auth: &AuthSession,
+    payload: V1ReauthenticatePayload,
+) -> Result<(), ErrorResponse> {
+    let owner = auth.user_required()?;
+    abuse_limiter::limiter(gate, &format!("reauth:{}", owner.id), ABUSE_LIMITER_CONFIG).await?;
+    let existing = user::Entity::find_by_id_with_404(db, owner.id).await?;
+    if existing.session_auth_secret != owner.session_auth_secret {
+        return Err(crate::services::fresh_auth::required());
+    }
+    let authenticated = auth
+        .backend()
+        .authenticate_password(existing.email.clone(), payload.password)
+        .await
+        .map_err(ErrorResponse::from)?
+        .filter(|user| {
+            user.id == owner.id
+                && user.session_auth_secret == existing.session_auth_secret
+                && user.password == existing.password
+                && user.two_fa_enabled == existing.two_fa_enabled
+                && user.two_fa_secret == existing.two_fa_secret
+        })
+        .ok_or_else(|| ErrorResponse::new(ErrorCode::InvalidCredentials))?;
+    if auth
+        .backend()
+        .check_ban(&owner.id)
+        .await
+        .map_err(ErrorResponse::from)?
+        .is_banned()
+    {
+        return Err(ErrorResponse::new(ErrorCode::AccountLocked));
+    }
+    if authenticated.two_fa_enabled {
+        let code = payload.code.ok_or_else(|| {
+            ErrorResponse::new(ErrorCode::MissingRequiredField)
+                .with_message("Authentication code required")
+        })?;
+        abuse_limiter::limiter(gate, &totp_limiter_key(owner.id), ABUSE_LIMITER_CONFIG).await?;
+        verify_current_second_factor(db, &authenticated, &code).await?;
+    }
+    let current = user::Entity::find_by_id_with_404(db, owner.id).await?;
+    if current.session_auth_secret != authenticated.session_auth_secret
+        || current.password != authenticated.password
+        || current.two_fa_enabled != authenticated.two_fa_enabled
+        || current.two_fa_secret != authenticated.two_fa_secret
+    {
+        return Err(crate::services::fresh_auth::required());
+    }
+    crate::services::fresh_auth::issue(auth, &current).await
+}
+
+#[debug_handler]
 #[instrument(skip(state, payload), fields(user_id, result))]
 pub async fn register(
     State(state): State<AppState>,
@@ -453,8 +527,7 @@ pub async fn register(
             warn!(error = ?err, "Registration failed");
             tracing::Span::current().record("result", "failure");
             // Do not echo the raw SeaORM error: a unique-violation would leak that the email is already registered (enumeration oracle).
-            return Err(ErrorResponse::new(ErrorCode::InternalServerError)
-                .with_message("Registration could not be completed at this time"));
+            return Err(registration_failure(err));
         }
     }
 
@@ -468,6 +541,14 @@ enum RegisterOutcome {
     Created(user::Model),
     DuplicateEmail,
     Failed(ErrorResponse),
+}
+
+fn registration_failure(error: ErrorResponse) -> ErrorResponse {
+    if error.code == ErrorCode::RateLimited {
+        return error;
+    }
+    ErrorResponse::new(ErrorCode::InternalServerError)
+        .with_message("Registration could not be completed at this time")
 }
 
 fn classify_register_outcome(outcome: Result<user::Model, ErrorResponse>) -> RegisterOutcome {
@@ -500,7 +581,10 @@ pub async fn twofa_setup(
         let key_prefix = totp_setup_limiter_key(user.id);
         abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
     }
+    crate::services::fresh_auth::consume(&auth, &state.sea_db).await?;
     let setup = prepare_twofa_setup(&state.sea_db, &existing).await?;
+    let current = user::Entity::find_by_id_with_404(&state.sea_db, user.id).await?;
+    crate::services::fresh_auth::issue_setup(&auth, &current).await?;
     Ok((StatusCode::OK, session_rotated_headers(false), Json(setup)))
 }
 
@@ -529,12 +613,8 @@ pub async fn prepare_twofa_setup(
     })?;
     let backup_hashes = {
         let codes_for_hash = backup_codes.clone();
-        tokio::task::spawn_blocking(move || twofa::hash_backup_codes(&codes_for_hash))
-            .await
-            .map_err(|e| {
-                ErrorResponse::new(ErrorCode::InternalServerError)
-                    .with_message(format!("Backup code hashing failed: {e}"))
-            })?
+        crate::services::password_work::run(move || twofa::hash_backup_codes(&codes_for_hash))
+            .await?
     };
     let backup_hashes_json = serde_json::json!(backup_hashes);
 
@@ -557,6 +637,7 @@ pub async fn prepare_twofa_setup(
     let changed = user::Entity::update_many()
         .set(active)
         .filter(user::Column::Id.eq(existing.id))
+        .filter(user::Column::SessionAuthSecret.eq(existing.session_auth_secret.clone()))
         .filter(user::Column::TwoFaEnabled.eq(false))
         .filter(secret_matches)
         .filter(counter_matches)
@@ -643,24 +724,79 @@ async fn verify_current_second_factor(
     if let Some(stored) = &existing.two_fa_backup_codes {
         let stored_vec: Vec<String> =
             serde_json::from_value(stored.clone()).unwrap_or_else(|_| vec![]);
-        let backup_ok = {
+        let updated_hashes = {
             let stored_clone = stored_vec;
             let code_clone = code.to_string();
-            tokio::task::spawn_blocking(move || {
-                twofa::consume_backup_code(&stored_clone, &code_clone).is_some()
+            crate::services::password_work::run(move || {
+                twofa::consume_backup_code(&stored_clone, &code_clone)
             })
-            .await
-            .map_err(|e| {
-                ErrorResponse::new(ErrorCode::InternalServerError)
-                    .with_message(format!("Backup code verification failed: {e}"))
-            })?
+            .await?
         };
-        if backup_ok {
-            return Ok(());
+        if let Some(updated_hashes) = updated_hashes {
+            let factor_matches = match &existing.two_fa_secret {
+                Some(secret) => user::Column::TwoFaSecret.eq(secret.clone()),
+                None => user::Column::TwoFaSecret.is_null(),
+            };
+            let changed = user::Entity::update_many()
+                .col_expr(
+                    user::Column::TwoFaBackupCodes,
+                    sea_orm::sea_query::Expr::value(json!(updated_hashes)),
+                )
+                .filter(user::Column::Id.eq(existing.id))
+                .filter(user::Column::SessionAuthSecret.eq(existing.session_auth_secret.clone()))
+                .filter(user::Column::TwoFaEnabled.eq(existing.two_fa_enabled))
+                .filter(factor_matches)
+                .filter(user::Column::TwoFaBackupCodes.eq(stored.clone()))
+                .exec(db)
+                .await?;
+            if changed.rows_affected == 1 {
+                return Ok(());
+            }
         }
     }
 
     Err(ErrorResponse::new(ErrorCode::InvalidToken).with_message("Invalid 2FA or backup code"))
+}
+
+async fn enable_twofa_for_unchanged_user(
+    db: &DatabaseConnection,
+    existing: &user::Model,
+    backup_hashes: Option<Vec<String>>,
+) -> Result<user::Model, ErrorResponse> {
+    let factor_matches = match &existing.two_fa_secret {
+        Some(secret) => user::Column::TwoFaSecret.eq(secret.clone()),
+        None => user::Column::TwoFaSecret.is_null(),
+    };
+    let mut update = user::Entity::update_many()
+        .col_expr(
+            user::Column::TwoFaEnabled,
+            sea_orm::sea_query::Expr::value(true),
+        )
+        .col_expr(
+            user::Column::UpdatedAt,
+            sea_orm::sea_query::Expr::value(chrono::Utc::now().fixed_offset()),
+        )
+        .filter(user::Column::Id.eq(existing.id))
+        .filter(user::Column::SessionAuthSecret.eq(existing.session_auth_secret.clone()))
+        .filter(user::Column::TwoFaEnabled.eq(existing.two_fa_enabled))
+        .filter(factor_matches);
+    if let Some(hashes) = backup_hashes {
+        let stored = existing
+            .two_fa_backup_codes
+            .clone()
+            .ok_or_else(|| ErrorResponse::new(ErrorCode::InvalidToken))?;
+        update = update
+            .col_expr(
+                user::Column::TwoFaBackupCodes,
+                sea_orm::sea_query::Expr::value(json!(hashes)),
+            )
+            .filter(user::Column::TwoFaBackupCodes.eq(stored));
+    }
+    if update.exec(db).await?.rows_affected != 1 {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("2FA state changed; try again"));
+    }
+    user::Entity::find_by_id_with_404(db, existing.id).await
 }
 
 #[debug_handler]
@@ -677,6 +813,11 @@ pub async fn twofa_verify(
     abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
 
     let existing = user::Entity::find_by_id_with_404(&state.sea_db, user.id).await?;
+    if !existing.two_fa_enabled
+        && !crate::services::fresh_auth::setup_available(&auth, &state.sea_db).await?
+    {
+        return Err(crate::services::fresh_auth::required());
+    }
     // CRYP-2FA-002: decrypt the at-rest secret via the accessor; fail closed on error.
     let secret = match existing.two_fa_secret_plain() {
         Ok(Some(s)) => s,
@@ -709,11 +850,10 @@ pub async fn twofa_verify(
                 );
             }
             // Counter already persisted by the atomic gate above; keep Unchanged — a Set here could clobber a concurrent advance and reopen replay.
-            let mut active: user::ActiveModel = existing.into();
-            active.two_fa_enabled = sea_orm::Set(true);
-            active.two_fa_last_totp_counter = sea_orm::Unchanged(Some(matched));
-            active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
-            let updated = active.update(&state.sea_db).await?;
+            if !existing.two_fa_enabled {
+                crate::services::fresh_auth::consume_setup(&auth, &state.sea_db).await?;
+            }
+            let updated = enable_twofa_for_unchanged_user(&state.sea_db, &existing, None).await?;
             let rotated = rotate_session_after_trust_change(&state.sea_db, &mut auth).await?;
             return Ok((
                 StatusCode::OK,
@@ -739,21 +879,18 @@ pub async fn twofa_verify(
             let consume_result = {
                 let stored_clone = stored_vec;
                 let code_clone = backup_code.clone();
-                tokio::task::spawn_blocking(move || {
+                crate::services::password_work::run(move || {
                     twofa::consume_backup_code(&stored_clone, &code_clone)
                 })
-                .await
-                .map_err(|e| {
-                    ErrorResponse::new(ErrorCode::InternalServerError)
-                        .with_message(format!("Backup code verification failed: {e}"))
-                })?
+                .await?
             };
             if let Some(updated_hashes) = consume_result {
-                let mut active: user::ActiveModel = existing.into();
-                active.two_fa_enabled = sea_orm::Set(true);
-                active.two_fa_backup_codes = sea_orm::Set(Some(serde_json::json!(updated_hashes)));
-                active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
-                let updated = active.update(&state.sea_db).await?;
+                if !existing.two_fa_enabled {
+                    crate::services::fresh_auth::consume_setup(&auth, &state.sea_db).await?;
+                }
+                let updated =
+                    enable_twofa_for_unchanged_user(&state.sea_db, &existing, Some(updated_hashes))
+                        .await?;
                 let rotated = rotate_session_after_trust_change(&state.sea_db, &mut auth).await?;
                 return Ok((
                     StatusCode::OK,
@@ -791,14 +928,40 @@ pub async fn twofa_disable(
         verify_current_second_factor(&state.sea_db, &existing, &code).await?;
     }
 
-    let last_counter = existing.two_fa_last_totp_counter;
-    let mut active: user::ActiveModel = existing.into();
-    active.two_fa_enabled = sea_orm::Set(false);
-    active.two_fa_secret = sea_orm::Set(None);
-    active.two_fa_backup_codes = sea_orm::Set(None);
-    active.two_fa_last_totp_counter = sea_orm::Unchanged(last_counter);
-    active.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
-    let updated = active.update(&state.sea_db).await?;
+    crate::services::fresh_auth::consume(&auth, &state.sea_db).await?;
+
+    let factor_matches = match &existing.two_fa_secret {
+        Some(secret) => user::Column::TwoFaSecret.eq(secret.clone()),
+        None => user::Column::TwoFaSecret.is_null(),
+    };
+    let changed = user::Entity::update_many()
+        .col_expr(
+            user::Column::TwoFaEnabled,
+            sea_orm::sea_query::Expr::value(false),
+        )
+        .col_expr(
+            user::Column::TwoFaSecret,
+            sea_orm::sea_query::Expr::value(Option::<String>::None),
+        )
+        .col_expr(
+            user::Column::TwoFaBackupCodes,
+            sea_orm::sea_query::Expr::value(Option::<serde_json::Value>::None),
+        )
+        .col_expr(
+            user::Column::UpdatedAt,
+            sea_orm::sea_query::Expr::value(chrono::Utc::now().fixed_offset()),
+        )
+        .filter(user::Column::Id.eq(existing.id))
+        .filter(user::Column::SessionAuthSecret.eq(existing.session_auth_secret.clone()))
+        .filter(user::Column::TwoFaEnabled.eq(existing.two_fa_enabled))
+        .filter(factor_matches)
+        .exec(&state.sea_db)
+        .await?;
+    if changed.rows_affected != 1 {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("2FA state changed; try again"));
+    }
+    let updated = user::Entity::find_by_id_with_404(&state.sea_db, existing.id).await?;
 
     let rotated = rotate_session_after_trust_change(&state.sea_db, &mut auth).await?;
 
@@ -1001,6 +1164,12 @@ pub(crate) async fn create_bound_session(
             .with_message("An error occurred while logging in"));
     }
 
+    let current = user::Entity::find_by_id_with_404(db, user_id).await?;
+    if let Err(err) = crate::services::fresh_auth::issue(auth, &current).await {
+        let _ = user_session::Entity::revoke(db, audit_row.id).await;
+        let _ = auth.logout().await;
+        return Err(err);
+    }
     Ok(())
 }
 
@@ -1243,10 +1412,30 @@ mod tests {
     }
 
     #[test]
+    fn saturated_registration_preserves_password_admission_rate_limit() {
+        let error: ErrorResponse = crate::services::password_work::PasswordWorkError::Busy.into();
+        let RegisterOutcome::Failed(error) = classify_register_outcome(Err(error)) else {
+            panic!("password saturation must be a registration failure");
+        };
+        assert_eq!(super::registration_failure(error).code.status_code(), 429);
+    }
+
+    #[test]
+    fn registration_database_failure_remains_sanitized() {
+        let error = ErrorResponse::new(ErrorCode::QueryError)
+            .with_message("private database diagnostic")
+            .with_context(serde_json::json!({"private": "database"}));
+        let response = super::registration_failure(error);
+        assert_eq!(response.code.status_code(), 500);
+        assert!(!response.message.contains("private"));
+        assert!(response.context.is_none());
+    }
+
+    #[test]
     fn register_duplicate_and_fresh_produce_identical_status_and_body() {
         // Mirrors the handler's response mapping: Created and DuplicateEmail both
         // fall through to the single CREATED + register_accepted_body() return;
-        // only Failed diverges (500).
+        // only Failed diverges.
         let respond = |outcome: RegisterOutcome| match outcome {
             RegisterOutcome::Created(_) | RegisterOutcome::DuplicateEmail => {
                 (StatusCode::CREATED, register_accepted_body())
@@ -1312,8 +1501,6 @@ mod tests {
     }
 
     async fn schemaless_db() -> sea_orm::DatabaseConnection {
-        // The backup-code path never touches the DB (only a fresh TOTP match does),
-        // so a connection to an empty in-memory SQLite is enough.
         sea_orm::Database::connect("sqlite::memory:")
             .await
             .expect("in-memory sqlite connects")
@@ -1321,9 +1508,14 @@ mod tests {
 
     #[tokio::test]
     async fn second_factor_gate_accepts_current_backup_code() {
+        use migration::{Migrator, MigratorTrait};
+        use sea_orm::ActiveModelTrait;
         let db = schemaless_db().await;
+        Migrator::up(&db, None).await.unwrap();
         let codes = twofa::generate_backup_codes(3).expect("CSPRNG available");
         let model = enrolled_user(Some(twofa::hash_backup_codes(&codes)));
+        let active: crate::db::sea_models::user::ActiveModel = model.into();
+        let model = active.reset_all().insert(&db).await.unwrap();
         verify_current_second_factor(&db, &model, &codes[1])
             .await
             .expect("a valid current backup code must pass the gate");

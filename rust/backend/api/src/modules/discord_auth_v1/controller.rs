@@ -18,7 +18,7 @@ use crate::{
     extractors::ValidatedJson,
     extractors::ValidatedQuery,
     modules::auth_v1::controller::session_rotated_headers,
-    services::oauth::login::{link_identity_to_user, CallbackFailure, CallbackOutcome},
+    services::oauth::login::{link_identity_to_unchanged_user, CallbackFailure, CallbackOutcome},
     services::{auth::AuthSession, oauth},
     AppState,
 };
@@ -87,9 +87,9 @@ pub async fn discord_login(
 }
 
 #[debug_handler]
-#[instrument(skip(_state, auth), fields(user_id, result))]
+#[instrument(skip(state, auth), fields(user_id, result))]
 pub async fn discord_link(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     auth: AuthSession,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     info!("Initiating Discord OAuth link");
@@ -98,6 +98,7 @@ pub async fn discord_link(
         warn!("Discord link attempted without an authenticated session");
         ErrorResponse::new(ErrorCode::Unauthorized).with_message("No active session")
     })?;
+    crate::services::fresh_auth::consume(&auth, &state.sea_db).await?;
     let link_user_id = user.id;
 
     let client = get_discord_oauth_client()?;
@@ -123,7 +124,8 @@ pub async fn discord_link(
     info!("Generated Discord link URL with PKCE + session-bound CSRF state");
     tracing::Span::current().record("result", "success");
 
-    Ok(Redirect::temporary(auth_url.as_str()))
+    crate::services::fresh_auth::authorize_link(&auth, csrf_token.secret()).await?;
+    Ok(Json(json!({ "url": auth_url.as_str() })))
 }
 
 #[debug_handler]
@@ -241,14 +243,14 @@ async fn run_discord_callback(
     let user_info = fetch_discord_user_info(access_token).await.map_err(fail)?;
 
     if let Some(target_user_id) = link_user_id {
-        let outcome = link_discord_identity(
-            &state.sea_db,
-            auth.user.as_ref().map(|user| user.id),
-            target_user_id,
-            &user_info,
-        )
-        .await
-        .map_err(fail)?;
+        let confirmed =
+            crate::services::fresh_auth::consume_link(auth, &state.sea_db, &state_secret)
+                .await
+                .map_err(fail)?;
+        let outcome =
+            link_discord_identity(&state.sea_db, Some(&confirmed), target_user_id, &user_info)
+                .await
+                .map_err(fail)?;
         return Ok(outcome);
     }
 
@@ -260,23 +262,23 @@ async fn run_discord_callback(
         .map_err(fail)
 }
 
-/// Completes the link branch of a Discord callback: verify the flow belongs to the current session
-/// user, then attach the provider identity. Never logs in, creates users, or rotates the session.
+/// Links Discord's identity to the same confirmed session account.
+/// Leaves login sessions and provider metadata intact.
 async fn link_discord_identity(
     db: &sea_orm::DatabaseConnection,
-    session_user_id: Option<i32>,
+    session_user: Option<&crate::db::sea_models::user::Model>,
     target_user_id: i32,
     user_info: &DiscordUserInfo,
 ) -> Result<CallbackOutcome, ErrorResponse> {
-    if session_user_id != Some(target_user_id) {
+    if session_user.map(|user| user.id) != Some(target_user_id) {
         warn!("Discord link callback session does not match the state link target");
         return Err(ErrorResponse::new(ErrorCode::Unauthorized)
             .with_message("Link session does not match the link target"));
     }
 
-    let outcome = link_identity_to_user(
+    let outcome = link_identity_to_unchanged_user(
         db,
-        target_user_id,
+        session_user.ok_or_else(|| ErrorResponse::new(ErrorCode::Unauthorized))?,
         oauth::OAuthProvider::Discord,
         &user_info.id,
     )

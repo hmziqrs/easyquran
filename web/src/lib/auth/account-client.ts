@@ -10,6 +10,7 @@ import {
   type UserProfile,
   type WireObject,
 } from "#lib/auth/auth-client.js";
+import { isFreshAuthenticationRequired } from "#lib/auth/fresh-auth-client.js";
 
 export interface SessionInfo {
   readonly id: string;
@@ -206,7 +207,8 @@ export function decodeIdentitySummary(raw: unknown): IdentitySummary | null {
   };
 }
 
-function statusFor(httpStatus: number): AccountResultStatus {
+function statusFor(httpStatus: number, error: AuthErrorEnvelope | null): AccountResultStatus {
+  if (isFreshAuthenticationRequired(error)) return "error";
   if (httpStatus === 401 || httpStatus === 403) return "anonymous";
   if (httpStatus >= 200 && httpStatus < 300) return "ok";
   return "error";
@@ -227,14 +229,14 @@ export class AccountClient {
       method: "POST",
       body,
     });
-    const status = statusFor(res.status);
+    const status = statusFor(res.status, res.error);
     const data = res.ok ? decodeUserProfile(res.data) : null;
     return { status, httpStatus: res.status, data, error: res.error };
   }
 
   async listSessions(): Promise<AccountResult<SessionInfo[]>> {
     const res = await this.auth.get<SessionListResponse>("/auth/v1/sessions/list");
-    const status = statusFor(res.status);
+    const status = statusFor(res.status, res.error);
     const data = res.ok ? decodeSessionList(res.data) : null;
     return { status, httpStatus: res.status, data, error: res.error };
   }
@@ -244,14 +246,43 @@ export class AccountClient {
       `/auth/v1/sessions/terminate/${encodeURIComponent(id)}`,
       { method: "DELETE" },
     );
-    const status = statusFor(res.status);
+    const status = statusFor(res.status, res.error);
     return { status, httpStatus: res.status, isCurrent: false };
   }
 
   async getIdentities(): Promise<AccountResult<IdentitySummary>> {
     const res = await this.auth.get<WireObject>("/user/v1/identities");
-    const status = statusFor(res.status);
+    const status = statusFor(res.status, res.error);
     const data = res.ok ? decodeIdentitySummary(res.data) : null;
+    return { status, httpStatus: res.status, data, error: res.error };
+  }
+
+  async startIdentityLink(provider: IdentityProvider): Promise<AccountResult<string>> {
+    const res = await this.auth.unsafeRequest<WireObject>(`/auth/${provider}/v1/link`, {
+      method: "POST",
+    });
+    const status = statusFor(res.status, res.error);
+    let data: string | null = null;
+    if (res.ok && isWireObject(res.data) && isString(res.data.url)) {
+      try {
+        const target = new URL(res.data.url);
+        const hosts = {
+          google: "accounts.google.com",
+          github: "github.com",
+          discord: "discord.com",
+        };
+        if (
+          target.protocol === "https:" &&
+          target.hostname === hosts[provider] &&
+          !target.username &&
+          !target.password &&
+          !target.port
+        )
+          data = target.href;
+      } catch {
+        data = null;
+      }
+    }
     return { status, httpStatus: res.status, data, error: res.error };
   }
 
@@ -260,7 +291,7 @@ export class AccountClient {
       method: "POST",
       body: { provider },
     });
-    const status = statusFor(res.status);
+    const status = statusFor(res.status, res.error);
     const data = res.ok ? decodeIdentitySummary(res.data) : null;
     return { status, httpStatus: res.status, data, error: res.error };
   }

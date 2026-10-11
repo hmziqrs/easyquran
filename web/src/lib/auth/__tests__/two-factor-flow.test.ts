@@ -162,6 +162,24 @@ describe("TwoFactorFlow setup (secret stays in memory)", () => {
 });
 
 describe("TwoFactorFlow verify (rotates only on success)", () => {
+  it("expired setup confirmation clears the secret and lets the user restart", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest
+      .mockResolvedValueOnce(ok({ secret: "S", otpauth_url: "u", backup_codes: ["backup"] }, false))
+      .mockResolvedValueOnce(err(403, { context: { reason: "fresh_auth_required" } }));
+    const flow = createTwoFactorFlow({ client, state });
+    await flow.setup();
+    flow.verifyCode = "123456";
+    expect(await flow.verify()).toBe(false);
+    expect(flow.setupData).toBeNull();
+    expect(flow.step).toBe("idle");
+    expect(flow.verifyCode).toBe("");
+    expect(flow.genericError).toMatch(/start 2FA setup again/i);
+    expect(state.transition).not.toHaveBeenCalled();
+    expect(state.setUser).not.toHaveBeenCalled();
+  });
+
   it("verify success -> transition(two-fa-verify) before setUser, secret cleared, step enabled", async () => {
     const client = mockClient();
     const state = mockState();

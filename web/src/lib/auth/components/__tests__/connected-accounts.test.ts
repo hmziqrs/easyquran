@@ -60,6 +60,10 @@ function mockClient(
     auth: { apiBase: API_BASE },
     getIdentities,
     unlinkIdentity,
+    startIdentityLink: vi.fn().mockImplementation((provider: IdentityProvider) => {
+      const hosts = { google: "accounts.google.com", discord: "discord.com", github: "github.com" };
+      return Promise.resolve(ok(`https://${hosts[provider]}/oauth/authorize`));
+    }),
   } as never;
 }
 
@@ -435,9 +439,11 @@ describe("ConnectedAccounts link flow", () => {
 
     expect(buttons().some((b) => b.textContent?.trim() === "Link GitHub")).toBe(false);
     button("Link Google").click();
-    expect(navigate).toHaveBeenCalledWith(`${API_BASE}/auth/google/v1/link`);
+    await settle();
+    expect(navigate).toHaveBeenCalledWith("https://accounts.google.com/oauth/authorize");
     button("Link Discord").click();
-    expect(navigate).toHaveBeenCalledWith(`${API_BASE}/auth/discord/v1/link`);
+    await settle();
+    expect(navigate).toHaveBeenCalledWith("https://discord.com/oauth/authorize");
   });
 });
 

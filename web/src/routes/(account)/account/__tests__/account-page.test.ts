@@ -120,6 +120,15 @@ beforeEach(() => {
   h.goto.mockClear();
   h.authClient.get.mockReset();
   h.authClient.get.mockImplementation((path: string) => {
+    if (path === "/auth/v1/reauth/status") {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        data: { ready: false, has_password: true, two_fa_enabled: false },
+        error: null,
+        rotated: false,
+      });
+    }
     if (path === "/user/v1/identities") {
       return Promise.resolve({
         ok: true,
@@ -187,6 +196,15 @@ describe("account page link-flow params", () => {
 
   it("navigates to /login when the identities client reports a 401 (onAnonymous wiring)", async () => {
     h.authClient.get.mockImplementation((path: string) => {
+      if (path === "/auth/v1/reauth/status") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          data: { ready: false, has_password: true, two_fa_enabled: false },
+          error: null,
+          rotated: false,
+        });
+      }
       if (path === "/user/v1/identities") {
         return Promise.resolve({ ok: false, status: 401, data: null, error: null, rotated: false });
       }

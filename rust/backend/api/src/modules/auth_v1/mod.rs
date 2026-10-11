@@ -29,6 +29,8 @@ pub fn routes() -> Router<AppState> {
 
     {
         authenticated = authenticated
+            .route("/reauth", post(controller::reauthenticate))
+            .route("/reauth/status", get(controller::fresh_auth_status))
             .route("/2fa/setup", post(controller::twofa_setup))
             .route("/2fa/verify", post(controller::twofa_verify))
             .route("/2fa/disable", post(controller::twofa_disable));

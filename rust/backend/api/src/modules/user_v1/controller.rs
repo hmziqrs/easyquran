@@ -104,7 +104,7 @@ pub async fn unlink_identity(
     state: State<AppState>,
     payload: ValidatedJson<V1UnlinkIdentityPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.ok_or_else(|| {
+    let user = auth.user.as_ref().ok_or_else(|| {
         ErrorResponse::new(ErrorCode::Unauthorized)
             .with_message("You must be logged in to access this resource")
     })?;
@@ -114,6 +114,7 @@ pub async fn unlink_identity(
             .with_message("Unsupported sign-in provider"));
     }
 
+    crate::services::fresh_auth::consume(&auth, &state.sea_db).await?;
     let user_id = user.id;
     // Guard reads + delete in ONE transaction: separate pool checkouts let two
     // concurrent unlinks each pass the count guard and both delete, leaving the
@@ -169,7 +170,7 @@ pub async fn unlink_identity(
     }
 
     info!(user_id = user.id, provider = %provider, "Unlinked OAuth sign-in method");
-    let body = identity_snapshot(&state, &user).await?;
+    let body = identity_snapshot(&state, user).await?;
     Ok((StatusCode::OK, Json(body)))
 }
 
@@ -196,13 +197,12 @@ pub async fn update_profile(
     state: State<AppState>,
     payload: ValidatedJson<V1UpdateProfilePayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user.ok_or_else(|| {
+    let user = auth.user.as_ref().ok_or_else(|| {
         ErrorResponse::new(ErrorCode::Unauthorized)
             .with_message("You must be logged in to access this resource")
     })?;
 
-    let payload = payload.0.into_update_user();
-    match User::update(&state.sea_db, user.id, payload).await {
+    match update_profile_with_auth(&state.sea_db, &auth, payload.0).await {
         Ok(Some(user)) => {
             info!(user_id = user.id, "Profile updated");
             Ok((StatusCode::OK, Json(json!(user))))
@@ -217,6 +217,22 @@ pub async fn update_profile(
             Err(err)
         }
     }
+}
+
+pub async fn update_profile_with_auth(
+    db: &sea_orm::DatabaseConnection,
+    auth: &AuthSession,
+    payload: V1UpdateProfilePayload,
+) -> Result<Option<UserModel>, ErrorResponse> {
+    let owner = auth.user_required()?;
+    if payload
+        .email
+        .as_ref()
+        .is_some_and(|email| crate::utils::email::normalize_email(email) != owner.email)
+    {
+        crate::services::fresh_auth::consume(auth, db).await?;
+    }
+    User::update(db, owner.id, payload.into_update_user()).await
 }
 
 #[debug_handler]

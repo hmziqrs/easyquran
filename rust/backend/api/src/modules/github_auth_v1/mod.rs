@@ -17,7 +17,7 @@ pub fn routes() -> Router<AppState> {
     // like every other authenticated route (the handler keeps its own
     // belt-and-braces user check).
     let link = Router::<AppState>::new()
-        .route("/link", get(controller::github_link))
+        .route("/link", axum::routing::post(controller::github_link))
         .route_layer(middleware::from_fn(auth_guard::authenticated));
 
     Router::new()

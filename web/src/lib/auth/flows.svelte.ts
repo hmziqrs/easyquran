@@ -24,6 +24,7 @@ import {
 } from "#lib/auth/auth-copy.js";
 import { authState } from "#lib/auth/auth-state.svelte.js";
 import type { AuthTransitionContext } from "#lib/auth/auth-state.svelte.js";
+import { FRESH_AUTH_REQUIRED, isFreshAuthenticationRequired } from "#lib/auth/fresh-auth-client.js";
 import {
   createOAuthFlow,
   type OAuthFlow,
@@ -35,6 +36,7 @@ import {
   type PasskeyFlow,
   type PasskeyFlowDeps,
 } from "#lib/auth/passkey-flow.svelte.js";
+import { notifications } from "#lib/stores/notifications.svelte.js";
 
 export interface FlowStateLike {
   transition(ctx: AuthTransitionContext): Promise<void>;
@@ -721,6 +723,8 @@ export class TwoFactorFlow {
       if (!res.ok) {
         if (res.status === 0) {
           this.genericError = NETWORK_ERROR;
+        } else if (isFreshAuthenticationRequired(res.error)) {
+          this.genericError = FRESH_AUTH_REQUIRED;
         } else if (res.status === 403 || isVerifiedOnlyError(res.error)) {
           this.genericError = VERIFY_EMAIL_NEXT;
         } else {
@@ -771,6 +775,12 @@ export class TwoFactorFlow {
       if (!res.ok) {
         if (res.status === 0) {
           this.genericError = NETWORK_ERROR;
+        } else if (isFreshAuthenticationRequired(res.error)) {
+          this.#setup = null;
+          this.step = "idle";
+          this.verifyCode = "";
+          this.genericError =
+            "Confirmation expired. Confirm your identity in Security confirmation, then start 2FA setup again.";
         } else if (res.status === 403 || isVerifiedOnlyError(res.error)) {
           this.genericError = VERIFY_EMAIL_NEXT;
         } else {
@@ -817,6 +827,8 @@ export class TwoFactorFlow {
       if (!res.ok) {
         if (res.status === 0) {
           this.genericError = NETWORK_ERROR;
+        } else if (isFreshAuthenticationRequired(res.error)) {
+          this.genericError = FRESH_AUTH_REQUIRED;
         } else if (res.status === 403 || isVerifiedOnlyError(res.error)) {
           this.genericError = VERIFY_EMAIL_NEXT;
         } else {
@@ -868,6 +880,7 @@ export class LogoutFlow {
     this.pending = true;
     this.genericError = null;
     try {
+      await notifications.prepareLogout();
       const res = await this.client.unsafeRequest<unknown>("/auth/v1/log_out", {
         method: "POST",
       });

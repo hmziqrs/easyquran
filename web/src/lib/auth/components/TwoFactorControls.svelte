@@ -131,7 +131,7 @@
     <div class="flex flex-col gap-1">
       <h3 class="text-base font-medium">Two-factor authentication is on</h3>
       <p class="text-sm text-foreground-secondary">
-        Enter your authenticator code to remove the second step at sign-in.
+        Confirm your identity in Security confirmation first. If you used your authenticator there, wait for its next code before entering it here to disable two-factor authentication.
       </p>
     </div>
     <form

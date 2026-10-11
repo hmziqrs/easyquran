@@ -13,6 +13,7 @@
   import { GENERIC_TRY_AGAIN } from "#lib/auth/auth-copy.js";
   import { consumeLinkProvider } from "#lib/auth/link-attempt.js";
   import { getAuthCopy } from "#lib/i18n/auth-copy.js";
+  import FreshAuthControls from "#lib/auth/components/FreshAuthControls.svelte";
   import TwoFactorControls from "#lib/auth/components/TwoFactorControls.svelte";
   import ConnectedAccounts from "#lib/auth/components/ConnectedAccounts.svelte";
   import {
@@ -319,6 +320,8 @@
         </div>
       </div>
     </section>
+
+    <FreshAuthControls />
 
     <ConnectedAccounts refreshKey={passkeyKey} onAnonymous={handleAnonymous} />
   </div>
