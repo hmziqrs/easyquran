@@ -31,11 +31,6 @@ Dokploy` → step 3).
 All CI runners use Ubuntu 26.04. Before publishing, CI loads the API image and runs
 its runtime linker against `ruxlog` to verify compatibility with Debian trixie.
 
-Publication also requires warning-free web check/lint/test, Bun audit, Rust format,
-strict Clippy, complete workspace tests and dependency policy checks. Rust CI uses
-1.98.1; the audit policy keeps the unpatched RSA lockfile finding visible and blocks
-publication if that crate becomes reachable in the shipped arm64 feature graph.
-
 **Manual fallback: a dev machine** (Apple Silicon → arm64 Ubuntu server, so same arch, no
 qemu), for when CI can't ship it:
 
