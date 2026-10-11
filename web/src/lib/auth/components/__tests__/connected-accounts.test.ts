@@ -72,14 +72,17 @@ interface MountProps {
 interface Deferred<T> {
   promise: Promise<T>;
   resolve: (value: T) => void;
+  reject: (reason: Error) => void;
 }
 
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((res) => {
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<T>((res, rej) => {
     resolve = res;
+    reject = rej;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 let target: HTMLElement;
@@ -454,6 +457,40 @@ describe("ConnectedAccounts transport failures", () => {
     expect(getIdentities).toHaveBeenCalledTimes(2);
     expect(errorTexts()).toEqual([]);
     expect(target.textContent).toContain("GitHub");
+  });
+
+  it("keeps the newer load's spinner when a stale load rejects", async () => {
+    const stale = deferred<AccountResult<IdentitySummary>>();
+    const fresh = deferred<AccountResult<IdentitySummary>>();
+    const getIdentities = vi
+      .fn()
+      .mockReturnValueOnce(stale.promise)
+      .mockReturnValueOnce(fresh.promise);
+    const client = mockClient(getIdentities, vi.fn());
+    const instance = mount(RefreshHarness, { target, props: { client } });
+    unmountComponent = () => {
+      void unmount(instance);
+    };
+    await settle();
+    expect(getIdentities).toHaveBeenCalledTimes(1);
+    expect(target.textContent).toContain(copy.connectedLoading);
+
+    button("bump").click();
+    await settle();
+    expect(getIdentities).toHaveBeenCalledTimes(2);
+
+    // Stale load rejects while the newer load is still pending: it must neither
+    // write an error nor clear the newer call's loading state.
+    stale.reject(new Error("transport"));
+    await settle();
+    expect(errorTexts()).toEqual([]);
+    expect(target.textContent).toContain(copy.connectedLoading);
+
+    fresh.resolve(ok(summary({ identities: [identity("github")], passkeyCount: 1 })));
+    await settle();
+    expect(target.textContent).not.toContain(copy.connectedLoading);
+    expect(target.textContent).toContain("GitHub");
+    expect(errorTexts()).toEqual([]);
   });
 
   it("settles the confirm state when unlink throws", async () => {
