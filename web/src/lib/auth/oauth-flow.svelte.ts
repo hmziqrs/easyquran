@@ -123,8 +123,8 @@ export class OAuthFlow {
     this.pending = true;
     this.lastErrorCode = null;
     // The marker lives in this tab's sessionStorage (shared with the popup) and
-    // tells the landing page it is our popup; it never outlives the attempt.
-    // Storage-blocked browsers can never carry it, so fall back immediately.
+    // tells the landing page it is our popup; it never outlives the last live
+    // attempt. Storage-blocked browsers can never carry it, so fall back immediately.
     if (!markOAuthPopupPending()) {
       this.pending = false;
       return "unavailable";

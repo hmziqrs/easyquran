@@ -419,5 +419,25 @@ describe("pending marker refcount", () => {
     });
     expect(markOAuthPopupPending()).toBe(false);
     setItem.mockRestore();
+
+    // A failed mark must not bump the refcount: one clear after a successful
+    // mark still removes the key.
+    expect(markOAuthPopupPending()).toBe(true);
+    clearOAuthPopupPending();
+    expect(sessionStorage.getItem(OAUTH_POPUP_PENDING_KEY)).toBeNull();
+  });
+
+  it("clear without a mark cannot corrupt the refcount", () => {
+    clearOAuthPopupPending();
+    expect(sessionStorage.getItem(OAUTH_POPUP_PENDING_KEY)).toBeNull();
+
+    // With a negative count, one of these clears would remove the key while the
+    // other attempt is still live.
+    expect(markOAuthPopupPending()).toBe(true);
+    expect(markOAuthPopupPending()).toBe(true);
+    clearOAuthPopupPending();
+    expect(sessionStorage.getItem(OAUTH_POPUP_PENDING_KEY)).toBe("1");
+    clearOAuthPopupPending();
+    expect(sessionStorage.getItem(OAUTH_POPUP_PENDING_KEY)).toBeNull();
   });
 });
