@@ -11,6 +11,10 @@ import { authState } from "#lib/auth/auth-state.svelte.js";
 import type { AuthTransitionContext } from "#lib/auth/auth-state.svelte.js";
 import {
   awaitOAuthPopup,
+  defaultPopupOpen,
+  navigateOAuthPopup,
+  oauthPopupFeatures,
+  oauthPopupName,
   type OAuthPopupOpen,
   type OAuthPopupOutcome,
 } from "#lib/auth/oauth-popup.js";
@@ -105,25 +109,34 @@ export class OAuthFlow {
   }
 
   /**
-   * Popup variant of begin(): same session bootstrap + return-target handling,
-   * then the provider page opens in a popup instead of a full-page navigation.
-   * Resolves with the popup outcome; callers fall back to begin() on anything
-   * but "completed".
+   * Popup variant of begin(): the popup opens synchronously (about:blank) while
+   * the click's user gesture is still active, then receives the authorize URL
+   * once the session bootstrap settles. Resolves with the popup outcome;
+   * callers fall back to begin() on anything but "completed".
    */
   async beginPopup(returnTarget?: string): Promise<OAuthPopupOutcome> {
-    if (this.pending) return "blocked";
+    if (this.pending) return "in_flight";
     if (!browser) return "unavailable";
     this.pending = true;
     this.lastErrorCode = null;
+    // window.open after an await is blocked once transient activation expires,
+    // so the window is opened first and pointed at the login URL afterwards.
+    const popup = (this.#openPopup ?? defaultPopupOpen)(
+      "about:blank",
+      oauthPopupName(this.provider),
+      oauthPopupFeatures(),
+    );
+    if (!popup) {
+      this.pending = false;
+      return "blocked";
+    }
     try {
       await this.client.ensureAnonymousSession();
       if (returnTarget) setReturnTarget(returnTarget);
-      return await awaitOAuthPopup({
-        provider: this.provider,
-        url: this.loginUrl,
-        open: this.#openPopup,
-      });
+      navigateOAuthPopup(popup, this.loginUrl);
+      return await awaitOAuthPopup({ provider: this.provider, url: this.loginUrl, popup });
     } catch {
+      popup.close();
       return "unavailable";
     } finally {
       this.pending = false;

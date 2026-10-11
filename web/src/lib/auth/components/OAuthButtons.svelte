@@ -5,7 +5,7 @@
   import { authModal } from "#lib/auth/auth-modal.svelte.js";
   import { createOAuthFlows } from "#lib/auth/flows.svelte.js";
   import { createPasskeyFlow } from "#lib/auth/passkey-flow.svelte.js";
-  import type { OAuthProvider } from "#lib/auth/oauth-flow.svelte.js";
+  import type { OAuthFlow, OAuthProvider } from "#lib/auth/oauth-flow.svelte.js";
   import OAuthIcon from "./OAuthIcon.svelte";
   import { getAuthCopy } from "#lib/i18n/auth-copy.js";
 
@@ -13,11 +13,13 @@
 
   type Props = {
     onPasskeySuccess?: () => void | Promise<void>;
+    /** Injectable for tests; defaults to the shared flows. */
+    flows?: Record<OAuthProvider, OAuthFlow>;
   };
 
-  let { onPasskeySuccess }: Props = $props();
+  let { onPasskeySuccess, flows }: Props = $props();
 
-  const oauth = createOAuthFlows();
+  const oauth = $derived(flows ?? createOAuthFlows());
   const passkey = createPasskeyFlow();
 
   const providers: ReadonlyArray<{ id: OAuthProvider; label: string }> = [
@@ -46,7 +48,10 @@
       await goto(`/auth/${provider}/success`);
       return;
     }
-    // Popup blocked, cancelled, or failed → classic full-page redirect fallback.
+    // Buttons are disabled while an attempt is pending, so a duplicate click is
+    // a no-op rather than a fallback navigation.
+    if (outcome === "in_flight") return;
+    // Popup blocked, cancelled, failed, or timed out → classic full-page redirect fallback.
     await oauth.google.begin();
   }
 
