@@ -24,7 +24,9 @@ The authorization coverage follows [OWASP API object-level authorization guidanc
 
 The first audit covered identity linking, recovery, verification, revocation, dependencies and tracked secrets. This additional discovery round used separate authentication-state, API-authorization and browser-boundary reviewers, each tracing reachable routes through middleware, handlers and storage. A separate web implementation worker handled account isolation. Local regressions use isolated application databases and fake transports; no production accounts or notifications were used.
 
-The follow-up round examines alternate ID paths, races and the fixes from another perspective. Findings are reported as code weaknesses with prerequisites, not evidence of an observed compromise. No Quran database was modified, provisioned, versioned or hashed. Concurrent work in another chat is excluded from this security commit.
+The follow-up round checked alternate ID paths and races: comment flagging, alternate post mutations, stale TOTP setup snapshots, first-factor invalidation and delayed responses. The primary agent completed the final integration review after subagents reached the account usage limit; the requested independent cross-review did not finish. That review found and fixed one further case: a stale tab could keep displaying an already loaded account A snapshot after the server rejected its cookie/account mismatch. The client now clears that view and re-probes the actual session before resuming.
+
+Findings describe code weaknesses with prerequisites, not evidence of an observed compromise. No Quran database was modified, provisioned, versioned or hashed. Concurrent commits checkpointed the main security changes on `master`; the final follow-up includes only the additional stale-tab fix, lint/format repairs and this report.
 
 ## Additional findings and solutions
 
@@ -55,4 +57,24 @@ The initial audit's dependency table, secret-history triage and deliberate recov
 
 ## Validation
 
-Final checks and independent review results will be recorded here after the implementation round completes.
+| Check                                                                    | Result                                                                                                 |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Web type checking                                                        | Zero errors and zero warnings, including worker TypeScript.                                            |
+| Web lint                                                                 | Passed with `--deny-warnings --type-aware --type-check`.                                               |
+| Web complete test suite                                                  | 2,374 tests across 188 files; zero failures.                                                           |
+| `cargo test --workspace --locked`                                        | 1,349 tests; zero failed or ignored.                                                                   |
+| `cargo fmt --all --check`                                                | Passed.                                                                                                |
+| `cargo +1.98.1 clippy --workspace --all-targets --locked -- -D warnings` | Passed. The first audit documents the existing Rust 1.99 macro/lint issue.                             |
+| Current Bun dependency audit                                             | `bun audit --json` returned `{}` with exit 0. Cargo's unresolved advisories remain in the first audit. |
+
+The web workspace migrated to Bun/Vitest/Oxlint in another chat during this audit. Final validation uses its current `bun run check`, `bun run lint` and Vitest script; warning and type-check requirements were retained. The legacy pnpm runner cannot validate Bun's catalog and needs the root CLI directory on PATH for lint. Dependency installation was not reverted.
+
+Regression evidence:
+
+- Both absolute-age acceptance paths, enrolled OAuth login and enrolled TOTP setup failed against the previous behavior before passing after repair.
+- Eight API regressions exercise actual routers/session cookies and isolated databases. Six security cases failed before repair, while two policy-preservation cases already passed. Existing 16 bookmark API tests also passed.
+- Browser regressions use the real sync engine/store with deferred transport and durable-storage seams. They cover pending A/B isolation, old responses, same-account re-login generations, cold reloads, migration and optimistic-write races, and server owner rejection. The final loaded-view mismatch test failed before its follow-up fix.
+- Six off-origin legacy redirect cases failed before repair; the 36-case hook suite, including legitimate redirects and encoded separators, passed afterward.
+- Mercado Pago regressions reproduced unsigned ID substitution and forged paid status before repair. Local mock API responses verify authoritative status/metadata, ignored unknown topics and valid manifest handling. The complete Rust suite includes the updated provider integration tests.
+
+No production exploit, notification, credential mutation, deployment or load test was performed in this chat. Deployed controls and remaining work above still need follow-through.

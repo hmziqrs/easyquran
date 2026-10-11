@@ -1,6 +1,7 @@
 import { browser } from "$app/env";
 
 import { authClient } from "#lib/auth/auth-client.js";
+import type { SessionProbeResult } from "#lib/auth/auth-client.js";
 import { authState } from "#lib/auth/auth-state.svelte.js";
 import type { VerseKey } from "#lib/data/quran.js";
 import { readRaw, writeRaw } from "#lib/storage/safe-storage.js";
@@ -55,6 +56,8 @@ export interface ReaderLike {
 export interface BookmarksAuthStateLike {
   readonly authenticated: boolean;
   readonly user: { readonly id: number } | null;
+  setUnknown?(): void;
+  probe?(): Promise<SessionProbeResult>;
 }
 
 export interface BookmarksStoreDeps {
@@ -420,8 +423,17 @@ export class BookmarksStore {
     if (!this.#isCurrent(account)) return;
     await this.#migrateLegacy(account);
     if (!this.#isCurrent(account)) return;
-    const domain = createBookmarksDomain(this.#auth, this.#state, account.ownerId, () =>
-      this.#isCurrent(account),
+    const domain = createBookmarksDomain(
+      this.#auth,
+      this.#state,
+      account.ownerId,
+      () => this.#isCurrent(account),
+      () => {
+        if (!this.#isCurrent(account)) return;
+        this.suspendAuth();
+        this.#state.setUnknown?.();
+        void this.#state.probe?.();
+      },
     );
     const adapter: SyncDomain<BookmarksMutation, BookmarksSnapshot> = {
       name: domain.name,

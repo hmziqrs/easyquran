@@ -303,4 +303,24 @@ describe("account-owned bookmark synchronization", () => {
     expect(await rig.outbox.count(bookmarksDomainFor(7))).toBe(1);
     expect(rig.store.bookmarks).toEqual([]);
   });
+
+  it("clears an already loaded A view when the server reports a cookie/account mismatch", async () => {
+    const rig = makeRig({
+      ownerId: 7,
+      respond: async () => ({
+        ok: false,
+        status: 403,
+        data: null,
+        error: { message: "Bookmark sync account changed" },
+        rotated: false,
+      }),
+    });
+    rig.store.applyServer(snapshotFor("private-a", 1));
+    expect(rig.store.bookmarks).toHaveLength(1);
+    rig.store.hydrate();
+    await vi.waitFor(() => expect(rig.calls).toHaveLength(1));
+    await rig.engine.flush();
+    expect(rig.store.bookmarks).toEqual([]);
+    expect(rig.store.authed).toBe(false);
+  });
 });

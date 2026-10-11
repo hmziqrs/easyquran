@@ -30,6 +30,7 @@ export function createBookmarksDomain(
   state: BookmarkAuthStateLike,
   ownerId: number,
   isCurrent: () => boolean = () => true,
+  onAccountMismatch?: () => void,
 ): SyncDomain<BookmarksMutation, BookmarksSnapshot> {
   const name = bookmarksDomainFor(ownerId);
   const assertCurrent = (signal?: AbortSignal): void => {
@@ -56,7 +57,13 @@ export function createBookmarksDomain(
         signal,
       });
       assertCurrent(signal);
-      if (!res.ok) throw new Error(`bookmark sync failed (${res.status})`);
+      if (!res.ok) {
+        if (res.status === 403 && res.error?.message === "Bookmark sync account changed") {
+          onAccountMismatch?.();
+          throw new SyncPausedError("bookmarks sync paused: cookie account changed");
+        }
+        throw new Error(`bookmark sync failed (${res.status})`);
+      }
       const envelope = decodeBookmarksEnvelope(res.data);
       if (envelope === null) throw new Error("bookmark sync returned an unreadable snapshot");
       return {

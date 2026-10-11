@@ -258,7 +258,7 @@ pub async fn complete_pending_totp_login(
     auth: &mut AuthSession,
     payload: V1LoginTotpPayload,
 ) -> Result<user::Model, ErrorResponse> {
-    let grant = match crate::services::pending_login::take(&auth, &payload.totp_token).await? {
+    let grant = match crate::services::pending_login::take(auth, &payload.totp_token).await? {
         Some(grant) => grant,
         None => {
             warn!("login/totp: pending token missing/expired/replayed");
