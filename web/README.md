@@ -1,6 +1,6 @@
 # EasyQuran — web
 
-SvelteKit 3 + Svelte 5 (runes). TS strict. Tailwind v4. shadcn-svelte. Firebase. Vite 8 + `adapter-bun`: Arabic reader routes stay prerendered; translation routes render on demand and use bounded 7-day disk-TTL HTML caching (see `docs/quran-system.md`). Build and serve both run on Bun — `bun run build` shells out to `bun run --bun vite build` (adapter-bun's `adapt()` calls `Bun.build`) and `bun start` is `bun server.ts`, so builds need bun ≥ 1.4 on PATH even from Node shells.
+SvelteKit 3 + Svelte 5 (runes). TS strict. Tailwind v4. shadcn-svelte. Firebase. Vite+ (`vp`). `adapter-bun`: Arabic reader routes stay prerendered; translation routes render on demand and use bounded 7-day disk-TTL HTML caching (see `docs/quran-system.md`). Build and serve both run on Bun — `bun run build` shells out to `bun run --bun vp build` (adapter-bun's `adapt()` calls `Bun.build`) and `bun start` is `bun server.ts`, so builds need bun ≥ 1.4 on PATH even from Node shells.
 
 ## Run
 
@@ -23,12 +23,10 @@ In `web/`:
     bun run dev | build | preview
     bun start       # bun server.ts — production build + static/dynamic header policy
     bun run check   # svelte-check + worker tsconfig
-    bun run lint    # oxlint --deny-warnings (config: .oxlintrc.json)
-    bun run format  # oxfmt (config: .oxfmtrc.json)
-    bun run test    # vitest
+    bun run lint | format | test   # vp lint | vp fmt | vp test under the hood
     bun run icons:generate  # regenerate favicon, app, Apple, pinned-tab, badge and logo exports
 
-Deps from repo root (bun workspace, `bun.lock`). `vite` pinned via `catalog:` in the root `package.json`.
+Deps from repo root (bun workspace, `bun.lock`; `vp env current pm` → bun). `vite` / `vite-plus` pinned via `catalog:`.
 
 Brand artwork lives in `src/lib/assets/open-pages.svg`. `BrandMark` uses that SVG with
 the surrounding component's CSS color; web components draw their own square and corner

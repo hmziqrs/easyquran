@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { version as appBuildId } from "$app/env";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { diskCacheKey, QuranDiskCache } from "#lib/server/quran-disk-cache.js";
 

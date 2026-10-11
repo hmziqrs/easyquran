@@ -1,5 +1,5 @@
 import { mount, unmount } from "svelte";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 const h = vi.hoisted(() => ({
   url: new URL("https://easyquran.app/search"),

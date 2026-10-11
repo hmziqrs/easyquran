@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { CatalogEntry } from "#lib/data/quran-types.js";
 import type { SearchResponse, TranslationSearchResponse } from "#lib/quran/search/types.js";

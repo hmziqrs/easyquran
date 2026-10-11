@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import corpus from "#lib/quran/__fixtures__/parity.json";
 import { isEligibleQuery, normalizeArabic } from "#lib/quran/search/normalize.js";

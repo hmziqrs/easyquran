@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { createSyncEngine, syncRetryDelayMs, type SyncEngine } from "#lib/sync/engine.svelte.js";
 import {

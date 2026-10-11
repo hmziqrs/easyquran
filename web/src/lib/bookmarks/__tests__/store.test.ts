@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { VerseKey } from "#lib/data/quran.js";
 import type { RegisteredSyncDomain, SyncMutation, SyncStatus } from "#lib/sync/index.js";

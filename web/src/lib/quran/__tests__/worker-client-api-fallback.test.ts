@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { ArtifactSpec } from "#lib/data/quran-types.js";
 import { LOCAL_BOOT_BUDGET_MS } from "#lib/quran/fetch.js";

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { detectEmbeddedPrefix, scalarSlice } from "#lib/quran/view/source-view.js";
 

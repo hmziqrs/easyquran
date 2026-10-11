@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { QuranSourceId } from "#lib/data/quran-types.js";
 import type { QuranCoordinateRow } from "#lib/quran/sql.js";

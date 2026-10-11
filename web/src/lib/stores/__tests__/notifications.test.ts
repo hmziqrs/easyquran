@@ -1,5 +1,5 @@
 import type { MessagePayload, Messaging, Unsubscribe } from "firebase/messaging";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const { messaging, firebaseCore, analytics } = vi.hoisted(() => ({
   messaging: {

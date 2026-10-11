@@ -1,4 +1,4 @@
-import { createServer } from "vite";
+import { createServer } from "vite-plus";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

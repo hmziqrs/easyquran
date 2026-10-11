@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { RangeKind } from "#lib/data/quran-data.js";
 import { parseKey, surahAyahPath, surahPath, toArabicDigits, verseKey } from "#lib/data/quran.js";

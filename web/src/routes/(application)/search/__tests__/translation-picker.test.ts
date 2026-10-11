@@ -1,5 +1,5 @@
 import { mount, unmount } from "svelte";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { getSearchCopy } from "#lib/i18n/search-copy.js";
 import { searchSelection } from "#lib/stores/search-selection.svelte.js";

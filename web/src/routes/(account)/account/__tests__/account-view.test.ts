@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 vi.mock("$app/env/public", () => ({
   PUBLIC_API_BASE_URL: undefined,
   PUBLIC_QURAN_API_BASE: undefined,

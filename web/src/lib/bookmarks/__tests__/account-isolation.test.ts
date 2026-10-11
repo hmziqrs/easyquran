@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { AuthRequestResult, UnsafeRequestInit } from "#lib/auth/auth-client.js";
 import { createSyncEngine } from "#lib/sync/engine.svelte.js";

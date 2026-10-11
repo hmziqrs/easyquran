@@ -22,9 +22,8 @@ already fixes a FIX scenario, the scenario says so and stays as a regression tes
   `svelte-core-bestpractices` + `svelte-code-writer` before touching `web/`. Caveman mode active
   (also for subagents).
 - Gates must stay green: `bun run check` (warning-free — `--fail-on-warnings`), `bun run lint`
-  (`--deny-warnings`), `bun run test` (all from `web/`). Lint rules live in `web/.oxlintrc.json`
-  (auto-discovered); formatting in `.oxfmtrc.json` (root + `web/`); never pass a partial
-  `oxlint -c <file>` — it replaces the rule set.
+  (`--deny-warnings`), `bun run test` (all from `web/`). Lint rules live in `web/vite.config.ts` →
+  `lint.rules`; never add a standalone `.oxlintrc.json`.
 - Hard rules: Quran DBs immutable; `db/` gitignored; DB identity = **id**, never sha (guards:
   `rust/backend/api/tests/quran_v1.rs`,
   `web/src/lib/quran/__tests__/catalogue-sha-guard.test.ts`); translated reader routes are

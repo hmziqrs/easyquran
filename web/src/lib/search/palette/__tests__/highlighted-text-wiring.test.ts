@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 /**
  * Translation hits must render LTR through `HighlightedText`. It is dead code
@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
  * so both are guarded textually, same pattern as `lazy-palette.test.ts`.
  */
 // SAFETY: glob uses query "?raw" + import "default", so every matched module's
-// default export is its own source text — vitest infers string.
+// default export is its own source text — vite-plus infers string.
 const sources = import.meta.glob("../../../**/*.{svelte,ts}", {
   query: "?raw",
   import: "default",

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { resolveLandingCopy } from "../landing-copy";
 import type { LandingResolvedCopy } from "../marketing-copy";

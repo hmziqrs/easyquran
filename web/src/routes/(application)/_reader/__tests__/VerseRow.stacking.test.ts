@@ -1,5 +1,5 @@
 import { mount } from "svelte";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const { nav, readerStub, mountStub } = vi.hoisted(() => ({
   // SAFETY: empty params literal widens to the page.params Record<string,string> contract; tests only ever assign string entries

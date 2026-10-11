@@ -1,5 +1,5 @@
 import { safeParse } from "valibot";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { issuesToFieldErrors } from "#lib/auth/form-validation.svelte.js";
 import {

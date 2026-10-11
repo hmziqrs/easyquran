@@ -1,5 +1,5 @@
 import { mount, unmount } from "svelte";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$app/state", () => ({ page: { url: { hash: "" }, params: {} } }));
 vi.mock("#lib/stores/reader.svelte.js", () => ({

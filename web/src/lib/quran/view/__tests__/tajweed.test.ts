@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { QuranScript, QuranSourceId } from "#lib/data/quran-types.js";
 import { sourceProfile } from "#lib/quran/view/source-profiles.js";

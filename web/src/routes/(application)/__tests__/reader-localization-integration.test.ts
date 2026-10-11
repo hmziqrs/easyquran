@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { surahAyahPathFor, surahPathFor } from "#lib/data/quran.js";
 import { readerHrefFor } from "#lib/i18n/reader.js";

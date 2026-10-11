@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { mount } from "svelte";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const { nav, readerStub, mountStub } = vi.hoisted(() => ({
   // SAFETY: empty params literal widens to the page.params Record<string,string> contract; the

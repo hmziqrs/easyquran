@@ -1,6 +1,6 @@
 import { mount, unmount } from "svelte";
 import type { ComponentProps } from "svelte";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { QuranReaderSource } from "#lib/data/quran-types.js";
 import type { SurahLocalPageData } from "#lib/data/quran.js";

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { MARKETING_PAGES } from "#lib/config/site-structure.js";
 import { baseEnglishPageCopy, baseEnglishPageCopyForPath } from "#lib/i18n/base-english-copy.js";

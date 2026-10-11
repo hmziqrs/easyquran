@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { HIZB_COUNT } from "#lib/data/mushaf-divisions.js";
 import { RANGE_COUNTS, RangeKind } from "#lib/data/quran-data.js";

@@ -1,5 +1,5 @@
 import { mount, tick, unmount } from "svelte";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { bufferedIndexes, type ReaderVirtualItem } from "../virtual-reader";
 import ReaderVirtualListHost from "./ReaderVirtualListHost.svelte";

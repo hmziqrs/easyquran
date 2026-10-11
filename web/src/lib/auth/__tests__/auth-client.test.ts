@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$app/env/public", () => ({
   PUBLIC_API_BASE_URL: "https://eq.test/api",

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { TRANSLATIONS } from "#lib/data/translations.js";
 import { LANGUAGE_FLAGS, TRANSLATION_CATALOGUE, flagFor } from "#lib/quran/catalogue.js";

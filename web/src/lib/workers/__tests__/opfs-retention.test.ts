@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { filterSourceFiles, type ActivePointer } from "#lib/workers/opfs-cache.js";
 import { computeEvictions, type PruneCandidate } from "#lib/workers/opfs-retention.js";

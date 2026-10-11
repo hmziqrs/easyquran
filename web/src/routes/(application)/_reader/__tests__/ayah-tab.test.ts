@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { QURAN_DATA } from "#lib/server/quran-data.js";
 
