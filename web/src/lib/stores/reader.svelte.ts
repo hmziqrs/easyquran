@@ -14,7 +14,7 @@ import {
 import { createReaderPersistence } from "./reader-persistence.svelte";
 import { createReaderSession } from "./reader-session.svelte";
 import { createReaderSettings } from "./reader-settings.svelte";
-import { createReaderShare } from "./reader-share.svelte";
+import { createReaderShare, type ShareResult, type ShareVerse } from "./reader-share.svelte";
 import { createVerseCache } from "./verse-cache.svelte";
 
 export { BrowseMode } from "./reader-core.svelte";
@@ -80,7 +80,9 @@ export interface ReaderApi {
   seedAyahs(ayahs: readonly { key: VerseKey; text: string }[]): void;
   refreshFromWorker(num: number): Promise<void>;
   copyVerse(key: VerseKey, text: string): Promise<boolean>;
-  shareVerse(key: VerseKey, text: string): Promise<"shared" | "copied" | "failed">;
+  shareVerse(key: VerseKey, text: string): Promise<ShareResult>;
+  /** FLOW-05 range variant: joined verse texts + the canonical `?ayah=` permalink. */
+  shareRange(from: VerseKey, to: VerseKey, verses: readonly ShareVerse[]): Promise<ShareResult>;
 }
 
 export function createReader(): ReaderApi {
@@ -213,6 +215,8 @@ export function createReader(): ReaderApi {
 
     copyVerse: (key: VerseKey, text: string) => share.copyVerse(key, text),
     shareVerse: (key: VerseKey, text: string) => share.shareVerse(key, text),
+    shareRange: (from: VerseKey, to: VerseKey, verses: readonly ShareVerse[]) =>
+      share.shareRange(from, to, verses),
   };
 }
 

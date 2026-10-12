@@ -17,6 +17,7 @@
 
   let copied = $state(false);
   let sharedCopied = $state(false);
+  let shareNote = $state("");
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
   let shareTimer: ReturnType<typeof setTimeout> | null = null;
   let mounted = true;
@@ -29,12 +30,32 @@
     copyTimer = setTimeout(() => (copied = false), COPY_FEEDBACK_MS);
   }
 
-  async function onShare() {
-    const result = await reader.shareVerse(vKey, text);
-    if (result !== "copied" || !mounted) return;
+  function flashShareNote(message: string) {
+    if (!mounted) return;
+    shareNote = message;
+    if (shareTimer) clearTimeout(shareTimer);
+    shareTimer = setTimeout(() => (shareNote = ""), 4000);
+  }
+
+  function flashSharedCopied() {
+    if (!mounted) return;
+    // Both feedback states share one timer; clear the note so a pending
+    // failure timeout can't outlive a retry that succeeded.
+    shareNote = "";
     sharedCopied = true;
     if (shareTimer) clearTimeout(shareTimer);
     shareTimer = setTimeout(() => (sharedCopied = false), COPY_FEEDBACK_MS);
+  }
+
+  async function onShare() {
+    const result = await reader.shareVerse(vKey, text);
+    if (result === "copied") {
+      flashSharedCopied();
+      return;
+    }
+    // FLOW-05: the "failed" result used to vanish — now it says what happened.
+    if (result === "link-copied") flashShareNote(copy.verse.shareFailed);
+    else if (result === "failed") flashShareNote(copy.verse.shareUnavailable);
   }
 
   onDestroy(() => {
@@ -76,6 +97,11 @@
       </Tooltip>
     {/snippet}
 
+    {#if shareNote}
+      <!-- Share failure feedback (FLOW-05): a live region so the outcome is
+           announced, not just the silent icon swap the old code had. -->
+      <span role="status" class="share-note">{shareNote}</span>
+    {/if}
     {@render verseAction({
       onclick: () => bookmarks.toggleVerse(vKey),
       label: bookmarked ? copy.verse.removeBookmark : copy.verse.bookmark,
@@ -105,5 +131,16 @@
   :global([data-reader-mode="reading"]) .verse-toolbar,
   :global([data-reader-mode="reading"]) .verse-note {
     display: none;
+  }
+
+  /* Share-failure note rides just above the toolbar, inside the row's 60px
+     top inset; nowrap is safe — the message is short and rows are full-width. */
+  .share-note {
+    bottom: calc(100% + 2px);
+    color: var(--muted);
+    font-size: 12px;
+    inset-inline-end: 0;
+    position: absolute;
+    white-space: nowrap;
   }
 </style>
