@@ -94,6 +94,14 @@
       chosenSessions.map((row) => row.id),
     );
   }
+
+  // "Don't ask again" rides the same reset path as every close: neverAsk()
+  // marks first (so close() writes no deferred marker), then the excluded-rows
+  // and review-step state reset — a later account's review starts clean.
+  function onNeverAsk(): void {
+    mergeReview.neverAsk();
+    close();
+  }
 </script>
 
 <DialogPrimitive.Root
@@ -222,11 +230,7 @@
                 >
               {/if}
             {/if}
-            <Button
-              variant="ghost"
-              size="sm"
-              onclick={() => mergeReview.neverAsk()}>{copy.neverAsk}</Button
-            >
+            <Button variant="ghost" size="sm" onclick={onNeverAsk}>{copy.neverAsk}</Button>
             <Button variant="ghost" size="sm" onclick={() => close()}
               >{copy.notNow}</Button
             >

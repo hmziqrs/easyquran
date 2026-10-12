@@ -163,10 +163,15 @@ describe("MergeReview — merge on login (§9.4)", () => {
     expect(rig.enqueued[1]).toMatchObject({
       payload: { surah: 112, ayah: 1, updatedAt: "2026-01-05T00:00:00.000Z" },
     });
-    // Markers land only after the enqueues resolved (EC-11).
+    // Markers land only after the enqueues resolved (EC-11); a completed merge
+    // is not "Don't ask again" — no auto reviewed marker beyond the user's
+    // explicit ones (§9.4).
     expect(localStorage.getItem(legacyMigratedKey("7"))).toBe("1");
-    expect(localStorage.getItem(mergeReviewedKey(7))).toBe("1");
+    expect(localStorage.getItem(mergeReviewedKey(7))).toBeNull();
     expect(rig.review.result).toEqual({ merged: 2, skipped: 0 });
+    rig.review.close();
+    rig.review.evaluate(7);
+    expect(rig.review.open).toBe(false); // the (a) marker holds: nothing new to offer
   });
 
   it("labels and counts both conflict directions against the account view (EC-13)", async () => {
@@ -336,8 +341,11 @@ describe("MergeReview — merge on login (§9.4)", () => {
       updatedAt: READ_TS_ISO,
     });
 
-    expect(localStorage.getItem(sessionsMigratedKey(7))).toBe("1");
-    expect(localStorage.getItem(mergeReviewedKey(7))).toBe("1");
+    // The sessions marker is a watermark of the envelope at merge time (max of
+    // the rows' updatedAt and the states' progress stamps — here READ_TS), and
+    // no reviewed marker is auto-written.
+    expect(localStorage.getItem(sessionsMigratedKey(7))).toBe(String(READ_TS));
+    expect(localStorage.getItem(mergeReviewedKey(7))).toBeNull();
     expect(rig.review.result).toEqual({ merged: 2, skipped: 0 });
   });
 
@@ -354,16 +362,50 @@ describe("MergeReview — merge on login (§9.4)", () => {
     expect(localStorage.getItem(mergeReviewedKey(7))).toBeNull();
 
     await rig.review.merge([], undefined); // retry: same row, not re-sent wholesale
-    expect(localStorage.getItem(sessionsMigratedKey(7))).toBe("1");
+    expect(localStorage.getItem(sessionsMigratedKey(7))).toBe(String(READ_TS));
     expect(rig.review.result).toEqual({ merged: 1, skipped: 0 });
   });
 
-  it("a migrated sessions key suppresses the sessions trigger for that account", () => {
+  it("a completed session merge re-arms detection for NEW local data, not for the same rows", async () => {
     const rig = makeRig();
-    localStorage.setItem(sessionsMigratedKey(7), "1");
+    const seed = (): void => {
+      seedSessions([sessionRow(LOCAL_DEFAULT_SESSION_ID, LOCAL_DEFAULT_SESSION_NAME, EPOCH)], {
+        [LOCAL_DEFAULT_SESSION_ID]: readState(2, 255, READ_TS),
+      });
+    };
+    seed();
+    rig.review.evaluate(7);
+    await rig.review.merge(
+      [],
+      rig.review.sessionRows.map((row) => row.id),
+    );
+    expect(localStorage.getItem(sessionsMigratedKey(7))).toBe(String(READ_TS));
+
+    // Unchanged envelope: the watermark matches, nothing new to offer.
+    rig.review.close();
+    rig.review.evaluate(7);
+    expect(rig.review.open).toBe(false);
+
+    // NEW local session later (signed-out use): the watermark moves, the
+    // prompt returns instead of stranding the data behind a one-way marker.
+    seedSessions(
+      [
+        sessionRow(LOCAL_DEFAULT_SESSION_ID, LOCAL_DEFAULT_SESSION_NAME, EPOCH),
+        sessionRow(DAILY_ID, "Daily", "2026-09-25T00:00:00.000Z"),
+      ],
+      { [LOCAL_DEFAULT_SESSION_ID]: readState(2, 255, READ_TS) },
+    );
+    rig.review.evaluate(7);
+    expect(rig.review.open).toBe(true);
+    expect(rig.review.sessionRows).toHaveLength(2);
+  });
+
+  it("the sessions watermark suppresses an unchanged envelope for that account", () => {
+    const rig = makeRig();
     seedSessions([sessionRow(LOCAL_DEFAULT_SESSION_ID, LOCAL_DEFAULT_SESSION_NAME, EPOCH)], {
       [LOCAL_DEFAULT_SESSION_ID]: readState(2, 255, READ_TS),
     });
+    localStorage.setItem(sessionsMigratedKey(7), String(READ_TS));
     rig.review.evaluate(7);
     expect(rig.review.open).toBe(false);
   });

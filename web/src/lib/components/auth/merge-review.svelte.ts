@@ -41,6 +41,27 @@ function stampOf(ms: number | undefined): string {
   return ms !== undefined && Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : EPOCH_ISO;
 }
 
+/** The `local` envelope shape the watermark reads — what `#localEnvelope` snapshots. */
+type LocalEnvelope = {
+  sessions: readonly ReadingSession[];
+  state: Readonly<Record<string, SessionReaderState>>;
+};
+
+/** Max mtime of the envelope's mergeable content: session rows' `updatedAt` plus each state's newest progress stamp. */
+function envelopeWatermark(envelope: LocalEnvelope): number {
+  let max = 0;
+  for (const session of envelope.sessions) {
+    const ms = Date.parse(session.updatedAt);
+    if (Number.isFinite(ms) && ms > max) max = ms;
+  }
+  for (const state of Object.values(envelope.state)) {
+    for (const entry of Object.values(state.progress)) {
+      if (entry.ts > max) max = entry.ts;
+    }
+  }
+  return max;
+}
+
 export function mergeReviewedKey(userId: number): string {
   return `eq.merge.reviewed.${userId}`;
 }
@@ -49,7 +70,12 @@ export function mergeDeferredKey(userId: number): string {
   return `eq.merge.deferred.${userId}`;
 }
 
-/** Per-account marker written once the review uploaded the `local` owner's sessions (§9.4 detection (b)). */
+/**
+ * Per-account watermark of the `local` sessions envelope at the last completed
+ * merge (§9.4 detection (b)): the max of every session row's `updatedAt` and
+ * each state's newest progress stamp. Unchanged local sessions stay suppressed;
+ * NEW local data re-arms detection instead of stranding behind a one-way flag.
+ */
 export function sessionsMigratedKey(userId: number): string {
   return `eq.merge.sessions-migrated.${userId}`;
 }
@@ -103,10 +129,7 @@ export class MergeReview {
   readonly #enqueuedKeys = new Set<string>();
   readonly #enqueuedSessions = new Set<string>();
   /** The `local` envelope read at detection — merge uploads from this snapshot. */
-  #localEnvelope: {
-    sessions: readonly ReadingSession[];
-    state: Readonly<Record<string, SessionReaderState>>;
-  } | null = null;
+  #localEnvelope: LocalEnvelope | null = null;
 
   constructor(deps: MergeReviewDeps) {
     this.#deps = deps;
@@ -146,8 +169,10 @@ export class MergeReview {
   /**
    * Detection after auth → authenticated: mergeable local data exists if legacy
    * blob bookmarks are unmarked for this account, the `local` owner's sessions
-   * (Feature 4.2) are unmigrated, or retained unowned entries are queued. This
-   * account's own pending mutations are never a trigger.
+   * (Feature 4.2) changed since the last completed merge, or retained unowned
+   * entries are queued. This account's own pending mutations are never a
+   * trigger. Only the user's explicit markers gate detection (deferred /
+   * reviewed); a completed merge re-arms for NEW local data.
    */
   evaluate(userId: number): void {
     if (this.#open && this.#userId === userId) return;
@@ -222,7 +247,12 @@ export class MergeReview {
       sessionsUploaded += 1;
     }
     if (this.#rows.length > 0) writeRaw("local", legacyMigratedKey(String(userId)), "1");
-    if (this.#sessionRows.length > 0) writeRaw("local", sessionsMigratedKey(userId), "1");
+    const snapshot = this.#localEnvelope;
+    if (this.#sessionRows.length > 0 && snapshot !== null) {
+      // Watermark of what this review offered: unchanged local sessions stay
+      // suppressed, NEW local data re-arms detection (§9.4 (b), no stranding).
+      writeRaw("local", sessionsMigratedKey(userId), String(envelopeWatermark(snapshot)));
+    }
     let merged = 0;
     let skipped = 0;
     for (const row of chosen) {
@@ -231,12 +261,10 @@ export class MergeReview {
     }
     merged += sessionsUploaded;
     this.#result = { merged, skipped };
-    // The review is complete once nothing mergeable remains; unresolved unowned
-    // entries stay eligible for the next session's prompt (EC-48).
-    if (this.#deps.bookmarks.unownedPending() === 0) {
-      writeRaw("local", mergeReviewedKey(userId), "1");
-      this.#resolved = true;
-    }
+    // No auto `reviewed` marker on a completed merge (§9.4): suppression beyond
+    // this review is the user's explicit choice alone ("Don't ask again"), so
+    // detection re-arms for NEW local data; unresolved unowned entries stay
+    // eligible for the next session's prompt (EC-48).
     this.#merging = false;
     void this.#deps.engine.flush(domain).catch(() => undefined);
     if (sessionsUploaded > 0) {
@@ -309,7 +337,6 @@ export class MergeReview {
    * position or progress worth uploading. Recents never sync and never trigger.
    */
   #localSessionRows(userId: number): MergeSessionRow[] {
-    if (readRaw("local", sessionsMigratedKey(userId)) === "1") return [];
     const envelope = decodeSessionsEnvelope(readJSON(SESSIONS_LOCAL_KEY));
     if (envelope === undefined) return [];
     this.#localEnvelope = { sessions: envelope.sessions, state: envelope.state };
@@ -329,6 +356,12 @@ export class MergeReview {
         isDefault: true,
       });
     }
+    if (rows.length === 0) return rows;
+    // §9.4 detection (b) re-arm: the marker is a watermark of the envelope at
+    // the last completed merge, not a one-way off switch — only unchanged local
+    // sessions stay suppressed.
+    const migrated = readRaw("local", sessionsMigratedKey(userId));
+    if (migrated !== null && Number(migrated) === envelopeWatermark(envelope)) return [];
     return rows;
   }
 

@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+// freshHarness() re-imports the whole graph per test (see comment below); the
+// first test pays the cold transform/import cost, which busts the default 5s
+// under CI load. Same ceiling LocaleSuggest.test.ts uses.
+vi.setConfig({ testTimeout: 15_000 });
+
 // The component binds the real auth-state singleton; only `sessionExpired` is
 // needed, so a plain object stands in (each case sets the flag before mount —
 // a plain property is not a signal, so it is never flipped mid-test).
