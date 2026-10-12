@@ -64,7 +64,7 @@ The rest of the suite ([FoxIO README](https://github.com/FoxIO-LLC/ja4), [FoxIO 
 
 | Fingerprint  | Input                               | Shape / notes                                                                                                                                                                                                                              |
 | ------------ | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| JA4S         | ServerHello                         | `{t                                                                                                                                                                                                                                        | q}{ver}{ext_count}{alpn}_{single_cipher}_{ext_hashes}`; not sorted; depends on the client hello it answered |
+| JA4S         | ServerHello                         | `{t\|q}{ver}{ext_count}{alpn}_{single_cipher}_{ext_hashes}`; not sorted; depends on the client hello it answered                                                                                                                           |
 | JA4H         | HTTP request                        | method+version+cookie/referer presence, 2-digit header count (Cookie/Referer excluded, >99→99), 4-char language, then cookie-field hash and a per-user hash ([JA4H](https://github.com/FoxIO-LLC/ja4/blob/main/technical_details/JA4H.md)) |
 | JA4X         | X.509 cert generation style         | issuer/subject/RDN-OID/extensions hashes; catches Sliver/Cobalt Strike even with randomized certs                                                                                                                                          |
 | JA4L / JA4LS | Latency + TTL from handshake timing | `{half-RTT_µs}_{TTL}`; distance estimate + OS guess; works on encrypted traffic                                                                                                                                                            |
@@ -342,7 +342,7 @@ Send `X-Eq-Edge-TS: <unix-seconds>`, `X-Eq-Edge-Kid: v1` (or a rotating key id),
 
 - **Strip inbound `X-Eq-Edge-*` from client requests.** Cloudflare forwards almost all client headers; without stripping, any client can forge these values.
 - **Require a valid signature** (or a valid mTLS/Authenticated-Origin-Pull identity) before trusting any header; a missing signature means the request did not come through the Worker pipeline.
-- **Make the origin unreachable except through Cloudflare**: Authenticated Origin Pulls, Cloudflare Tunnel, or a strict firewall allowlist of Cloudflare egress IPs; otherwise `CF-Connecting-IP`-style headers and even the Worker path can be bypassed ([HTTP headers docs](https://developers.cloudflare.com/fundamentals/reference/http-headers/)).
+- **Make the origin unreachable except through Cloudflare**: Cloudflare Tunnel, or Authenticated Origin Pulls with a **per-zone** certificate (the global AOP certificate is shared by every Cloudflare account, so it proves nothing about _your_ zone). A firewall allowlist of Cloudflare egress IPs is not enough on its own — it does not cover other containers on a shared Docker network, which is this deployment's actual exposure (F1-ingress-trust). Otherwise `CF-Connecting-IP`-style headers and even the Worker path can be bypassed ([HTTP headers docs](https://developers.cloudflare.com/fundamentals/reference/http-headers/)).
 - Keep the header count small; don't put large blobs in headers.
 - Log both raw values and a derived `edge_fp_version` so you can re-derive when Cloudflare changes field semantics.
 
@@ -477,7 +477,7 @@ IP intelligence / networking
 
 - RIPE NCC delegated stats: https://ftp.ripe.net/pub/stats/ripencc/delegated-ripencc-latest
 - IANA AS number registry: https://www.iana.org/assignments/as-numbers/as-numbers.xhtml
-- MaxMind accuracy comparison (country-level 50 km): https://www.maxmind.com/en/geoip2-city-accuracy-comparison
+- MaxMind accuracy comparison (city-level, % within 50 km): https://www.maxmind.com/en/geoip2-city-accuracy-comparison
 - MaxMind GeoLite2 EULA: https://www.maxmind.com/en/geolite2/eula
 - MaxMind GeoLite2 data/limits: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
 - IPinfo privacy detection (VPN/proxy/Tor/relay/hosting): https://ipinfo.io/data/proxy-vpn-detection

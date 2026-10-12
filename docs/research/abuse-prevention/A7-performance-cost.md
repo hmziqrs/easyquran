@@ -22,7 +22,7 @@ page-cache warm) and are labelled; the deploy target is a small arm64 Ubuntu VPS
 | **Quran content path is a separate router with no session layer**, rate-limited only; its SQLite access uses its own read-only `immutable(true)` sqlx connections, not sea_db.            | `src/main.rs:897-927`; `src/quran/loader.rs:208-222`                                                             |
 | docker-compose sets **no cpu/memory limits** on any service.                                                                                                                              | `docker-compose.yml` (no `deploy.resources`/`mem_limit`)                                                         |
 | No `auto_vacuum` / `VACUUM` anywhere in the repo.                                                                                                                                         | grep: 0 matches                                                                                                  |
-| No CF Worker / Logpush / JA4 code anywhere in the repo.                                                                                                                                   | grep `Logpush                                                                                                    | JA4`: 0 matches |
+| No CF Worker / Logpush / JA4 code anywhere in the repo.                                                                                                                                   | grep `Logpush\|JA4`: 0 matches                                                                                   |
 | Client budgets: `DEFAULT_TIMEOUT_MS = 12_000` (auth), worker `DEFAULT_TIMEOUT_MS = 30_000`, `LOCAL_BOOT_BUDGET_MS = 1500`, `LOCAL_HEDGE_BUDGET_MS = 400`, `DOWNLOAD_BUDGET_MS = 120_000`. | `web/src/lib/auth/auth-client.ts:7`; `quran/worker-client.ts:61`; `quran/fetch.ts:3,7`; `workers/download.ts:14` |
 | Worker infra exists; IDB is a shared helper with `IDB_VERSION = 1`.                                                                                                                       | `web/src/lib/workers/*`; `workers/idb.ts:2`                                                                      |
 | CSP already allows wasm (`'wasm-unsafe-eval'`) and workers (`worker-src 'self' blob:`); `'unsafe-eval'` is dev-only. sqlite-wasm already runs in `quran.worker.ts`.                       | `web/src/hooks.server.ts:80-93`; `web/server.ts:230`; `web/static/_headers:16`                                   |
@@ -55,12 +55,12 @@ Server receives the client payload → `device_key = HMAC-SHA256(components, pep
 ### Cost per request (VPS arithmetic)
 
 - Commit cost = 1 fsync. Local APFS floor 56 µs; a cheap VPS ext4/NVMe is 0.1–0.5 ms and
-  network-backed block storage 0.5–3 ms. Use **0.5 ms** as the working number.
+  network-backed block storage 0.5–3 ms. Use **0.5 ms** as the working number — an assumption, not a VPS measurement, so every ceiling below is an estimate to recalibrate on the real host.
 - 2 writes = 2 commits = **1.0 ms/request** of pure commit time. Batch both into one txn → 0.5 ms.
 - 1 read through sea-orm/sqlx (statement build + param encode + row decode + pool acquire/release)
   ≈ **30–100 µs** (raw engine is 2.7–7.2 µs; the app stack is 10–30× the engine cost).
 
-### Ceiling for the pool of 1 (all DB work serialized)
+### Ceiling for the pool of 1 (all DB work serialized) — estimates derived from the 0.5 ms fsync assumption
 
 ```
 ceiling = 1 / (DB time per request)
@@ -84,8 +84,8 @@ The 10 s flush is the sharp edge. It holds the connection for
 `N × per-await-overhead`:
 
 ```
-N = 2 000 live rate-limit buckets, 30–100 µs per txn.execute().await
-  → 60–200 ms of exclusive connection time, every 10 s (0.6–2% duty cycle)
+N = 2 000 live rate-limit buckets (assumed), 30–100 µs per txn.execute().await (estimated)
+  → 60–200 ms of exclusive connection time, every 10 s (0.6–2% duty cycle) — estimate
 ```
 
 Any request that lands in that window waits up to 200 ms — _before_ the device feature adds anything.
@@ -164,17 +164,17 @@ Measured numbers are from this machine (bun/JSC — _not_ a browser; treat as en
 Low-end Android multiplier for CPU-bound work: **5–15×**. Estimates (marked "est.") are for a
 mid-range Android browser.
 
-| Signal                                         | Cost (measured / est.)                                          | Low-end Android | Must be a Worker?                                                                                                  |
-| ---------------------------------------------- | --------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------ |
-| WebGL context + `getParameter` + extension set | warm 3–20 ms; **cold GPU-process start 50–200 ms (est.)**       | 50–300 ms       | **Yes** (OffscreenCanvas WebGL in worker). Fallback to main thread = `requestIdleCallback` + hard abandon timeout. |
-| WebGPU `requestAdapter()`                      | 10–150 ms (est.); returns `null` on most Android and iOS < 17.4 | 20–250 ms       | **Yes**, and must be optional (never a required component).                                                        |
-| WASM compile+instantiate                       | **3.78 ms for an 8-byte module (measured)**                     | 20–60 ms        | **Yes**                                                                                                            |
-| JS timing loop                                 | **12.84 ms / 3M iters (measured)**                              | 65–190 ms       | **Yes**                                                                                                            |
-| Feature matrix (16 probes)                     | **1.93 ms (measured)**                                          | 10–30 ms        | Main thread OK if deferred                                                                                         |
-| UA-CH `getHighEntropyValues()`                 | 0.5–20 ms (est., browser-process IPC); absent in Firefox/Safari | 2–30 ms         | Main thread OK (async), optional                                                                                   |
-| `Intl` resolver                                | **5.62 ms first use (measured)** — ICU data load                | 20–60 ms        | Prefer Worker, or reuse an existing instance                                                                       |
-| `navigator.webdriver` / native-fn tamper check | 0.1–5 ms (stringifying functions is the cost)                   | ≤ 25 ms         | Main thread OK                                                                                                     |
-| Payload build + JSON                           | **0.67 ms / 426 B (measured)**                                  | ~3 ms           | anywhere                                                                                                           |
+| Signal                                         | Cost (measured / est.)                                                                    | Low-end Android | Must be a Worker?                                                                                                  |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------ |
+| WebGL context + `getParameter` + extension set | warm 3–20 ms; **cold GPU-process start 50–200 ms (est.)**                                 | 50–300 ms       | **Yes** (OffscreenCanvas WebGL in worker). Fallback to main thread = `requestIdleCallback` + hard abandon timeout. |
+| WebGPU `requestAdapter()`                      | 10–150 ms (est.); availability is uneven across Android browsers (Safari 26 ships WebGPU) | 20–250 ms       | **Yes**, and must be optional (never a required component).                                                        |
+| WASM compile+instantiate                       | **3.78 ms for an 8-byte module (measured)**                                               | 20–60 ms        | **Yes**                                                                                                            |
+| JS timing loop                                 | **12.84 ms / 3M iters (measured)**                                                        | 65–190 ms       | **Yes**                                                                                                            |
+| Feature matrix (16 probes)                     | **1.93 ms (measured)**                                                                    | 10–30 ms        | Main thread OK if deferred                                                                                         |
+| UA-CH `getHighEntropyValues()`                 | 0.5–20 ms (est., browser-process IPC); absent in Firefox/Safari                           | 2–30 ms         | Main thread OK (async), optional                                                                                   |
+| `Intl` resolver                                | **5.62 ms first use (measured)** — ICU data load                                          | 20–60 ms        | Prefer Worker, or reuse an existing instance                                                                       |
+| `navigator.webdriver` / native-fn tamper check | 0.1–5 ms (stringifying functions is the cost)                                             | ≤ 25 ms         | Main thread OK                                                                                                     |
+| Payload build + JSON                           | **0.67 ms / 426 B (measured)**                                                            | ~3 ms           | anywhere                                                                                                           |
 
 **Main-thread budget for a first-paint-adjacent task on low-end Android:** no single task > **50 ms**
 (that is the Long Task / RAIL threshold), and for INP health the whole collector should stay
@@ -250,8 +250,8 @@ Storage: `localStorage` first (sync, ~µs), IDB as backup only — opening a new
   `TRUSTED_PROXY_CIDRS`, 400 if absent in prod). **Zero** CF Worker, Logpush or JA4 code exists in
   the repo.
 - **Worker on every request:** +1–5 ms p50 TTFB, up to +20 ms p99 on cold isolates, plus edge CPU
-  (~0.1–1 ms for an HMAC + header signing). Pricing: Workers free = 100k requests/day; paid = $5/mo
-  for 10M requests + $0.30/M after → 10M req/mo ≈ $5, 100M req/mo ≈ $32. That is billed on _all_
+  (~0.1–1 ms for an HMAC + header signing). Pricing (Cloudflare Workers pricing page, developers.cloudflare.com/workers/platform/pricing — verify current
+  rates): Workers free = 100k requests/day; paid = $5/mo for 10M requests + $0.30/M after → 10M req/mo ≈ $5, 100M req/mo ≈ $32. That is billed on _all_
   site traffic if the Worker sits in front of the zone, not just `/api/**`. A Worker that only adds
   `X-Eq-Edge-*` to `/api/*` (route-filtered) avoids most of that.
 - **Header-only alternative:** no Worker at all. `request.cf` fields are **not** exposed to the
@@ -266,8 +266,8 @@ Storage: `localStorage` first (sync, ~µs), IDB as backup only — opening a new
   cannot see.** The ladder must not require JA4 above L2, or the feature silently degrades on the
   plan the site is actually on.
 - **Logpush as an origin pipeline:** volume = requests × 0.5–1.5 KB/record (a full `cf` object is
-  ~2 KB; NDJSON with selected fields ~~0.5 KB). 1M req/mo = 0.5–1.5 GB; 10M = 5–15 GB;
-  100M = 50–150 GB. Transfer billing is plan-dependent (~~$0.05/GB on Enterprise) → 100M req/mo
+  ~2 KB; NDJSON with selected fields ≈ 0.5 KB). 1M req/mo = 0.5–1.5 GB; 10M = 5–15 GB;
+  100M = 50–150 GB. Transfer billing is plan-dependent (≈ $0.05/GB on Enterprise) → 100M req/mo
   ≈ $2.5–7.5 plus destination storage. **Latency: batched, typically 30 s to several minutes**
   (configurable batch size/interval), and delivery is best-effort: **gaps are not backfilled**.
   Therefore Logpush can feed _aggregates and dashboards only_ — never enforcement, never the
@@ -304,8 +304,9 @@ Recommended strategy:
    new job — one transaction per tick, matching `rate_limit_store::flush`.
 2. Sweep `device_sessions` in the **existing hourly session sweep** (`main.rs:764-775`) by joining on
    `user_session_id` — otherwise the join table outlives the sessions it describes.
-3. Monthly out-of-band compaction via **`VACUUM INTO 'easyquran.new.db'`** on a copy, then swap
-   (SQLite 3.27+; needs only a read lock). Set an explicit high-water-mark target (e.g. ≤ 200 MB)
+3. Monthly out-of-band compaction via **`VACUUM INTO 'easyquran.new.db'`** (SQLite 3.27+; needs only a read
+   lock), then swap the file in a short maintenance window — replacing the live file requires closing the
+   single connection, so the swap is not zero-downtime (C5 §4 #25). Set an explicit high-water-mark target (e.g. ≤ 200 MB)
    and alert on it. Do **not** try `PRAGMA incremental_vacuum` — it requires
    `auto_vacuum=INCREMENTAL` to have been set before the tables existed, and switching needs a full
    VACUUM anyway.
@@ -371,13 +372,13 @@ What to add instead:
 
 ## Findings
 
-1. **Per-request device evaluation breaks the single-writer budget** — **blocker.** Design §1/§2 implies 1 indexed read + 2 commits + 1 HMAC per authenticated request. sqlx pins `PRAGMA synchronous` to the SQLite default FULL (`sqlx-sqlite-0.8.6/src/options/mod.rs:187-189`; `sea_connect.rs` never overrides it) → **1 fsync per commit**. At 0.5 ms/fsync on the VPS target: 1.0 ms of commit time per request → **~950 req/s ceiling for the entire authenticated API**, with the device feature consuming 60–95% of it (local floor 56 µs median / 162 µs max per commit; 250–1000 req/s range on slower disks). **Fix:** zero DB ops on the request path — write-on-login-only + the 5-min session-payload cache (§2), 60 s ticker for `last_seen`/`seen_count`, in-memory LRU in front of `device_records`.
+1. **Per-request device evaluation breaks the single-writer budget** — **blocker.** Design §1/§2 implies 1 indexed read + 2 commits + 1 HMAC per authenticated request. sqlx pins `PRAGMA synchronous` to the SQLite default FULL (`sqlx-sqlite-0.8.6/src/options/mod.rs:187-189`; `sea_connect.rs` never overrides it) → **1 fsync per commit**. At an assumed 0.5 ms/fsync on the VPS target (not measured there): 1.0 ms of commit time per request → **an estimated ~950 req/s ceiling for the entire authenticated API**, with the device feature consuming 60–95% of it (local floor 56 µs median / 162 µs max per commit; 250–1000 req/s range on slower disks). **Fix:** zero DB ops on the request path — write-on-login-only + the 5-min session-payload cache (§2), 60 s ticker for `last_seen`/`seen_count`, in-memory LRU in front of `device_records`.
 
-2. **The existing 10 s ban flush already monopolizes the pool for 60–200 ms** — **major** (pre-existing, but the design must budget around it). `rate_limit_store.rs:199-219` issues **N separate `txn.execute().await`** in a loop: raw engine floor 1.4 ms for N=2000 (measured), but 30–100 µs per await through sea-orm/sqlx → **60–200 ms of exclusive connection time every 10 s** (0.6–2% duty cycle, up to 200 ms tail for any request that lands in it). **Fix:** add no DB reads to the request path; separately, batch the flush into one multi-row upsert (free win).
+2. **The existing 10 s ban flush already monopolizes the pool for 60–200 ms** — **major** (pre-existing, but the design must budget around it). `rate_limit_store.rs:199-219` issues **N separate `txn.execute().await`** in a loop: raw engine floor 1.4 ms for N=2000 (measured), but an estimated 30–100 µs per await through sea-orm/sqlx → **an estimated 60–200 ms of exclusive connection time every 10 s at an assumed N = 2 000** (0.6–2% duty cycle, up to 200 ms tail for any request that lands in it). **Fix:** add no DB reads to the request path; separately, batch the flush into one multi-row upsert (free win).
 
 3. **WASM/JS timing signature is negative-value** — **major.** Measured: **3.78 ms** just to compile+instantiate an **8-byte** module, **12.84 ms** for a 3M-iteration loop (fast Mac) → 50–400 ms on low-end Android as a long task. Entropy is ~2–4 bits already covered by `deviceMemory`/`hardwareConcurrency` (1 property read each), and the bucket is **unstable across sessions** (thermal/throttling/JIT) → an unstable component inside the HMAC'd `device_key` **mints a new `device_record` and a false "new device" step-up** whenever it shifts, defeating the 30-day keyed retention. **Fix:** drop it; use `deviceMemory` + `hardwareConcurrency` as cohort inputs, never key material.
 
-4. **Client collector must not run on the main thread** — **major.** Cold WebGL context 50–200 ms (est.), WebGPU `requestAdapter()` 10–150 ms and `null` on most Android / iOS <17.4, WASM compile 3.8 ms measured. Budget: **no task > 50 ms, total ≤ 20–30 ms in ≤ 5 ms chunks, deferred past first paint** (the repo's own convention: `LOCAL_BOOT_BUDGET_MS = 1500`, hedge at 400 ms). **Fix:** a dedicated, lazily-spawned Worker under `web/src/lib/workers/` (CSP `worker-src 'self' blob:` already permits it, `hooks.server.ts:93`); do **not** reuse `quran.worker.ts` (its boot is artifact staging with its own budget, `worker-client.ts:576-618`); main-thread GL fallback only via `requestIdleCallback` with a hard abandon timeout.
+4. **Client collector must not run on the main thread** — **major.** Cold WebGL context 50–200 ms (est.), WebGPU `requestAdapter()` 10–150 ms (est.) with uneven availability, WASM compile 3.8 ms measured. Budget: **no task > 50 ms, total ≤ 20–30 ms in ≤ 5 ms chunks, deferred past first paint** (the repo's own convention: `LOCAL_BOOT_BUDGET_MS = 1500`, hedge at 400 ms). **Fix:** a dedicated, lazily-spawned Worker under `web/src/lib/workers/` (CSP `worker-src 'self' blob:` already permits it, `hooks.server.ts:93`); do **not** reuse `quran.worker.ts` (its boot is artifact staging with its own budget, `worker-client.ts:576-618`); main-thread GL fallback only via `requestIdleCallback` with a hard abandon timeout.
 
 5. **`Intl` resolver is the sneaky client cost** — **minor.** Measured **5.62 ms** first use (ICU data load) → 20–60 ms on low-end Android. **Fix:** run it in the collector worker, or reuse an already-constructed formatter instead of `Intl.DateTimeFormat().resolvedOptions()` + `Locale.maximize()` per collection.
 
@@ -385,9 +386,9 @@ What to add instead:
 
 7. **A Cloudflare Worker on every request is unjustified in v0** — **major.** +1–5 ms p50 TTFB (up to 20 ms p99 cold isolate) and per-request billing (free 100k/day; $5 per 10M + $0.30/M after). JA4 requires Enterprise + Bot Management, and without Bot Management the edge forwards only ASN/colo/country — all derivable from `CF-Connecting-IP`, which the origin already trusts. **Fix:** Layer 4 optional; ship origin-only; add the Worker (route-filtered to `/api/*`) only when the plan exposes a field the origin cannot see; the ladder must not require JA4 above L2.
 
-8. **Logpush cannot be an origin/enforcement pipeline** — **major.** Batched delivery, typical end-to-end **30 s to several minutes**, and **gaps are not backfilled**. Volume 0.5–1.5 KB/record → 5–15 GB per 10M requests, 50–150 GB per 100M (transfer billing plan-dependent, ~$0.05/GB on Enterprise). **Fix:** use it for aggregates/dashboards only; state explicitly that it can never gate a request, never retry a lost record, and never produce a complete DSAR export.
+8. **Logpush cannot be an origin/enforcement pipeline** — **major.** Batched delivery, typical end-to-end **30 s to several minutes**, and **gaps are not backfilled**. Volume 0.5–1.5 KB/record → 5–15 GB per 10M requests, 50–150 GB per 100M (transfer billing plan-dependent, ≈ $0.05/GB on Enterprise). **Fix:** use it for aggregates/dashboards only; state explicitly that it can never gate a request, never retry a lost record, and never produce a complete DSAR export.
 
-9. **Storage growth is bounded in rows but not in file size** — **minor/major.** ~40k `device_records`/month × 0.4–0.9 KB = 16–36 MB/month; 30 d retention → **20–40 MB steady state**; `device_sessions` 7.5 MB/month must be swept with sessions. **No `auto_vacuum` is set anywhere** (0 grep matches) → default `auto_vacuum=NONE` leaves the file at a high-water mark, and a plain `VACUUM` through the pool of 1 stalls every request. **Fix:** retention deletes inside the existing 60 s ticker; add `device_sessions` to the hourly session sweep (`main.rs:764-775`); monthly out-of-band `VACUUM INTO` with an explicit ≤200 MB high-water target.
+9. **Storage growth is bounded in rows but not in file size** — **minor/major.** ~40k `device_records`/month × 0.4–0.9 KB = 16–36 MB/month; 30 d retention → **20–40 MB steady state**; `device_sessions` 7.5 MB/month must be swept with sessions. **No `auto_vacuum` is set anywhere** (0 grep matches) → default `auto_vacuum=NONE` leaves the file at a high-water mark, and a plain `VACUUM` through the pool of 1 stalls every request. **Fix:** retention deletes inside the existing 60 s ticker; add `device_sessions` to the hourly session sweep (`main.rs:764-775`); monthly out-of-band `VACUUM INTO` plus a file swap in a maintenance window, with an explicit ≤200 MB high-water target.
 
 10. **The 12-month ban record conflicts with the 30-day `device_records` sweep** — **major.** If the ban row FKs to (or is derived from) a `device_records` row deleted at 30 d, the ban axis dies or cascades away — silently un-banning devices. **Fix:** the ban record owns its own copy of `device_key` with no FK dependency on the swept table; assert this in a test that deletes a 31-day-old record and then checks the ban still resolves.
 

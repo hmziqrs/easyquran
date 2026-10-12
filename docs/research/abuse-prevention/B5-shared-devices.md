@@ -112,7 +112,7 @@ could be abused, so the split is normative.
 ### 2.1 Data model
 
 ```sql
--- m000012 (fold into the device_records CREATE TABLE; if m000012 has already shipped, m000013):
+-- device migration (next free number; fold into the device_records CREATE TABLE, or a follow-up migration if it has shipped):
 -- current shared-device state, read from the in-process map, never queried per request.
 ALTER TABLE device_records ADD COLUMN shared_until TEXT;              -- NULL = not shared
 ALTER TABLE device_records ADD COLUMN shared_grant_id INTEGER;        -- current grant
@@ -120,7 +120,7 @@ ALTER TABLE device_records ADD COLUMN context_last TEXT;              -- browser
 ALTER TABLE device_records ADD COLUMN reputation_cleared_at TEXT;     -- last self-claim/kiosk clear
 ALTER TABLE device_records ADD COLUMN non_actionable INTEGER NOT NULL DEFAULT 0;
 
--- m000013: grant history + enrolment codes + audit. Append-only except state/revocation columns.
+-- follow-up migration: grant history + enrolment codes + audit. Append-only except state/revocation columns.
 CREATE TABLE IF NOT EXISTS shared_device_grants (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     kind TEXT NOT NULL,                    -- 'self_claim' | 'org_kiosk'
@@ -409,9 +409,9 @@ and UA-CH and has separate storage.
 
 ### 6.2 Rules that make the join hold
 
-- `context` (`browser` | `webview` | `standalone`) is an **attribute** (`device_records.context_last`
-  - evidence JSON), never part of any identity key. A context change updates the attribute; it
-    never creates a record, never triggers a prompt, and never appears in any rule.
+- `context` (`browser` | `webview` | `standalone`) is an **attribute** (`device_records.context_last` +
+  evidence JSON), never part of any identity key. A context change updates the attribute; it
+  never creates a record, never triggers a prompt, and never appears in any rule.
 - **Account continuity is the join** across storage-isolated contexts: Safari and the home-screen
   PWA may have different tokens → two records → both bound to the same account. That is normal.
 - `device_count_per_account` and `contexts_per_account` are **excluded from every rule** and from
@@ -573,11 +573,10 @@ seen with ≥3 accounts". A madrasa that puts 200 students through one account p
 device protection set (step-down, kiosk suppression, non-actionable) never fires, while per-account
 write limits and per-IP limits (school NAT = one `/32`) throttle all 200. A2 A2(ii) already warned
 the IP axis takes out the school.
-**Fix.** Add the second signal (§7.3): `sessions_per_device_per_day` + `writes_per_account_per_day`
-
-- grant/annotation → propose `org_shared_account` (queue-only). Recommend per-student accounts +
-  one kiosk device token as the supported posture; warn the org with explicit copy; allow a bounded
-  `write_quota_multiplier` only via admin-approved grants.
+**Fix.** Add the second signal (§7.3): `sessions_per_device_per_day` + `writes_per_account_per_day` +
+grant/annotation → propose `org_shared_account` (queue-only). Recommend per-student accounts +
+one kiosk device token as the supported posture; warn the org with explicit copy; allow a bounded
+`write_quota_multiplier` only via admin-approved grants.
 
 ### 2. NEW — Precedence (account ban > device challenge > nothing) is unasserted in DESIGN-v1 and needs a machine guard, or the shared-device mechanisms become an un-ban path
 
@@ -689,7 +688,7 @@ stale** (absence of policy = no suppression = pre-existing behavior, never a den
   `get_active_ban`, `admin_list`, `NewUserBan::permanent()`; `expires_at`/`revoked_at` semantics.
 - `rust/backend/api/src/services/auth.rs:530` — `check_ban`; `crates/rux-auth/src/traits.rs`
   `BanStatus`; `crates/rux-auth/src/middleware/guard.rs:46` — the `not_banned` gate;
-  `src/middlewares/auth_guard.rs:18–22` — role consts incl. the dead `ROLE_MODERATOR`.
+  `src/middlewares/auth_guard.rs:18–22` — role consts incl. `ROLE_MODERATOR` (no route gate uses it; inline `is_moderator()` checks still grant delete-any-media and read-any-email — F3 §3.5).
 - `rust/backend/api/src/modules/device_v1/{controller,validator,mod}.rs` — `/device/v1`
   register/list/delete, `MAX_DEVICES_PER_USER = 20`, oldest-evict, same-token ownership transfer
   test ("shared devices are non-suspicious" already encoded).

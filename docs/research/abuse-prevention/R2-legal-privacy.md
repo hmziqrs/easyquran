@@ -441,7 +441,7 @@ If minors can use the app, the following attach, in rough order of severity:
 
 1. **India — hard prohibition on monitoring children.** DPDP s.9(3): no tracking or behavioural monitoring of children, no targeted advertising to children. Under-18 = child. Verifiable parental consent (Rule 10) is required before processing a child's data (in force 13 May 2027). **There is no security exemption in the Fourth Schedule.** → Strongest argument for an **age-gated account system** (no accounts for under-18s, or a fully separate no-tracking mode).
 2. **Brazil — parental consent for children, with "all reasonable efforts" to verify.** LGPD Art 14. Note the terminology: Art 14's caput covers _crianças e adolescentes_ (children and adolescents) but the parental-consent paragraph refers to _crianças_; Brazilian commentary is split on whether the consent duty reaches 18. `[unverified; verify before relying.]`
-3. **US — COPPA, under 13.** The FTC's amended COPPA Rule was finalised **16 January 2025**, effective **60 days after Federal Register publication** (~~**23 June 2025**), with one year from publication to reach full compliance on amendments without earlier dates (~~**23 April 2026**). What changed, from the FTC's own release:
+3. **US — COPPA, under 13.** The FTC's amended COPPA Rule was finalised **16 January 2025**, effective **60 days after Federal Register publication** (≈ **23 June 2025**), with one year from publication to reach full compliance on amendments without earlier dates (≈ **23 April 2026**). What changed, from the FTC's own release:
    - **separate verifiable parental consent** to disclose a child's PI to third parties for targeted advertising;
    - **retention only "as long as reasonably necessary to fulfill a specific purpose"** — the rule "explicitly states that operators cannot retain the information indefinitely";
    - the definition of personal information was **expanded to include biometric identifiers and government-issued identifiers**;
@@ -480,7 +480,7 @@ Covered in §2.2. The operative safeguards if Art 22 applies: human intervention
 - **Art 20 (Internal complaint-handling)** — providers of **online platforms** must give recipients access to a free, electronic internal complaint-handling system for at least **six months** after the decision, covering decisions to suspend or terminate the service or the account. Art 20(4) requires reversal "without undue delay" where the complaint contains sufficient grounds. **Art 20(6): "Providers of online platforms shall ensure that the decisions ... are taken under the supervision of appropriately qualified staff, and not solely on the basis of automated means."** ← This is the DSA's answer to automatic bans.
 - **Art 21** — out-of-court dispute settlement for the same decisions.
 - **Art 19 (Exclusion for micro and small enterprises)** — verbatim: "This Section, with the exception of Article 24(3) thereof, shall not apply to providers of online platforms that qualify as **micro or small enterprises** as defined in Recommendation 2003/361/EC." Section 3 contains Arts 20–28. → **A micro/small platform is exempt from Art 20 (internal complaint-handling) and Art 21 (out-of-court dispute settlement).** But **Art 17 sits in Section 2 and is not exempted by Art 19.** `[analysis: so a micro hosting service still owes statements of reasons, but not a complaint-handling system. And a read-only app owes neither.]`
-- **Practical:** if the app never hosts third-party content, DSA exposure is nil. If it adds comments later, add Art 17 statements of reasons at that moment. Keep the "is this a hosting service?" question in the design doc as a trigger for re-assessment.
+- **Practical:** this API already hosts third-party content — posts and comments (`post_comment_v1`) — so it is a hosting service and Art 17 statements of reasons apply now; Arts 20–21 do not while it qualifies as a micro/small platform. A read-only deployment without those modules would owe neither.
 
 ### 7.3 EU AI Act — is a fingerprinting ban system high-risk, or "remote biometric identification"?
 
@@ -540,7 +540,7 @@ Covered in §2.2. The operative safeguards if Art 22 applies: human intervention
 
 ### 8.4 Data minimisation at collection time
 
-- Compute the fingerprint **server-side from request headers** where possible (User-Agent, Accept-Language, TLS/JA4 signature via your proxy) instead of running client-side JS probes. CNIL's LINC notes the transport-layer approach requires **no client-side execution** and can be done at the edge. This removes the entire class of "intrusive client-side collection" concerns (fonts, WebGL, plugins) that the LINC article describes as "more intrusive collection of client information [that] makes it possible to identify the user in an almost unique way."
+- Compute the fingerprint **server-side from request headers** where possible (User-Agent, Accept-Language; a TLS/JA4 signature only where the edge exposes one — not on this stack, where Traefik terminates TLS and Cloudflare exposes JA4 only with Enterprise Bot Management, see R2-network-transport) instead of running client-side JS probes. CNIL's LINC notes the transport-layer approach requires **no client-side execution** and can be done at the edge. This removes the entire class of "intrusive client-side collection" concerns (fonts, WebGL, plugins) that the LINC article describes as "more intrusive collection of client information [that] makes it possible to identify the user in an almost unique way."
 - If you do need client-side signals, collect a **fixed, documented, small set** and hash them; do not collect canvas/WebGL/audio fingerprints (high entropy, high creep factor, and the thing journalists write about).
 - **Never collect precise geolocation.** Coarse (country) only, and only if needed for triage.
 - Apply Art 25(2)/CPPA §7002 logic: the default configuration must be the minimised one, and there must be no toggle that silently widens it.
@@ -586,15 +586,15 @@ Collect a **small, fixed set of request-level signals server-side** (User-Agent,
 
 ### 9.2 What to collect
 
-| Collect                                                  | Why                                           | Notes                                               |
-| -------------------------------------------------------- | --------------------------------------------- | --------------------------------------------------- |
-| `User-Agent` (full string, hashed into the key)          | coarse device/browser class; bot detection    | hash it; never display raw UA in the abuse UI       |
-| `Accept-Language`, `Accept-Encoding`, `Connection`       | consistency checks vs. UA                     | CNIL/LINC names these explicitly                    |
-| TLS fingerprint (JA3/JA4-style) via your reverse proxy   | catches scripted clients, VPN/proxy patterns  | computed at the edge, before app data; no client JS |
-| HTTP protocol version + header order                     | low-entropy, useful signal                    | —                                                   |
-| Your own first-party session cookie (httpOnly, SameSite) | stable, consent-free session continuity       | random, not derived from the fingerprint            |
-| Account ID (only when logged in)                         | links the key to a user for DSAR/ban purposes | stored in a separate column, access-controlled      |
-| Ban/abuse reason codes + timestamps + reviewer ID        | Art 22 / DSA Art 17 / LGPD Art 20 compliance  | —                                                   |
+| Collect                                                  | Why                                           | Notes                                                                                   |
+| -------------------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `User-Agent` (full string, hashed into the key)          | coarse device/browser class; bot detection    | hash it; never display raw UA in the abuse UI                                           |
+| `Accept-Language`, `Accept-Encoding`, `Connection`       | consistency checks vs. UA                     | CNIL/LINC names these explicitly                                                        |
+| TLS fingerprint (JA3/JA4-style) via your reverse proxy   | catches scripted clients, VPN/proxy patterns  | computed at the edge, before app data; no client JS. Not available on this stack (§8.4) |
+| HTTP protocol version + header order                     | low-entropy, useful signal                    | —                                                                                       |
+| Your own first-party session cookie (httpOnly, SameSite) | stable, consent-free session continuity       | random, not derived from the fingerprint                                                |
+| Account ID (only when logged in)                         | links the key to a user for DSAR/ban purposes | stored in a separate column, access-controlled                                          |
+| Ban/abuse reason codes + timestamps + reviewer ID        | Art 22 / DSA Art 17 / LGPD Art 20 compliance  | —                                                                                       |
 
 ### 9.3 What NOT to collect
 
@@ -685,7 +685,7 @@ Two documents, not one:
 - [ ] **Audit-log every human read of a device key**, append-only.
 - [ ] **If you add "remember this device" login, prefer a random httpOnly token over the fingerprint.** Use the fingerprint for abuse signals only.
 - [ ] **If you use a vendor, make it a processor/service provider**, forbid pooling and model training, sign the DPA, check transfers.
-- [ ] **Re-check the DSA hosting-service question** the moment you add user-generated content.
+- [ ] **Ship Art 17 statements of reasons** for comment/account restrictions — the API already hosts user content (§7.2).
 - [ ] **Re-check the CCPA "business" thresholds** the moment you monetise or share anything.
 - [ ] **Document the India position explicitly**, because DPDP has no security basis and no ePrivacy carve-out.
 - [ ] **Decide the minors question explicitly** — no accounts for under-18s is the only clean answer for India's s.9(3).

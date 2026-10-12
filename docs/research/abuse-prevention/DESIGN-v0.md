@@ -6,7 +6,7 @@ NOT ad tracking. NOT behavioral biometrics. NOT a bot-vendor buy.
 Repo facts that constrain everything (verified):
 
 - Rust API: axum, SQLite only, pool = 1 connection, migrations auto-run at boot (m000001..m000011).
-- Session: tower-sessions opaque id in cookie `ruxlog.sid` (HttpOnly, SameSite=Lax, Secure, 14d absolute), msgpack in `sessions` table, payload `rux_auth` = AuthSessionState. `user_sessions` audit row per session, `auth_session_binding` links tower id <-> audit row. Revocation = process-local HashSet + DB `revoked_at`.
+- Session: tower-sessions opaque id in cookie `ruxlog.sid` (HttpOnly, SameSite=Lax, `Secure` per `cookie_secure`, `Path=/`, 14 d inactivity expiry), msgpack in `sessions` table, payload `rux_auth` = AuthSessionState. `user_sessions` audit row per session, `auth_session_binding` links tower id <-> audit row. Revocation = process-local HashSet + DB `revoked_at`.
 - Guards: `auth_guard` (authenticated/unverified/verified/role), ban check with 5-min cache, fail-closed.
 - IP: single trusted signal `CF-Connecting-IP` (IP_SOURCE hardcoded), peer-gated by TRUSTED_PROXY_CIDRS; 400 if absent in prod.
 - Rate limit: `rux-request-gate`, fixed-window in-memory L1 + SQLite L2 flush every 10s; keys `ratelimit:{unit}:{path}` where unit = IP /32 or /64, `internal-webssr`, `unknown`. Escalation default-OFF, IP-only, allowlist-gated, never permanent.

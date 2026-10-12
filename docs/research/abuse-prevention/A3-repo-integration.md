@@ -201,10 +201,10 @@ every private-router layer. Therefore:
 
 Affordability with pool = 1 (`db/sea_connect.rs:32-44`): a per-request device **DB** read is the
 third serialized read per authenticated request (session load + user load + device) and it competes
-with the 10 s flush writer and `PERSISTENCE_LOCK` (`rate_limit_store.rs:47,126-178`). It is
-affordable only for the private API's low volumes (60-200 req/min/IP per nest, `router.rs:73-177`),
-not for the public Quran path (600/min/IP, `middlewares/rate_limit.rs:57-63`). Use L1 + a session
-field, not a per-request `SELECT`.
+with the 10 s flush writer and `PERSISTENCE_LOCK` (`rate_limit_store.rs:47,126-178`). Even at the
+private API's volumes (60-200 req/min/IP per nest, `router.rs:73-177`) it would take most of the
+authenticated DB budget (A7 F1: 60–95 %), and the public Quran path (600/min/IP,
+`middlewares/rate_limit.rs:57-63`) rules it out. Use L1 + a session field, not a per-request `SELECT`.
 
 ## 4. Indexes needed, and the write-amplification bill
 
@@ -305,8 +305,11 @@ factor_enabled` (`:25-34`) — **no device axis**; `matches` compares session id
 
 ## 8. Migration mechanics: rollback, safety, precedent
 
-- Auto-run at boot: `db/sea_connect.rs:87-93` → `Migrator::up(&conn, None)`; sea-orm wraps **each**
-  migration in a transaction (`sea-orm-migration-1.1.20/src/migrator.rs:263-266`).
+- Auto-run at boot: `db/sea_connect.rs:87-93` → `Migrator::up(&conn, None)`. On SQLite sea-orm does
+  **not** wrap a migration in a transaction — only Postgres is wrapped (`sea-orm-migration-1.1.20/src/migrator.rs:261-272`) —
+  and the version row is inserted only after `up()` returns (`:386-397`), so a crash mid-migration re-runs a
+  partly applied `up()`. Every statement must be idempotent, and a multi-statement batch should be wrapped in an
+  explicit `conn.transaction`.
 - **Rollback (`down`)** is only reachable manually (`migration/bin/migrate.rs:63-69`,
   `Migrator::down(&connection, steps)`); `steps: None` rolls back **everything**, i.e. m000001's
   `down` drops all tables (`m000001:318-347`). Never document a bare `down`; use `--steps 1`.
@@ -318,10 +321,10 @@ factor_enabled` (`:25-34`) — **no device axis**; `matches` compares session id
   (`m000011:10-19`), then create the UNIQUE index — i.e. any new UNIQUE on device data must
   pre-dedupe in the same `up`.
 - **Never rebuild a table in the new migration.** `PRAGMA foreign_keys=ON` is set at connect
-  (`sea_connect.rs:50`) and the migration runs inside a transaction, where `PRAGMA foreign_keys` is
-  a **no-op** — so a 12-step table rebuild cannot disable FK enforcement: `DROP TABLE user_sessions`
+  (`sea_connect.rs:50`) and stays live during migration DDL, and inside an explicit transaction
+  `PRAGMA foreign_keys` is a **no-op** — so a 12-step table rebuild cannot disable FK enforcement: `DROP TABLE user_sessions`
   would fire `ON DELETE CASCADE` into child tables (including the design's `device_sessions`) or
-  fail. Keep m000012 strictly additive: `CREATE TABLE/INDEX IF NOT EXISTS`, and `ALTER TABLE …
+  fail. Keep the new migration (next free number — see `docs/next-features.md` reservations) strictly additive: `CREATE TABLE/INDEX IF NOT EXISTS`, and `ALTER TABLE …
 ADD COLUMN … NOT NULL DEFAULT <constant>` guarded by a `PRAGMA table_info` check exactly like
   m000002:19-38. Note the CLI path (`migrate.rs`) does **not** call `configure_sqlite`, so FK
   enforcement differs between `just api-migrate` and boot — another reason not to rely on FK
@@ -487,12 +490,12 @@ exactly why device bans can only be corroborated bans, never a standalone enforc
     a present-but-invalid header; labeled-HKDF key derivation; update `main.rs:799-805` CORS
     `allow_headers` if a browser device header is added.
 
-13. **Migration mechanics: additive-only, idempotent, no table rebuild (FK pragma is a no-op in the
-    per-migration transaction), `down()` index-only, never a bare `down`** — severity **high** —
+13. **Migration mechanics: additive-only, idempotent, no table rebuild (FK enforcement is live during
+    migrations; SQLite migrations are not transactional), `down()` index-only, never a bare `down`** — severity **high** —
     NEW
-    Evidence: `sea_connect.rs:46-56,87-93`; sea-orm-migration-1.1.20 `migrator.rs:263-266`;
+    Evidence: `sea_connect.rs:46-56,87-93`; sea-orm-migration-1.1.20 `migrator.rs:261-272,386-397` (SQLite unwrapped; version row after `up()`);
     `migration/bin/migrate.rs:63-69` (`steps: None` = all, and m000001:318-347 drops every table);
-    precedents m000002:19-51, m000008:74-82, m000009:121-124, m000011:8-33. Fix: `CREATE TABLE/INDEX
+    precedents m000002:19-51, m000008:74-82, m000009:121-124, m000011:8-33. Fix: explicit `conn.transaction` around the batch + `CREATE TABLE/INDEX
 IF NOT EXISTS` + `PRAGMA table_info`-guarded `ADD COLUMN … NOT NULL DEFAULT <const>`;
     pre-dedupe before any new UNIQUE; build indexes while the old container is drained.
 

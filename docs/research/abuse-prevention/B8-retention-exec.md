@@ -34,13 +34,13 @@
 
 ## 1. The cleanup implementation
 
-### 1.1 Migration m000012 — only the retention-relevant shape
+### 1.1 Migration m0000NN — only the retention-relevant shape
 
 Full DDL is A10 §1.2. The corrections this audit forces (all three are load-bearing):
 
 1. **All retention columns are `INTEGER` unix seconds**, not TEXT. Reason: `CHECK (expires_at >= last_seen_at)` and `expires_at <= ?` must compare like-typed values. SQLite compares across storage classes by class order (NULL < INTEGER < TEXT < BLOB), so an INTEGER `expires_at` compared to a TEXT `created_at` is **always false** — a silent no-op CHECK and a silent no-op predicate. The repo already mixes formats (`user_bans.expires_at` is chrono RFC3339; `audit_logs.created_at` defaults to SQLite `CURRENT_TIMESTAMP` — a latent pre-existing bug). New tables do not repeat it: `first_seen_at/last_seen_at/created_at/expires_at/revoked_at` are epoch seconds; human-readable rendering stays in the API.
-2. **`device_sessions` carries `device_key` + `key_kid`** (denormalized). Without it, the session sweeper needs a join to `device_records` to find the ban key; with it, every sweeper probe is an index point lookup. This is the anti-join-explosion move.
-3. **`device_bans` is keyed by `device_key` (the fingerprint digest) + `key_kid`**, with `device_record_id` a nullable convenience pointer (`ON DELETE SET NULL`). See finding 6 — this is the only key that survives the 30-day record.
+2. **`device_sessions` carries `device_record_id`, which is also the ban key**, so every sweeper probe is an index point lookup with no join (the anti-join-explosion move). `device_key` + `key_kid` are copied onto the row as evidence only.
+3. **`device_bans` is keyed by `device_record_id`, and a live ban pins the record**: while the ban is live the record's `expires_at` = ban expiry + 30 d and the sweeper skips it, so the record survives exactly as long as the ban (finding 6). `device_key` is copied onto the ban row as evidence only — a digest ban would be a cohort ban (A2 F1). `ON DELETE SET NULL` keeps ended-ban history once the record is gone.
 
 ```sql
 CREATE TABLE IF NOT EXISTS device_records (
@@ -70,7 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_device_records_user  ON device_records (user_id, 
 CREATE TABLE IF NOT EXISTS device_sessions (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     device_record_id TEXT NOT NULL,
-    device_key       TEXT NOT NULL,              -- denormalized: ban guard without a join
+ device_key TEXT NOT NULL, -- evidence copy (the ban guard uses device_record_id)
     key_kid          TEXT NOT NULL DEFAULT 'v1',
     user_id          INTEGER NOT NULL,           -- NO FK (evidence must outlive users)
     user_session_id  INTEGER NOT NULL,           -- NO FK
@@ -85,9 +85,9 @@ CREATE INDEX IF NOT EXISTS idx_device_sessions_key     ON device_sessions (devic
 
 CREATE TABLE IF NOT EXISTS device_bans (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    device_key       TEXT NOT NULL,              -- the enforcement + retention key
+ device_key TEXT NOT NULL, -- evidence copy only (cohort key; never the ban key)
     key_kid          TEXT NOT NULL DEFAULT 'v1',
-    device_record_id TEXT,                       -- convenience; SET NULL is fine
+ device_record_id TEXT, -- the ban key; pinned while the ban is live
     scope            TEXT NOT NULL DEFAULT 'Long',
     reason           TEXT,
     banned_by        INTEGER,
@@ -98,8 +98,7 @@ CREATE TABLE IF NOT EXISTS device_bans (
     CHECK (expires_at IS NULL OR expires_at > created_at),
     FOREIGN KEY (device_record_id) REFERENCES device_records (id) ON DELETE SET NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_device_bans_active ON device_bans (device_key) WHERE revoked_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_device_bans_live_key ON device_bans (device_key) WHERE revoked_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_device_bans_active_record ON device_bans (device_record_id) WHERE revoked_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_device_bans_retention ON device_bans (revoked_at, expires_at);
 
 CREATE TABLE IF NOT EXISTS device_evidence (     -- append-only, self-contained, NO CASCADE FKs
@@ -271,17 +270,17 @@ async fn run_batches(
 
 ### 1.3 The SQL (no `DELETE ... LIMIT` anywhere)
 
-Sessions first — they are children of records and their absence is the record's own guard. The ban guard is a direct `device_key` probe (no join), and the hold guard is a point lookup.
+Sessions first — they are children of records and their absence is the record's own guard. The ban guard is a direct `device_record_id` probe (no join), and the hold guard is a point lookup.
 
 ```sql
--- 1. device_sessions: 30d inactivity, no live ban on the same key, no hold.
+-- 1. device_sessions: 30d inactivity, no live ban on the record, no hold.
 DELETE FROM device_sessions
  WHERE id IN (
    SELECT s.id FROM device_sessions s
     WHERE s.expires_at <= ?1
       AND NOT EXISTS (
             SELECT 1 FROM device_bans b
-             WHERE b.device_key = s.device_key
+ WHERE b.device_record_id = s.device_record_id
                AND b.revoked_at IS NULL
                AND (b.expires_at IS NULL OR b.expires_at > ?2))
       AND NOT EXISTS (
@@ -291,16 +290,16 @@ DELETE FROM device_sessions
     ORDER BY s.expires_at
     LIMIT ?3);
 
--- 2. device_records: candidate expiry, no live ban by key, no hold, no remaining links.
+-- 2. device_records: candidate expiry, no live ban on the record, no hold, no remaining links.
 DELETE FROM device_records
  WHERE id IN (
    SELECT d.id FROM device_records d
     WHERE d.expires_at <= ?1
       AND NOT EXISTS (
             SELECT 1 FROM device_bans b
-             WHERE b.device_key = d.device_key
-               AND b.revoked_at IS NULL
-               AND (b.expires_at IS NULL OR b.expires_at > ?2))
+ WHERE b.device_record_id = d.id
+ AND b.revoked_at IS NULL
+ AND (b.expires_at IS NULL OR b.expires_at > ?2))
       AND NOT EXISTS (
             SELECT 1 FROM legal_hold_subjects hs
              WHERE hs.subject_kind = 'device_record'
@@ -321,7 +320,7 @@ DELETE FROM device_bans
       AND NOT EXISTS (
             SELECT 1 FROM legal_hold_subjects hs
              WHERE hs.subject_kind = 'device_record'
-               AND hs.subject_id = device_bans.device_key)
+ AND hs.subject_id = device_bans.device_record_id)
     ORDER BY COALESCE(revoked_at, expires_at)
     LIMIT ?3);
 
@@ -381,7 +380,7 @@ Do **not** add it to the flush's `every_sixth_tick` callback — that callback i
 | `legal_holds`       | NOT NULL     | `preserve_until` = received + 90d, renewable; **never NULL**                                                                                                                       | `preserve_until > created_at`                              |
 | `erasure_receipts`  | NOT NULL     | `created_at + 24mo`                                                                                                                                                                | `expires_at > created_at`                                  |
 
-**The device key is the row.** There is no separate "device key" object to expire: `token_hash` (client token match), `device_key` (fingerprint digest), the profile columns, and the sessions all live on rows covered above. Expiring the record expires all of it. The **ban row is the only thing that may outlive the record**, and only on its own 12-month clock.
+**The device key is the row.** There is no separate "device key" object to expire: `token_hash` (client token match), `device_key` (fingerprint digest), the profile columns, and the sessions all live on rows covered above. Expiring the record expires all of it. A live ban **pins** the record (`expires_at` = ban expiry + 30 d); once the ban has ended, the ban row may outlive the record on its own 12-month clock.
 
 ### 2.2 CHECK constraint (the one that matters)
 
@@ -397,11 +396,11 @@ CHECK (expires_at > created_at)             -- evidence / holds / receipts
 
 Active use **does** extend retention under this design (`expires_at = last_seen + 30d` on every login/link write). That is defensible _because the purpose is live_ (recognising a returning device, detecting ban evasion) and it must be stated as such in the retention schedule — A5 defect B.
 
-But "active forever" is not acceptable without a bound, so the design needs a **re-mint cap**, enforced on the write path, not the sweeper:
+But "active forever" is not acceptable without a bound, so the design needs a **token rotation cap**, enforced on the write path, not the sweeper:
 
-> If a record's `first_seen_at <= now - 365d` at a login/link write: insert a **new** record (same `device_key` digest, new `token_hash`, new ULID), set the old row `revoked_at = now, expires_at = now + 30d`, and hand the client the new token. The old row is then reaped by the ordinary sweeper once its sessions age out. The digest continuity preserves enforcement (a live ban on the digest still matches); the identity history is capped at one year.
+> If a record's `first_seen_at <= now - 365d` at a login/link write: rotate `token_hash` **in place** (same ULID, new random token), reset `first_seen_at = now`, and hand the client the new token. The old row is then reaped by the ordinary sweeper once its sessions age out. The digest continuity preserves enforcement (a live ban on the digest still matches); the identity history is capped at one year.
 
-Orphans (no `user_id`, no ban, no case, no hold) die at 30 days of inactivity with no cap needed. The cap only bounds the always-active signed-in device. Test: `active_record_is_reminted_after_one_year`.
+Orphans (no `user_id`, no ban, no case, no hold) die at 30 days of inactivity with no cap needed. The cap only bounds the always-active signed-in device. Test: `active_record_token_rotates_in_place_after_one_year`.
 
 Sliding updates happen in the same upsert as the sighting, so there is no second write:
 
@@ -428,7 +427,7 @@ ON CONFLICT(token_hash) DO UPDATE SET
 
 A record survives its 30-day candidate expiry **iff any** of:
 
-1. a **live ban** on the same `device_key` (`revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now)`) — the ban needs the record for token-level attribution and for the appeal;
+1. a **live ban** on the record (`device_bans.device_record_id`, `revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now)`) — the ban needs the record for token-level attribution and for the appeal;
 2. an **open case** (`enforcement_cases.state IN ('proposed','active','appeal')` for the same digest);
 3. an **active legal hold** naming the record;
 4. **remaining sessions** (children are deleted first; the `NOT EXISTS` guard makes this automatic).
@@ -439,11 +438,11 @@ Otherwise it is deleted. Evidence does **not** retain the record: `device_eviden
 
 - The sweeper's candidate set is a bounded range scan on `idx_device_records_expires` (`expires_at <= now`), capped at 500 rows.
 - Each guard is a `NOT EXISTS` **semi-join**, which SQLite evaluates as a coroutine that stops at the first match — O(1) per candidate with the right index:
-  - `idx_device_bans_live_key` (partial, `WHERE revoked_at IS NULL`) for guard 1;
-  - `idx_device_sessions_key` / `idx_device_sessions_expires` for sessions;
-  - `idx_hold_subjects_lookup (subject_kind, subject_id)` for the hold probe.
+- `idx_device_bans_active_record` (partial, `WHERE revoked_at IS NULL`) for guard 1;
+- `idx_device_sessions_key` / `idx_device_sessions_expires` for sessions;
+- `idx_hold_subjects_lookup (subject_kind, subject_id)` for the hold probe.
 - Never a `LEFT JOIN` + `DISTINCT`: a left join fans out one row per ban/case/hold per device and destroys early exit. Rule for reviewers: **no JOIN in the sweeper, `NOT EXISTS` only.**
-- The record's own delete guard is by `device_key`, not `device_record_id`, so a ban whose `device_record_id` was nulled (or never set) still protects the digest.
+- The record's delete guard is by `device_record_id`. A live ban always carries it (that is the pin), and `SET NULL` cannot fire while the guard keeps the record alive.
 
 ---
 
@@ -485,8 +484,8 @@ SELECT id, device_key, key_kid, first_seen_at, last_seen_at, trust_state, user_i
   FROM device_records WHERE user_id = ?;
 SELECT device_record_id, device_key, user_id, user_session_id, linked_at
   FROM device_sessions WHERE user_id = ?;
-SELECT id, device_key, scope, reason, expires_at, revoked_at
-  FROM device_bans WHERE device_key IN (/* digests above */);
+SELECT id, device_record_id, device_key, scope, reason, expires_at, revoked_at
+ FROM device_bans WHERE device_record_id IN (/* record ids above */);
 SELECT subject_id FROM legal_hold_subjects
  WHERE subject_kind = 'device_record' AND subject_id IN (/* record ids */);
 ```
@@ -512,7 +511,7 @@ DELETE FROM device_sessions
 -- keep the sessions that are the ban's linkage evidence, only for the ban's duration
 ```
 
-The ban row itself is retained: digest + reason class + window + reviewer + `expires_at`. That is Art 17(3)(e) restriction, not free retention.
+The ban row itself is retained: record id + digest copy + reason class + window + reviewer + `expires_at`. That is Art 17(3)(e) restriction, not free retention.
 
 **Step 3c — active hold:** do not delete the held rows; strip nothing from held evidence; return a partial response that says exactly which rows are frozen, under which authority, until when.
 
@@ -544,9 +543,9 @@ after that they are destroyed. If a backup is ever restored, we re-apply this
 receipt so the deletion is repeated.
 Next: reading without signing in creates no device record. Signing in again
 creates a new record with no link to the deleted one — except that if you are
-under an active ban, retained enforcement evidence can be matched to the new
-record by the fingerprint digest. That is deliberate ban enforcement and is
-disclosed here.
+under an active ban, retained enforcement evidence can be linked to the new
+record by the fingerprint digest for human review. That is deliberate ban
+enforcement and is disclosed here.
 ```
 
 ### 5.2 The "continued use recreates the record" lie — avoid it, don't paper it
@@ -554,7 +553,7 @@ disclosed here.
 The honest position, and the one that matches this design:
 
 - v1's token is **random, server-minted**, not a deterministic HMAC of the device (`A9 §3.4`; DESIGN-v1 B4). So a deleted record is genuinely gone; a new record is a new random token. There is no "same record comes back".
-- The **fingerprint digest is deterministic** under the pepper. A new record computed from the same device signals produces the same `device_key`. If that digest appears in retained enforcement evidence (active ban/open case/hold), the new record can be matched to that evidence. That is the one real limit, and the DSAR text must say it.
+- The **fingerprint digest is deterministic** under the pepper. A new record computed from the same device signals produces the same `device_key`. If that digest appears in retained enforcement evidence (active ban/open case/hold), the new record can be linked to that evidence for human review — never banned on the digest alone (a digest is a cohort, A2 F1). That is the one real limit, and the DSAR text must say it.
 - If no ban/case/hold exists, the new record has no link to anything deleted.
 - **Anonymous reading creates nothing.** B2 forbids the collector on reader routes and B3 writes only on login/link. So "sign out and read" is a true statement, not a hedge.
 
@@ -576,8 +575,8 @@ No endpoint, no SOP doc, no receipt table, no self-service account delete (only 
 
 Technically yes, functionally no. On the next boot with a new pepper:
 
-- every `token_hash` fails to match → every returning browser is a "new device" → global step-up storm;
-- every `device_key` digest fails to match → **all device bans stop matching** (including permanent ones), all cohort lookups return nothing;
+- every `token_hash` fails to match → every returning browser is a "new device" → global step-up storm, and since bans attach to records reached through the token, **all device bans stop matching** (including permanent ones);
+- every `device_key` digest fails to match → all cohort lookups return nothing;
 - every `device_evidence` digest becomes unmatchable → past cases cannot be linked to new devices, so ban-evasion detection for existing cases ends;
 - the app boots and serves normally; nothing crashes. It is a silent enforcement amnesia, which is why it must be a deliberate, logged event (A9 finding 2, failure mode 3/6).
 
@@ -588,7 +587,7 @@ Technically yes, functionally no. On the next boot with a new pepper:
 3. Export/retain nothing that you are not legally required to keep; for the rest: `DELETE FROM device_sessions; DELETE FROM device_records;` (bans: revoke first and record why, then `DELETE FROM device_bans;`). Evidence under hold stays.
 4. Rotate `DEVICE_KEY_PEPPER` to a fresh 32-byte CSPRNG value; ensure `DEVICE_KEY_PEPPER_PREV` is unset (the token subkey has no valid `_PREV` story — A9 §1.4). Restart.
 5. Remove the old value from **every** store that held it: Dokploy env tab (and Dokploy's own DB/backups), GitHub environment secrets if mirrored, any host `.env`, shell history, password manager, CI logs. Grep the deploy host for the old value; a secret you rotated but left in a backup is not destroyed.
-6. Post-conditions: `SELECT COUNT(*) FROM device_records` = 0; no row carries `key_kid` referencing the destroyed key; `PRAGMA wal_checkpoint(TRUNCATE)` so the WAL's old frames are gone; then the nightly `VACUUM INTO` swap replaces the file (freelist still holds deleted bytes otherwise, finding 2).
+6. Post-conditions: `SELECT COUNT(*) FROM device_records` = 0; no row carries `key_kid` referencing the destroyed key; `PRAGMA wal_checkpoint(TRUNCATE)` so the WAL's old frames are gone; then swap the live file for a `VACUUM INTO` copy in a maintenance window — API stopped, swap, restart (§8.3 step 8) — since the freelist still holds deleted bytes otherwise (finding 2).
 7. Accept and record the consequences: all users re-enrol, all device bans reset, evidence digests dead. If any of that is unacceptable, you cannot destroy the pepper — you can only delete rows.
 
 ### 6.4 Operationally viable?
@@ -658,7 +657,7 @@ Default NONE (verified): deleted pages go to the freelist, are reused, and the f
    is ever needed, stop the API, run `VACUUM` offline, restart.
 ```
 
-`VACUUM INTO` doubles as the backup mechanism, so the nightly job does backup + compaction in one pass. Do not add a second, separate VACUUM job.
+`VACUUM INTO` doubles as the backup mechanism: the copy is compact, the live file is not. The live file shrinks only through an offline swap in a maintenance window (step 8). Do not add a second, separate VACUUM job.
 
 ---
 
@@ -668,21 +667,21 @@ Default NONE (verified): deleted pages go to the freelist, are reused, and the f
 
 Exact assertions:
 
-| Test                                                         | Assertion                                                                                                                                                                                                                                                 |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `expired_unbanned_record_is_deleted`                         | fixture: record `expires_at = now-1`, no ban/session → after `sweep_once`: `COUNT(*) WHERE id=? == 0`                                                                                                                                                     |
-| `record_with_live_ban_survives_past_expiry`                  | record expired, ban `revoked_at IS NULL, expires_at = now+30d` → row still present, `report.records == 0`                                                                                                                                                 |
-| `record_under_hold_survives`                                 | expired record + active hold subject → row present; and after `release_hold` + expiry extension `now+30d`, still present; after that passes, deleted                                                                                                      |
-| `record_with_remaining_sessions_survives`                    | expired record with one session `expires_at = now+1d` → present; after the session expires and is swept, record deleted in the same tick                                                                                                                  |
-| `revoked_ban_pruned_after_12mo` / `live_ban_never_pruned`    | `revoked_at = now-366d` → deleted; `revoked_at IS NULL, expires_at IS NULL` → present                                                                                                                                                                     |
-| `evidence_survives_record_deletion`                          | evidence row for a record; sweep deletes the record; `COUNT(device_evidence WHERE case_id=?) == 1` and its `device_key` unchanged                                                                                                                         |
-| `sweep_is_idempotent`                                        | second `sweep_once` returns all zeros, row counts unchanged                                                                                                                                                                                               |
-| `sweep_is_bounded`                                           | insert 1200 expired records, `batch=500, max_batches=2` → first tick deletes exactly 1000, `backlog == true`; second tick finishes                                                                                                                        |
-| `active_record_is_reminted_after_one_year`                   | login write with `first_seen_at = now-366d` → old row `revoked_at IS NOT NULL`, new row exists with same `device_key`, different `id`                                                                                                                     |
-| `hold_extension_is_atomic`                                   | force an error mid-transaction on hold create → no `legal_holds` row, no `expires_at` change                                                                                                                                                              |
-| `check_rejects_sliding_without_expiry`                       | `INSERT ... last_seen_at = now, expires_at = now-1` → CHECK violation                                                                                                                                                                                     |
-| `sweeper_queries_use_indexes`                                | `EXPLAIN QUERY PLAN` for each DELETE contains `USING INDEX idx_device_records_expires` / `idx_device_sessions_expires` / `idx_device_bans_live_key` / `idx_hold_subjects_lookup` — pins that a dropped index cannot silently become a full scan on pool=1 |
-| `migration_creates_tables_with_expected_columns_and_indices` | m000004-style `PRAGMA table_info` + `index_list` equality; `up()` twice clean (m000011 style)                                                                                                                                                             |
+| Test                                                         | Assertion                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `expired_unbanned_record_is_deleted`                         | fixture: record `expires_at = now-1`, no ban/session → after `sweep_once`: `COUNT(*) WHERE id=? == 0`                                                                                                                                                          |
+| `record_with_live_ban_survives_past_expiry`                  | record expired, ban `revoked_at IS NULL, expires_at = now+30d` → row still present, `report.records == 0`                                                                                                                                                      |
+| `record_under_hold_survives`                                 | expired record + active hold subject → row present; and after `release_hold` + expiry extension `now+30d`, still present; after that passes, deleted                                                                                                           |
+| `record_with_remaining_sessions_survives`                    | expired record with one session `expires_at = now+1d` → present; after the session expires and is swept, record deleted in the same tick                                                                                                                       |
+| `revoked_ban_pruned_after_12mo` / `live_ban_never_pruned`    | `revoked_at = now-366d` → deleted; `revoked_at IS NULL, expires_at IS NULL` → present                                                                                                                                                                          |
+| `evidence_survives_record_deletion`                          | evidence row for a record; sweep deletes the record; `COUNT(device_evidence WHERE case_id=?) == 1` and its `device_key` unchanged                                                                                                                              |
+| `sweep_is_idempotent`                                        | second `sweep_once` returns all zeros, row counts unchanged                                                                                                                                                                                                    |
+| `sweep_is_bounded`                                           | insert 1200 expired records, `batch=500, max_batches=2` → first tick deletes exactly 1000, `backlog == true`; second tick finishes                                                                                                                             |
+| `active_record_token_rotates_in_place_after_one_year`        | login write with `first_seen_at = now-366d` → same `id`, new `token_hash`, old token no longer matches, a live ban on the record still applies                                                                                                                 |
+| `hold_extension_is_atomic`                                   | force an error mid-transaction on hold create → no `legal_holds` row, no `expires_at` change                                                                                                                                                                   |
+| `check_rejects_sliding_without_expiry`                       | `INSERT ... last_seen_at = now, expires_at = now-1` → CHECK violation                                                                                                                                                                                          |
+| `sweeper_queries_use_indexes`                                | `EXPLAIN QUERY PLAN` for each DELETE contains `USING INDEX idx_device_records_expires` / `idx_device_sessions_expires` / `idx_device_bans_active_record` / `idx_hold_subjects_lookup` — pins that a dropped index cannot silently become a full scan on pool=1 |
+| `migration_creates_tables_with_expected_columns_and_indices` | m000004-style `PRAGMA table_info` + `index_list` equality; `up()` twice clean (m000011 style)                                                                                                                                                                  |
 
 ### 9.2 Metric
 
@@ -714,14 +713,13 @@ SELECT COUNT(*) FROM device_records d
  WHERE d.expires_at <= :now
    AND NOT EXISTS (SELECT 1 FROM device_sessions s WHERE s.device_record_id = d.id)
    AND NOT EXISTS (SELECT 1 FROM device_bans b
-                    WHERE b.device_key = d.device_key AND b.revoked_at IS NULL
+ WHERE b.device_record_id = d.id AND b.revoked_at IS NULL
                       AND (b.expires_at IS NULL OR b.expires_at > :now));  -- must be 0 after a sweep
 
--- (d) live ban whose key has no record and no evidence → ban cannot be attributed
+-- (d) live ban whose record is gone → the pin failed
 SELECT COUNT(*) FROM device_bans b
  WHERE b.revoked_at IS NULL AND (b.expires_at IS NULL OR b.expires_at > :now)
-   AND NOT EXISTS (SELECT 1 FROM device_records d WHERE d.device_key = b.device_key)
-   AND NOT EXISTS (SELECT 1 FROM device_evidence e WHERE e.device_key = b.device_key);  -- alert only
+ AND NOT EXISTS (SELECT 1 FROM device_records d WHERE d.id = b.device_record_id); -- must be 0
 
 -- (e) growth: SELECT page_count, freelist_count FROM pragma_page_count(), pragma_freelist_count();
 ```
@@ -734,7 +732,7 @@ Boot replay (non-fatal, after migrations, before the listener): `DELETE FROM dev
 
 | #   | Claim (where it lives)                                                  | Status today                                                                                                                                | Fix                                                                                                                                        |
 | --- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | "keyed device key 30d, ban row 12mo, aggregates forever" (DESIGN-v1 B3) | **Cannot.** No tables, no `expires_at`, no sweeper.                                                                                         | m000012 + `device_retention.rs` + tests (§1, §9)                                                                                           |
+| 1   | "keyed device key 30d, ban row 12mo, aggregates forever" (DESIGN-v1 B3) | **Cannot.** No tables, no `expires_at`, no sweeper.                                                                                         | m0000NN + `device_retention.rs` + tests (§1, §9)                                                                                           |
 | 2   | "`expires_at` enforced by a batched sweeper" (B7)                       | **Cannot.** No sweeper exists; the only sweeps are sessions (`main.rs:764`) and the post publisher.                                         | register `device_retention::start` (§1.4)                                                                                                  |
 | 3   | "evidence outlives its subject" (A9 F13)                                | **Cannot** if `device_evidence`/`device_sessions` get CASCADE FKs; not yet built at all.                                                    | self-contained evidence, no CASCADE (§1.1, §3)                                                                                             |
 | 4   | "deletion propagates within the backup rotation window" (A5 F6)         | **Vacuous then false.** No backups exist; and no receipt ledger to replay.                                                                  | §7 policy + `erasure_receipts` replay                                                                                                      |
@@ -759,13 +757,13 @@ All NEW relative to A5/A8/A9/A10.
 
 **Severity: Critical.**
 Evidence: DESIGN-v1 B3/B7 assert `expires_at NOT NULL` + "batched sweeper registered in `scheduler.rs`"; `migration/src/lib.rs:12-13` stops at m000011; no `expires_at` on any device table (the schema's only expiry is `user_bans.expires_at`, which has zero writers); `scheduler.rs:11-25` publishes posts only; `main.rs:764-775` sweeps sessions only.
-Fix: m000012 + `device_retention.rs` + registration + the §9 tests, before any retention sentence ships.
+Fix: m0000NN + `device_retention.rs` + registration + the §9 tests, before any retention sentence ships.
 
 ### 2. `DELETE` on this build is not physical erasure
 
 **Severity: High.**
 Evidence: `libsqlite3-sys-0.30.1/build.rs:122-138` — no `SQLITE_SECURE_DELETE`; SQLite docs — `auto_vacuum` default NONE, deleted bytes stay in freelist and WAL frames; `journal_size_limit` default -1 (WAL reused, never shrinks).
-Fix: qualify the claim ("removed from the live DB; backups within 30 days"); `PRAGMA secure_delete=ON` on the app connection; `wal_checkpoint(TRUNCATE)` after sweeps; nightly `VACUUM INTO` swap for the physical variant.
+Fix: qualify the claim ("removed from the live DB; backups within 30 days"); `PRAGMA secure_delete=ON` on the app connection; `wal_checkpoint(TRUNCATE)` after sweeps; a `VACUUM INTO` file swap in a maintenance window (API stopped) for the physical variant.
 
 ### 3. No backup exists anywhere, so deletion propagation is unbacked
 
@@ -785,11 +783,11 @@ Fix: `erasure_receipts.subject_ref` = deleted row ULID; boot + restore replay de
 Evidence: A8 F14; `grep legal_hold` in repo → 0 hits; no retention job exists to be stopped either.
 Fix: §4 schema + transactional hold create/release that extends `expires_at` + the `NOT EXISTS` backstop + the three invariants.
 
-### 6. What a device ban is keyed on after the 30-day record dies is unresolved
+### 6. What a device ban is keyed on, given the 30-day record, is unresolved
 
 **Severity: High.**
-Evidence: DESIGN-v1 B3 says `device_bans` "own table" and "keyed record 30d, ban row 12mo" but never states the ban key; B3 also drops `UNIQUE(device_key)` and calls it a cohort axis. If the ban keys on the record id, deleting the record (30d) breaks it; if it keys on the client token, clearing storage evades it; the only survivable value is the fingerprint digest — which is exactly the cohort key that A1/design-v1 rejected as a sole ban unit.
-Fix: `device_bans.device_key` (digest) + `key_kid` as the enforcement/retention key, record retention extended while a live ban exists, and the corroboration rule machine-enforced (a digest ban never stands alone). This must be written into B3.
+Evidence: DESIGN-v1 B3 says `device_bans` "own table" and "keyed record 30d, ban row 12mo" but never states the ban key; B3 also drops `UNIQUE(device_key)` and calls it a cohort axis. If the ban keys on the record id, deleting the record (30d) breaks it unless the record is pinned; if it keys on the client token, clearing storage evades it; the fingerprint digest survives everything but is exactly the cohort key that A1/design-v1 rejected as a sole ban unit.
+Fix: key the ban on `device_bans.device_record_id` and **pin** the record while the ban is live (`expires_at` = ban expiry + 30 d; skipped by the sweeper), so the 30-day rule never breaks a live ban. Not the digest (a cohort ban, A2 F1), and no new record at the 1-year cap — rotate `token_hash` in place on the same id (§2.3). Copy the digest onto the ban row as evidence only.
 
 ### 7. `expires_at` as TEXT with mixed formats is a silent no-op
 
@@ -801,7 +799,7 @@ Fix: all retention columns INTEGER epoch seconds (like `rate_limit_state`/`sessi
 
 **Severity: Medium.**
 Evidence: A5 defect B; DESIGN-v1 B3 has `last_seen` but no outer cap.
-Fix: `expires_at = last_seen + 30d` is the rule; plus a one-year re-mint on the write path (§2.3) and a test.
+Fix: `expires_at = last_seen + 30d` is the rule; plus a one-year in-place `token_hash` rotation on the write path (§2.3) and a test.
 
 ### 9. DSAR cannot be executed today
 
@@ -889,4 +887,4 @@ async fn run_batches(db, sql, args, batch, max_batches) -> Result<u64, DbErr> {
 
 Each `*_SQL` is the §1.3 statement: `DELETE FROM t WHERE id IN (SELECT ... WHERE <expiry> AND NOT EXISTS <live ban> AND NOT EXISTS <hold> ORDER BY <expiry> LIMIT ?)`. Never `DELETE ... LIMIT` (unsupported), never a `LEFT JOIN`, never a lock held across the sleep.
 
-**Minimum ship order:** m000012 → sweeper + tests → erasure receipts + boot replay → `legal_holds` → backup job + restore runbook → policy rewrite. Until the first three land, remove every retention sentence from the policy and the design.
+**Minimum ship order:** m0000NN → sweeper + tests → erasure receipts + boot replay → `legal_holds` → backup job + restore runbook → policy rewrite. Until the first three land, remove every retention sentence from the policy and the design.

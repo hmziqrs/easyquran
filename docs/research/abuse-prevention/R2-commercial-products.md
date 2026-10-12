@@ -230,19 +230,21 @@ Environment note: search tooling was intermittent; most facts below come from di
 
 ### 10.2 Open-source / framework bypass
 
-- **rebrowser-patches** (https://github.com/rebrowser/rebrowser-patches): fixes the **`Runtime.enable` CDP leak** — page JS can detect automation because `Runtime.enable` triggers serialization of `console.log` arguments; DataDome's blog documents the technique (Error.stack getter + console API). Also patches `sourceURL` `pptr:` artifacts and the `__puppeteer_utility_world__` world name. Supports addBinding / alwaysIsolated / enableDisable modes. Claims "undetectable by Cloudflare or DataDome" in their tests; README itself warns this alone is insufficient (proxies, canvas/WebGL, behavior still matter) and that JS injection is itself detectable (`Object.getOwnPropertyDescriptor`, `toString()` no longer `[native code]`). Last fully-tested versions: Puppeteer 24.8.1, Playwright 1.52.0 (April/May 2025).
-- **Patchright** (https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python): patched Playwright (Chromium only). Avoids `Runtime.enable`; disables Console API; removes `--enable-automation`, adds `--disable-blink-features=AutomationControlled`, drops `--disable-component-update`/`--disable-extensions`; handles closed shadow roots. Claims passing Brotector, Cloudflare, Kasada, Akamai, Shape/F5, Bet365, DataDome, **Fingerprint.com bot detection**, CreepJS, Sannysoft, Incolumitas, IPHey, Browserscan, Pixelscan. Independent benchmark (ianlpaterson.com, 2026, "7 tools, 651 verdicts") is more mixed: Camoufox and Patchright tied; rebrowser patches changed no outcomes on the tested targets — https://ianlpaterson.com/blog/anti-detect-browser-benchmark-patchright-nodriver-curl-cffi/
-- **Camoufox** (https://camoufox.com/stealth/): Firefox-based, patches Juggler (not CDP) so Playwright's injected JS is invisible; spoofs at the C++ level (native-looking getters); uses BrowserForge for market-share-realistic fingerprint sampling; human-like cursor motion ported from HumanCursor. **Explicit self-criticism**: went a year without maintenance; "performance down due to base Firefox version and newly discovered fingerprint inconsistencies"; internal consistency is the hard part (Windows UA + Apple GPU, etc.); anti-bot vendors "test Camoufox over and over to find even 1 unique inconsistency."
-- **undetected-chromedriver** (https://github.com/ultrafunkamsterdam/undetected-chromedriver): Selenium/ChromeDriver patch that prevents variable injection instead of renaming; author's own caveat: **"THIS PACKAGE DOES NOT hide your IP"** — datacenter IPs and low-reputation home IPs fail; now largely superseded by nodriver/Selenium-Driverless (which avoid ChromeDriver and `Runtime.enable` entirely — see DataDome's write-up).
-- **puppeteer-extra-plugin-stealth**: the original evasion collection; DataDome has a dedicated post on detecting it (https://datadome.co/bot-management-protection/detecting-headless-chrome-puppeteer-extra-plugin-stealth/). Kasada prices stealth-plugin setups at $20–$500/mo in their adversary catalog.
+Mechanisms, leaks and what each tool concedes (rebrowser-patches, Patchright, Camoufox, undetected-chromedriver, nodriver/Selenium-Driverless): R2-evasion-counters §1.2 and §4.2. Facts this survey adds:
+
+- **rebrowser-patches** claims "undetectable by Cloudflare or DataDome" in its own tests; last fully-tested versions Puppeteer 24.8.1, Playwright 1.52.0 (April/May 2025).
+- **Patchright**: an independent benchmark (ianlpaterson.com, 2026, "7 tools, 651 verdicts") is more mixed than its README — Camoufox and Patchright tied; rebrowser patches changed no outcomes on the tested targets — https://ianlpaterson.com/blog/anti-detect-browser-benchmark-patchright-nodriver-curl-cffi/
+- **Camoufox** (https://camoufox.com/stealth/) samples market-share-realistic fingerprints via BrowserForge and ports HumanCursor motion. Self-criticism: a year without maintenance; "performance down due to base Firefox version and newly discovered fingerprint inconsistencies"; anti-bot vendors "test Camoufox over and over to find even 1 unique inconsistency."
+- **undetected-chromedriver** is now largely superseded by nodriver/Selenium-Driverless.
+- **puppeteer-extra-plugin-stealth**: the original evasion collection; DataDome's detection post: https://datadome.co/bot-management-protection/detecting-headless-chrome-puppeteer-extra-plugin-stealth/. Kasada prices stealth-plugin setups at $20–$500/mo in their adversary catalog.
 
 ### 10.3 The harvesting/replay economy (the real bypass)
 
 From Castle's research and F5/Group-IB history:
 
 - **Genesis Marketplace** sold ~323,000 compromised browser environments bundled with fingerprints + a Chromium extension to replay victim device attributes, paired with residential proxies (F5 Labs; Europol takedown).
-- **Bablosoft**: BrowserAutomationStudio + FingerprintSwitcher + **PerfectCanvas** (render canvas on a real remote machine, inject output locally to defeat canvas antifraud) + `clientsafe.js` harvesting (found on 115+ compromised e-commerce sites; still live on third-party domains in 2026).
-- Market price for **real fingerprints: up to $5 per 1,000**; forum advice: deploy a collector on a high-traffic site (or buy ads) to harvest clean fingerprints.
+- **Bablosoft**: BrowserAutomationStudio + FingerprintSwitcher + **PerfectCanvas** (render canvas on a real remote machine, inject output locally to defeat canvas antifraud) + `clientsafe.js` harvesting (§2).
+- Market price for real fingerprints: §2; forum advice: deploy a collector on a high-traffic site (or buy ads) to harvest clean fingerprints.
 - Castle's recommendation: treat fingerprint data as untrusted client input; add controlled variability in client logic/payload structure; validate cross-context consistency; combine with behavioral/network/server-side telemetry.
 
 ---
@@ -298,7 +300,7 @@ ICO online-tracking strategy 2025 + a 2026 development: "Google Activates IP Fin
 1. **Hybrid client + server architecture, server-side matching.** Fingerprint's core insight: collect raw signals client-side, but do dedupe/merging/recovery server-side with fuzzy matching + confidence scoring. A self-hosted system should never let the client compute the final ID. (docs.fingerprint.com/docs/identification-accuracy-and-confidence)
 2. **Explicit confidence score per identification**, defined as 1 − false-positive probability, and _published methodology_ (control set = deterministic IDs; test set = deterministic stripped). Copy this measurement design — it's the only way to know your own FP/FN.
 3. **Signal taxonomy worth copying:** velocity aggregates (distinct IPs/countries/linked accounts per ID at 5m/1h/24h), incognito flag, timezone-vs-IP mismatch, public-VPN/datacenter-ASN/Tor flags, high-activity device (top-2% threshold computed per deployment), headless/bot flag, tampering/anomaly score vs population. These are cheap and high-signal.
-4. **TLS/JA3-JA4 + HTTP/2 fingerprinting at the edge** (DataDome/Akamai model): server-observable, no client cost, catches UA/TLS inconsistency. Pair with IP/ASN reputation.
+4. **TLS/JA3-JA4 + HTTP/2 fingerprinting at the edge** (DataDome/Akamai model): server-observable, no client cost, catches UA/TLS inconsistency. Pair with IP/ASN reputation. Not available on this stack: Traefik terminates TLS so the app never sees a ClientHello, and Cloudflare exposes JA4 only with Enterprise Bot Management (R2-network-transport).
 5. **Behavioural signal separation:** treat bot score and fraud risk as separate outputs (Fingerprint and DataDome both do); don't conflate "automated" with "malicious".
 6. **Cross-context consistency checks:** compare main-world vs worker/iframe values; detect overwritten getters (`getOwnPropertyDescriptor`, `toString()` not `[native code]`); detect `Runtime.enable`/CDP artifacts (DataDome's Error.stack technique; rebrowser's leak list). This catches anti-detect tooling cheaply.
 7. **Treat client data as untrusted and expect replay** (Castle): rotate/vary payload schemas, add server-side corroboration (TLS, timing, navigation graph), never make a single client signal authoritative.
@@ -319,7 +321,7 @@ ICO online-tracking strategy 2025 + a 2026 development: "Google Activates IP Fin
 
 ### Minimal viable self-hosted architecture (suggested by the survey)
 
-- **Edge/server:** TLS (JA4) + HTTP/2 fingerprint, header order, IP/ASN reputation, velocity counters (per IP / per account / per ID), all computed server-side with no client involvement.
+- **Edge/server:** TLS (JA4) + HTTP/2 fingerprint (needs an edge that exposes it — see Borrow #4), header order, IP/ASN reputation, velocity counters (per IP / per account / per ID), all computed server-side with no client involvement.
 - **Client (only on security-relevant pages: login, signup, payment, password reset):** small script, no cross-site storage, collects ~30–60 stable signals (canvas/webgl hashes, fonts, screen, timezone, languages, hardware concurrency/memory, plugins, touch, storage availability) + consistency checks (main world vs worker, getter tampering, CDP artifacts, `navigator.webdriver`, headless markers).
 - **Server-side matcher:** deterministic anchors (signed first-party cookie) with fuzzy fallback; per-identification confidence score; explicit merge/split audit trail; short retention.
 - **Outputs:** `device_id` (rotating, deployment-scoped), `confidence`, `bot_score` (separate), risk flags as _weak_ signals, never a black-box "fraud score" without per-signal attribution.
@@ -329,22 +331,22 @@ ICO online-tracking strategy 2025 + a 2026 development: "Google Activates IP Fin
 
 ## 14. Concrete evasion techniques attackers use (with sources)
 
-1. **CDP `Runtime.enable` detection → patched drivers.** Anti-bot scripts detect automation via the console-serialization side effect of `Runtime.enable` (DataDome's Error.stack getter trick: https://datadome.co/threat-research/how-new-headless-chrome-the-cdp-signal-are-impacting-bot-detection/). Bypass: rebrowser-patches / Patchright / nodriver / Selenium-Driverless avoid `Runtime.enable` (https://github.com/rebrowser/rebrowser-patches, https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python). DataDome counters by layering behavior + reputation + weak signals.
-2. **`navigator.webdriver` + command-flag removal.** `--disable-blink-features=AutomationControlled` and removing `--enable-automation` (Patchright README; undetected-chromedriver).
-3. **Headless fingerprint convergence.** New headless Chrome shares codebase with headful; once UA is set and webdriver removed, few JS inconsistencies remain — hence the pivot to CDP/behavioral detection (DataDome post above).
-4. **Fingerprint harvesting + replay.** Genesis Marketplace (323K browser profiles + replay extension; F5 Labs/Europol), Bablosoft `clientsafe.js` (115+ sites, Group-IB; still live 2026 per Castle), PerfectCanvas remote-canvas injection, FingerprintSwitcher; market price up to $5/1K real fingerprints (https://castle.io/research/fingerprint-harvesting-in-the-bot-ecosystem).
-5. **Vendor-aligned payload forgery.** Harvesting scripts replicate signal structures/challenge logic of PerimeterX, Incapsula, Akamai, Adyen, hCaptcha so replayed telemetry looks vendor-consistent (same Castle report).
-6. **Solver services / CAPTCHA farms.** $0.80–$3.50 per 1,000 solves; CAPTCHA bypass ~$0.50/1K (Kasada adversary page: https://www.kasada.io/adversarial-techniques).
-7. **Residential proxy networks + infected devices.** Defeats IP reputation/rate limits; Cloudflare built ML v8 specifically for residential-proxy bots (https://blog.cloudflare.com/residential-proxy-bot-detection-using-machine-learning/); DataDome detects "residential proxy" IPs and Fingerprint exposes `proxy_type: residential` + provider.
-8. **TLS/HTTP2 fingerprint spoofing and mismatch.** Bots tamper with TLS to avoid detection (Akamai: https://www.akamai.com/blog/security/bots-tampering-with-tls-to-avoid-detection); defenders catch _inconsistency_ (TLS says iOS, UA says Chrome) — DataDome's TLS post documents a 2.1M-request attack blocked this way.
-9. **PoW farms / VM de-obfuscation.** Kasada's Polymorphic VM and Arkose PoW raise attacker compute cost; reverse-engineering writeups show tokens (`x-kpsdk-ct`/`x-kpsdk-cd`, `_abck`/`sensor_data`) can be replayed by real-browser farms, which is why both vendors keep escalating (https://www.browserless.io/blog/kasada-bypass, https://scrapfly.io/blog/posts/akamai-bot-manager-understanding-abck-cookies-and-sensor-data).
-10. **Anti-detect browser inconsistencies (defenders' leverage).** Timezone ≠ proxy geo (AdsPower default), system TTS language leak (Incogniton), outdated engine versions, canvas/audio spoofing detectable by CreepJS, "like headless" heuristics (GoLogin Oct 2026 benchmark: https://gologin.com/blog/anti-fingerprinting-browser/). Fingerprint's Tamper Detection explicitly names AdsPower/DolphinAnty/OctoBrowser/GoLogin and combines anomaly score + ML (docs.fingerprint.com).
-11. **ML poisoning + de-obfuscation.** Feed statistically human-looking but fake data to confuse classifiers; reverse-engineer obfuscated scripts (Kasada adversary page).
-12. **Privacy-tool abuse.** VPN/proxy/Tor/incognito/privacy browsers used to launder identity; Fingerprint monetizes detection of these (VPN methods, privacy settings signal); defenders should treat as weak signals (false positives on legitimate privacy users).
-13. **Ban evasion via factory reset / reinstall.** Mobile: factory reset changes device IDs; countermeasure is location anchoring (Incognia) or hardware-level persistence (SEON "True Device ID" claim). iOS/Android Keychain/Keystore reuse is the common trick; Fingerprint exposes "Factory Reset" and "Cloned App" signals.
-14. **Fingerprint randomization as user defense (and its limits).** Brave farbling + Firefox RFP/ETP-Strict reduce trackability; the 2025 "Breaking the Shield" paper claims statistical attacks defeat canvas randomization and several extensions — so randomization raises cost but is not absolute.
+Detection-side detail for automation, rotation and spoofing lives in R2-evasion-counters (§1–§4, master table §9). This list keeps only what the vendor survey adds:
 
----
+1. **CDP `Runtime.enable` detection → patched drivers** (R2-evasion-counters §4.1–§4.2). DataDome's counter is layering behaviour + reputation + weak signals rather than one detector.
+2. **`navigator.webdriver` + command-flag removal** (R2-evasion-counters §4.2, Patchright row).
+3. **Headless fingerprint convergence.** New headless Chrome shares its codebase with headful; once UA is set and webdriver removed, few JS inconsistencies remain — hence the pivot to CDP/behavioural detection (DataDome post in §9.2).
+4. **Fingerprint harvesting + replay** — §10.3.
+5. **Vendor-aligned payload forgery.** Harvesting scripts replicate the signal structures/challenge logic of PerimeterX, Incapsula, Akamai, Adyen, hCaptcha so replayed telemetry looks vendor-consistent (Castle report, §2).
+6. **Solver services / CAPTCHA farms** — §9.3.
+7. **Residential proxy networks + infected devices** (R2-evasion-counters §2). Cloudflare built ML v8 for residential-proxy bots (§9.1); Fingerprint exposes `proxy_type: residential` + provider (§1).
+8. **TLS/HTTP2 fingerprint spoofing and mismatch.** Bots tamper with TLS (Akamai: https://www.akamai.com/blog/security/bots-tampering-with-tls-to-avoid-detection); defenders catch the _inconsistency_ (TLS says iOS, UA says Chrome) — DataDome's TLS post documents a 2.1M-request attack blocked this way.
+9. **PoW farms / VM de-obfuscation** — §9.3 (Kasada tokens) and §9.5 (Akamai `_abck`/`sensor_data`); real-browser farms replay the tokens, which is why both vendors keep escalating.
+10. **Anti-detect browser inconsistencies** — §10.1; Fingerprint's Tamper Detection names AdsPower/DolphinAnty/OctoBrowser/GoLogin (§1).
+11. **ML poisoning + de-obfuscation** — Kasada adversary page (§9.3).
+12. **Privacy-tool abuse.** VPN/proxy/Tor/incognito/privacy browsers launder identity; Fingerprint monetises detecting them (§1); treat as weak signals — legitimate privacy users are the false positives.
+13. **Ban evasion via factory reset / reinstall.** Mobile factory reset changes device IDs; countermeasures are location anchoring (Incognia, §5) or hardware-level persistence (SEON "True Device ID", §6). iOS/Android Keychain/Keystore reuse is the common trick; Fingerprint exposes "Factory Reset" and "Cloned App" signals.
+14. **Fingerprint randomization as user defence (and its limits)** — §11 (Brave farbling, Firefox RFP/ETP-Strict, the 2025 "Breaking the Shield" paper).
 
 ## 15. Gaps / open questions
 

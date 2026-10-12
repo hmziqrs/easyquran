@@ -30,11 +30,9 @@ would be silently dropped with no record.
 
 ## 0. Ground truth — the endpoint table (deliverable 1)
 
-Limiter column: **nest** = `rate_limit::rate_limit_layer` on the module nest in `router.rs` (per-IP unit
-
-- matched route pattern); **in-handler** = `abuse_limiter::limiter` inside the handler; **mail** = the
-  `MailRouter` buckets that bound any send. Audit = an `audit_logs` row (none exist anywhere — F3 F2).
-  All rows below verified this session.
+Limiter column: **nest** = `rate_limit::rate_limit_layer` on the module nest in `router.rs` (per-IP unit + matched route pattern); **in-handler** = `abuse_limiter::limiter` inside the handler; **mail** = the
+`MailRouter` buckets that bound any send. Audit = an `audit_logs` row (none exist anywhere — F3 F2).
+All rows below verified this session.
 
 | #   | Endpoint                                  | Method          | Auth (route gate)                                                  | Nest                          | In-handler                        | Mail cap                                    | Audit | Who can act                                    |
 | --- | ----------------------------------------- | --------------- | ------------------------------------------------------------------ | ----------------------------- | --------------------------------- | ------------------------------------------- | ----- | ---------------------------------------------- |
@@ -47,8 +45,8 @@ Limiter column: **nest** = `rate_limit::rate_limit_layer` on the module nest in 
 | 7   | `/notification/v1/mark_read`              | POST            | `authenticated`                                                    | 100/min                       | —                                 | —                                           | no    | own rows; zero callers                         |
 | 8   | `/notification/v1/mark_all_read`          | POST            | `authenticated`                                                    | 100/min                       | —                                 | —                                           | no    | own rows; zero callers                         |
 | 9   | `/email_verification/v1/verify`           | POST            | `unverified` (**no `not_banned`**)                                 | **none** (`router.rs:82-83`)  | 3/360 s per user → 1 h            | —                                           | no    | any logged-in unverified user                  |
-| 10  | `/email_verification/v1/resend`           | POST            | `unverified`                                                       | **none**                      | 3/360 s per user + 1 min delay    | txn 30/h/rcpt                               | no    | same                                           |
-| 11  | `/email_verification/v1/admin/issue_code` | POST            | `ROLE_ADMIN`                                                       | **none**                      | **none**                          | txn 30/h/rcpt, provider cap bypassed        | no    | **any Admin, any target**                      |
+| 10  | `/email_verification/v1/resend`           | POST            | `unverified`                                                       | **none**                      | 3/360 s per user + 1 min delay    | txn 29/h/rcpt                               | no    | same                                           |
+| 11  | `/email_verification/v1/admin/issue_code` | POST            | `ROLE_ADMIN`                                                       | **none**                      | **none**                          | txn 29/h/rcpt, provider cap bypassed        | no    | **any Admin, any target**                      |
 | 12  | `/email_verification/v1/admin/list`       | POST            | `ROLE_ADMIN`                                                       | **none**                      | —                                 | —                                           | no    | every target's email                           |
 | 13  | `/email_verification/v1/admin/delete`     | POST            | `ROLE_ADMIN`                                                       | **none**                      | —                                 | —                                           | no    | destroys the target's pending code             |
 | 14  | `/newsletter/v1/subscribe`                | POST            | **public**                                                         | 100/min                       | per-email 5/60 s + per-IP 20/60 s | marketing 5/10 min + provider 50/min, 500/h | no    | anyone, any recipient address                  |
@@ -61,8 +59,8 @@ Limiter column: **nest** = `rate_limit::rate_limit_layer` on the module nest in 
 
 Two structural facts the table makes visible:
 
-1. **Every nest in this surface except `device_v1` and `notification_v1` has no limiter** — F3 F9's ten-nest
-   list is confirmed. The new detail: the two _admin_ mail senders (`admin/issue_code`, suppression CRUD)
+1. **The `email_verification_v1` and `mail_v1` nests have no limiter** (only `device_v1`, `notification_v1`
+   and `newsletter_v1` carry one) — F3 F9's ten-nest list is confirmed. The new detail: the two _admin_ mail senders (`admin/issue_code`, suppression CRUD)
    live on the two unmetered nests, so the operator-side blast radius is bounded only by the mail router's
    per-recipient bucket.
 2. **No endpoint in this surface writes an audit row** (the writer does not exist — F3 F2). That includes
@@ -157,8 +155,8 @@ UPDATE SET user_id = excluded.user_id, platform, updated_at, last_seen_at`. The 
 - **Zero callers confirmed.** `grep -rn "device/v1" web/src` → only `messaging.ts:142` (register/delete via
   the `postDeviceEndpoint` helper) and its test. Nothing calls `/device/v1/list`. F5 F8's "dormant
   endpoint" is verified. D1 item 12's correction (the Notifications toggle _is_ a user-facing revoke for
-  the current device) is also verified: `notifications.svelte.ts:151-156,316-321` → `unregisterTokenFromServer`
-  - `deleteFcmToken`.
+  the current device) is also verified: `notifications.svelte.ts:151-156,316-321` → `unregisterTokenFromServer` +
+  `deleteFcmToken`.
 
 ---
 
@@ -183,7 +181,7 @@ UPDATE SET user_id = excluded.user_id, platform, updated_at, last_seen_at`. The 
 - **Read-path consequence (NEW).** `mark_all_read` (`notification/actions.rs:78-93`) loads _every_ unread
   row into memory and issues one `UPDATE` per row — each its own implicit transaction, i.e. one fsync per
   row under WAL + `synchronous=FULL` (A7). 144 k unread rows = 144 k serialized commits on the pool of 1
-  (≈950 commits/s ceiling per B6 F9 ⇒ ~150 s of stalled writes). `unread_count` (`:51-58`) counts with
+  (an estimated ≈950 commits/s ceiling, A7/B6 F9 ⇒ ~150 s of stalled writes). `unread_count` (`:51-58`) counts with
   `read_at IS NULL` filtered off an index that does not include `read_at`
   (`idx_notifications_user_created`, m000005), so it is an index scan per call. Today only the _victim_ can
   trigger this and no UI calls it — so it is a latent amplification, not a live one. It becomes live the
@@ -219,7 +217,7 @@ return value carries no device count, no success count, no failure count — a c
 (`:103`). Nothing is spawned. The web has a precedent for the right shape (`newsletter_v1/controller.rs:164`
 uses `tokio::spawn`), so this is an omission, not a policy.
 
-**Does it hold the single DB connection?** **No — and F6/F4's framing should be corrected on this point.**
+**Does it hold the single DB connection?** **No.**
 sea-orm acquires/releases a pooled connection per query (`list_for_user`, the prune-on-unregistered), and
 the HTTPS sends happen with no connection held. The failure mode is therefore _not_ pool starvation; it is:
 
@@ -311,11 +309,11 @@ correct place for content; it just must never be forwarded to FCM. It is not tod
 
 Consequences:
 
-- **Mail-bomb any address, bounded by 30/h/recipient.** F3 F12 says "at line rate"; the accurate shape is
-  **30 sends/hour to one address** (the transactional per-recipient bucket, `router.rs:33-40`), **and the
+- **Mail-bomb any address, bounded by 29/h/recipient.** Not "at line rate": **≤29 sends/hour to one
+  address** (the transactional per-recipient bucket, `router.rs:33-40` — the 30th attempt in an hour trips it), **and the
   provider-wide bucket is deliberately skipped for transactional mail** (`router.rs:141-157`), so _N_
-  distinct targets give _N_ × 30/h with no global ceiling (D5 1b's missing global cap, now with the
-  admin-side trigger named). **Correction to F3 F12.**
+  distinct targets give _N_ × 29/h with no global ceiling (D5 1b's missing global cap, now with the
+  admin-side trigger named).
 - **Denial of verification (NEW).** Each call invalidates whatever code the user just requested. An admin
   (or a compromised admin session) can keep any unverified account from ever completing verification, and
   the user has no way to tell why: `resend` will keep minting codes, but the admin's next call kills them.
@@ -329,11 +327,12 @@ Consequences:
 - `resend` (`:65-142`): 1-minute delay per row (`DELAY_TIME`, `model.rs:36`), then the abuse limiter keyed
   `email_verification:{user_id}` with `temp_block_attempts 3 / range 360 / duration 3600` (`:29-36`).
 - **Attempt semantics (NEW detail).** `InMemoryStore::abuse_check` (`rux-request-gate/src/store.rs:287-350`)
-  appends an attempt on _every_ call and blocks when `short_count >= temp_block_attempts` — so the 3rd call
-  within 360 s is already blocked, i.e. **2 guesses per window, then a 1 h temp block**, and the limiter is
-  evaluated _before_ the code check (`controller.rs:48-54`). Attempts are pruned at `block_range` (900 s),
-  so after each 1 h block the counter resets; the 24 h `Long` block is effectively unreachable on this key
-  (temp is evaluated first and re-trips). Effective ceiling ≈ 3 guesses/hour ≈ 72/day.
+  appends an attempt on _every_ call — blocked calls included — and blocks when
+  `short_count >= temp_block_attempts`, so the 3rd call within 360 s is already blocked: **2 guesses per
+  window, then a 1 h temp block**; the limiter is evaluated _before_ the code check (`controller.rs:48-54`).
+  Attempts are pruned at `block_range` (900 s). The 24 h `Long` block is reachable (≈8 timed requests: ≥4
+  blocked retries in the temp block's last 15 min, then 1 after expiry). The sustained ceiling that trips
+  neither block is 4 calls per 900 s ≈ 16 guesses/hour ≈ 384/day.
 - **Entropy/expiry:** 8 chars of `Alphanumeric` = 62^8 ≈ 2.18 × 10^14, `EXPIRY_TIME = 3 h`
   (`model.rs:36-45`), generated with `rand::rng()` (thread RNG, OS-seeded). Sound.
 - **Verdict:** brute force is not a finding. `verify_code` (`actions.rs:63-96`) is a single
@@ -442,7 +441,7 @@ Chain, each link verified:
 
 1. `POST /auth/v1/register` is public and takes an **arbitrary submitted address**
    (`auth_v1/controller.rs:459-535`, spawn at `:503-521`); on success it sends the verification mail to that address in a
-   detached task (`:504-517`). E2 §2 line 141 records the sender; the _suppression consequence_ is not
+   detached task (`:504-517`). E2 §2's sender table (row 2) records the sender; the _suppression consequence_ is not
    stated in any report.
 2. The recipient (a real third party) marks the unsolicited mail as spam, or their server bounces it.
 3. The provider webhook fires; `apply_mail_event` (`mail_v1/controller.rs:143-156`) upserts a **complaint
@@ -482,9 +481,8 @@ The ban/notice path (E1 §4.3, E4) will send a **transactional** notice mail. Tw
    a router change, because the suppression fact is discarded inside `send`. E1 §4.3 says "change the
    enforcement path to write `notice_delivery_state='suppressed'`"; this report adds the required
    prerequisite: **the router must return a distinguishable outcome first** (§9 P0.1).
-2. E1's `notice_delivery_state` enum is `sent|suppressed|no_contact_details|pending`; E4's DDL comment is
-   `'sent' | 'no_contact_details' | 'send_failed'`. **The two ban-contract designs disagree**; `suppressed`
-   is the state that matters here. Flagged as a cross-report correction.
+2. `notice_delivery_state` is the four-value union `sent | suppressed | no_contact_details | send_failed`
+   (E1 §4.3, E4 §1.2, H3 #22); `suppressed` is the state that matters here.
 
 ---
 
@@ -583,11 +581,11 @@ of it is optional for an Art 17-shaped notice.**
    a third-party notice killer. The `suppressed` outcome from (1) must be recorded on the notice row, and
    the fallback is E1 §4.3's public appeal URL (the only channel a suspended user can reach).
 3. **The mail path itself must be provably alive**: `MAIL_PROVIDER` set, `MAIL_RATE_LIMIT_ENABLED=true`
-   (default), the per-recipient transactional bucket (30/h) not exhausted by the admin's own
+   (default), the per-recipient transactional bucket (29/h) not exhausted by the admin's own
    `issue_code`/resend loops, and a tested send. A notice that depends on a bucket another admin action
    can exhaust is not a notice.
 4. **`TEMPLATE_ENFORCEMENT_NOTICE` must be added to `is_transactional`** (`provider.rs:17-22`) and the
-   suppression rule must key on the template (E4 §24-28's correction). Add the template + Tera file
+   suppression rule must key on the template (E4 verdict item 3). Add the template + Tera file
    (E1 §4.3).
 5. **The in-app channel must not be load-bearing.** `notify_user` returns `Ok` with no push in four ways
    (§4.1), the inbox endpoints have zero web callers (§5.2), and the ban revokes sessions (E4 step: session
@@ -638,9 +636,8 @@ back). D5 item 3: "token hijack requires knowing a token"; F5 F1 pins the transf
 **Evidence:** `notification_v1/controller.rs:90-100` (awaited in the handler); `services/notification/mod.rs:101-132`
 (sequential per-device `.await`); `state.rs:16-23` (5 s connect / 15 s total); `docker-compose.yml`
 (no Traefik response timeout; only healthcheck timeouts); `router.rs:170-173` (100/min per IP).
-**Correction to F6/F4's framing:** it does **not** hold the pooled connection during the HTTPS sends
-(sea-orm releases per query); the failure is a blocked request + interleaved prune commits, not pool
-starvation.
+It does **not** hold the pooled connection during the HTTPS sends (sea-orm releases per query); the
+failure is a blocked request + interleaved prune commits, not pool starvation.
 **Fix:** §9 P0.3.
 
 ### N4 — No per-recipient notification cap and no retention, and `mark_all_read` rewrites every unread row one commit at a time. `NEW` (D5 item 3 states the missing cap; the N-commit read-path amplification and the numbers are new).
@@ -661,14 +658,14 @@ none on `read_at`); A7 (WAL + FULL ⇒ one fsync per commit).
 foreground payload); `services/notification/mod.rs:137-148`.
 **Fix:** §10 item 5 — declare the notice channel or ship the surface; do not count `in_app` as delivered.
 
-### N6 — `admin/issue_code` is unmetered at the nest, has no rank check, skips the resend delay, invalidates the target's pending code, and can send 30 mails/hour to any address with the provider-wide cap bypassed. `NEW` (F3 F12 states the mail-bomb and the missing rank check; the code invalidation, the 30/h precision, and the transactional provider-cap bypass interaction are new).
+### N6 — `admin/issue_code` is unmetered at the nest, has no rank check, skips the resend delay, invalidates the target's pending code, and can send 29 mails/hour to any address with the provider-wide cap bypassed. `NEW` (F3 F12 states the mail-bomb and the missing rank check; the code invalidation, the 29/h precision, and the transactional provider-cap bypass interaction are new).
 
 **Severity: Medium-High.**
 **Evidence:** `email_verification_v1/controller.rs:248-286` (no rank check at `:255-260`, no
 `is_in_delay` check, `regenerate_for_email` at `:264-270`); `email_verification/actions.rs:98-113`
 (overwrites `code_hash` + `updated_at`); `router.rs:82-83` (no nest limiter);
-`mail/router.rs:33-40` (txn 30/h/rcpt), `:141-157` (`if !transactional` skips the provider bucket).
-**Correction to F3 F12:** "at line rate" → 30/h per recipient, uncapped across recipients.
+`mail/router.rs:33-40` (txn 29/h/rcpt), `:141-157` (`if !transactional` skips the provider bucket).
+Rate: ≤29/h per recipient, uncapped across recipients — not "at line rate".
 **Fix:** §9 P1.8.
 
 ### N7 — The newsletter confirmation link points at a web route that does not exist, and there is no unsubscribe page or header: the double opt-in can never complete and a subscriber can never unsubscribe. `NEW` (E2 F-5/C4 item 9 cover the missing `List-Unsubscribe` and the plaintext token; the missing web route is in no report).
@@ -740,19 +737,21 @@ an arbitrary address); E2 §2 gap 1 (webhook secret in no env example).
 
 ---
 
-## 12. Corrections to prior reports
+## 12. Claims to avoid
 
-1. **F3 F12's "at line rate" for `admin/issue_code`** → the mail router caps transactional mail at
-   **30/hour per recipient** (`mail/router.rs:33-40`); the provider-wide bucket is skipped for transactional
-   templates (`:141-157`), so the correct statement is "30/h/recipient, uncapped across recipients, on an
-   unmetered nest".
-2. **F6 §2/F4's "blocking the single DB connection" framing** → the fan-out blocks the _request_, not the
-   pooled connection (sea-orm acquires per query). The pool-of-1 cost is the interleaved prune commits and
-   the flush contention, not a held connection.
-3. **E1 §4.3 vs E4's DDL comment disagree on the notice delivery-state enum** (`sent|suppressed|…` vs
-   `sent|no_contact_details|send_failed`). `suppressed` is the state the mail path can actually produce and
-   the one Art 17 needs; the two documents must be reconciled, and the mail router must return the fact
-   first (§9 P0.1).
+1. **"`admin/issue_code` mails at line rate"** → the mail router caps transactional mail at **≤29 sends/hour
+   per recipient** (`mail/router.rs:33-40`; the 30th attempt trips the bucket); the provider-wide bucket is
+   skipped for transactional templates (`:141-157`), so the statement is "29/h/recipient, uncapped across
+   recipients, on an unmetered nest".
+2. **"The fan-out blocks the single DB connection"** → the fan-out blocks the _request_, not the pooled
+   connection (sea-orm acquires per query). The pool-of-1 cost is the interleaved prune commits and the
+   flush contention, not a held connection. (Bookmark sync is different: its `begin()` does hold the
+   connection across the round — G2 §1.)
+3. **"The notice delivery-state enum is `sent|no_contact_details|send_failed`"** → it is the four-value union
+   `sent | suppressed | no_contact_details | send_failed` (E1 §4.3, E4 §1.2, H3 #22). `suppressed` is the
+   state the mail path can actually produce and the one Art 17 needs, and the mail router must return the
+   fact first (§9 P0.1).
+
 4. **C4 item 8's prune statement is correct but incomplete** — `INVALID_ARGUMENT` (400) and
    `SENDER_ID_MISMATCH` (403) are also terminal and are never pruned (N2).
 5. **D5 item 3's "token hijack requires knowing a token" is correct**, but the endpoint adds no shape

@@ -5,10 +5,9 @@ Method: read every report in this directory; re-check load-bearing claims agains
 against each other. No new research. Every citation below is to a file in this directory or to a
 `file:line` in `/Users/hmziq/os/easyquran`.
 
-**Scope note — missing inputs.** The brief names `B1..B*` (round-4 reports). **They do not exist in this
-directory.** The directory contains only `DESIGN-v0.md`, `DESIGN-v1.md`, `R2-*.md` (7 files), and
-`A1..A10` (10 files). Any claim attributed to a `B*` report is unverifiable here; `DESIGN-v1.md` itself
-cites only "A1..A10". Claims about "B1's cache trace" cannot be audited and must not be relied on.
+**Scope.** This pass audited `DESIGN-v0.md`, `DESIGN-v1.md`, the seven `R2-*.md` reports and `A1..A10`.
+The round-4 `B1..B9` reports ran in parallel and are outside its scope; `DESIGN-v1.md` itself cites only
+"A1..A10".
 
 **Repo facts re-verified for this audit** (so the contradictions below have a ground truth):
 
@@ -34,7 +33,9 @@ cites only "A1..A10". Claims about "B1's cache trace" cannot be audited and must
   wording; its substantive finding (adding a field without `#[serde(default)]` breaks live sessions) stands.
 - `MAX_GRANTS = 10_000`, process-local (`src/services/fresh_auth.rs:16,100,176`). Confirmed.
 - `user_sessions.device` = raw `user-agent` on login (`modules/auth_v1/controller.rs:182-187`). Confirmed.
-- `ROLE_MODERATOR` defined once, used nowhere (`middlewares/auth_guard.rs:20`). Confirmed.
+- `ROLE_MODERATOR` (`middlewares/auth_guard.rs:20`) gates no route, but inline `User::is_moderator()` checks
+  already grant delete-any-media, read-any-email and paywall bypass (`post_v1/controller.rs`,
+  `media_v1/controller.rs:540`; F3 §3.5).
 - `NewUserBan` exists only in `db/sea_models/user_ban/` — no production caller. Confirmed.
 - `audit_logs` — model only, zero writers. Confirmed.
 - `post_v1` and `post_comment_v1` are mounted **outside** the `WEB_AUTH_ENABLED` gate (`router.rs:117,122`).
@@ -53,48 +54,48 @@ cites only "A1..A10". Claims about "B1's cache trace" cannot be audited and must
 
 ## 1. Contradictions between reports
 
-Each entry: claim A / claim B / which one the code or the adopted design supports.
+Each entry: a claim that conflicts with the code or with another report, and what the code or the adopted
+design supports.
 
-### 1.1 Migrations are transactional — A3 vs A10 (**A3 is wrong**)
+### 1.1 Migrations are not transactional on SQLite
 
-- **A3 §8 + Finding 13**: "sea-orm wraps **each** migration in a transaction (`sea-orm-migration-1.1.20/src/migrator.rs:263-266`)"; and "the migration runs inside a transaction, where `PRAGMA foreign_keys` is a **no-op**".
-- **A10 §0 + F8**: "**SQLite migrations are NOT transactional in sea-orm-migration 1.1.20**" (`migrator.rs:261-272`: Postgres begins a transaction; `MySql | Sqlite => f(&manager)`), and "the migration record is inserted **after** `up()` returns" (`:386-397`), so "a crash mid-migration leaves DDL applied but **unrecorded**, so `up()` re-runs on the next boot".
-- **Ground truth**: A10 is correct — read from the registry source. A3's transaction claim is false, and its
-  derived claim that the FK pragma is a no-op inside the migration is false for the same reason. A3's
-  _conclusion_ ("never rebuild a table") survives for a different reason: `configure_sqlite` sets
-  `PRAGMA foreign_keys=ON` before `Migrator::up` (`sea_connect.rs:46-56,87-93`), so FK actions are live
-  during DDL regardless. A10's conclusion (idempotent, `IF NOT EXISTS`, re-runnable, optional explicit
-  `conn.transaction`) is the one the code demands. **A3 must be corrected or it will produce a
-  crash-unsafe migration.**
+- **Claim to avoid:** "sea-orm wraps each migration in a transaction", and its corollary that
+  `PRAGMA foreign_keys` is a no-op inside a migration.
+- **Fact** (A10 §0 + F8, read from the registry source): sea-orm-migration 1.1.20 opens a transaction
+  only for Postgres (`migrator.rs:261-272`: `MySql | Sqlite => f(&manager)`), and the version row is
+  inserted **after** `up()` returns (`:386-397`), so a crash mid-migration leaves DDL applied but
+  unrecorded and `up()` re-runs on the next boot. `configure_sqlite` sets `PRAGMA foreign_keys=ON` before
+  `Migrator::up` (`sea_connect.rs:46-56,87-93`), so FK actions are live during DDL.
+- Both facts lead to the same rules: never rebuild a table; idempotent `IF NOT EXISTS` DDL, re-runnable,
+  optional explicit `conn.transaction` (A3 §8, A10).
 
-### 1.2 `device_sessions` FK cascade — A9 vs A10+A3 (**A9 is wrong**)
+### 1.2 `device_sessions` must not cascade from `user_sessions`
 
-- **A9 §2.4** (recommended schema, labelled "m000012"): `device_sessions.user_session_id INTEGER NOT NULL REFERENCES user_sessions(id) ON UPDATE CASCADE ON DELETE CASCADE` and `device_record_id … ON DELETE CASCADE`.
-- **A10 F1 (critical)**: any `device_sessions.user_session_id → user_sessions(id)` FK "erases the device↔account linkage exactly when the offender's account is deleted — the moment the linkage is needed" (`user_sessions.user_id … ON DELETE CASCADE`, `m000001:55-56`; hard delete at `user/actions.rs:486-497`; boot reconcile `auth.rs:401-406`).
-- **A3 F10 (high)**: same finding, same fix ("mirror `auth_session_binding` — no FK").
-- **Ground truth**: A10/A3 correct. `DESIGN-v1.md:39` adopts their shape ("`device_sessions` (no FKs to users/user_sessions; denormalized user_id)"). A9's DDL directly contradicts the adopted decision and would destroy ban-evasion evidence on account deletion.
+- **Claim to avoid:** `device_sessions.user_session_id … REFERENCES user_sessions(id) ON DELETE CASCADE`
+  (and `device_record_id … ON DELETE CASCADE`).
+- **Fact** (A10 F1, A3 F10): any such FK erases the device↔account linkage exactly when the offender's
+  account is deleted (`user_sessions.user_id … ON DELETE CASCADE`, `m000001:55-56`; hard delete at
+  `user/actions.rs:486-497`; boot reconcile `auth.rs:401-406`). Fix: mirror `auth_session_binding` — no
+  FK. `DESIGN-v1:43` adopts this shape ("no FKs to users/user_sessions; denormalized user_id").
 
-### 1.3 Device token storage: cookie or not — A1 vs A4+A6+A9 (**A4/A6's absolute ban is wrong**)
+### 1.3 Device token storage: cookie or localStorage — A1 vs A9
 
-- **A1 F4** (high): "Move the token to a server-set `HttpOnly; Secure; SameSite=Lax; Path=/api` cookie (path-scoped ⇒ `/t/**` cache untouched)".
-- **A4 §1**: "**Break condition A:** the token ever becomes a cookie … → `cacheable === false`"; "Design must avoid: (1) any cookie for the device token".
-- **A6 G2 guard**: asserts the device module must not match `/document\.cookie|Set-Cookie/` — i.e. a cookie is a build failure.
+- **A1 F4** (high): "Move the token to a server-set `HttpOnly; Secure; SameSite=Lax; Path=/api` cookie
+  (path-scoped ⇒ `/t/**` cache untouched)".
 - **A9 §3.4(5)**: "One storage location … **Pick localStorage**".
-- **DESIGN-v1:15,69**: adopts "HttpOnly cookie, Path=/api (OPEN Q1)".
+- **DESIGN-v1:16,78**: adopts "HttpOnly cookie, Path=/api (OPEN Q1)".
 - **Ground truth**: `requestHasCookie = !!event.request.headers.get("cookie")` (`hooks.server.ts:427`). A
   `Path=/api` cookie is **not sent on a `/t/**` document request**, so the disk cache predicate is
-  untouched — exactly A1's argument. A4's break-condition A is overbroad (it is true only for a
-  path-unscoped cookie), and A6's guard would fail the design A1 and DESIGN-v1 chose. A9's
-  "pick localStorage" is contradicted by A1's XSS analysis (the CSP trusts three third-party script
-  origins) and by DESIGN-v1. **Resolution: "no cookie on reader paths", not "no cookie".** A4's and A6's
-  wording must change or the chosen fix cannot land.
+  untouched — the rule is "no cookie on reader paths", not "no cookie" (A4 §1, A6 G2). A9's
+  localStorage choice is contradicted by A1's XSS analysis (the CSP trusts three third-party script
+  origins) and by DESIGN-v1.
 
 ### 1.4 Edge attestation: fail-open or fail-closed — A3 vs A1 vs A9 (three incompatible answers)
 
 - **A3 F12**: the new middleware must "**fail closed** in production when the header is present but invalid".
 - **A9 F11**: "Sig mismatch → **drop the attestation, keep the request.** Alert with the kid. **Never 401/403 the request**"; enforcement only behind a default-off flag.
 - **A1 F6**: "make unknown-kid/clock-skew **fail open for read-only GETs**" (implying fail-closed for writes).
-- **DESIGN-v1:18** adopts A9's observe-only default.
+- **DESIGN-v1:19** adopts A9's observe-only default.
 - No two of these can be implemented at once. A3's rule turns one Worker deploy or one clock-skew event into
   a site-wide 4xx (A1's own availability warning); A1's read/write split is a third policy with no spec.
 
@@ -102,7 +103,7 @@ Each entry: claim A / claim B / which one the code or the adopted design support
 
 - **A1 F6 / §(c)**: keeps the design's HMAC construction; fix = "sign `CF-Connecting-IP` + path-with-query + a body digest … keep the edge key in a separate secret"; verdict "worth building".
 - **A9 F10 (high)**: "**Use Ed25519 for edge attestation, not a shared HMAC key** … a shared HMAC key … gives the origin the ability to forge edge claims"; `verify_ed25519` already exists.
-- **DESIGN-v1:17** adopts Ed25519.
+- **DESIGN-v1:18** adopts Ed25519.
 - A1's stated security property ("stops a request that did not transit the Worker") fails under its own
   threat model, because the origin holds the same key and the origin is not the attacker's only target —
   an in-network process with the `.env` key forges everything (A1's own F6 gap 3). A9's construction is the
@@ -114,80 +115,79 @@ Each entry: claim A / claim B / which one the code or the adopted design support
 - **A1 §(c)**: "worth building, but it is _transport integrity_, not _device attestation_".
 - **A7 F7 (major)**: "A Cloudflare Worker on every request is **unjustified in v0** … make Layer 4 optional; ship origin-only".
 - **A9 §8**: "**Defer** edge attestation entirely. There is no Worker, no wrangler config".
-- **DESIGN-v1:18** = A9/A7's shape. A1's positive verdict is unsupported by the cost analysis it did not do
+- **DESIGN-v1:19** = A9/A7's shape. A1's positive verdict is unsupported by the cost analysis it did not do
   (A7 did it: +1–5 ms p50, per-request billing, and "without Bot Management the edge contributes
   geography/ASN/colo — all derivable from the IP").
 
-### 1.7 `UNIQUE(device_key)` — A10 vs A2+A9+DESIGN-v1 (**A10's normative DDL is stale**)
+### 1.7 `UNIQUE(device_key)` is wrong
 
-- **A10 §1.2/§1.3**: keeps `CREATE UNIQUE INDEX IF NOT EXISTS idx_device_records_key ON device_records (device_key)` and justifies it: "Plain UNIQUE: this is the upsert conflict target."
-- **A2 F1 (critical)**: "`UNIQUE(device_key)` asserts 1:1 — false in both directions"; fix: "Drop `UNIQUE(device_key)`; key the table on a token hash".
-- **A9 §2.4**: no `device_key` column at all; `token_hash UNIQUE`; `fp_digest` indexed non-unique.
-- **DESIGN-v1:10**: "`UNIQUE(device_key)` … **dropped**; `device_key` non-unique".
-- A10's DDL cannot be the migration that DESIGN-v1 adopted. Its justification is also circular once the
-  conflict target becomes `token_hash` (A10 itself has `token_hash TEXT` + a UNIQUE index at `:136`).
+- **Claim to avoid:** `CREATE UNIQUE INDEX … ON device_records (device_key)` as the upsert conflict target.
+- **Fact** (A2 F1, A9 §2.4, DESIGN-v1:11): `device_key` is a cohort key — 1:1 is false in both directions.
+  It stays a non-unique, indexed cohort attribute; `token_hash` (UNIQUE) is the identity and the conflict
+  target (A10 §1.2).
 
-### 1.8 Two "normative" m000012 schemas that cannot both be written — A9 vs A10
+### 1.8 Two "normative" device-migration schemas that cannot both be written — A9 vs A10
 
-Beyond the UNIQUE question, A9 and A10 each present a complete DDL as _the_ m000012, and they differ on:
+Beyond the UNIQUE question, A9 and A10 each present a complete DDL as _the_ device migration, and they differ on:
 `id` (TEXT ULID vs INTEGER AUTOINCREMENT), `token_hash` (BLOB vs TEXT), `trust_state` default (`'new'` vs
 `'observe'`), retention column (`expires_at` absent in both vs DESIGN-v1's requirement), and the presence
-of a `device_bans` table (A10 has one; A9 has none and defers device bans entirely). DESIGN-v1:38-42
+of a `device_bans` table (A10 has one; A9 has none and defers device bans entirely). DESIGN-v1:42-46
 requires `expires_at NOT NULL` and `device_bans`; **neither A9's nor A10's DDL has `expires_at`**, which
-A5 F2 (high) and DESIGN-v1:22 both make a launch requirement. Three reports assert a schema; none matches
+A5 F2 (high) and DESIGN-v1:23 both make a launch requirement. Three reports assert a schema; none matches
 the adopted one.
 
 ### 1.9 Anonymous visitors mint device records — DESIGN-v1 vs A4 (internal contradiction)
 
-- **DESIGN-v1:64**: "no fingerprint for logged-out readers".
-- **DESIGN-v1:33-35 + A4 §7(a)**: the payload attaches inside `AuthClient.#request`, and
+- **DESIGN-v1:72**: "no fingerprint for logged-out readers".
+- **A4 §7(a)**: the payload attaches inside `AuthClient.#request`, and
   `fetchCsrf()` is `#request("POST", "/csrf/v1/generate")` (`auth-client.ts:231-238`) fired by
   `unsafeRequest()` for anonymous visitors — "every anonymous visitor's first unsafe action would mint a
   `device_records` row". A6 §1(b) reinforces it: "The token must ride the existing `/api/**` round trip …
   never a side fetch."
-- The adopted design states a policy its own attachment point violates. No report resolves it (the fix is
-  A4 §7's path allowlist: "Never on `/csrf/v1/generate`, never on `/user/v1/get`").
+- The adopted design states a policy its own attachment point violates. The fix is A4 §7's path allowlist
+  ("Never on `/csrf/v1/generate`, never on `/user/v1/get`"), which DESIGN-v1 does not adopt.
 
-### 1.10 A1's CSP "fix" breaks shipped Firebase Analytics
+### 1.10 Removing gstatic/googletagmanager from the CSP breaks shipped Firebase Analytics
 
-- **A1 F4**: "Remove `gstatic`/`googletagmanager` from `script-src` if nothing loads them (the repo has no GTM/gtag usage — `grep googletagmanager web/src` → only the CSP line)."
-- **Ground truth**: `web/src/lib/firebase/analytics.ts` initialises Firebase Analytics (`getAnalytics`, `logEvent`)
+- **Claim to avoid:** "remove `gstatic`/`googletagmanager` from `script-src` — nothing loads them
+  (`grep googletagmanager web/src` → only the CSP line)".
+- **Fact:** `web/src/lib/firebase/analytics.ts` initialises Firebase Analytics (`getAnalytics`, `logEvent`)
   and consent defaults `analytics: true` (`consent.svelte.ts:16`). GA4 loads `gtag/js` from
-  `googletagmanager.com`/`gstatic.com` at runtime — the URLs are inside the Firebase bundle, so a
-  source grep cannot find them. The CSP entries exist **because** the app loads them. A1's grep inference
-  is wrong; following its fix breaks Analytics on every page.
-- Secondary: A1's own premise ("any script from those origins runs first-party and can read the token") is
-  about the _token_, and Firebase Analytics is exactly such a script — so the correct fix is A1's other
-  recommendation (HttpOnly), not deleting the CSP entries.
+  `googletagmanager.com`/`gstatic.com` at runtime — the URLs are inside the Firebase bundle, so a source
+  grep cannot find them. The CSP entries exist **because** the app loads them; removing them breaks
+  Analytics on every page.
+- Firebase Analytics is itself a third-party-origin script that could read a script-readable token, so the
+  fix for token exposure is HttpOnly (A1 F4), not deleting the CSP entries.
 
-### 1.11 A5 endorses edge header stripping that does not exist
+### 1.11 Nothing strips client-supplied edge headers
 
-- **A5 §1 L4**: "**Mostly defensible.** Replay window, kid, HMAC, **origin strips client-supplied headers — good.**"
-- **A3 F12** + **A9 F7**: "Nothing strips client-supplied `X-Eq-Edge-*`; … Traefik's only api-router middleware is `stripprefix /api` … `HeaderMap::get` is first-value-wins"; `rg X-Eq-Edge` → 0 hits (re-verified).
-- A5 credits the design with a control that is absent from the repo and absent from the design text
-  (DESIGN-v0 says the origin _should_ strip; no report found any stripping code).
+- **Claim to avoid:** "origin strips client-supplied headers — good", credited as an existing control.
+- **Fact** (A3 F12, A9 F7): nothing strips client-supplied `X-Eq-Edge-*`; Traefik's only api-router
+  middleware is `stripprefix /api`; `HeaderMap::get` is first-value-wins; `rg X-Eq-Edge` → 0 hits
+  (re-verified). DESIGN-v0:54 says the origin _should_ strip; no code does.
 
-### 1.12 A5 calls Layer 0 the strongest part while A8/A10 show the repo already violates it
+### 1.12 The repo already violates Layer 0
 
-- **A5 §1 L0**: "**Defensible.** The strongest part of the design."
-- **A8 F6 (high)** + **A10 F10**: "Raw UA and IP are already stored durably, contradicting Layer 0" —
-  `user_sessions.device` = raw UA, `user_sessions.ip_address` = client IP, written on every login
-  (`auth_v1/controller.rs:182-187`), with no retention policy.
-- A5's own "What exists" table does not list `user_sessions` raw-UA storage. The design's Layer 0 refusal
-  is aspirational, and the one report that graded it "the strongest part" missed the live contradiction.
+- **Fact** (A8 F6, A10 F10): raw UA and IP are already stored durably — `user_sessions.device` = raw UA,
+  `user_sessions.ip_address` = client IP, written on every login (`auth_v1/controller.rs:182-187`), with no
+  retention policy. Layer 0's refusal stays aspirational until that is fixed (A5 §1 L0).
 
-### 1.13 A6's `#request` sketch contradicts A4's normative sequencing
+### 1.13 `#request` must read a synchronous payload
 
-- **A6 §2** code sketch: `const payload = await this.device.payload().catch(() => null);` inside `#request`.
-- **A4 §3/§7 (normative)**: "`#request` reads a **synchronous, already-collected** payload … **No `await`**, no import inside `#request`"; an awaited collector either extends the 12 s deadline or trips it (`auth-client.ts:192,196`).
-- A6's sketch is the exact shape A4 forbids. Anyone implementing from A6 breaks the login `ready` gate.
+- **Claim to avoid:** an awaited collector inside `#request`
+  (`const payload = await this.device.payload().catch(() => null);`).
+- **Fact** (A4 §3/§7, normative): `#request` reads a **synchronous, already-collected** payload — no
+  `await`, no import inside `#request`; an awaited collector either extends the 12 s deadline or trips it
+  (`auth-client.ts:192,196`) and breaks the login `ready` gate. A6 §2 sketches the synchronous shape.
 
-### 1.14 A9's per-request `cf-ray` dedupe vs A7's request-path budget
+### 1.14 DESIGN-v1's per-request `cf-ray` dedupe vs A7's request-path budget
 
-- **A9 F8/§4.3**: "dedupe `cf-ray` in a short-TTL store (the repo already has in-memory TTL + SQLite L2 plumbing) to make replay strictly single-use".
-- **A7 §1**: request path hard budget "**≤10 µs CPU and 0 fsyncs per request**" and "**no new global lock** on the request path".
+- **DESIGN-v1:52**: "`cf-ray` single-use dedupe" (a short-TTL store makes replay strictly single-use).
+- **A7 §1**: request path hard budget "**≤10 µs CPU and 0 fsyncs per request**" and "**no new global
+  lock** on the request path".
 - A per-request insert/check into a TTL store is a state mutation on the hot path (the repo's own store is
-  behind a global `Mutex`, A7 §0). A9's control is not budgeted and contradicts A7's constraint.
+  behind a global `Mutex`, A7 §0). The control is not budgeted and contradicts A7's constraint; A9 drops
+  it.
 
 ### 1.15 A5's India verdict vs R2-legal-privacy's India verdict (severity, not direction)
 
@@ -195,7 +195,7 @@ Both say "consent or don't process", but **A5 F5 (high)** recommends a jurisdict
 while **R2-legal-privacy §9.7(7)** recommends a consent-gated mode for India. They are different products
 (gate = never collect; consent = collect with a Rule 3 notice), and DESIGN-v1 has **neither** — B7's minors
 clause is the only population control, and no report notices that the adopted design has no India path at
-all. (The brief's "A5 vs B2/B3" case cannot be checked: no `B*` files exist.)
+all.
 
 ---
 
@@ -208,34 +208,30 @@ all. (The brief's "A5 vs B2/B3" case cannot be checked: no `B*` files exist.)
 | Session UPSERT median 56 µs, p95 85 µs, max 162 µs (WAL+FULL)                                                                                                                                           | **MEASURED**                                                           | A7 §0 table; no script committed in this directory — self-reported                                                                                                                                                      |
 | SQLite PK read 2.7–7.2 µs; 10 s-flush shape 1.4 ms/2000 upserts; HMAC 1.50 µs (Python); SHA-256 0.31 µs; Intl 5.62 ms; WASM 3.78 ms; JS loop 12.84 ms/3M; feature matrix 1.93 ms; payload 0.67 ms/426 B | **MEASURED**                                                           | A7 §0; self-reported, machine-class anchors (bun/JSC for client items)                                                                                                                                                  |
 | **0.5 ms per fsync on the VPS**                                                                                                                                                                         | **ESTIMATED — no basis**                                               | A7 §1: "a cheap VPS ext4/NVMe is 0.1–0.5 ms … Use **0.5 ms** as the working number". No measurement, no citation, no hardware spec                                                                                      |
-| **~950 req/s ceiling**                                                                                                                                                                                  | **ESTIMATED (derived)**                                                | 1/(1.0 ms + 0.05 ms) from the 0.5 ms estimate. The headline number in DESIGN-v1:12 rests entirely on an unsourced constant                                                                                              |
+| **~950 req/s ceiling**                                                                                                                                                                                  | **ESTIMATED (derived)**                                                | 1/(1.0 ms + 0.05 ms) from the 0.5 ms estimate; DESIGN-v1:13 labels it an estimate                                                                                                                                       |
 | ~1 800 / ~3 300 / ~8 900 req/s variants                                                                                                                                                                 | **ESTIMATED (derived)**                                                | same arithmetic; the "today" row adds an unexplained 0.1 ms to a 0.2 ms read cost                                                                                                                                       |
 | **60–200 ms flush lock hold, every 10 s**                                                                                                                                                               | **ESTIMATED**                                                          | N = 2000 buckets is an assumption (no traffic data in repo); 30–100 µs per `txn.execute().await` is an estimate (engine floor measured at 1.4 ms). A3 §1.4 independently describes the same flush but gives no duration |
 | "2–5× slower on CPU … much slower on fsync" for the VPS                                                                                                                                                 | **ESTIMATED**                                                          | A7 §0; no citation                                                                                                                                                                                                      |
 | "low-end Android multiplier 5–15×"                                                                                                                                                                      | **ESTIMATED**                                                          | A7 §3, labelled                                                                                                                                                                                                         |
-| Workers pricing ($5/10M + $0.30/M), Logpush ~$0.05/GB                                                                                                                                                   | **UNSOURCED**                                                          | A7 §6 gives no URL. These are load-bearing for the "Worker is unjustified" verdict and must be cited or dropped                                                                                                         |
+| Workers pricing ($5/10M + $0.30/M); Logpush ≈ $0.05/GB                                                                                                                                                  | **SOURCED (Workers) / UNSOURCED (Logpush $/GB)**                       | A7 §6 cites the Cloudflare Workers pricing page; the Logpush transfer figure has no URL                                                                                                                                 |
 | Logpush 0.5–1.5 KB/record, 30 s–minutes latency, no backfill                                                                                                                                            | SOURCED in R2-network-transport §7 item 4 (Cloudflare docs, URL given) | A7 repeats without the URL                                                                                                                                                                                              |
 | JA4 = Enterprise + Bot Management                                                                                                                                                                       | SOURCED                                                                | R2-network-transport §4.1 (Cloudflare docs URLs)                                                                                                                                                                        |
-| "WebGPU `requestAdapter()` … returns `null` on most Android and iOS < 17.4"                                                                                                                             | **UNSOURCED, likely wrong**                                            | No source. WebGPU shipped in Safari 26 (iOS 18-era) per R2-fingerprint-science §4.2 — the "17.4" threshold appears invented                                                                                             |
+| WebGPU availability is uneven; Safari 26 ships WebGPU                                                                                                                                                   | **SOURCED (Safari)**                                                   | R2-fingerprint-science §4.2; no per-version Android/iOS threshold has a source                                                                                                                                          |
 | Storage/row-size/MAU assumptions (25k MAU, 1.4 devices, 40k rows/mo, 16–36 MB)                                                                                                                          | **STATED ASSUMPTION**                                                  | A7 §7 explicitly labels it ("the repo has no traffic figures"). Fair, but every storage conclusion inherits it                                                                                                          |
 | Metrics cardinality 6k → 36k series; ~100–300 ns per histogram                                                                                                                                          | ESTIMATED                                                              | A7 §8                                                                                                                                                                                                                   |
 | WebGL cold 50–200 ms; WebGPU 10–150 ms                                                                                                                                                                  | ESTIMATED                                                              | A7 §3, labelled "est."                                                                                                                                                                                                  |
 
-**Cross-check with A3**: A3 §1.4(3) says a per-request DB device read is "+50 % round-trips … **affordable
-only for the private API's low volumes** (60–200 req/min/IP)". A7 says the same construct consumes
-"60–95 % of the entire authenticated-API DB budget" and caps the whole API at 250–1000 req/s. These are not
-a numeric contradiction (different framings: per-IP vs total), but they are **inconsistent verdicts** on
-the same design element — A3 calls it affordable, A7 calls it a blocker. A7's verdict is the one
-DESIGN-v1:12 adopted. The disagreement should be reconciled explicitly, because A3's "affordable" is the
-sentence an implementer would quote to keep the per-request read.
+**Cross-check with A3**: A3 §3 and A7 F1 agree that a per-request DB device read takes 60–95 % of the
+authenticated-API DB budget (pool = 1); the fix is L1 + a session field, never a per-request `SELECT`
+(DESIGN-v1:13).
 
 ### 2.2 A2 (false positives)
 
 | Claim                                                                                                 | Verdict                                                            | Basis                                                                                                                                                                                                                                                                                                                                                            |
 | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **18.5 % mobile uniqueness** (and "≥81.5 % shared")                                                   | **SOURCED but population-transferred**                             | Gómez-Boix et al., WWW 2018, one top-15 **French** commercial site (R2-fingerprint-science §2.1, §3.2). A2 applies it to a "phone-first, locale-concentrated Arabic/Urdu/Indonesian/Bengali" audience and calls C1 _Critical_ on that basis. The study's own thesis is that uniqueness is population-dependent; the transfer is an assumption, not a measurement |
-| **90.62 % Chrome, India mobile, Sept 2026** (and the 3.61/3.51/0.97/0.79/0.27 tail)                   | **SOURCED (weak citation)**                                        | StatCounter, cited inline three times (§2.0, B5, F6) but **absent from A2's source list** — no URL anywhere in the report. Arithmetic checks out (non-Chrome = 9.38 %)                                                                                                                                                                                           |
-| 45.52 % of fingerprints change after one day                                                          | **SOURCED**                                                        | FP-Stalker, USENIX 2018 (R2-fingerprint-science §2.3)                                                                                                                                                                                                                                                                                                            |
+| **90.62 % Chrome, India mobile, Sept 2026** (and the 3.61/3.51/0.97/0.79/0.27 tail)                   | **SOURCED**                                                        | StatCounter, cited inline three times (§2.0, B5, F6) and in A2's source list with URL. Arithmetic checks out (non-Chrome = 9.38 %)                                                                                                                                                                                                                               |
+| 45.52 % of fingerprints change after one day                                                          | **SOURCED**                                                        | FP-Stalker, IEEE S&P 2018 (R2-fingerprint-science §2.3)                                                                                                                                                                                                                                                                                                          |
 | 32 % of browser instances cleared cookies in 8 months                                                 | **SOURCED**                                                        | Li & Cao, IMC 2020                                                                                                                                                                                                                                                                                                                                               |
 | Pew 2019 (India 30 % non-owners; 48 % median / 56 % India borrowing; women 20 % vs men 5 %)           | **SOURCED**                                                        | URL given                                                                                                                                                                                                                                                                                                                                                        |
 | IAMAI/Kantar 2024 (+24 % rural shared-device; 76 % under 19; 58 % female; 62 % NCCS CDE; ~80 % rural) | **SOURCED**                                                        | URLs given (report + The Hindu summary)                                                                                                                                                                                                                                                                                                                          |
@@ -274,21 +270,17 @@ sentence an implementer would quote to keep the per-request read.
 - A9's "~500 ns per short ClientHello" is SOURCED (Cloudflare blog via R2-network-transport §8.1).
 - A10's SQLite facts (`SQLITE_ENABLE_UPDATE_DELETE_LIMIT` off, 3.46.0, JSON1 on) are SOURCED to the
   vendored header/build.rs; not re-checked here.
-- **No B\* report exists**, so "B1's cache trace" has no provenance at all.
 
-### 2.6 Numbers that appear in the design docs but in no report with a source
+### 2.6 Numbers in the design docs labelled more strongly than their source
 
-- **DESIGN-v1:12** "~950 req/s ceiling total" — from A7's estimated fsync (above).
-- **DESIGN-v1:13** "measured 3.78 ms compile, 50–400 ms low-end" — the first is measured, the second is an
+- **DESIGN-v1:14** "measured 3.78 ms compile, 50–400 ms low-end" — the first is measured, the second is an
   estimate; the sentence labels the pair as measured.
-- **DESIGN-v1:8** "18.5 % mobile uniqueness" — a 2018 French-site figure used as a property of this app's
-  audience.
 
 ---
 
 ## 3. True in general, false (or unsupported) for THIS repo
 
-1. **"45.52 % of fingerprints change after a day ⇒ the device key churns" (A1 F3, A2 B6, DESIGN-v1:8).**
+1. **"45.52 % of fingerprints change after a day ⇒ the device key churns" (A1 F3, A2 B6, DESIGN-v1:9).**
    FP-Stalker measured a large attribute set including canvas/audio/UA. The design's key is _deliberately
    coarse_ (screen bucket, hardware family, no canvas/audio) — the churn rate for a coarse key is lower,
    and no report estimates it. The direction is right; the magnitude is imported from a study of a
@@ -303,14 +295,14 @@ sentence an implementer would quote to keep the per-request read.
    A6 §1(h)). So the "clean" server-side path that removes the ePrivacy problem **is not available on this
    stack without building the exact edge component A7 and A9 recommend against**. Three reports recommend
    it; none notices the conflict.
-3. **"Edge-signed headers make JA4 trustworthy" / "sign request.cf fields" (DESIGN-v0:48, A5 L4).**
+3. **"Edge-signed headers make JA4 trustworthy" / "sign request.cf fields" (DESIGN-v0:54, A5 L4).**
    JA4 is absent below Enterprise+BM, so the Worker can only sign fields the origin could derive from
    `CF-Connecting-IP` anyway (A7 F7). Signing a field that is never present is dead code; the design's
    stated value ("signed JA4") is not purchasable on the actual plan.
-4. **"Purpose limitation in code" (DESIGN-v0:54).** One SQLite file, one `DATABASE_URL`
+4. **"Purpose limitation in code" (DESIGN-v0:62).** One SQLite file, one `DATABASE_URL`
    (`docker-compose.yml:128`) — the forbidden join is one `SELECT` (A1 F11). A machine guard on _source
    text_ (A6 G3) cannot prevent a runtime join added later through a query builder; A1 F11's "separate
-   store" is the only enforcement, and DESIGN-v1:62 adopts the weaker source-scan guard.
+   store" is the only enforcement, and DESIGN-v1:70 adopts the weaker source-scan guard.
 5. **"`device_key`/token HMAC cost is a non-issue" (A7 §5) — true, and irrelevant.** A1 §4(a) already
    concedes it; the actual levers are the DB write and the row growth. No contradiction, but the two
    reports spend different amounts of ink on it.
@@ -345,7 +337,7 @@ sentence an implementer would quote to keep the per-request read.
    (`state.rs:108-179`). A5's control requires infrastructure the project does not have and A5 never
    budgets.
 3. **"Two-person for permanent bans" / "reviewed by someone not involved in the original decision"**
-   (DESIGN-v1:19; R2-ban-operations §5.4; A8 §8). One operator. A8's compensating control
+   (DESIGN-v1:20; R2-ban-operations §5.4; A8 §8). One operator. A8's compensating control
    (`single_operator_control=true`) is the implementable version; the design text asserts a control the
    project cannot staff, and a control that is not exercised is the same Uber-pattern exposure A5 F4
    calls CRITICAL.
@@ -361,7 +353,7 @@ sentence an implementer would quote to keep the per-request read.
    ePrivacy analysis, DPAs, TIA, legal-hold SOP, DSAR SOP, appeal SOP, breach runbook, children's memo —
    needs legal capacity the project does not have; the artefacts are _doable_ but not by the team that
    exists.)
-6. **Bonus — "dedupe `cf-ray` per request"** (A9 §4.3, adopted in DESIGN-v1:47) conflicts with A7 §1's
+6. **Bonus — "dedupe `cf-ray` per request"** (DESIGN-v1:52) conflicts with A7 §1's
    "no new global lock / ≤10 µs" budget. Either the dedupe is a new hot-path lock or the single-use
    guarantee is dropped; both are unstated.
 
@@ -374,39 +366,45 @@ sentence an implementer would quote to keep the per-request read.
 1. "**make banning of abusive/illegal actors effective**" (line 3) → contradicted by A1 F5 (device signal
    exists only where `AuthClient` is used; anonymous readers/scrapers never send it) and A2 §3.3
    ("challenge spam on co-users plus a small recapture gain on naive evaders").
-2. "**coherence booleans** … **spoof/tamper flags**" (29-30) presented as detection → A1 F1: client-authored,
+2. "**coherence booleans** … **spoof/tamper flags**" (32-33) presented as detection → A1 F1: client-authored,
    one line of JS, and the server is forbidden the raw inputs to recompute them.
-3. "**Purpose limitation in code**: device records never joined to reading/recitation/search data" (54) →
+3. "**Purpose limitation in code**: device records never joined to reading/recitation/search data" (62) →
    one SQLite file, one `SELECT` (A1 F11).
-4. "**raw signals never stored**" (55) → contradicted by `evidence JSON` (35), the `audit_logs` reuse (38),
+4. "**raw signals never stored**" (63) → contradicted by `evidence JSON` (39), the `audit_logs` reuse (42),
    and the repo's existing raw UA/IP in `user_sessions` (A8 F6, A10 F10).
-5. "**Edge** … origin strips client-supplied `X-Eq-Edge-*` and verifies" (48) → nothing strips anywhere in
+5. "**Edge** … origin strips client-supplied `X-Eq-Edge-*` and verifies" (54) → nothing strips anywhere in
    the stack (A3 F12, A9 F7; `rg X-Eq-Edge` → 0).
-6. "**Step-up (existing 5-min fresh-auth grants)**" (43) → grants cannot challenge; no grant exists at
-   login; process-global cap (A1 F7, A3 §6).
-7. "**Cloudflare Worker adds signed `X-Eq-Edge-*` headers (request.cf fields …)**" (48) → `request.cf`
+6. "**Step-up (existing 5-min fresh-auth grants)**" (48) → login itself issues the grant, so a grant
+   cannot serve as a challenge; process-global cap (A1 F7, A3 §6).
+7. "**Cloudflare Worker adds signed `X-Eq-Edge-*` headers (request.cf fields …)**" (54) → `request.cf`
    includes city/lat/long/postal/timezone (A5 F6: precise-geolocation injection), and JA4 is not available
    on the plan.
-8. "**L4 hold for review (<=72h)**" and "**L6 ban + second look**" (42) → no timer, no queue, no case
+8. "**L4 hold for review (<=72h)**" and "**L6 ban + second look**" (47) → no timer, no queue, no case
    record; with one operator both become silent-permanent or theatre (A8 F3, F9).
-9. "**Retention ladder**" (55) → no `expires_at` in the schema (A5 F2); the ladder is a sentence.
-10. "**/admin/devices API … minimal UI**" (51) → no admin UI exists in `web/src/routes`, and the repo's
+9. "**Retention ladder**" (63) → no `expires_at` in the schema (A5 F2); the ladder is a sentence.
+10. "**/admin/devices API … minimal UI**" (58) → no admin UI exists in `web/src/routes`, and the repo's
     convention is API + scripts (A8 §0, §2). The UI is a new build, not a "minimal" addition.
 
-**DESIGN-v1 (asserted guarantee → evidence)** 11. "**~950 req/s ceiling total**" (12) → derived from A7's unsourced 0.5 ms fsync (see §2.1). 12. "**measured 3.78 ms compile, 50–400 ms low-end**" (13) → only the first is measured; the sentence
-presents both as measured. 13. "**18.5 % mobile uniqueness**" (8) → a 2018 French-site figure applied to this app's audience. 14. "**0 DB ops on the request path**" (12) → achievable only if the device state rides the session payload
-and the in-memory map; DESIGN-v1 does not state what happens on the _login_ path (write-on-login) or on
-a cache miss — A7 §2 allows "≤1 read" on refresh, so the absolute phrasing overclaims. 15. "**two-person for permanent**" (19) → one operator (A8 §8). 16. "**binds … `cf-ray` single-use dedupe**" (47) → conflicts with A7's hot-path budget (A9's own control,
-not budgeted). 17. "**no fingerprint for logged-out readers**" (64) → contradicted by the chosen attachment point
-(A4 §7(a): the CSRF bootstrap is an anonymous `AuthClient.#request`). 18. "**Purpose limitation enforced by schema boundary + a machine guard that fails the build on any device
-x reader-data join**" (62) → the guard A6 sketches is a substring scan of source text; it cannot fail
-the build on a runtime join through the ORM. 19. "**minors: self-declared DOB -> minor flag -> collector off**" (64) → self-declaration is not
-verification (A5 §8 says so); in India the honest posture A5 recommends is _no accounts for
-self-declared under-18s_, which DESIGN-v1 does not adopt. 20. "**Where an audit found a blocker, the blocker's fix is folded in**" (line 3) → false for at least:
-A3 F1 (serde default — v1 does not mention session wire compat), A9's DDL/FK findings (v1's B3 does not
-restate the no-FK rule it needs), A5 F1/F2 (no consent path, no `expires_at` in the schema text), A10's
-`expires_at` requirement (v1:38 says "expires_at NOT NULL" but no report's DDL has it), and A4's
-"no await in `#request`" (v1 B2 does not state the attachment allowlist).
+**DESIGN-v1 (asserted guarantee → evidence)**
+
+11. "**measured 3.78 ms compile, 50–400 ms low-end**" (14) → only the first is measured; the sentence presents
+    both as measured.
+12. "**0 DB ops on the request-evaluation path**" (13) → holds for evaluation only: the login/link write and
+    the session-payload TTL refresh (A7 §2 allows "≤1 read") are DB operations, so the zero must not be
+    quoted for the request path as a whole.
+13. "**two-person for permanent**" (20) → one operator (A8 §8).
+14. "**`cf-ray` single-use dedupe**" (52) → conflicts with A7's hot-path budget; not budgeted.
+15. "**no fingerprint for logged-out readers**" (72) → contradicted by the chosen attachment point (A4 §7(a):
+    the CSRF bootstrap is an anonymous `AuthClient.#request`).
+16. "**Purpose limitation enforced by schema boundary + a machine guard that fails the build on any device
+    x reader-data join**" (70) → the guard A6 sketches is a substring scan of source text; it cannot fail
+    the build on a runtime join through the ORM.
+17. "**minors: self-declared DOB -> minor flag -> collector off**" (72) → self-declaration is not
+    verification (A5 §8 says so); in India the honest posture A5 recommends is _no accounts for
+    self-declared under-18s_, which DESIGN-v1 does not adopt.
+18. "**Where an audit found a blocker, the blocker's fix is folded in**" (line 3) → false for at least
+    A3 F1 (serde default — v1 does not mention session wire compat), A5 F1 (no consent path), and A4's
+    "no await in `#request`" (v1 B2 does not state the attachment allowlist).
 
 ---
 
@@ -421,7 +419,7 @@ restate the no-FK rule it needs), A5 F1/F2 (no consent path, no `expires_at` in 
 2. **What happens on a deployment change?** (a) Origin change / domain move: the first-party device token is
    origin-scoped — every device becomes "new" on any domain move, and A4's guards forbid the cookie that
    would survive it. (b) Cloudflare removed: `IP_SOURCE=CfConnectingIp` + "400 if absent in prod"
-   (`client_ip.rs:113-148`, DESIGN-v0:10) means the API stops answering; JA4/geo vanish; the edge design is
+   (`client_ip.rs:113-148`, DESIGN-v0:11) means the API stops answering; JA4/geo vanish; the edge design is
    dead. (c) DB moved off SQLite: A10's partial UNIQUE upsert (`ON CONFLICT … WHERE revoked_at IS NULL`),
    `id IN (SELECT … LIMIT)`, and the `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` workaround are SQLite-shaped; the
    pool-of-1 argument evaporates; A9's TEXT PK vs A10's INTEGER PK becomes a portability decision nobody
@@ -444,9 +442,9 @@ restate the no-FK rule it needs), A5 F1/F2 (no consent path, no `expires_at` in 
 5. **Falsification criteria for the project itself.** Q2 of DESIGN-v1 asks "is fingerprinting the right tool
    at all", but no report answers it with a decision rule. Nobody wrote down what observation would make the
    team stop (e.g. "if <5 ban-worthy events/quarter, ship nothing"), nor what the total build cost is
-   (A5's 17 artefacts + A8's case/appeal/legal-hold/metrics surface + A6's ~70 tests + A9's crypto surface
-   - A7's ops jobs) against the _demonstrated_ threat. Without a kill criterion, the audits function as
-     optimisation of a decision that was never tested.
+   (A5's 17 artefacts + A8's case/appeal/legal-hold/metrics surface + A6's ~70 tests + A9's crypto surface +
+   A7's ops jobs) against the _demonstrated_ threat. Without a kill criterion, the audits function as
+   optimisation of a decision that was never tested.
 
 ---
 
@@ -460,7 +458,7 @@ be copied (R2-evasion §8.3); the documented attacks on Quran apps are app-store
 not account abuse (R2-evasion §8.1-8.2); and no report, vendor, platform or study publishes a ban precision
 or a false-positive rate for device fingerprinting (R2-ban-operations §4). Against that, the fingerprint
 layer's own audits conclude that it cannot see anonymous scraping at all (A1 F5), that its key is a cohort
-key with 18.5 % mobile uniqueness (A2 F1), that its coherence signals are client-authored and unforgeable
+key (18.5 % mobile uniqueness on one French site in 2018, A2 F1), that its coherence signals are client-authored and unforgeable
 one-liners (A1 F1), that the ban key churns with browser updates (A1 F3), that its token is a bearer
 credential on a CSP that trusts three third-party script origins (A1 F4), and that the honest accounting of
 its marginal value is "challenge spam on co-users plus a small recapture gain on naive evaders" (A2 §3.3) —
@@ -476,10 +474,11 @@ audience that pays for all of it is the audience the system is most likely to fl
 madrasa labs, CGNAT mobile, low-end Android, in-app browsers, privacy-hardened and censorship-country
 readers (A2 Parts A–D), the same population the design promises in Layer 0 never to penalise. Meanwhile
 the one genuinely defensible asset — the account and its credential — is already bannable with `user_id`
-through a `user_bans` table that exists, is enforced by `check_ban`, and has zero callers (A8 F1); wiring
-that, plus per-credential limits, plus the existing moderation queue, delivers most of the abuse reduction
+through a `user_bans` table that exists and that `check_ban` already enforces at login, but that nothing
+ever writes (A8 F1); wiring that, plus failure-only per-credential limits (the existing ones also count
+successes), plus the existing moderation queue, delivers most of the abuse reduction
 at a fraction of the cost and none of the Art 9/ePrivacy/DPIA surface. The correct v1 is therefore: wire
-`user_bans`, add per-credential and per-API-key rate limits, ship the appeal path, and spend the rest of the
+`user_bans`, make the per-credential limits failure-only, add per-API-key rate limits, ship the appeal path, and spend the rest of the
 budget on the threats the evidence actually shows (takedown contingency, review-bombing defence, scraping
 tolerated with a cheap legitimate bulk path) — with device identity revisited only if a measured abuse
 base rate and a working server-side signal source (not available behind this Cloudflare plan) appear.
@@ -488,18 +487,18 @@ base rate and a working server-side signal source (not available behind this Clo
 
 ## 8. Deliverable summary
 
-**Top 10 unsupported / contradicted claims** — see §1.1–1.10:
+**Top 10 unsupported / contradicted claims** — see §1.1–1.11:
 
-1. A3 §8 "each migration wrapped in a transaction" vs A10 §0 (A3 false; verified in registry source).
-2. A9 §2.4 `device_sessions … ON DELETE CASCADE` vs A10 F1 + A3 F10 (A9 wrong; DESIGN-v1 sides with A10/A3).
-3. A4 §1/A6 G2 "no cookie, ever" vs A1 F4 (Path=/api cookie cannot reach `/t/**`; A4 overbroad).
+1. "Each migration is wrapped in a transaction" — false on SQLite; the version row is written after `up()` (§1.1).
+2. `device_sessions … ON DELETE CASCADE` to `user_sessions` — erases ban-evasion linkage on account deletion; no FK (§1.2).
+3. "No device cookie, ever" — a `Path=/api` cookie cannot reach `/t/**`; the rule is "no cookie on reader paths" (§1.3).
 4. A3 F12 "fail closed" vs A9 F11 "never reject" vs A1 F6 "fail open for reads" (three policies, one control).
 5. A1 F6 HMAC fix vs A9 F10 Ed25519 (DESIGN-v1 adopts Ed25519; A1's property requires it).
 6. A1 §(c) "worth building" vs A7 F7 "unjustified" vs A9 §8 "defer" (one component, three verdicts).
-7. A10 §1.2 `UNIQUE(device_key)` vs A2 F1 + A9 + DESIGN-v1:10 (A10's normative DDL is stale).
-8. A9 vs A10 both present _the_ m000012 with incompatible `id`/`token_hash`/`trust_state`/`device_bans`; neither has `expires_at` that A5 F2/DESIGN-v1:22 require.
-9. DESIGN-v1:64 "no fingerprint for logged-out readers" vs the adopted attachment point (A4 §7(a) CSRF bootstrap).
-10. A1 F4 "remove gstatic/googletagmanager" — Firebase Analytics is live and loads them (grep-inference, false in effect). Runner-up: A5 L4 "origin strips headers — good" vs A3 F12/A9 F7 (nothing strips).
+7. `UNIQUE(device_key)` — a cohort key; `token_hash` is the identity (§1.7).
+8. A9 vs A10 both present _the_ device migration with incompatible `id`/`token_hash`/`trust_state`/`device_bans`; neither has the `expires_at` that A5 F2/DESIGN-v1:23 require (§1.8).
+9. DESIGN-v1:72 "no fingerprint for logged-out readers" vs the adopted attachment point (A4 §7(a) CSRF bootstrap).
+10. "Remove gstatic/googletagmanager from the CSP" — Firebase Analytics is live and loads them (§1.10). Runner-up: "origin strips edge headers" — nothing strips (§1.11).
 
 **Top 5 unimplementable recommendations** — see §4:
 

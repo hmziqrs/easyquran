@@ -95,9 +95,8 @@ Consequences:
   returns (:386–397).
 
 So on SQLite: DDL auto-commits per statement, the version row is written last, and a crash at any
-point leaves `up()` to be re-run on the next boot. This **corrects A3 §8**, which claims each
-migration is wrapped in a transaction. Idempotency is the only thing between a crash and a boot
-loop.
+point leaves `up()` to be re-run on the next boot. Idempotency is the only thing between a crash and a
+boot loop.
 
 ### 0.5 Observability available in production
 
@@ -128,14 +127,15 @@ limiter holds `None` (:860–895). A3 #14 lists the eight exhaustive struct lite
 
 ## 1. Build order and dependency graph
 
-Each row is one PR unless marked. "Gates green" means `bun run check && bun run lint && bun run test`
+Each row is one PR unless marked. `m0000NN` = the next free migration number at implementation time
+(`docs/next-features.md` already reserves numbers; never hard-code). "Gates green" means `bun run check && bun run lint && bun run test`
 in `web/`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --check`,
 `cargo test --workspace -- --test-threads=1` in `rust/`.
 
 ```
 PR-0  CI gates restore ────────────────────────────────► gates every later step
         │
-PR-1  m000012 pure DDL ─┬─► PR-2 AuthSessionState compat (serde defaults + legacy decode test)
+PR-1  m0000NN pure DDL ─┬─► PR-2 AuthSessionState compat (serde defaults + legacy decode test)
         │              │        │
         │              │        ├─► PR-4 device mint/link + device_records writer ──► PR-6 shadow evaluator
         │              │        │        (flag DEVICE_COLLECTION_ENABLED)              (flag DEVICE_ENFORCEMENT_ENABLED=false)
@@ -157,7 +157,7 @@ PR-10 edge enforcement — only if PR-9's absence/mismatch data justifies it; ne
 | PR   | Content                                                                                                                                                     | Why independent                                                                                  |
 | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | PR-0 | Restore the two gate blocks in `images.yml` (web: check/lint/test; rust: fmt/clippy/test). Audits excluded.                                                 | Pure CI. No runtime change.                                                                      |
-| PR-1 | `migration/src/m000012_device_identity.rs` + `lib.rs` registration + inline tests. Pure `CREATE TABLE/INDEX IF NOT EXISTS`, empty tables, no reader/writer. | Nothing in `src/` references it. Old binaries ignore additive tables (`lib.rs:24–25` precedent). |
+| PR-1 | `migration/src/m0000NN_device_identity.rs` + `lib.rs` registration + inline tests. Pure `CREATE TABLE/INDEX IF NOT EXISTS`, empty tables, no reader/writer. | Nothing in `src/` references it. Old binaries ignore additive tables (`lib.rs:24–25` precedent). |
 | PR-3 | `web/src/lib/device/**` collector, lazy dynamic import, flag off; no header attached until PR-4.                                                            | Client-only; dead code when the flag is false.                                                   |
 | PR-5 | `modules/admin_device_v1/**` list/propose/unban behind `verified_with_role::<ROLE_ADMIN>`; export feed untouched (IP-only, `deploy/README.md:411–436`).     | Reads tables that are empty until PR-4; useful immediately as a manual ban surface.              |
 | PR-9 | `X-Eq-Edge-*` strip + Ed25519 verify middleware, observe-only, unknown `kid` drops claims.                                                                  | Independent of device identity; `EDGE_ATTEST_REQUIRED` stays false.                              |
@@ -167,7 +167,7 @@ PR-10 edge enforcement — only if PR-9's absence/mismatch data justifies it; ne
 | Bundle                  | Members                                                                                                                                                 | Reason                                                                                                                    |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Writer + retention      | PR-4 + the `device_records`/`device_sessions`/`device_evidence` sweeper (own 60 s task, `id IN (SELECT … LIMIT 500)`, `NOT EXISTS` ban guard — A10 #15) | Rows must never exist without a sweeper; `expires_at NOT NULL` is unenforceable otherwise (DESIGN v0→v1 row 22).          |
-| Evaluator + kill switch | PR-6 + `POST /admin/device/v1/pause                                                                                                                     | resume` (runtime atomics, Admin role)                                                                                     | Shadow can be stopped in seconds without a redeploy. |
+| Evaluator + kill switch | PR-6 + `POST /admin/device/v1/pause\|resume` (runtime atomics, Admin role)                                                                              | Shadow can be stopped in seconds without a redeploy.                                                                      |
 | Collector + writer      | PR-3 + PR-4                                                                                                                                             | Flag-gated both ways; the server must treat a missing payload as **unknown/allow** from day one (A3 #14 behavioral list). |
 | Bans + appeals          | PR-8 + `appeals` + one mail template + `NotificationKind::Enforcement`                                                                                  | A ban with no appeal path is the DSA/Art-17 problem DESIGN §B7 is trying to avoid.                                        |
 
@@ -205,7 +205,7 @@ All parsed in one independent struct, `DeviceConfig::from_env()`, called from `m
 | `PUBLIC_DEVICE_COLLECTION`            | `false` | None (web only). Read via `$env/dynamic/public` (runtime, not build-baked — `docker-compose.yml:45–46`), gates the lazy collector import.                                                                                                   | Web collector boot path.                                                                                                                                                                                                   | No — container env.                                      |
 | `EDGE_ATTEST_REQUIRED`                | `false` | `true` requires `EDGE_PUBLIC_KEYS` non-empty + a valid skew value. Never a sole gate; only named endpoints (A9 #11).                                                                                                                        | Early `main.rs`; verifier middleware.                                                                                                                                                                                      | No.                                                      |
 | `EDGE_PUBLIC_KEYS`                    | unset   | Required when attestation is required; `kid:base64` list. Unknown `kid` → drop claims, keep request.                                                                                                                                        | Early `main.rs`.                                                                                                                                                                                                           | No.                                                      |
-| (runtime) `device_enforcement_paused` | `false` | None. `AtomicBool` read by the evaluator; `POST /admin/device/v1/pause                                                                                                                                                                      | resume`behind`verified_with_role::<ROLE_ADMIN>`(copy`admin_route_v1/mod.rs:36–38`, `controller.rs:236–248`).                                                                                                               | Evaluator; status endpoint.                              | **Yes — the only no-restart switch.** |
+| (runtime) `device_enforcement_paused` | `false` | None. `AtomicBool` read by the evaluator; `POST /admin/device/v1/pause\|resume` behind `verified_with_role::<ROLE_ADMIN>` (copy `admin_route_v1/mod.rs:36–38`, `controller.rs:236–248`).                                                    | Evaluator; status endpoint.                                                                                                                                                                                                | **Yes — the only no-restart switch.**                    |
 
 Notes:
 
@@ -261,7 +261,7 @@ user_id: Option<i64> }`. Raw signals never enter a sample (G4 guard, A6 §3). Th
    - retention deletes use `DELETE FROM t WHERE id IN (SELECT id FROM t WHERE created_at < ?
 LIMIT 500)` — no `DELETE … LIMIT` on this SQLite build (A10 #15).
 
-Schema (part of m000012, so PR-1 carries it):
+Schema (part of m0000NN, so PR-1 carries it):
 
 ```sql
 CREATE TABLE IF NOT EXISTS device_shadow_observations (
@@ -306,22 +306,22 @@ Both tables are empty in PR-1, so PR-1 remains reversible with zero data loss.
 
 A rule may be promoted only when **all** of these hold. Evaluate per rule, not per pack.
 
-| #   | Gate              | Measurement                                                                                                                                                                                |
-| --- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| G1  | Window            | ≥14 consecutive days with `DEVICE_COLLECTION_ENABLED=true`, including ≥1 full weekend, and ≥7 days since the last collector change.                                                        |
-| G2  | Volume            | ≥50,000 evaluations of the rule; ≥200 distinct accounts in the would-fire set. If not met, extend — never lower.                                                                           |
-| G3  | Human precision   | Two moderators independently label a random sample of ≥100 would-fire cases (all if fewer). Cohen's κ ≥0.6; confirmed false-positive rate ≤5% for challenge rules, ≤1% for throttle rules. |
-| G4  | Coverage          | Unknown-device share ≤15% of authenticated requests; payload present on ≥95% of logins.                                                                                                    |
-| G5  | Allowlist hygiene | Zero would-fire events on `DEVICE_BAN_ALLOWLIST` accounts, internal service identities, or test accounts.                                                                                  |
-| G6  | Performance       | Request p99 delta ≤ +1 ms vs the pre-shadow baseline; zero request-path DB ops (G3.3); flush tick ≤50 ms; DB growth ≤40 MB/30 d.                                                           |
-| G7  | Ban rules only    | Additionally ≥30 days of shadow data, ≤1% confirmed FP, a working auto-reversal path, and two-person sign-off.                                                                             |
+| #   | Gate              | Measurement                                                                                                                                                                                                                                                                                  |
+| --- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| G1  | Window            | ≥14 consecutive days with `DEVICE_COLLECTION_ENABLED=true`, including ≥1 full weekend, and ≥7 days since the last collector change.                                                                                                                                                          |
+| G2  | Volume            | ≥50,000 evaluations of the rule; ≥200 distinct accounts in the would-fire set. If not met, extend — never lower.                                                                                                                                                                             |
+| G3  | Human precision   | A human-labelled random sample of ≥100 would-fire cases (all if fewer). Two independent labellers with Cohen's κ ≥0.6 where a second reviewer exists; with one operator, a single recorded labelling (H3 O5). Confirmed false-positive rate ≤5% for challenge rules, ≤1% for throttle rules. |
+| G4  | Coverage          | Unknown-device share ≤15% of authenticated requests; payload present on ≥95% of logins.                                                                                                                                                                                                      |
+| G5  | Allowlist hygiene | Zero would-fire events on `DEVICE_BAN_ALLOWLIST` accounts, internal service identities, or test accounts.                                                                                                                                                                                    |
+| G6  | Performance       | Request p99 delta ≤ +1 ms vs the pre-shadow baseline; zero request-path DB ops (G3.3); flush tick ≤50 ms; DB growth ≤40 MB/30 d.                                                                                                                                                             |
+| G7  | Ban rules only    | Additionally ≥30 days of shadow data, ≤1% confirmed FP, a working auto-reversal path, and a recorded second look (two-person where possible).                                                                                                                                                |
 
 Abort the promotion (and keep shadow running) if any rule's would-fire set exceeds 20% on a single
 device cohort (the shared-phone signal) or if G3/G5 fails for two consecutive reviews.
 
 ---
 
-## 4. Migration rollout: m000012 on the live SQLite DB
+## 4. Migration rollout: m0000NN on the live SQLite DB
 
 ### 4.1 Pre-flight (T−1 day, on the Dokploy host)
 
@@ -371,7 +371,7 @@ point a throwaway container at it.
    docker compose logs -f api | grep -Ei "migration|migrat|panic|initialization failed"
    ```
    Expected log lines: `Starting database migrations` → `Applying migration
-'m000012_device_identity'` → `Migration 'm000012_device_identity' has been applied` →
+'m0000NN_device_identity'` → `Migration 'm0000NN_device_identity' has been applied` →
    `Database migrations completed successfully` (`sea_connect.rs:88–92`).
 4. Migrations run before the port opens, so the healthcheck cannot pass with a half-applied
    schema. Wait for `api` healthy and `web` healthy (`docker compose ps`), ~30 s total.
@@ -382,7 +382,7 @@ Because sea-orm does **not** wrap SQLite migrations in a transaction and records
 after `up()` returns (§0.4):
 
 - every statement already executed stays committed (DDL is auto-committed);
-- the version row is absent, so `Migrator::up` re-runs m000012 on the next boot;
+- the version row is absent, so `Migrator::up` re-runs m0000NN on the next boot;
 - with every statement `IF NOT EXISTS` / `PRAGMA table_info`-guarded, the re-run is a no-op and
   boot proceeds. There is no partial-state class beyond "some of the five tables exist";
 - if any statement is not idempotent, the re-run errors → `init_db` panics → `restart:
@@ -405,7 +405,7 @@ curl -fsS https://easyquran.fyi/api/quran/health/ready | jq '{ready, auth}'
 # c. Migration recorded.
 docker run --rm -v easyquran_api_data:/data keinos/sqlite3:latest /data/easyquran.db \
   "SELECT version FROM seaql_migrations ORDER BY applied_at DESC LIMIT 1;"
-# Expect: m000012_device_identity
+# Expect: m0000NN_device_identity
 
 # d. Tables + indexes present, rows zero.
 docker run --rm -v easyquran_api_data:/data keinos/sqlite3:latest /data/easyquran.db \
@@ -426,7 +426,7 @@ docker compose logs --since 10m api | grep -cE "ERROR|panic" || true
 
 | Window                      | Reachable?                                                                                                                                                                                                                                                                                                | Behavior                                                                                                                                                                                                                                                              | Verify                                                                                                                         |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Old binary + new schema** | Yes — that is exactly the `VERSION`-pin rollback after m000012.                                                                                                                                                                                                                                           | Safe: the old code never reads `device_*`; additive-only tables are the documented m000004 pattern (`lib.rs:24–25`).                                                                                                                                                  | After pinning the previous sha: `/healthz` ok, `/quran/health/ready` `ready:true`, one login + one logout succeed, logs clean. |
+| **Old binary + new schema** | Yes — that is exactly the `VERSION`-pin rollback after m0000NN.                                                                                                                                                                                                                                           | Safe: the old code never reads `device_*`; additive-only tables are the documented m000004 pattern (`lib.rs:24–25`).                                                                                                                                                  | After pinning the previous sha: `/healthz` ok, `/quran/health/ready` `ready:true`, one login + one logout succeed, logs clean. |
 | **New binary + old schema** | No in the container: `get_sea_connection()` (migrations) completes before the listener binds (`main.rs:168` vs `:929–939`). Reachable only via out-of-band DB surgery (a manual `down --steps 1` while the new binary is running) or a hypothetical `run_migrations=false` build (exists only for tests). | Next boot re-runs `up()` → tables restored, idempotent. If a table is missing while serving, every device read must warn-and-empty (`rate_limit_store::load` shape, `:111–115`) and every write must be non-fatal — otherwise `no such table` 500s take the API down. | Ship the fail-open behavior in PR-4 and test it with a dropped table.                                                          |
 
 ### 4.6 The rule that must never be broken
@@ -442,7 +442,7 @@ export, only with the API stopped.
 | Step                              | Rollback action                                                                                                                                                                                     | Data loss                                                                                   | Irreversible?                                                                                                     |
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | PR-0 CI gates                     | Revert the workflow commit.                                                                                                                                                                         | None.                                                                                       | No.                                                                                                               |
-| PR-1 m000012                      | Revert code (schema stays, harmless) **or** `migrate down --steps 1` with the API stopped.                                                                                                          | None — tables are empty until PR-4 lands. After PR-4: total (see below).                    | No before PR-4; effectively yes after.                                                                            |
+| PR-1 m0000NN                      | Revert code (schema stays, harmless) **or** `migrate down --steps 1` with the API stopped.                                                                                                          | None — tables are empty until PR-4 lands. After PR-4: total (see below).                    | No before PR-4; effectively yes after.                                                                            |
 | PR-3 collector                    | Set `PUBLIC_DEVICE_COLLECTION=false` + redeploy (or revert). Browser-local token remains until the user clears site data; it is inert.                                                              | None server-side.                                                                           | No.                                                                                                               |
 | PR-4 mint/link writer             | Flag off + revert. Rows become unreferenced; the sweeper (if it stays) expires them at 30 d. **If the sweeper is reverted too, rows persist forever** — keep the sweeper when disabling the writer. | None (rows are regenerable on next login).                                                  | No.                                                                                                               |
 | PR-6 shadow                       | Runtime `pause` (instant) + flag off. Shadow tables retain ≤14 d of data for the review.                                                                                                            | Shadow data only.                                                                           | No.                                                                                                               |
@@ -453,7 +453,7 @@ export, only with the API stopped.
 
 ### 5.1 Irreversible steps and how to make them reversible
 
-1. **`m000012.down` after writers land.** `device_key` is a one-way HMAC of signals that are
+1. **`m0000NN.down` after writers land.** `device_key` is a one-way HMAC of signals that are
    never stored; the records cannot be reconstructed from `user_sessions`, logs, or anything else
    (A10 #11). _Make it reversible:_ forbid `down` in the runbook; roll back by pinning the
    previous sha (tables stay, old binary ignores them). If the tables must actually be dropped,
@@ -497,7 +497,7 @@ Shadow mode must run on production traffic. Minimum:
   last 7. Ban-level rules: 30 days.
 - **Volume:** ≥50,000 evaluations per rule; ≥200 distinct accounts in the would-fire set.
 - **What to look at, in order:** (1) `device_shadow_stats` per-rule totals; (2) the sampled
-  `device_shadow_observations` for the would-fire set, reviewed independently by two people;
+  `device_shadow_observations` for the would-fire set, human-reviewed (two independent reviewers where available);
   (3) the unknown-device share; (4) request p99 vs baseline; (5) SQLite growth; (6) the api log
   for any `no such table`/write errors; (7) `device_records` retention counts to confirm the
   sweeper keeps up.
@@ -528,7 +528,7 @@ Shadow mode must run on production traffic. Minimum:
 6. **Turnstile configured** (`TURNSTILE_SECRET_KEY` api + `PUBLIC_TURNSTILE_SITE_KEY` web,
    already in the compose env block, `:73`) before L2 challenges; production registration already
    503s without the secret.
-7. **A second human** for L6 two-person approval and for the §3.4 sample review.
+7. **A second human**, if one can be found, for L6 approval and the §3.4 sample review; otherwise the single-operator variants (auto-expiring bans + recorded self-review, single recorded labelling).
 
 ### 8.2 Dokploy (Environment tab, exact values)
 
@@ -548,7 +548,8 @@ DEVICE_RULE_PACK_VERSION=<pinned pack id>
 EDGE_ATTEST_REQUIRED=false
 EDGE_PUBLIC_KEYS=
 
-# Optional observability (only if you want OTLP metrics; not required by the plan)
+# Optional observability — only once a collector with storage/retention exists. None is deployed, and
+# OTLP to a missing collector drops data silently (F4 F2). Not required by the plan.
 ENABLE_QUICKWIT_OTEL=true
 QUICKWIT_INGEST_URL=<collector url>
 QUICKWIT_ACCESS_TOKEN=<token>
@@ -589,13 +590,13 @@ STAGE 0 — GATES (PR-0)
   merge CI-restore PR ──► confirm green CI on master ──► confirm deploy job ran
   ABORT: any gate red → stop, fix the gate, do not proceed.
 
-STAGE 1 — SCHEMA (PR-1: m000012 only)
+STAGE 1 — SCHEMA (PR-1: m0000NN only)
   1. freeze merges; disable the Dokploy auto-update schedule
   2. backup:  docker run --rm -v easyquran_api_data:/data -v /opt/easyquran/backups:/backup \
                 keinos/sqlite3:latest /data/easyquran.db ".backup '/backup/<stamp>.db'"
   3. record pre-state (seaql_migrations tail; no device_* tables)
   4. merge PR-1 ──► watch: docker compose logs -f api | grep -i migrat
-  5. verify §4.4 a–e (ready:true, m000012 row, 6 tables, 0 rows)
+  5. verify §4.4 a–e (ready:true, m0000NN row, 6 tables, 0 rows)
   ABORT: api Restarting / "Database initialization failed" → Dokploy VERSION=<previous sha>
          → redeploy → re-verify → stop the rollout.
 
@@ -609,10 +610,10 @@ STAGE 2 — COLLECT + SHADOW (PR-2 session compat → PR-3 collector → PR-4 wr
 
 STAGE 3 — SHADOW WINDOW (14 days, 30 for ban rules)
   daily: shadow status counters; unknown share; p99; SQLite growth; sweeper lag
-  day 14: sample review (2 people, ≥100 cases/rule) → §3.4 G1–G6
+  day 14: sample review (≥100 cases/rule; second reviewer if available) → §3.4 G1–G6
   ABORT: G3/G5 fail twice consecutively, or any rule fires >20% on one cohort → keep shadowing.
 
-STAGE 4 — ENFORCE (PR-7 challenge first; PR-8 bans after 30d + two-person sign-off)
+STAGE 4 — ENFORCE (PR-7 challenge first; PR-8 bans after 30d + a recorded second look)
   1. verify runtime pause endpoint works BEFORE enabling
   2. set DEVICE_ENFORCEMENT_ENABLED=true + allowlist + pack version → deploy
   3. 48h watch: challenge rate, allowlist hits, appeal path
@@ -630,8 +631,8 @@ ROLLBACK (any stage): Dokploy → VERSION=<previous sha-<short>> → redeploy �
 
 ## 10. The smallest first PR that is useful, safe, and reversible
 
-**PR-1 = m000012 alone.** One new file
-(`rust/backend/api/migration/src/m000012_device_identity.rs`), one line in
+**PR-1 = m0000NN alone.** One new file
+(`rust/backend/api/migration/src/m0000NN_device_identity.rs`), one line in
 `migration/src/lib.rs`, and inline tests. Nothing in `src/` reads or writes it.
 
 - **Useful:** it is the only step with a live-DB component, and it is executed while the stakes
@@ -669,8 +670,8 @@ correction of a report's claim).
    crash mid-migration re-runs the migration** · **critical** · NEW
    _Evidence:_ `sea-orm-migration-1.1.20/src/migrator.rs:261–272` (transaction only for
    `DbBackend::Postgres`; `MySql | Sqlite` run bare) and `:386–397` (version insert after
-   `up()`). A3 §8 asserts the opposite ("sea-orm wraps **each** migration in a transaction").
-   _Fix:_ m000012 all-`IF NOT EXISTS` + `PRAGMA table_info` guards, an up-twice test
+   `up()`).
+   _Fix:_ m0000NN all-`IF NOT EXISTS` + `PRAGMA table_info` guards, an up-twice test
    (`m000011:56–57` style), and optionally an explicit `conn.transaction` around the DDL batch.
    Never merge a non-idempotent migration in this repo.
 
@@ -721,8 +722,8 @@ security gates`, and audit blocks added by `37d90c41`; `DEPLOYMENT.md:74–76` a
    _Evidence:_ `utils/telemetry.rs:247–252` (OTLP only when `ENABLE_QUICKWIT_OTEL`),
    `docker-compose.yml:120–152` and `.env.example` (no OTEL/Quickwit vars).
    _Fix:_ shadow status endpoint + SQLite aggregates as the source of truth; if a backend is
-   wanted, set `ENABLE_QUICKWIT_OTEL`/`QUICKWIT_INGEST_URL` as an operator prerequisite (and note
-   it is not part of the repo).
+   wanted, deploy a collector with storage first (none exists; OTLP to a missing collector drops data
+   silently, F4 F2), then set `ENABLE_QUICKWIT_OTEL`/`QUICKWIT_INGEST_URL` (not part of the repo).
 
 8. **The session-payload change and the writer must be ordered, or the first device deploy logs
    out every live session and 500s part of the API** · **high** · NEW (sequencing of A3 #1)
@@ -736,8 +737,8 @@ security gates`, and audit blocks added by `37d90c41`; `DEPLOYMENT.md:74–76` a
    request-path write blows the single-writer budget and the flush must not ride the 10 s
    durability task** · **high** · NEW (rollout framing of A7 #1/#2, A10 #15)
    _Evidence:_ `rate_limit_store.rs:1` ("Do NOT add a DB write to the request hot path"),
-   `translation_popularity_store.rs:1–5`, A7 #1 (1 fsync/commit → ~950 req/s ceiling),
-   A7 #2 (the 10 s flush holds the connection 60–200 ms), A10 #15 (`DELETE … LIMIT` is a syntax
+   `translation_popularity_store.rs:1–5`, A7 #1 (1 fsync/commit → an estimated ~950 req/s ceiling),
+   A7 #2 (the 10 s flush holds the connection an estimated 60–200 ms), A10 #15 (`DELETE … LIMIT` is a syntax
    error; do not contend with the flush).
    _Fix:_ `AtomicU64` + bounded ring buffer on the request path; a dedicated 60 s task
    (session-sweep precedent, `main.rs:764–775`) writes ≤500 rows/statement; a source-scan guard

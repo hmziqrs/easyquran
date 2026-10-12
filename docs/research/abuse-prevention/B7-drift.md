@@ -1,8 +1,7 @@
 # B7 — Repo drift audit: what else rotted, which invariants are unguarded
 
-Repo: `/Users/hmziq/os/easyquran` @ HEAD `53d3d421` (master). Working tree has an **uncommitted
-docs restructure** (see §6.4) — left untouched. All findings below are against HEAD unless a path
-is marked "working tree".
+Repo: `/Users/hmziq/os/easyquran` @ HEAD `53d3d421` (master). The docs restructure that was uncommitted at audit
+time has since landed; doc references below are to the current tree.
 
 Scope: Q7 of DESIGN-v1. Established fact (not re-verified): `53d3d421 fix(ci): remove security
 publication gates` deleted the web/Rust test, lint, fmt, clippy and dependency-audit gates from
@@ -117,21 +116,16 @@ claim publication gates (`deploy/README.md:18–35`; `web/README.md` "Check/lint
 audits remain local checks"). The coordinator's premise is outdated for those two. What is still
 false:
 
-| Doc                                                              | Claim                                                                                                                                                                                                                                                                     | Status                                                                                                                                                      |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/security-hardening-2026-10-11.md` @ HEAD, lines 19, 27, 54 | "Existing image workflow now requires complete web/Rust checks and dependency policy checks before publication"; "The publication policy displays this finding and fails if that exact package/version becomes reachable"; "publication depends on both gated build jobs" | **FALSE.** File is staged for deletion in the working tree (uncommitted), so it resolves only when that lands; HEAD still carries it.                       |
-| `docs/history.md:38–39` (working tree, untracked/new)            | "Resolved since: CI now runs the web/Rust suites (`.github/workflows/images.yml`)"                                                                                                                                                                                        | **FALSE.** CI runs neither suite.                                                                                                                           |
-| `DEPLOYMENT.md:69`                                               | "Translations are **not** fetched in CI — the web build never reads them, and the api gets them from the host bind mount"                                                                                                                                                 | **FALSE since `37d90c41`**: api job runs `deploy/fetch-quran-db.sh all` (images.yml:180–181), which fetches every translation sqlite.                       |
-| `DEPLOYMENT.md:74–76`                                            | "The three gates (`pnpm check`, `pnpm lint`, `pnpm test`) and `cargo clippy` / `cargo test` are not in it"                                                                                                                                                                | Statement true at HEAD, but **pnpm-era names** (repo is bun since `92450204`/`64b3385f`) and the advice ("add as a separate job") is exactly the open work. |
-| `rust/backend/api/AGENTS.md` hard-rule paragraph                 | "`tests/quran_v1.rs` guards fail the build"                                                                                                                                                                                                                               | **FALSE as machine claim**: the build no longer runs them.                                                                                                  |
+| Doc                                              | Claim                                                                                                                     | Status                                                                                                                                                      |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `documentation/history.md:36`                    | "Resolved since: CI now runs the web/Rust suites (`.github/workflows/images.yml`)"                                        | **FALSE.** CI runs neither suite.                                                                                                                           |
+| `DEPLOYMENT.md:69`                               | "Translations are **not** fetched in CI — the web build never reads them, and the api gets them from the host bind mount" | **FALSE since `37d90c41`**: api job runs `deploy/fetch-quran-db.sh all` (images.yml:180–181), which fetches every translation sqlite.                       |
+| `DEPLOYMENT.md:74–76`                            | "The three gates (`pnpm check`, `pnpm lint`, `pnpm test`) and `cargo clippy` / `cargo test` are not in it"                | Statement true at HEAD, but **pnpm-era names** (repo is bun since `92450204`/`64b3385f`) and the advice ("add as a separate job") is exactly the open work. |
+| `rust/backend/api/AGENTS.md` hard-rule paragraph | "`tests/quran_v1.rs` guards fail the build"                                                                               | **FALSE as machine claim**: the build no longer runs them.                                                                                                  |
 
 Not false but now unbacked (requirement lists, previously read as enforced by the removed gates):
 `AGENTS.MD` ("All three gates are green and must stay green"), `docs/next-features.md:24–25`,
-`docs/search-system.md:212`, `docs/settings-system.md:272`, `docs/design-system.md:91,680`.
-`docs/security.md` (working tree, untracked) is **accurate**: "GitHub Actions security test/audit
-gates were removed; application fixes, local audit scripts and other workflow safeguards remain."
-`docs/security-audit-2026-10-11.md:54` and `docs/security-audit-rounds-2026-10-11.md:56` say the
-workflow "does not run the full check/lint/test suites" — true again at HEAD, not false.
+`documentation/search-system.md:212`, `documentation/settings-system.md:272`, `documentation/design-system.md:91,680`.
 
 ---
 
@@ -142,7 +136,7 @@ CI; neither runs in the commit hook.
 
 **Web machine guards** (`web/src/**/__tests__/`): `nav-guard` (reader href grammar + translation
 context — AGENTS.MD machine-guard claim), `catalogue-sha-guard` (no SHA-256 in published
-catalogues), `docs-divergence-guard` (docs/quran-system.md divergences vs code), `message-barrel-guard`
+catalogues), `docs-divergence-guard` (documentation/quran-system.md divergences vs code), `message-barrel-guard`
 (i18n barrel/tree-shaking), `route-isolation` (settings + search), `logical-properties` (RTL
 physical-property ban), `marketing-surface-guard`, `landing-guard`, `usage-bar-guard`,
 `account-isolation`, plus design guards (token-contrast, fonts, geometry).
@@ -242,11 +236,8 @@ any `anti-slop/*` rule, web import/Tailwind sorting, `svelte-check`, or any test
    `rust/backend/api/docs/ERROR_HANDLING.md`). Clean.
 3. **Generated artifacts fresh** — `bun run i18n:namespaces:check` → "16 namespaces up to date
    (699 messages)"; running the writers produced no tracked-file diff.
-4. **Working tree carries an uncommitted docs restructure** (106 entries): staged deletions of 76
-   docs including the three `security-*-2026-10-11.md` files and `docs/design-enhancements/**`;
-   untracked new `docs/README.md`, `docs/history.md`, `docs/indopak.md`, `docs/locale-suggest.md`,
-   `docs/security.md`; unstaged edits to design/quran docs. User work — untouched. Note the
-   corrected `docs/security.md` and the false `docs/history.md:38` are both in this uncommitted set.
+4. **Docs restructure** (uncommitted at audit time, since landed): the false CI claim survives at
+   `documentation/history.md:36`.
 5. **Only one workflow** (`.github/workflows/images.yml`); no dependabot/secret-scanning config in
    the repo, so removing the audits leaves zero automated dependency signal.
 6. `deploy/fetch-quran-db.sh` exists and works (CI still calls it); `deploy/provision-quran.sh`,
@@ -303,8 +294,8 @@ Order (cheapest, highest-value first):
    `lint.overrides` / `fmt.overrides` (the documented Vite+ monorepo pattern) or add a
    `web/**` staged command (`cd web && vp check --fix`). Without this, step 1 only catches drift at
    push time.
-4. **Doc cleanup**: `docs/history.md:38`, `DEPLOYMENT.md:69,74`, `rust/backend/api/AGENTS.md`
-   hard-rule sentence, images.yml comments; commit or drop `docs/security-hardening-2026-10-11.md`.
+4. **Doc cleanup**: `documentation/history.md:36`, `DEPLOYMENT.md:69,74`, `rust/backend/api/AGENTS.md`
+   hard-rule sentence, images.yml comments.
 
 Restore as **separate required jobs**, not inline in the build jobs:
 
@@ -316,8 +307,8 @@ Restore as **separate required jobs**, not inline in the build jobs:
   `needs`, not a step.
 - Known risk from the one day the gates existed: they were added in `bed80b13`, failed on a fresh
   runner for missing corpus, fixed in `37d90c41` (provisioning changes remain), and were removed in
-  `53d3d421` **before ever being observed green in CI** (`docs/security.md`: "CI has not run these
-  commits"). Expect one provisioning/serialization pass before trusting them.
+  `53d3d421` **before ever being observed green in CI**.
+  Expect one provisioning/serialization pass before trusting them.
 
 ---
 
@@ -326,10 +317,10 @@ Restore as **separate required jobs**, not inline in the build jobs:
 1. CI verifies builds only — all test/lint/type/fmt/clippy/audit gates removed (CRITICAL).
 2. Commit hook cannot enforce web lint/fmt rules — `vp check` reads root config only (HIGH, NEW empirical).
 3. `cargo-audit-gate.py` still works and still fails on new advisories; nothing runs it; RSA exception no longer displayed (HIGH).
-4. `docs/security-hardening-2026-10-11.md` (HEAD) + `docs/history.md:38` + `DEPLOYMENT.md:69` are false; `deploy/README.md`/`web/README.md` already fixed (MEDIUM).
+4. `documentation/history.md:36` + `DEPLOYMENT.md:69` are false; `deploy/README.md`/`web/README.md` already fixed (MEDIUM).
 5. Stale CI comments + dead `all` provisioning in the api job (LOW).
 6. All machine guards (web + Rust, ranked) unenforced (HIGH).
 7. Device cookie/header on reader routes → silent SSR-cache loss; device digest in sha-free file → hard-rule break; both unguarded (HIGH).
 8. Hook chain / no pre-push / no Rust coverage (MEDIUM, NEW detail).
-9. No TODO rot, generated artifacts fresh, one workflow, no dependabot; uncommitted docs restructure in tree (INFO).
+9. No TODO rot, generated artifacts fresh, one workflow, no dependabot (INFO).
 10. Restoration costs measured; restore as separate `gates` + `rust-gates` jobs in `publish.needs` (RECOMMENDATION).

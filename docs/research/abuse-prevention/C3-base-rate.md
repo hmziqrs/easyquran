@@ -19,7 +19,8 @@ unrecorded:
 3. **The one automated abuse response is switched off in production.**
    `QURAN_BAN_ESCALATION_ENABLED` defaults to `false` (`config/settings.rs:349`), is **absent from
    `docker-compose.yml`**, and requires `QURAN_BAN_ALLOWLIST` to be set before it can be enabled at all
-   (`:356`). So the number of bans _automatically_ issued in production is **provably zero**, and the
+   (`:356`). So the number of bans _automatically_ issued in production is **zero unless the deployed `.env` enables
+   the engine** (the server `.env` is not in the repo), and the
    only way a ban exists is a human `DELETE`-free admin call that **has no writer**: `user_bans` has
    zero create/revoke callers and no admin route (`B2 F7`, re-verified: the only `user_ban` reference
    outside `db/sea_models/user_ban/` is a read at `services/auth.rs:531`).
@@ -31,7 +32,7 @@ unrecorded:
 
 The cheapest path to a real number is **not new code**. It is: Cloudflare zone analytics (the
 denominator) + GA4 (`G-ZYL6HY24W6`, already live) + a read-only copy of the production SQLite volume +
-one `grep` over the container stdout log. **Under one hour, no deploy, no schema change.** §5 gives the
+one `grep` over the container stdout log. **A few hours the first time (access setup included), no deploy, no schema change.** §5 gives the
 exact queries.
 
 ---
@@ -46,15 +47,15 @@ and how.
 
 ### 1a. Request-path limiters (the only thing that sees abuse _as it happens_)
 
-| #   | Surface                                                                                                                                                 | What it records                                                                                                               | Retained                                                                                                                                                    | Queryable today                                                                                                                                                                                                                                                      | Kind                                                                                                                           |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | `rate_limit_state` (L2 mirror of the in-memory gate store)                                                                                              | `key`, `fixed_count`, `fixed_expires_at`, `block_until_at`, `block_scope` for **currently active** buckets only               | **≤15 min for a plain fixed window; ≤ the block duration (1 h Temp / 24 h Long / 7 d quran-ban) for a block. Then DELETEd** (`rate_limit_store.rs:190-197`) | Yes: `SELECT key, fixed_count, block_until_at, block_scope FROM rate_limit_state`. **But it is a snapshot, not a ledger.**                                                                                                                                           | DEV rows present (3), REAL rows exist in prod                                                                                  |
-| 2   | `rate_limit_state` key namespace                                                                                                                        | Three families: `ratelimit:{ip                                                                                                | internal-webssr                                                                                                                                             | unknown}:{route-or-label}`(per-route ceiling),`quran-ban:{ip/32                                                                                                                                                                                                      | /64}`(escalation ban),`login:{email}`/`comment:create:user:{id}`/`forgot_password*`/`newsletter:*` (per-identity abuse limits) | as above | Yes — the key namespace _is_ the taxonomy. `LIKE 'ratelimit:%'` vs `LIKE 'quran-ban:%'` vs the rest | DEV: all 3 rows are `ratelimit:*`, **0 blocks**, one key is the unit-test IP `203.0.113.10/32` |
-| 3   | `limiter.checks` / `limiter.allowed` / `limiter.blocked` / `limiter.blocked.temp` / `limiter.blocked.long` OTel counters (`utils/telemetry.rs:443-476`) | Cumulative in-process block counts, split Temp/Long                                                                           | **Process lifetime only.** In-process counters, reset on every restart/deploy                                                                               | **No.** `ENABLE_QUICKWIT_OTEL` appears **only** in `utils/telemetry.rs` — grep across `*.yml`, `*.env*`, `*.md`, `*.toml`, `*.sh` returns **0 hits**; `.env` has `OTEL_SDK_DISABLED=true`; `docker-compose.yml` sets no OTEL/Quickwit var. Incremented, then dropped | NONE (dead code in practice)                                                                                                   |
-| 4   | `"Request blocked by abuse limiter"` WARN (`crates/rux-request-gate/src/abuse.rs:109`)                                                                  | One line per per-identity block, with the key in the span (`scope = %key_prefix`), `retry_after`, `short_count`, `long_count` | Container stdout → whatever Dokploy retains                                                                                                                 | **Yes, by grep** — this is a real, working, already-emitted signal. `RUST_LOG=info` includes WARN                                                                                                                                                                    | NONE locally (abuse limiter is skipped in non-prod); REAL in prod                                                              |
-| 5   | `"Rate limit exceeded"` DEBUG (`rux-request-gate/src/layer.rs:323`)                                                                                     | One line per per-route 429, with `identity`, `path`, `count`, `max_requests`                                                  | Container stdout                                                                                                                                            | **No at the default log level.** `docker-compose.yml` sets `RUST_LOG=info`; DEBUG is dropped. **The 600/min Quran ceiling and every per-route 429 are invisible in production logs.**                                                                                | NONE                                                                                                                           |
-| 6   | `middlewares/route_blocker.rs`                                                                                                                          | Nothing recorded; reads `route_status` and 4xxes if `is_blocked`                                                              | n/a                                                                                                                                                         | n/a                                                                                                                                                                                                                                                                  | NONE                                                                                                                           |
-| 7   | `track_view` dedup key `trackview:{post_id}:{ip}` (`post_v1/controller.rs:357`)                                                                         | 5-minute dedup marker per (post, IP)                                                                                          | 300 s                                                                                                                                                       | No (in-memory only)                                                                                                                                                                                                                                                  | NONE                                                                                                                           |
+| #   | Surface                                                                                                                                                 | What it records                                                                                                                                                                                                                                      | Retained                                                                                                                                                    | Queryable today                                                                                                                                                                                                                                                      | Kind                                                                                           |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 1   | `rate_limit_state` (L2 mirror of the in-memory gate store)                                                                                              | `key`, `fixed_count`, `fixed_expires_at`, `block_until_at`, `block_scope` for **currently active** buckets only                                                                                                                                      | **≤15 min for a plain fixed window; ≤ the block duration (1 h Temp / 24 h Long / 7 d quran-ban) for a block. Then DELETEd** (`rate_limit_store.rs:190-197`) | Yes: `SELECT key, fixed_count, block_until_at, block_scope FROM rate_limit_state`. **But it is a snapshot, not a ledger.**                                                                                                                                           | DEV rows present (3), REAL rows exist in prod                                                  |
+| 2   | `rate_limit_state` key namespace                                                                                                                        | Three families: `ratelimit:{ip\|internal-webssr\|unknown}:{route-or-label}` (per-route ceiling), `quran-ban:{ip/32\|/64}` (escalation ban), `login:{email}`/`comment:create:user:{id}`/`forgot_password*`/`newsletter:*` (per-identity abuse limits) | as above                                                                                                                                                    | Yes — the key namespace _is_ the taxonomy. `LIKE 'ratelimit:%'` vs `LIKE 'quran-ban:%'` vs the rest                                                                                                                                                                  | DEV: all 3 rows are `ratelimit:*`, **0 blocks**, one key is the unit-test IP `203.0.113.10/32` |
+| 3   | `limiter.checks` / `limiter.allowed` / `limiter.blocked` / `limiter.blocked.temp` / `limiter.blocked.long` OTel counters (`utils/telemetry.rs:443-476`) | Cumulative in-process block counts, split Temp/Long                                                                                                                                                                                                  | **Process lifetime only.** In-process counters, reset on every restart/deploy                                                                               | **No.** `ENABLE_QUICKWIT_OTEL` appears **only** in `utils/telemetry.rs` — grep across `*.yml`, `*.env*`, `*.md`, `*.toml`, `*.sh` returns **0 hits**; `.env` has `OTEL_SDK_DISABLED=true`; `docker-compose.yml` sets no OTEL/Quickwit var. Incremented, then dropped | NONE (dead code in practice)                                                                   |
+| 4   | `"Request blocked by abuse limiter"` WARN (`crates/rux-request-gate/src/abuse.rs:109`)                                                                  | One line per per-identity block, with the key in the span (`scope = %key_prefix`), `retry_after`, `short_count`, `long_count`                                                                                                                        | Container stdout → whatever Dokploy retains                                                                                                                 | **Yes, by grep** — this is a real, working, already-emitted signal. `RUST_LOG=info` includes WARN                                                                                                                                                                    | NONE locally (abuse limiter is skipped in non-prod); REAL in prod                              |
+| 5   | `"Rate limit exceeded"` DEBUG (`rux-request-gate/src/layer.rs:323`)                                                                                     | One line per per-route 429, with `identity`, `path`, `count`, `max_requests`                                                                                                                                                                         | Container stdout                                                                                                                                            | **No at the default log level.** `docker-compose.yml` sets `RUST_LOG=info`; DEBUG is dropped. **The 600/min Quran ceiling and every per-route 429 are invisible in production logs.**                                                                                | NONE                                                                                           |
+| 6   | `middlewares/route_blocker.rs`                                                                                                                          | Nothing recorded; reads `route_status` and 4xxes if `is_blocked`                                                                                                                                                                                     | n/a                                                                                                                                                         | n/a                                                                                                                                                                                                                                                                  | NONE                                                                                           |
+| 7   | `track_view` dedup key `trackview:{post_id}:{ip}` (`post_v1/controller.rs:357`)                                                                         | 5-minute dedup marker per (post, IP)                                                                                                                                                                                                                 | 300 s                                                                                                                                                       | No (in-memory only)                                                                                                                                                                                                                                                  | NONE                                                                                           |
 
 ### 1b. Durable tables that could carry an abuse signal
 
@@ -64,9 +65,9 @@ and how.
 | 9   | `user_bans` (`db/sea_models/user_ban/`)                  | `user_id`, `reason`, `banned_by`, `expires_at`, `revoked_at`, `revoked_by`                                                               | Forever                       | Table exists; `get_active_ban` / `is_banned` / `admin_list` exist — **but `create`/`revoke` have zero callers and there is no admin route**                                                                                            | DEV: **0 rows**. REAL: **0 by construction** (nothing can write)                                                                                                                                                                                                                                               |
 | 10  | `comment_flags` (`db/sea_models/comment_flag/`)          | `comment_id`, `user_id`, `reason` (free text), `created_at`; upsert per (comment, user); `flags_count` denormalized onto `post_comments` | Forever                       | **Yes, fully wired**: `POST /post/comment/v1/flag/{id}` (public, auth-only, **no abuse limiter**) → `admin_flags_list` / `admin_flags_summary` / `admin_flags_details` / `admin_flags_clear` (`post_comment_v1/controller.rs:341-468`) | DEV: **0 rows**. **This is the only real user-generated abuse report in the system.**                                                                                                                                                                                                                          |
 | 11  | `post_comments.hidden` + `flags_count`                   | Admin hide/unhide/delete state                                                                                                           | Forever                       | Yes (`admin_hide`/`admin_unhide`/`admin_delete`)                                                                                                                                                                                       | DEV: 0 rows                                                                                                                                                                                                                                                                                                    |
-| 12  | `post_views` (`db/sea_models/post_view/`)                | **Raw `ip_address` + raw `user_agent` + `user_id` + `post_id`** per view, 5-min dedup per (post, IP)                                     | Forever, no retention policy  | Yes: `post_views` SQL + the `analytics_v1` `/engagement/page-views` endpoint (unique-visitor = `DISTINCT COALESCE(user_id, 'ip:'                                                                                                       |                                                                                                                                                                                                                                                                                                                | ip_address)`) | DEV: **0 rows**. **The best existing per-IP distribution source in the schema** — and a raw-PII store `A8 F6`/`A10 F10` already flagged |
+| 12  | `post_views` (`db/sea_models/post_view/`)                | **Raw `ip_address` + raw `user_agent` + `user_id` + `post_id`** per view, 5-min dedup per (post, IP)                                     | Forever, no retention policy  | Yes: `post_views` SQL + the `analytics_v1` `/engagement/page-views` endpoint (unique-visitor = `DISTINCT COALESCE(user_id, 'ip:' \|\| ip_address)`)                                                                                    | DEV: **0 rows**. **The best existing per-IP distribution source in the schema** — and a raw-PII store `A8 F6`/`A10 F10` already flagged                                                                                                                                                                        |
 | 13  | `audit_logs` (`db/sea_models/audit_log/`)                | Designed for `action`, `resource_type`, `resource_id`, `metadata`, `ip_address`, `user_agent`                                            | Forever                       | Table + model exist                                                                                                                                                                                                                    | DEV: **0 rows**, and grep for `audit_log::` / `AuditLog` outside `db/sea_models/audit_log/` returns **0 hits → zero writers**                                                                                                                                                                                  |
-| 14  | `user_sessions`                                          | `user_id`, raw `device` (UA), `ip_address`, `last_seen`, `revoked_at` — written **on successful login only**                             | Forever, no retention         | Yes: `POST /sessions/list` returns raw UA + IP + `isCurrent`                                                                                                                                                                           | DEV: 42 rows, 33 from `127.0.0.1`, 9 NULL (OAuth). **No failed-login row is ever written** → login attempts are not recorded anywhere                                                                                                                                                                          |
+| 14  | `user_sessions`                                          | `user_id`, raw `device` (UA), `ip_address`, `last_seen`, `revoked_at` — written **on successful login only**                             | Forever, no retention         | Yes: `POST /sessions/list` returns raw UA + IP + `isCurrent`                                                                                                                                                                           | DEV: 42 rows, 33 from `127.0.0.1`, 9 NULL (OAuth). **No failed-login row is ever written**; failures appear only as the `Invalid credentials` WARN log line with client IP (`auth_v1/controller.rs:226`)                                                                                                       |
 | 15  | `sessions` (tower-session SQLite store)                  | Session id + blob + `expiry_date`                                                                                                        | Until expiry                  | Yes                                                                                                                                                                                                                                    | DEV: 103 rows, all unexpired                                                                                                                                                                                                                                                                                   |
 | 16  | `email_suppression` (`db/sea_models/email_suppression/`) | `recipient` (UNIQUE), `reason` (Bounce/Complaint/Manual), `source`, `diagnostic`, `permanent`, `last_seen`                               | Forever                       | **Yes**: `GET/POST/DELETE /mail/v1/suppression` (admin)                                                                                                                                                                                | DEV: **0 rows**. **The best existing mail-abuse signal**: forgot-password / verification flooding of invalid addresses surfaces here as hard bounces; recipient spam-marking surfaces as complaints                                                                                                            |
 | 17  | `email_verifications`                                    | `user_id`, `code_hash`, timestamps                                                                                                       | Forever                       | Direct SQL                                                                                                                                                                                                                             | DEV: 8 rows (signup→verify funnel for the dev accounts)                                                                                                                                                                                                                                                        |
@@ -88,13 +89,13 @@ and how.
 
 ### 1d. Off-app surfaces (real, reachable, not in the repo)
 
-| #   | Surface                                                                                                                                                                                                                                                                 | What it records                                                                                                                           | Queryable today                                                                                                                                                                                                                                                                                                                                 | Kind                                                     |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| 28  | **Cloudflare zone analytics** (confirmed in front: `server: cloudflare`, `cf-ray: …-KHI`)                                                                                                                                                                               | Every request: path, status, country, ASN, top client IPs, cache status, bot score if Bot Fight Mode is on                                | Yes, dashboard                                                                                                                                                                                                                                                                                                                                  | **REAL. The only true request denominator that exists.** |
-| 29  | **Firebase Analytics / GA4** — live, `measurementId: "G-ZYL6HY24W6"` (`web/src/lib/firebase/index.ts:12`), consent defaults `analytics: true` (`web/src/lib/stores/consent.svelte.ts:16`), and the CSP in the live response allows `googletagmanager.com`/`gstatic.com` | Real human sessions, geography, engagement                                                                                                | Yes, GA4 dashboard                                                                                                                                                                                                                                                                                                                              | **REAL. The only human-user denominator.**               |
-| 30  | **Container stdout logs** (Dokploy, `RUST_LOG=info`)                                                                                                                                                                                                                    | The WARN block lines (#4), route-block WARNs, `Comment flagged`, newsletter subscribe (domain only), comment create/delete, admin actions | Yes, Dokploy log view                                                                                                                                                                                                                                                                                                                           | REAL                                                     |
-| 31  | Quickwit / OTLP                                                                                                                                                                                                                                                         | Would hold traces + metrics + logs                                                                                                        | **No — never enabled** (#3)                                                                                                                                                                                                                                                                                                                     | NONE                                                     |
-| 32  | `docs/`                                                                                                                                                                                                                                                                 | Any traffic or abuse number                                                                                                               | **None.** `grep -rniE "abuse\|spam\|scrap\|stuffing\|ban evas\|429\|attack" docs/*.md` → 3 hits, all about a redirect bug and the rate-limit _design_, not observed volume. `docs/security.md:9` states "**Nothing is deployed yet and CI has not run these commits**" — already stale, but it confirms no incident numbers were ever collected | NONE                                                     |
+| #   | Surface                                                                                                                                                                                                                                                                 | What it records                                                                                                                           | Queryable today                                                                                                                                                                                                        | Kind                                                     |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| 28  | **Cloudflare zone analytics** (confirmed in front: `server: cloudflare`, `cf-ray: …-KHI`)                                                                                                                                                                               | Every request: path, status, country, ASN, top client IPs, cache status, bot score if Bot Fight Mode is on                                | Yes, dashboard                                                                                                                                                                                                         | **REAL. The only true request denominator that exists.** |
+| 29  | **Firebase Analytics / GA4** — live, `measurementId: "G-ZYL6HY24W6"` (`web/src/lib/firebase/index.ts:12`), consent defaults `analytics: true` (`web/src/lib/stores/consent.svelte.ts:16`), and the CSP in the live response allows `googletagmanager.com`/`gstatic.com` | Real human sessions, geography, engagement                                                                                                | Yes, GA4 dashboard                                                                                                                                                                                                     | **REAL. The only human-user denominator.**               |
+| 30  | **Container stdout logs** (Dokploy, `RUST_LOG=info`)                                                                                                                                                                                                                    | The WARN block lines (#4), route-block WARNs, `Comment flagged`, newsletter subscribe (domain only), comment create/delete, admin actions | Yes, Dokploy log view                                                                                                                                                                                                  | REAL                                                     |
+| 31  | Quickwit / OTLP                                                                                                                                                                                                                                                         | Would hold traces + metrics + logs                                                                                                        | **No — never enabled** (#3)                                                                                                                                                                                            | NONE                                                     |
+| 32  | `docs/`                                                                                                                                                                                                                                                                 | Any traffic or abuse number                                                                                                               | **None.** `grep -rniE "abuse\|spam\|scrap\|stuffing\|ban evas\|429\|attack" docs/*.md` → 3 hits, all about a redirect bug and the rate-limit _design_, not observed volume. No doc records an observed incident number | NONE                                                     |
 
 ---
 
@@ -171,26 +172,26 @@ finding, not a gap in this audit.
 
 ## 3. Is there ANY current evidence of abuse?
 
-| Abuse class                           | Evidence found                                                                                                                                                                                                                                                                              | Verdict                                                   |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| **Account-creation abuse**            | None. DEV: 13 accounts, all attributable to fixtures/operator, signup→verify 46.2 %. Production: no rate data obtainable; the per-IP ceiling is 100/min on the auth nest (`router.rs:75`) and Turnstile is mandatory for password registration in production (`docs/security.md:65`).       | **NO EVIDENCE**                                           |
-| **Credential stuffing**               | None. `user_sessions` has 42 rows from a single IP. **Failed logins are not recorded anywhere** — no table, no log line at INFO. The `login:{email}` limiter (`auth_v1/controller.rs:135-140`) would count them, but its bucket is purged ≤15 min after the window and never logged.        | **NO EVIDENCE — and none is currently _observable_**      |
-| **Scraping**                          | None. `translation_popularity` (the only Quran volume counter) shows 414 dev hits. Production: per-route 429s are **not logged** (`layer.rs:323` is DEBUG; `RUST_LOG=info`), so a scrape against the 600/min ceiling would leave **no trace at all**. Cloudflare sees it; the app does not. | **NO EVIDENCE — and the app is structurally blind to it** |
-| **Comment spam**                      | None. `post_comments = 0`, `comment_flags = 0`. The report mechanism is complete and unused.                                                                                                                                                                                                | **NO EVIDENCE**                                           |
-| **Ban evasion**                       | None. `user_bans = 0`; and no account can be banned at all (zero writers, no admin route). `QURAN_BAN_ESCALATION_ENABLED` is off in production, so **automated IP bans issued to date = 0, provably**. `rate_limit_state` shows 0 `quran-ban:*` rows.                                       | **NO EVIDENCE — and the class is uninstantiable today**   |
-| **Coordinated inauthentic behaviour** | None. No co-action pipeline, no device graph, no session-IP diversity (DEV max 2 IPs/user).                                                                                                                                                                                                 | **NO EVIDENCE**                                           |
+| Abuse class                           | Evidence found                                                                                                                                                                                                                                                                                                                                                        | Verdict                                                   |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| **Account-creation abuse**            | None. DEV: 13 accounts, all attributable to fixtures/operator, signup→verify 46.2 %. Production: no rate data obtainable; the per-IP ceiling is 100/min on the auth nest (`router.rs:75`) and Turnstile is mandatory for password registration in production (`services/turnstile.rs:42-47`).                                                                         | **NO EVIDENCE**                                           |
+| **Credential stuffing**               | None. `user_sessions` has 42 rows from a single IP. **Failed logins are not recorded in the DB**; the only trace is the `Invalid credentials` WARN (client IP, no email) in container logs, kept only since the container started. The `login:{email}` limiter (`auth_v1/controller.rs:135-140`) would count them, but its bucket is purged ≤15 min after the window. | **NO EVIDENCE — observable only per IP, in logs**         |
+| **Scraping**                          | None. `translation_popularity` (the only Quran volume counter) shows 414 dev hits. Production: per-route 429s are **not logged** (`layer.rs:323` is DEBUG; `RUST_LOG=info`), so a scrape against the 600/min ceiling would leave **no trace at all**. Cloudflare sees it; the app does not.                                                                           | **NO EVIDENCE — and the app is structurally blind to it** |
+| **Comment spam**                      | None. `post_comments = 0`, `comment_flags = 0`. The report mechanism is complete and unused.                                                                                                                                                                                                                                                                          | **NO EVIDENCE**                                           |
+| **Ban evasion**                       | None. `user_bans = 0`; and no account can be banned at all (zero writers, no admin route). `QURAN_BAN_ESCALATION_ENABLED` is off in production, so **automated IP bans issued to date = 0 by configuration (verify the running container's env)**. `rate_limit_state` shows 0 `quran-ban:*` rows.                                                                     | **NO EVIDENCE — and the class is uninstantiable today**   |
+| **Coordinated inauthentic behaviour** | None. No co-action pipeline, no device graph, no session-IP diversity (DEV max 2 IPs/user).                                                                                                                                                                                                                                                                           | **NO EVIDENCE**                                           |
 
 **Two honest caveats, stated plainly.**
 
 1. **Absence of evidence here is weak evidence of absence — but it is not nothing.** The instrumentation
-   cannot see credential stuffing (no failed-login record), cannot see scraping (429s unlogged), and
+   sees credential stuffing only as per-IP WARN log lines, cannot see scraping (429s unlogged), and
    cannot see ban evasion (no bans possible). What _is_ hard is: **zero comment flags, zero suppression
-   rows, zero active bans, zero escalation history, and a provably-zero automated ban count.** Those
+   rows, zero active bans, zero escalation history, and a zero-by-configuration automated ban count.** Those
    four are genuine zeros, not blind spots.
-2. **The observation window is short.** `docs/security.md:9` says nothing was deployed at the time of
-   the 2026-10-11 audit; the deploy README still documents `WEB_AUTH_ENABLED` as _off_ for production
-   (`deploy/README.md:478`), while the live health endpoint now reports it **on**. So the window during
-   which any abuse could have been _recorded_ is days, not months.
+2. **The observation window is short.** The deploy README still documents `WEB_AUTH_ENABLED` as _off_
+   for production (`deploy/README.md:478`), while the live health endpoint now reports it **on**, so
+   accounts went live recently. The window during which any account abuse could have been _recorded_ is
+   likely days, not months.
 
 **Bottom line for §3: there is no evidence of any of the six abuse classes, in either the dev database
 or any production surface reachable from this repo — and for three of the six, the app could not have
@@ -252,31 +253,30 @@ CREATE TABLE IF NOT EXISTS enforcement_cases (
 
 **Missing prerequisite:** the token itself, and a link table with **no FK to `users`** (an FK to
 `user_sessions`/`users` cascades away exactly when the linkage is needed — A10 F1, A3 F10, adopted at
-`DESIGN-v1.md:39`). B2's Option B already specifies both (`device_tokens`, `device_account_links`).
+`DESIGN-v1.md:43`). B2's Option B already specifies both (`device_tokens`, `device_account_links`).
 The measurement needs only the second:
 
 ```sql
--- denominator: tokens that were linked to a user who was banned
-WITH banned_tokens AS (
-  SELECT DISTINCT l.token_id
-  FROM device_account_links l
-  JOIN user_bans b ON b.user_id = l.user_id AND b.revoked_at IS NULL
+-- denominator: tokens linked to a banned user (the banned user is kept explicitly)
+WITH banned_links AS (
+    SELECT l.token_id, b.user_id AS banned_user_id,
+           CAST(strftime('%s', b.created_at) AS INTEGER) AS banned_at  -- TEXT -> epoch (B8 F7)
+      FROM device_account_links l
+      JOIN user_bans b ON b.user_id = l.user_id AND b.revoked_at IS NULL
 ),
--- numerator: those tokens re-linked to a DIFFERENT account after the ban was created
+-- numerator: those tokens re-linked to a DIFFERENT account after that ban was created
 recaptured AS (
-  SELECT DISTINCT l.token_id
-  FROM device_account_links l
-  JOIN banned_tokens bt ON bt.token_id = l.token_id
-  JOIN user_bans b2 ON b2.user_id = (SELECT user_id FROM device_account_links
-                                     WHERE token_id = l.token_id LIMIT 1)
-  WHERE l.first_seen > b2.created_at
-    AND l.user_id <> b2.user_id
+    SELECT DISTINCT bl.token_id
+      FROM banned_links bl
+      JOIN device_account_links l2 ON l2.token_id = bl.token_id
+     WHERE l2.user_id <> bl.banned_user_id
+       AND l2.first_seen > bl.banned_at  -- epoch vs epoch
 )
-SELECT (SELECT COUNT(*) FROM banned_tokens) AS evaders,
-       (SELECT COUNT(*) FROM recaptured)    AS recaptured,
-       CASE WHEN (SELECT COUNT(*) FROM banned_tokens) = 0 THEN NULL
+SELECT (SELECT COUNT(DISTINCT token_id) FROM banned_links) AS evaders,
+       (SELECT COUNT(*) FROM recaptured) AS recaptured,
+       CASE WHEN (SELECT COUNT(*) FROM banned_links) = 0 THEN NULL
             ELSE 1.0 * (SELECT COUNT(*) FROM recaptured)
-                     / (SELECT COUNT(*) FROM banned_tokens) END AS recapture_rate;
+                 / (SELECT COUNT(DISTINCT token_id) FROM banned_links) END AS recapture_rate;
 ```
 
 - **Where computed:** async only. **Cost on a pool of 1:** two indexed lookups + one small join over a
@@ -315,7 +315,8 @@ Zero new request-path DB work beyond the login-time link insert that Option B al
 
 ## 5. The cheapest "do we even have a problem?" measurement — runnable in 7 days, no new infrastructure
 
-Five sources, all already live. Total operator time: **under one hour.** Nothing here needs a deploy,
+Five sources, all already live. Operator time: **2–3 hours the first time** (Cloudflare API token, GA4
+property and deploy-host access), 10–15 min per repeat. Nothing here needs a deploy,
 a migration, or a code change.
 
 ### Step 1 — Cloudflare (the denominator, ~10 min)
@@ -332,24 +333,28 @@ Dashboard → the `easyquran.fyi` zone → **Analytics → Traffic** and **Secur
 
 ### Step 2 — GA4 (the human denominator, ~5 min)
 
-Property `G-ZYL6HY24W6` → Reports → **User acquisition** / **Tech → Tech details**: 5. Real users + sessions, last 30 days. 6. **The ratio (Cloudflare requests ÷ GA4 sessions).** For a Quran reader that is overwhelmingly
-page-view traffic, a ratio above ~50 is prima facie evidence of machine traffic. **This single ratio
-is the cheapest possible abuse indicator in the whole stack.**
+Property `G-ZYL6HY24W6` → Reports → **User acquisition** / **Tech → Tech details**:
+
+5. Real users + sessions, last 30 days.
+6. **The ratio (Cloudflare requests ÷ GA4 sessions)** — a sanity check only, with no fixed threshold:
+   GA4 misses blockers, deniers and JS-less bots, and Cloudflare counts every asset, prefetch and pack
+   download. The indicator is the Step 1 per-IP/ASN distribution (D3 §2).
 
 ### Step 3 — a read-only copy of the production SQLite (~15 min)
 
 The prod DB is in the Docker volume `api_data`. **Copy it out; never query the live file in place.**
 
 ```bash
-# 1) copy the DB out of the volume, read-only mount, into a throwaway container
+# 1) copy the DB together with its WAL/SHM files (recent commits live in -wal), read-only mount
 docker run --rm -v easyquran_api_data:/data:ro -v "$PWD:/out" debian:trixie-slim \
-  sh -c 'cp /data/easyquran.db /out/prod-copy.db && ls -l /out/prod-copy.db'
+  sh -c 'cp /data/easyquran.db /data/easyquran.db-wal /data/easyquran.db-shm /out/ 2>/dev/null; ls -l /out/easyquran.db*'
 
 # 2) query the COPY (never the volume) — read-only, aggregate counts only
-DB="$PWD/prod-copy.db"
+DB="$PWD/easyquran.db"
 sqlite3 -readonly "$DB" <<'SQL'
 .mode column
 .headers on
+PRAGMA integrity_check;  -- must print ok; then check freshness: max(created_at) vs container start
 
 -- (a) THE ABUSE HEADLINE: is anything blocked right now, and why?
 SELECT key, fixed_count, block_until_at, block_scope
@@ -405,28 +410,39 @@ FROM translation_popularity;
 SQL
 ```
 
-### Step 4 — one log grep over the container stdout (~5 min)
+### Step 4 — log greps over the container stdout (~10 min)
 
 ```bash
-# per-identity blocks (WARN — actually emitted at RUST_LOG=info)
-docker logs easyquran_api --since 720h 2>&1 \
+# the log window is the current container's lifetime: every master push recreates it
+docker inspect -f '{{.State.StartedAt}}' easyquran_api
+
+# per-identity blocks (WARN, emitted at RUST_LOG=info); the FIRST scope= is the key,
+# the second is the Temp/Long block scope
+docker logs easyquran_api 2>&1 \
   | grep -F 'Request blocked by abuse limiter' \
-  | sed -E 's/.*scope=([^ ]+).*/\1/' | sort | uniq -c | sort -rn | head -40
+  | awk 'match($0, /scope=[^ ]+/) { print substr($0, RSTART + 6, RLENGTH - 6) }' \
+  | sort | uniq -c | sort -rn | head -40
+
+# failed logins per client IP (the only credential-stuffing trace; WARN, IP only)
+docker logs easyquran_api 2>&1 \
+  | grep -F 'Invalid credentials' \
+  | awk 'match($0, /client_ip=[^ ]+/) { print substr($0, RSTART + 10, RLENGTH - 10) }' \
+  | sort | uniq -c | sort -rn | head -20
 
 # route blocks, comment flags, newsletter signups (domains only)
-docker logs easyquran_api --since 720h 2>&1 \
+docker logs easyquran_api 2>&1 \
   | grep -E 'Route blocked by dynamic route_blocker|Comment flagged|Newsletter subscription created' \
   | head -50
 ```
 
-**Read the results like this:** if Step 1 shows a request-to-session ratio in the normal range, Step 3
+**Read the results like this:** if Step 1 shows a flat per-IP/ASN distribution, Step 3
 (b)/(c) shows zero active blocks with a flat `fixed_count` distribution, Step 3 (h) shows zero flags,
 Step 3 (i) shows zero suppressions, Step 3 (j) shows all zeros, and Step 4 returns nothing — **the
 abuse base rate is indistinguishable from zero, and that is a measurement, not an absence of one.**
 
-**Note on what this plan cannot see, stated honestly:** credential stuffing (no failed-login record
-exists), scraping against the Quran ceiling (429s are DEBUG-only, #5), and ban evasion (no bans
-possible). If Step 1's request-to-session ratio is anomalous, that anomaly is the _only_ evidence that
+**Note on what this plan cannot see, stated honestly:** targeted credential stuffing (the failure log
+line carries IP, not email), scraping against the Quran ceiling (429s are DEBUG-only, #5), and ban
+evasion (no bans possible). If Step 1's distribution is hot, that anomaly is the _only_ evidence that
 would exist — and the fix for its blindness is finding #4, a one-word log-level change.
 
 ---
@@ -461,7 +477,7 @@ deployed days ago behind Cloudflare with no automation on — then:**
 5. **Do not spend the budget on the threat the evidence shows and the instrument can't see.** The one
    documented threat class for Quran apps is app-store takedowns and review-bombing, not account abuse
    (R2-evasion §8.1–8.2, unchanged by this audit). And the app is **structurally blind to the abuse it
-   does name**: the device axis is excluded from reader routes (`DESIGN-v1.md:64`, B2 F4), so the one
+   does name**: the device axis is excluded from reader routes (`DESIGN-v1.md:72`, B2 F4), so the one
    abuse that this app could plausibly suffer at scale — scraping a public-domain text — would not be
    detected by the proposed system even if it were built.
 6. **Say it in the design doc.** `DESIGN-v1.md` §Q2 asks whether fingerprinting is the right tool. The
@@ -471,7 +487,7 @@ deployed days ago behind Cloudflare with no automation on — then:**
 
 **The one sentence the plan should contain:** _"Measured abuse base rate as of 2026-10-\__: zero active
 bans, zero escalation history, zero comment flags, zero mail suppressions, zero audit rows; production
-request-to-session ratio within the normal range. The device-identity design is deferred; it reopens
+per-IP/ASN request distribution flat. The device-identity design is deferred; it reopens
 if any of the five counters moves, or if the C1/C2 instrumentation (one `audit_logs` writer + one
 login-time link insert) produces a non-zero numerator over 90 days."_
 
@@ -498,7 +514,7 @@ smallest change that makes the base rate measurable at all, and it costs one `IN
 a transaction that already runs every 10 s. Cheapest alternative if a migration is unacceptable:
 reuse `audit_logs` (already exists, zero writers — F7) with `action='ratelimit.block'`.
 
-### F2 — The only automated abuse response is default-OFF in production, so the automated ban count is provably zero. **NEW**
+### F2 — The only automated abuse response is default-OFF in production, so the automated ban count is zero by configuration. **NEW**
 
 **Severity: High.**
 **Evidence:** `config/settings.rs:349` — `env_bool("QURAN_BAN_ESCALATION_ENABLED", false)`; `:356` —
@@ -525,12 +541,13 @@ temp_blocks, long_blocks }`, incremented by `TelemetryHooks` in `services/abuse_
 `*.yml`, `*.yaml`, `*.env*`, `*.md`, `*.toml`, `*.sh` returns **0 hits** outside the code. `.env:39` sets
 `OTEL_SDK_DISABLED=true`; `docker-compose.yml` sets no OTEL or Quickwit variable. So the counters are
 incremented into a global meter with no reader and no exporter. `Metrics` are also process-local, so
-even a live exporter would reset them on every deploy — and `deploy/README.md:241` states that every
+even a live exporter would reset them on every deploy — and `deploy/README.md:21` states that every
 master push redeploys.
 **Fix:** the cheapest fix is **not** to stand up Quickwit. It is finding F4: promote the block log line
-to a durable level and grep the container stdout that already exists. If real metrics are wanted, set
-`ENABLE_QUICKWIT_OTEL=1` + `QUICKWIT_INGEST_URL` in `docker-compose.yml` — two env lines — and accept
-the redeploy-reset.
+to a durable level and grep the container stdout that already exists. If real metrics are wanted, first deploy
+a collector with storage and an owner: the default ingest URL is `http://localhost:7280`, export failures
+are dropped silently, and the counters reset on every redeploy (F4 F2) — the env flag alone produces nothing
+readable.
 
 ### F4 — Route-level 429s are logged at DEBUG only, so the Quran content ceiling is invisible in production. **NEW**
 
@@ -622,7 +639,7 @@ against a missing table. Consequence: `newsletter_v1`'s two abuse limiters
 (`newsletter:subscribe:{email}` 5/60s→1h + 20/24h→24h, and `newsletter:subscribe:ip:{ip}`
 20/60s→1h + 200/24h→24h, `:63-87`) guard a write that cannot succeed, and §5's signup-to-confirm abuse
 signal is **unavailable**: there are no Pending rows to compare against Confirmed rows.
-**Fix:** either add the migration (`m000012_newsletter_subscribers`, the model's columns are already
+**Fix:** either add the migration (next free number, `m0000NN_newsletter_subscribers`; the model's columns are already
 fixed) or remove the module from the router. Do not leave a mounted public write endpoint whose table
 does not exist — it is an unhandled-500 surface and a false sense of coverage in the abuse inventory.
 

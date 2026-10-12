@@ -4,10 +4,10 @@ These 59 reports are the evidence base for [`docs/abuse-prevention.md`](../../ab
 
 **Precedence rules — read these before citing anything here.**
 
-1. **`docs/abuse-prevention.md` is authoritative.** These reports disagree with each other; later reports correct earlier ones. Where they conflict, the plan is correct and the reports are not.
-2. **§16.1 of the plan lists claims that were corrected and must not be repeated.** Numbers, mechanisms, and guarantees appear in these reports that were later refuted. Do not copy a number out of a report without checking that list.
+1. **`docs/abuse-prevention.md` is authoritative.** Factual claims (code, numbers, sources) have been reconciled across the reports; what still differs between them is design decisions, where a later report supersedes an earlier one (H3 §1 records each supersession). Where a report and the plan differ, the plan is correct.
+2. **§16.1 of the plan lists claims that must not be repeated** (H3 §2 has the full list). Do not copy a number, mechanism, or guarantee out of a report without checking it.
 3. **Numbers are labelled by provenance in the plan's §16.2** (measured / sourced / estimated). Reports do not consistently label them. An estimate presented as a fact in a report is still an estimate.
-4. **Every claim here was true of the code at `53d3d421`.** Anything read as current fact must be re-verified against the code before it is used.
+4. **Code claims were written against `53d3d421`** and spot-rechecked during the consistency pass. Re-verify anything against the code before using it as current fact.
 5. These are working documents, not a specification. They contain rejected designs (`DESIGN-v0.md`, `DESIGN-v1.md`), attack reports, and meta-audits. The rejected designs are kept deliberately: the plan's §15 lists what was rejected and why, and these files are the evidence for those rejections.
 
 **Do not implement from these files.** Implement from `docs/abuse-prevention.md`, which states the normative rules, the acceptance criteria, and the gates.

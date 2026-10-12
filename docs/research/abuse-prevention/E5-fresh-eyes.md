@@ -23,7 +23,7 @@ Every finding below is marked **NEW** (no prior reports were consulted, so no co
 - `git log` / `git show` for the HEAD commit (evidence, not a prior report).
 
 Not read: anything under `/private/var/folders/.../fp-audit/`. I also deliberately did not read
-`docs/security.md` so as not to be anchored.
+the repo's security docs so as not to be anchored.
 
 ## Verification runs I actually executed (not guesses)
 
@@ -149,8 +149,8 @@ actually hits.
   restarts (`services/rate_limit_store.rs` flush/load).
 
 **Consequence.** Anyone who knows (or guesses, or enumerates — see #5) a victim's email can lock that
-account out of password login with 3 requests, and keep re-triggering a 24-hour block indefinitely by
-re-sending 5 requests per 15 minutes. There is no user remedy and no operator remedy. It also fires on
+account out of password login with 3 requests, and escalate to a 24-hour block with ≈8 timed requests
+(≥4 blocked retries in the block's last 15 min, then one after expiry — D1 §1), re-triggered at each expiry. There is no user remedy and no operator remedy. It also fires on
 _successful_ logins: a normal user's third login inside six minutes is 429'd.
 
 **Fix.** Count failures only (decrement/clear on success), make the block short and bounded
@@ -331,11 +331,12 @@ anonymous session table / add a global admission budget).
 
 ## A4. **NEW** — Cost amplification on the public Quran surface
 
-`modules/quran_v1/controller.rs:893-938` — a cold `/quran/v1/sources` fans out **117 HEAD requests** to R2
-(`:995-1009`), and `/scripts` similarly (`:846-873`); the result is memoized only when _fully_ verified
+`modules/quran_v1/controller.rs:893-938` — a cold `/quran/v1/sources` fans out **380 HEAD requests** to R2 in
+production (2 scripts + 378 catalogue entries; 382 non-prod; serialized by the memo mutex — E6 F4)
+(`:995-1009`), and `/scripts` 2 (`:846-873`); the result is memoized only when _fully_ verified
 (`:915-917`), so a partial failure re-fans on every request. `quran_v1/controller.rs:1216-1256,1258-1351`
 serves translations through a pool capped at 8 resident corpora / 48 MB
-(`config/settings.rs:299-301`), so cycling through the 117 catalogue ids forces continuous eviction +
+(`config/settings.rs:299-301`), so cycling through the 378 catalogue ids forces continuous eviction +
 SQLite re-reads. Consequence: an attacker on the 600/min content bucket can keep the api hot on R2 HEADs
 and disk I/O without ever using a valid account. Fix: single-flight the cold resolve, cache partial results
 with a short TTL, and add a per-source cost budget.
@@ -343,8 +344,8 @@ with a short TTL, and add a per-source cost budget.
 ## A5. **NEW** — Mail as an attack surface (registration + newsletter)
 
 Registration: 100 sends/min/IP to arbitrary addresses (#6 above). Newsletter:
-`newsletter_v1/controller.rs:55-120` sends a confirmation mail per new address, limited to 5/address/hour
-and 20/IP/hour — but with #1 unfixed, per-IP limits are nominal. Consequence: inbox bombing + provider
+`newsletter_v1/controller.rs:55-120` sends a confirmation mail per new address, limited to 5/address/min
+and 20/IP/min (then 1 h blocks) — but with #1 unfixed, per-IP limits are nominal. Consequence: inbox bombing + provider
 quota/reputation burn, which is an auth outage (`deploy/README.md:463-506`). Fix: global send budget +
 domain allowlist/reputation check + alerting.
 
@@ -526,9 +527,8 @@ bans are attacker-directed, and the WAF is bypassable by anyone who knows the or
 1. Whether the Cloudflare-range ingress restriction and the edge cache rules are actually configured on the
    live deployment. No config exists in the repo; `deploy/README.md:377-409` says it is manual and
    owner-signed.
-2. Whether `docs/security.md` or any other repo doc records an accepted-risk decision for the login throttle,
-   the enumeration oracle, or the ingress trust model. I deliberately did not read `docs/security.md` to
-   keep this audit unanchored.
+2. Whether any repo doc records an accepted-risk decision for the login throttle, the enumeration oracle,
+   or the ingress trust model. I deliberately did not read the security docs, to keep this audit unanchored.
 3. Whether clippy passes on the CI-pinned toolchain (1.98.1). It fails on the locally installed 1.99.0 with
    16 `double_must_use` errors, which looks like new-lint drift.
 4. Whether Cloudflare actually caches `/offline/*` and `/_quran/*` (extension-based defaults say `.json`

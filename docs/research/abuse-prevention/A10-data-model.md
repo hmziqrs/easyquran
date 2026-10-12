@@ -1,7 +1,7 @@
 # A10 — Data-model & migration-risk audit of DESIGN-v0 (device identity)
 
 Auditor: data-model / migration-risk subagent. Scope: the design's schema (Layer 2), its
-migration (m000012), its ban placement, its lifecycle, and its concurrency/idempotency story.
+migration (DESIGN-v0 calls it m000012; the real number is the next free one at implementation time), its ban placement, its lifecycle, and its concurrency/idempotency story.
 Every claim below is grounded in a file read during this audit; quotes are verbatim.
 
 Already-known items (SQLite pool of 1; identity tables FK `users NOT NULL CASCADE`; `audit_logs`
@@ -59,11 +59,12 @@ deletion; `user_session_id`/`tower_session_id` are plain INTEGER/TEXT with no FK
 a real FK is wanted: `ON DELETE SET NULL` on `user_session_id` (nullable) — still loses the
 session-level link, so the denormalized `user_id` is the load-bearing part either way.
 
-**(c) `device_key` UNIQUE — yes, and the failure mode is bounded.**
-It must be a **plain** (non-partial) UNIQUE index because it is the upsert conflict target
-(`ON CONFLICT(device_key)` requires a matching non-partial unique constraint). Collision math:
-256-bit HMAC, birthday bound ~2^128 — not a practical concern; the real risks are two other
-things, and both need schema support:
+**(c) `device_key` UNIQUE — no; `token_hash` is the identity.**
+`device_key` is an HMAC of deliberately coarse components, so distinct devices share a key by
+construction (A2 F1: it is a cohort key — HMAC collision math is irrelevant). An upsert on it would
+merge whole cohorts into one row, and a ban on it would be a cohort ban. The **plain** (non-partial)
+UNIQUE upsert conflict target is `token_hash` (HMAC of the server-minted token); `device_key` stays a
+non-unique indexed attribute. Two risks still need schema support:
 
 1. **Pepper rotation is unrecoverable.** `device_key = HMAC(pepper, signals)` and the raw
    signals are never stored (design Layer 0). Rotating the pepper therefore makes every
@@ -71,10 +72,10 @@ things, and both need schema support:
    Fix: an immutable pepper (documented, backed up like `COOKIE_KEY`/field-encryption key) plus
    a `key_kid TEXT NOT NULL DEFAULT 'v1'` column; on lookup, an unknown kid must **fail open**
    (no ban, log loudly), never fail closed.
-2. If a collision did happen, the upsert merges two physical devices into one row. That must
-   never become a sole ban basis — which is exactly the design's own shared-device rule
-   (Layer 3: "may only ban with corroboration"). Schema consequence: keep `cohort_key` and the
-   coherence columns so a human review can see the corroboration.
+2. Rows that share a `device_key` are a cohort, never one device. That must never become a sole
+   ban basis — which is exactly the design's own shared-device rule (Layer 3: "may only ban with
+   corroboration"). Schema consequence: keep `cohort_key` and the coherence columns so a human
+   review can see the corroboration.
 
 **(d) coherence booleans — separate tri-state INTEGER columns, not JSON.**
 `SQLITE_ENABLE_JSON1` is compiled in, but `json_extract()` is not indexable (no expression index
@@ -96,18 +97,19 @@ cheaper but there is no integer-enum precedent in the schema (`UserRole::to_i32`
 level_, not the stored form), and a TEXT value is readable in the admin console and in
 `sqlite3` without a decoder. Use `TEXT`, and mirror the fail-closed read.
 
-### 1.2 Full corrected DDL (m000012, repo style)
+### 1.2 Full corrected DDL (the device migration, repo style)
 
 ```sql
--- device_records: one row per derived device key. Identity is device_key (HMAC-SHA256 of the
--- collected signal tuple under an IMMUTABLE server pepper, lowercase hex). No raw signals are
--- stored (design Layer 0): the key is one-way, so these rows cannot be rebuilt after a rollback.
+-- device_records: one row per server-minted device token. Identity is token_hash (HMAC of the
+-- token); device_key (HMAC-SHA256 of the coarse signal tuple under an IMMUTABLE server pepper,
+-- lowercase hex) is a cohort attribute, never unique. No raw signals are stored (design Layer 0):
+-- the keys are one-way, so these rows cannot be rebuilt after a rollback.
 CREATE TABLE IF NOT EXISTS device_records (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     device_key TEXT NOT NULL,
     key_kid TEXT NOT NULL DEFAULT 'v1',
-    token_hash TEXT,
-    user_id INTEGER,
+ token_hash TEXT NOT NULL,
+ user_id INTEGER,
     first_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     seen_count INTEGER NOT NULL DEFAULT 1,
@@ -131,9 +133,9 @@ CREATE TABLE IF NOT EXISTS device_records (
     FOREIGN KEY (user_id) REFERENCES users (id)
         ON UPDATE CASCADE ON DELETE SET NULL
 );
+-- Non-unique: device_key identifies a cohort of devices, not one device (A2 F1).
+CREATE INDEX IF NOT EXISTS idx_device_records_key ON device_records (device_key);
 -- Plain UNIQUE: this is the upsert conflict target. Non-partial on purpose.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_device_records_key ON device_records (device_key);
--- SQLite treats NULLs as distinct, so derived-only rows coexist.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_device_records_token_hash ON device_records (token_hash);
 -- Admin console "devices of a user", newest first (backward index scan).
 CREATE INDEX IF NOT EXISTS idx_device_records_user_last_seen
@@ -192,9 +194,11 @@ CREATE TABLE IF NOT EXISTS device_bans (
     FOREIGN KEY (device_record_id) REFERENCES device_records (id)
         ON UPDATE CASCADE ON DELETE SET NULL
 );
--- One ACTIVE ban per key, unbounded history behind it. Makes concurrent ban proposals idempotent.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_device_bans_active_key
-    ON device_bans (device_key) WHERE revoked_at IS NULL;
+-- One ACTIVE ban per device record, unbounded history behind it. Makes concurrent ban proposals
+-- idempotent. Keyed on the record, never on device_key (a cohort key would ban strangers, A2 F1);
+-- device_key is kept on the row as evidence only.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_device_bans_active_record
+ ON device_bans (device_record_id) WHERE revoked_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_device_bans_record ON device_bans (device_record_id);
 CREATE INDEX IF NOT EXISTS idx_device_bans_key_created ON device_bans (device_key, created_at);
 CREATE INDEX IF NOT EXISTS idx_device_bans_expires ON device_bans (expires_at);
@@ -221,18 +225,18 @@ CREATE INDEX IF NOT EXISTS idx_device_evidence_subject_created
 
 ### 1.3 Why each choice (compressed)
 
-| Choice                                                 | Justification                                                                                                                                                                                         |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `device_key TEXT` + `key_kid`                          | One-way key needs an immutability guard; kid makes a rotation fail loudly instead of silently un-banning everyone                                                                                     |
-| `token_hash TEXT UNIQUE`                               | The client-held minted token is a _lookup hint_ only (avoids re-collecting signals); it must not be the ban key (storage clearing would evade). Plain UNIQUE is safe: SQLite treats NULLs as distinct |
-| `user_id` nullable + `SET NULL`                        | "Last-seen owner" convenience; matches `audit_logs`/`media.uploader_id` precedent                                                                                                                     |
-| No FK on `device_sessions.user_id` / `user_session_id` | The evidence chain must outlive both `users` and `user_sessions`; precedent `auth_session_binding` (no FKs, m000004)                                                                                  |
-| `device_record_id` CASCADE on `device_sessions`        | Child of the record; if the record is gone the link is meaningless. Retention must be _blocked_ by active bans instead (see §7)                                                                       |
-| Partial UNIQUE on active ban                           | Makes `INSERT … ON CONFLICT (device_key) WHERE revoked_at IS NULL DO UPDATE` atomic; without it two concurrent proposals create two rows and an un-ban revokes only one                               |
-| `scope TEXT DEFAULT 'Long'`                            | Reuses `BlockScope::from_db_str` vocabulary + fail-closed read; no new enum type needed                                                                                                               |
-| `expires_at TEXT` nullable                             | Mirrors `user_bans.expires_at`; NULL = indefinite, admin-set only (design forbids auto-permanent)                                                                                                     |
-| tri-state `INTEGER` coherence columns                  | Queryable/indexable per cohort; `NULL` = not collected. JSON cannot be filtered cheaply                                                                                                               |
-| `cohort_key TEXT`                                      | The only indexable way to express "same coarse device class" (see §5, unindexable query)                                                                                                              |
+| Choice                                                 | Justification                                                                                                                                                                                                                   |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `device_key TEXT` + `key_kid`                          | One-way key needs an immutability guard; kid makes a rotation fail loudly instead of silently un-banning everyone                                                                                                               |
+| `token_hash TEXT NOT NULL UNIQUE`                      | The record's identity and the upsert conflict target. Clearing storage mints a new record (accepted: the ban is account-scoped and device data is evidence only); `device_key` cannot take this role because it is a cohort key |
+| `user_id` nullable + `SET NULL`                        | "Last-seen owner" convenience; matches `audit_logs`/`media.uploader_id` precedent                                                                                                                                               |
+| No FK on `device_sessions.user_id` / `user_session_id` | The evidence chain must outlive both `users` and `user_sessions`; precedent `auth_session_binding` (no FKs, m000004)                                                                                                            |
+| `device_record_id` CASCADE on `device_sessions`        | Child of the record; if the record is gone the link is meaningless. Retention must be _blocked_ by active bans instead (see §7)                                                                                                 |
+| Partial UNIQUE on active ban                           | Makes `INSERT … ON CONFLICT (device_record_id) WHERE revoked_at IS NULL DO UPDATE` atomic; without it two concurrent proposals create two rows and an un-ban revokes only one                                                   |
+| `scope TEXT DEFAULT 'Long'`                            | Reuses `BlockScope::from_db_str` vocabulary + fail-closed read; no new enum type needed                                                                                                                                         |
+| `expires_at TEXT` nullable                             | Mirrors `user_bans.expires_at`; NULL = indefinite, admin-set only (design forbids auto-permanent)                                                                                                                               |
+| tri-state `INTEGER` coherence columns                  | Queryable/indexable per cohort; `NULL` = not collected. JSON cannot be filtered cheaply                                                                                                                                         |
+| `cohort_key TEXT`                                      | The only indexable way to express "same coarse device class" (see §5, unindexable query)                                                                                                                                        |
 
 ---
 
@@ -258,14 +262,15 @@ async fn migration_creates_device_tables_with_expected_columns_and_indices() {
     // for each column assert (type, notnull, dflt_value, pk) so an accidental
     // NOT NULL / default change fails the test.
     // PRAGMA index_list(name) → assert:
-    //   device_records: idx_device_records_key (unique), idx_device_records_token_hash (unique),
+ // device_records: idx_device_records_key, idx_device_records_token_hash (unique),
     //                   idx_device_records_user_last_seen, idx_device_records_last_seen,
     //                   idx_device_records_cohort
     //   device_sessions: idx_device_sessions_record_session (unique), + 4 more
-    //   device_bans: idx_device_bans_active_key (unique, partial), + 3 more
+ // device_bans: idx_device_bans_active_record (unique, partial), + 3 more
     //   device_evidence: 3 indices
-    // plus the two behavioural pins: (1) a second device_key insert must fail;
-    // (2) two ACTIVE rows for one device_key must fail while a revoked row may coexist.
+ // plus the two behavioural pins: (1) a second token_hash insert must fail (a second
+ // device_key insert must succeed — cohort); (2) two ACTIVE bans for one device record must fail
+ // while a revoked row may coexist.
 }
 ```
 
@@ -280,7 +285,7 @@ async fn ensure_table_ddl_matches_migration_ddl() {
     // runtime db: ensure_table(&db).await;
     // migration db: Migrator::up(&db, None).await;
     // assert_eq!(table_info(runtime_db), table_info(migration_db),
-    //   "ensure_table DDL and m000012 migration DDL have drifted apart");
+ // "ensure_table DDL and the device migration DDL have drifted apart");
 }
 ```
 
@@ -315,7 +320,7 @@ async fn ensure_table_ddl_matches_migration_ddl() {
   written idempotently (`IF NOT EXISTS` everywhere in m000002/m000004/m000005/m000007/m000010,
   and m000004 even has an explicit "a prior partial run may have created the table" branch).
 
-### 3.2 What m000012 must do
+### 3.2 What the device migration must do
 
 1. **Pure DDL, all `IF NOT EXISTS`, no backfill.** Every table is new; index creation is on an
    empty table (O(1)). Total cost ≈ a few ms; downtime = the process restart that was already
@@ -333,7 +338,7 @@ async fn ensure_table_ddl_matches_migration_ddl() {
    SQLite (DDL is transactional there). It is not the repo's migration habit, so if omitted the
    `IF NOT EXISTS` discipline is the safety net.
 4. **Idempotency proof, in the m000011 style** — its test calls `Migration.up` twice
-   (`m000011:56-57`). m000012 must do the same, and must also prove `down` then `up` is clean.
+   (`m000011:56-57`). The device migration must do the same, and must also prove `down` then `up` is clean.
 
 ### 3.3 The m000011 precedent, quoted
 
@@ -352,7 +357,7 @@ conn.execute_unprepared(
 ```
 
 Order is the lesson: **dedupe by the exact uniqueness predicate first, then create the unique
-index**. If m000012 ever creates a UNIQUE index on a table that already has rows (it should not),
+index**. If the device migration ever creates a UNIQUE index on a table that already has rows (it should not),
 it must carry the same two-pass dedupe — m000008 is the richer precedent (normalize → dedupe
 keeping `MAX(updated_at)`, tie-break `max(rowid)` → unique index, `m000008:30-54,60-69`).
 
@@ -374,7 +379,7 @@ async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         "DROP INDEX IF EXISTS idx_device_bans_expires",
         "DROP INDEX IF EXISTS idx_device_bans_key_created",
         "DROP INDEX IF EXISTS idx_device_bans_record",
-        "DROP INDEX IF EXISTS idx_device_bans_active_key",
+        "DROP INDEX IF EXISTS idx_device_bans_active_record",
         "DROP TABLE IF EXISTS device_bans",
         "DROP INDEX IF EXISTS idx_device_sessions_linked",
         "DROP INDEX IF EXISTS idx_device_sessions_session",
@@ -417,14 +422,14 @@ async fn down(&self, _manager: &SchemaManager) -> Result<(), DbErr> {
 ```
 
 The design must state this loss explicitly (the way m000009 does) rather than pretend the
-rollback is reversible, and the m000012 comment must carry the same sentence. Two further
+rollback is reversible, and the migration's comment must carry the same sentence. Two further
 requirements:
 
 - **The new binary must fail open on missing tables.** After a rollback the process can boot
   against a DB without these tables. Every read path must behave like
   `rate_limit_store::load` (`:111-115`: warn + empty) and every write path must be non-fatal;
   a device-ban check that 500s on `no such table` would take the whole API down.
-- An old binary rolled back across m000012 is safe (additive-only tables it never reads) — the
+- An old binary rolled back across the device migration is safe (additive-only tables it never reads) — the
   same reasoning as the m000004 registration comment in `lib.rs:24-25`.
 
 ---
@@ -437,18 +442,18 @@ requirements:
 INSERT INTO device_records
     (device_key, key_kid, token_hash, user_id, last_seen_at, seen_count)
 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 1)
-ON CONFLICT(device_key) DO UPDATE SET
-    last_seen_at = excluded.last_seen_at,
-    seen_count   = device_records.seen_count + 1,
-    token_hash   = COALESCE(excluded.token_hash, device_records.token_hash),
-    user_id      = COALESCE(excluded.user_id, device_records.user_id);
+ON CONFLICT(token_hash) DO UPDATE SET
+ last_seen_at = excluded.last_seen_at,
+ seen_count = device_records.seen_count + 1,
+ device_key = excluded.device_key,
+ user_id = COALESCE(excluded.user_id, device_records.user_id);
 ```
 
-Index: `idx_device_records_key` (UNIQUE, the conflict target). Then, to get the id + risk state:
+Index: `idx_device_records_token_hash` (UNIQUE, the conflict target). Then, to get the id + risk state:
 
 ```sql
 SELECT id, trust_state, risk_score, key_kid, seen_count
-FROM device_records WHERE device_key = ?;
+FROM device_records WHERE token_hash = ?;
 ```
 
 Same index. (`RETURNING id` also works on 3.46 and saves the round trip, but it is unused in the
@@ -471,26 +476,26 @@ Index: `idx_device_sessions_record_session` (UNIQUE).
 Enforcement read, hydrated once at boot into an in-process map and mutated on admin ban/unban:
 
 ```sql
-SELECT device_key, scope, expires_at, rule_version
+SELECT device_record_id, scope, expires_at, rule_version
 FROM device_bans
 WHERE revoked_at IS NULL
   AND (expires_at IS NULL OR expires_at > ?);
 ```
 
-Index: `idx_device_bans_active_key` (partial UNIQUE `WHERE revoked_at IS NULL`). This runs **once
+Index: `idx_device_bans_active_record` (partial UNIQUE `WHERE revoked_at IS NULL`). This runs **once
 at boot**, not per request — the repo's own rule is explicit: "Do NOT add a DB write to the
 request hot path" (`rate_limit_store.rs:1`), and with a pool of 1 a per-request read is a
 per-request serialization point. Per request the middleware does one hash-map lookup on the
-device key carried in a header.
+device record id already resolved from the token (session field).
 
 If an operator needs the live attribution for a device (admin only, not hot):
 
 ```sql
 SELECT user_id, first_seen_at, last_seen_at, seen_count, trust_state, risk_score
-FROM device_records WHERE device_key = ?;
+FROM device_records WHERE id = ?;
 ```
 
-Index: `idx_device_records_key`.
+Index: PK.
 
 ### 5.4 User → devices for the admin console
 
@@ -510,7 +515,7 @@ LIMIT ? OFFSET ?;
 ```
 
 Indices: `idx_device_sessions_user_linked (user_id, linked_at)` for the inner probe,
-`idx_device_records_key`/PK for the outer fetch. Reads `device_sessions` (history), **not**
+the PK for the outer fetch. Reads `device_sessions` (history), **not**
 `device_records.user_id` (last-seen owner only — a shared device would flip owners and vanish
 from the first user's list).
 
@@ -636,13 +641,13 @@ Evidence for why each alternative fails:
 
 **Placement, concretely:**
 
-| Requirement                           | How `device_bans` satisfies it                                                                                                                                                                                                                                                                                                                 |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| (a) enforced per-request cheaply      | Boot `SELECT` (§5.3) → `HashMap<device_key, (scope, expires_at)>` behind a `std::sync::RwLock`; per request a read-lock + hash lookup (sub-µs), no SQL, no pool. Admin mutations take the write lock and write the DB **first**, then update the map (mirroring `delete_ban`'s "durable delete FIRST, then clear L1", `controller.rs:139-153`) |
-| (b) listed/unbanned by the admin API  | A new `/admin/devices` nest (design Layer 5) queries `device_bans` directly; list = `WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)` on `idx_device_bans_active_key`; unban = `UPDATE … SET revoked_at=?, revoked_by=?` (history kept, unlike the IP path's hard `DELETE`)                                                |
-| (c) survives restarts                 | Plain table + boot hydration; no dependency on the 10s flush loop                                                                                                                                                                                                                                                                              |
-| (d) does not pollute the IP namespace | Separate table, separate counters, separate key space; `rate_limit_state` and every `quran-ban:` counter are untouched                                                                                                                                                                                                                         |
-| export contract preserved             | `device_bans` is deliberately **not** in `/admin/bans/export`; if an operator wants edge enforcement, the design must say the device key is origin-only, or the export needs an explicit, versioned `kind` field (a separate, deliberate change)                                                                                               |
+| Requirement                           | How `device_bans` satisfies it                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| (a) enforced per-request cheaply      | Boot `SELECT` (§5.3) → `HashMap<device_record_id, (scope, expires_at)>` behind a `std::sync::RwLock`; per request a read-lock + hash lookup (sub-µs), no SQL, no pool. Admin mutations take the write lock and write the DB **first**, then update the map (mirroring `delete_ban`'s "durable delete FIRST, then clear L1", `controller.rs:139-153`) |
+| (b) listed/unbanned by the admin API  | A new `/admin/devices` nest (design Layer 5) queries `device_bans` directly; list = `WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)` on `idx_device_bans_active_record`; unban = `UPDATE … SET revoked_at=?, revoked_by=?` (history kept, unlike the IP path's hard `DELETE`)                                                   |
+| (c) survives restarts                 | Plain table + boot hydration; no dependency on the 10s flush loop                                                                                                                                                                                                                                                                                    |
+| (d) does not pollute the IP namespace | Separate table, separate counters, separate key space; `rate_limit_state` and every `quran-ban:` counter are untouched                                                                                                                                                                                                                               |
+| export contract preserved             | `device_bans` is deliberately **not** in `/admin/bans/export`; if an operator wants edge enforcement, the design must say the device key is origin-only, or the export needs an explicit, versioned `kind` field (a separate, deliberate change)                                                                                                     |
 
 ---
 
@@ -737,16 +742,16 @@ different feature — and the design must say which one it is.**
 
 ## 9. Idempotency and concurrency — the exact constraints/upserts
 
-| Race                                           | Mechanism that makes it safe                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Two simultaneous logins, same brand-new device | One statement, no read-then-write: `INSERT … ON CONFLICT(device_key) DO UPDATE` (§5.1). Pool=1 serializes statements, but _not_ an `await`-separated SELECT→INSERT pair, so the single statement is what actually closes the race. `seen_count` increments atomically in the same statement                                                                                                                                                                                                                                                          |
-| Same device record created twice               | `idx_device_records_key` (plain UNIQUE) + the upsert conflict target. A second `up()`-like re-run cannot duplicate because the key is the constraint, not a queried value                                                                                                                                                                                                                                                                                                                                                                            |
-| Two concurrent link writes for one session     | `idx_device_sessions_record_session` (UNIQUE) + `ON CONFLICT(device_record_id, user_session_id) DO UPDATE`                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Two concurrent ban proposals for one device    | `idx_device_bans_active_key` (partial UNIQUE `WHERE revoked_at IS NULL`) + `INSERT INTO device_bans (device_key, scope, reason, banned_by, expires_at) VALUES (?,?,?,?,?) ON CONFLICT (device_key) WHERE revoked_at IS NULL DO UPDATE SET scope = excluded.scope, expires_at = MAX(device_bans.expires_at, excluded.expires_at)` — one row, longest expiry wins. Without the partial unique index (i.e. if `device_bans` copied `user_bans`, which has none) the two proposals create two rows and the un-ban revokes only one → "unban didn't work" |
-| Ban proposal vs. capacity gate                 | The engine's own pattern: check `active_ban_count()` before creating, and on saturation `incr_saturation()` + decline (`escalation.rs:254-261`) — fail-closed, never evict an active ban. Mirror it for devices with a device-scoped count, not the shared one                                                                                                                                                                                                                                                                                       |
-| Cleanup job vs. ban proposal                   | Ban row written **first**, keyed on `device_key` (not only `device_record_id`), inside one transaction; cleanup's `NOT EXISTS (SELECT 1 FROM device_bans …)` guard then sees it. `device_bans.device_record_id` is `ON DELETE SET NULL` so a retention-driven record delete cannot delete the ban — the ban survives with its key. Residual race with a pool of one is closed by putting both the guard and the delete in one transaction (`conn.transaction`, as `delete_ban_rows` does)                                                            |
-| Un-ban vs. periodic writers                    | Device bans have **no** periodic flusher (unlike `rate_limit_state`), so the "snapshot resurrects a lifted ban" hazard does not exist here. Still: write the DB first, then update the in-process map — a DB failure must leave the ban enforced and the op retryable, exactly as `delete_ban` documents (`controller.rs:139-148`)                                                                                                                                                                                                                   |
-| User delete vs. evidence                       | `device_records.user_id` → `SET NULL` (row survives); `device_sessions.user_id` has **no FK** (pair survives); `device_evidence.user_id` has **no FK** (attribution survives). This is the whole point of §1.1(b)                                                                                                                                                                                                                                                                                                                                    |
+| Race                                           | Mechanism that makes it safe                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Two simultaneous logins, same brand-new device | One statement, no read-then-write: `INSERT … ON CONFLICT(token_hash) DO UPDATE` (§5.1). Pool=1 serializes statements, but _not_ an `await`-separated SELECT→INSERT pair, so the single statement is what actually closes the race. `seen_count` increments atomically in the same statement                                                                                                                                                                                                                                                                                                  |
+| Same device record created twice               | `idx_device_records_token_hash` (plain UNIQUE) + the upsert conflict target. A second `up()`-like re-run cannot duplicate because the key is the constraint, not a queried value                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Two concurrent link writes for one session     | `idx_device_sessions_record_session` (UNIQUE) + `ON CONFLICT(device_record_id, user_session_id) DO UPDATE`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Two concurrent ban proposals for one device    | `idx_device_bans_active_record` (partial UNIQUE `WHERE revoked_at IS NULL`) + `INSERT INTO device_bans (device_record_id, device_key, scope, reason, banned_by, expires_at) VALUES (?,?,?,?,?,?) ON CONFLICT (device_record_id) WHERE revoked_at IS NULL DO UPDATE SET scope = excluded.scope, expires_at = MAX(device_bans.expires_at, excluded.expires_at)` — one row, longest expiry wins. Without the partial unique index (i.e. if `device_bans` copied `user_bans`, which has none) the two proposals create two rows and the un-ban revokes only one → "unban didn't work"            |
+| Ban proposal vs. capacity gate                 | The engine's own pattern: check `active_ban_count()` before creating, and on saturation `incr_saturation()` + decline (`escalation.rs:254-261`) — fail-closed, never evict an active ban. Mirror it for devices with a device-scoped count, not the shared one                                                                                                                                                                                                                                                                                                                               |
+| Cleanup job vs. ban proposal                   | Ban row written **first**, keyed on `device_record_id` (with the `device_key` copied in as evidence), inside one transaction; cleanup's `NOT EXISTS (SELECT 1 FROM device_bans …)` guard then sees it. `device_bans.device_record_id` is `ON DELETE SET NULL` so a retention-driven delete of a record whose ban has ended cannot delete the ban history — it survives with its key copy; a live ban blocks the delete via the guard. Residual race with a pool of one is closed by putting both the guard and the delete in one transaction (`conn.transaction`, as `delete_ban_rows` does) |
+| Un-ban vs. periodic writers                    | Device bans have **no** periodic flusher (unlike `rate_limit_state`), so the "snapshot resurrects a lifted ban" hazard does not exist here. Still: write the DB first, then update the in-process map — a DB failure must leave the ban enforced and the op retryable, exactly as `delete_ban` documents (`controller.rs:139-148`)                                                                                                                                                                                                                                                           |
+| User delete vs. evidence                       | `device_records.user_id` → `SET NULL` (row survives); `device_sessions.user_id` has **no FK** (pair survives); `device_evidence.user_id` has **no FK** (attribution survives). This is the whole point of §1.1(b)                                                                                                                                                                                                                                                                                                                                                                            |
 
 ---
 
@@ -776,7 +781,7 @@ must not be written for unauthenticated _reader_ traffic (lawful basis is auth-s
 **Fix:** `device_records.user_id INTEGER NULL` + `SET NULL` for "current owner"; all history in
 `device_sessions.user_id` (no FK) and `device_evidence.user_id` (no FK).
 
-### 3. NEW — `device_key` UNIQUE yes, but pepper rotation is unrecoverable and must be schema-guarded
+### 3. NEW — `device_key` must not be UNIQUE, and pepper rotation is unrecoverable and must be schema-guarded
 
 _Severity: critical._
 `device_key = HMAC(pepper, signals)` with raw signals never stored (Layer 0) means a pepper
@@ -785,9 +790,9 @@ stop matching, with no error. HMAC collision (2^128 birthday bound) is not the r
 real risk is key generation.
 **Fix:** `key_kid TEXT NOT NULL DEFAULT 'v1'`, the pepper is immutable and backed up like
 `COOKIE_KEY`/the field-encryption key, and an unknown kid fails **open** (no ban, loud log).
-Keep `idx_device_records_key` a plain (non-partial) UNIQUE because it is the upsert conflict
-target. Collision failure mode is a merged record, which must never be a sole ban basis — the
-design's own shared-device corroboration rule.
+`device_key` is a cohort key (coarse components, A2 F1), so it is a plain non-unique index; the
+upsert conflict target is `token_hash`. Rows sharing a `device_key` must never be a sole ban basis —
+the design's own shared-device corroboration rule.
 
 ### 4. NEW — "server-minted opaque device token" contradicts "HMAC of components": a wiped token evades a ban
 
@@ -796,8 +801,10 @@ Design Layer 1 says the client stores a _server-minted opaque id_; Layer 2 says 
 _HMAC-SHA256 of components_. If the ban keys on a server-minted token, clearing localStorage/IDB
 yields a fresh key → instant ban evasion. If it keys on the derived HMAC, storage clearing is
 harmless but the "opaque id" framing is wrong.
-**Fix:** two columns — `device_key` (derived, stable, UNIQUE, the ban key) and
-`token_hash` (HMAC of the minted token, UNIQUE, a lookup hint to avoid re-collecting signals).
+**Fix:** two columns — `token_hash` (HMAC of the minted token, UNIQUE, the record identity the ban
+attaches to) and `device_key` (derived from coarse components, non-unique, evidence only — a cohort
+key can never be the ban key, A2 F1). A wiped token mints a new record; that evasion is accepted
+because the durable ban is account-scoped and linkage comes from credentials/content.
 
 ### 5. NEW — Coherence booleans as JSON TEXT are not queryable; use tri-state INTEGER columns
 
@@ -825,7 +832,7 @@ m000004 style (exact `table_info` + `index_list` assertions + the two behavioura
 runtime `ensure_table` is added anyway, the exact `table_info`-equality drift test becomes
 mandatory.
 
-### 8. NEW — SQLite migrations are not transactional in sea-orm-migration 1.1.20 → m000012 must be re-runnable
+### 8. NEW — SQLite migrations are not transactional in sea-orm-migration 1.1.20 → the device migration must be re-runnable
 
 _Severity: critical._
 `migrator.rs:261-272` wraps only Postgres; `migrator.rs:386-397` records the version only after
@@ -840,7 +847,7 @@ _Severity: high._
 SQLite rejects non-constant defaults in `ADD COLUMN`; with `foreign_keys=ON` (live during
 migrations, `sea_connect.rs:46-56`) an added FK column must default NULL. `CREATE UNIQUE INDEX` on
 a populated table is O(n) with a write lock.
-**Fix:** m000012 is pure DDL on empty tables (O(1)); any future ADD COLUMN uses
+**Fix:** the device migration is pure DDL on empty tables (O(1)); any future ADD COLUMN uses
 `NOT NULL DEFAULT '<constant>'` (m000002:33-36 precedent) or nullable-then-backfill; any future
 UNIQUE index on a populated table carries m000011's dedupe-first pair of DELETEs.
 
@@ -861,7 +868,7 @@ _Severity: high._
 `down` drops four tables; `device_key` is one-way, so nothing can be rebuilt; an active device ban
 becomes no ban. The m000009 precedent is honest about this ("Original casing is unrecoverable;
 nothing to revert", `m000009:121-124`).
-**Fix:** document the loss in the m000012 comment; drop children before parents; every device read
+**Fix:** document the loss in the migration's comment; drop children before parents; every device read
 path warns-and-empties like `rate_limit_store::load` (`:111-115`) and every write is non-fatal, so
 a post-rollback boot does not 500.
 

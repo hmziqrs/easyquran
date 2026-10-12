@@ -106,7 +106,7 @@ Independent measurement of a _static_ hash is far less flattering. Li & Cao (IMC
 
 ### 2.3 Stability over time — the numbers
 
-**FP-Stalker (Vastel et al., USENIX Security 2018)** — daily fingerprints from volunteers:
+**FP-Stalker (Vastel et al., IEEE S&P 2018)** — daily fingerprints from volunteers:
 
 - **45.52%** of fingerprints had changed after **one day**.
 - Average trackable duration with a fingerprint every 3 days: **51.8 days**.
@@ -353,13 +353,7 @@ Google's WWW 2024 study is the definitive statement: **the information revealed 
 
 ### 5.2 The empirical result (evasive bots)
 
-**FP-Inconsistent (Venugopalan et al., 2024; extended 2025)** is the strongest available measurement. They deployed a honey site with two commercial anti-bot services (DataDome and BotD) and solicited traffic from **20 bot services selling "realistic and undetectable traffic"**:
-
-- **Half a million requests.**
-- **52.93% average evasion rate against DataDome; 44.56% against BotD.**
-- Bots that evade alter _different_ fingerprint attributes depending on which service they target.
-- **Inconsistent fingerprint attributes are pervasive in evasive bot traffic.**
-- They derived data-driven rules over **space** (two attributes in one fingerprint) and **time** (one attribute at two points in time). Applying those rules **reduced the evasion rate by 48.11% against DataDome and 44.95% against BotD** — i.e. _coherence checking roughly halved bot evasion without adding a single new signal_.
+Measurement detail is in R2-evasion-counters §3 (FP-Inconsistent: honey site, 20 bot services selling "realistic and undetectable traffic", ~500K requests; 52.93% evasion vs DataDome, 44.56% vs BotD; space/time rules cut evasion by 48.11% / 44.95%). Two findings matter here: inconsistent attributes are **pervasive** in evasive bot traffic, and bots alter _different_ attributes depending on which service they target — so _coherence checking roughly halved bot evasion without adding a single new signal_.
 
 ### 5.3 The cross-validations that actually work
 
@@ -393,20 +387,7 @@ Their recommendation: derive `hasConsistentLanguagesSignals` (is the primary `Ac
 
 **E. Hardware coherence: `hardwareConcurrency` × `deviceMemory` × `maxTouchPoints` × screen × UA.** Firefox's FPP clamps are the tell: a browser reporting `hardwareConcurrency: 2` alongside a high-end GPU renderer is running Firefox FPP. More generally, cores and memory are correlated with device class, which is correlated with screen size and platform.
 
-**F. Native-function integrity.** The strongest single spoofing detector, because it targets the _mechanism_ of spoofing rather than its output:
-
-```js
-try {
-  ctx.getImageData(canvas);
-} catch (e) {
-  // deliberately wrong arity
-  if (e.stack.includes("chrome-extension://")) {
-    /* extension */
-  }
-}
-```
-
-Vastel's 2024 demo leaks the Canvas Blocker extension ID this way. The same trick generalizes: any overridden native function will show a non-native frame in its stack, and V8's lazy `Error.stack` formatting is what makes the CDP detection (§6) work too.
+**F. Native-function integrity.** The strongest single spoofing detector, because it targets the _mechanism_ of spoofing rather than its output: call a native function with deliberately wrong arguments and inspect `e.stack` — an overridden native shows a non-native frame, and an extension wrapper leaks its `chrome-extension://<id>` (Vastel 2024; worked example in §3.5). V8's lazy `Error.stack` formatting is also what makes the CDP detection (§6) work.
 
 **G. Canvas readback vs canvas display.** Safari's noise is applied only on readback, in drawn regions only. A script that draws a known solid color and reads it back can therefore _measure the noise_ — which is itself a signal that the browser is Safari-with-AFP, and (as Brave's farbling showed) may allow recovery of the original.
 
@@ -429,25 +410,12 @@ Vastel's 2024 demo leaks the Canvas Blocker extension ID this way. The same tric
 - `$cdc_` / `$chrome_asyncScriptInfo` globals (Chromedriver).
 - Empty `navigator.plugins` / `navigator.mimeTypes`.
 
-**Tier 2 — CDP side effects. The single best generic automation signal as of 2025–2026.**
-
-```js
-var detected = false;
-var e = new Error();
-Object.defineProperty(e, "stack", {
-  get() {
-    detected = true;
-  },
-});
-console.log(e); // console.log is part of the challenge — do not remove
-```
-
-Why it works: CDP clients that send `Runtime.enable` (Puppeteer, Playwright, Selenium, ChromeDriver) cause V8 to serialize the logged object, and V8 defers `Error.stack` formatting until the property is accessed — so the getter fires. Verified independently by DataDome (June 2024) and Castle/Vastel (March 2025).
+**Tier 2 — CDP side effects. The single best generic automation signal as of 2025–2026.** The `Error.stack`-getter trap and why it works (a CDP client that sent `Runtime.enable` makes V8 serialize logged objects, firing the lazy `stack` getter): R2-evasion-counters §4.1. Verified independently by DataDome (June 2024) and Castle/Vastel (March 2025).
 
 Known limitations, stated by the researchers themselves:
 
-- **False positives: human users with DevTools open.** Mitigating by also checking whether the DevTools _UI_ is open fails, because bot developers discovered anti-bot vendors added that rule and now launch with `args: ['--auto-open-devtools-for-tabs']`.
-- **Bypassable.** `nodriver` (successor to undetected-chromedriver) and Selenium-Driverless avoid `Runtime.enable` entirely and reimplement automation over low-level CDP commands. Bypass is now documented and part of anti-detect test suites.
+- **False positives: human users with DevTools open.** Checking whether the DevTools _UI_ is open fails as a mitigation, because bot developers now launch with `args: ['--auto-open-devtools-for-tabs']`.
+- **Bypassable.** `nodriver` (successor to undetected-chromedriver) and Selenium-Driverless avoid `Runtime.enable` entirely and reimplement automation over low-level CDP commands (R2-evasion-counters §4.2).
 
 **Tier 3 — integrity of the runtime itself.**
 
@@ -455,16 +423,7 @@ Known limitations, stated by the researchers themselves:
 - `Function.prototype.toString()` on natives — overridden functions lose `[native code]`.
 - Proxy detection on `HTMLCanvasElement.prototype.toBlob/toDataURL` and `CanvasRenderingContext2D.prototype.getImageData` — the exact functions Canvas Blocker wraps.
 
-**Tier 4 — behavioral. This is where the 2026 research says the future is.**
-
-**FP-Agent (Wang, Shafiq, Vekaria; May 2026)** is the most important recent result and it directly answers the "what do we do about AI browsing agents" question:
-
-- First controlled measurement of **7 AI browsing agents vs human users** on an instrumented honey site (flight booking, online shopping, forum interaction).
-- **Browser fingerprints provide limited discriminative power** when several AI agents share a fingerprint — because they run real browsers.
-- **Behavioral fingerprints are distinctive**: typing, scrolling, and mouse dynamics separate agents from humans _and from one another_.
-- **FP-Agent detected all 7 AI browsing agents. Cloudflare's bot detection detected 1.**
-
-That is a 7× detection gap in favour of behavioural signals, measured, on the same traffic.
+**Tier 4 — behavioral. This is where the 2026 research says the future is.** FP-Agent (Wang, Shafiq, Vekaria; May 2026; detail in R2-evasion-counters §5.1): with several AI browsing agents sharing a real-browser fingerprint, browser fingerprints gave limited discriminative power, while typing/scrolling/mouse dynamics separated agents from humans _and from one another_ — FP-Agent detected all 7 agents, Cloudflare 1. A 7× detection gap in favour of behavioural signals, measured on the same traffic.
 
 **FP-Inconsistent** (§5.2) supports the same conclusion from the other direction: static fingerprint attributes alone leave ~50% evasion; coherence rules over space and time cut that roughly in half; the researchers explicitly conclude that detection "goes beyond fingerprinting" and must combine behaviour, IP reputation, and contextual signals.
 
@@ -513,7 +472,7 @@ Ranked by (stability × spoof-resistance) ÷ (privacy cost + false-positive risk
 | **WebAssembly / native-code timing signature**                                                            | Guri & Fibert 2025: Chrome vs Edge separable with UA fully spoofed, FPR <1%. Survives UA/JS spoofing. Low privacy cost (it's a capability measurement, not a user attribute).                                                                                                                      |
 | **Native-function integrity + stack-trace forensics**                                                     | Not a user attribute at all — it detects _spoofing_ rather than identifying users. Effectively zero privacy cost, and it is the highest-signal detector of anti-detect tooling.                                                                                                                    |
 | **CDP side-effect detection**                                                                             | Same category: detects the mechanism, not the person. Documented false positive = DevTools open (6% of desktop sessions per FingerprintJS). Handle as a risk _feature_, never a block.                                                                                                             |
-| **Coherence rules (space + time)**                                                                        | FP-Inconsistent: ~50% evasion reduction for zero new collection. The best privacy-per-bit trade in the entire field.                                                                                                                                                                               |
+| **Coherence rules (space + time)**                                                                        | FP-Inconsistent: 45–48% evasion reduction for zero new collection. The best privacy-per-bit trade in the entire field.                                                                                                                                                                             |
 
 **Tier B — collect, but expect churn and mitigate.**
 
@@ -562,9 +521,24 @@ Ranked by (stability × spoof-resistance) ÷ (privacy cost + false-positive risk
 6. Platform class from UA-CH high-entropy hints (permission-gated)
 7. Codec support set
 
-**Coherence (boolean features, not values):** 8. UA ↔ UA-CH ↔ JS feature-matrix agreement 9. GPU renderer ↔ extensions ↔ UA platform agreement 10. Timezone ↔ IP-geo agreement (probabilistic; VPN-aware) 11. Language quintuple agreement (`hasConsistentLanguagesSignals`, `hasStrictConsistentLanguagesSignals`) 12. Hardware triple agreement (`hardwareConcurrency` × `deviceMemory` × `maxTouchPoints` vs device class) 13. `screen.*` ↔ `innerWidth/Height` ↔ media-query agreement 14. Fingerprint-delta vs expected update churn (time-series feature)
+**Coherence (boolean features, not values):**
 
-**Integrity / automation (boolean risk features):** 15. Native-function tampering (arity-error stack inspection) 16. CDP side-effect detection (`Error.stack` getter) 17. `navigator.webdriver`, `HeadlessChrome` substring, `$cdc_`, plugins stub 18. `Notification.permission` vs `permissions.query` consistency 19. Extension ID leakage in stack traces (context, not block) 20. Behavioral: keystroke cadence, scroll dynamics, mouse dynamics, form-fill ordering (server-side scoring)
+8. UA ↔ UA-CH ↔ JS feature-matrix agreement
+9. GPU renderer ↔ extensions ↔ UA platform agreement
+10. Timezone ↔ IP-geo agreement (probabilistic; VPN-aware)
+11. Language quintuple agreement (`hasConsistentLanguagesSignals`, `hasStrictConsistentLanguagesSignals`)
+12. Hardware triple agreement (`hardwareConcurrency` × `deviceMemory` × `maxTouchPoints` vs device class)
+13. `screen.*` ↔ `innerWidth/Height` ↔ media-query agreement
+14. Fingerprint-delta vs expected update churn (time-series feature)
+
+**Integrity / automation (boolean risk features):**
+
+15. Native-function tampering (arity-error stack inspection)
+16. CDP side-effect detection (`Error.stack` getter)
+17. `navigator.webdriver`, `HeadlessChrome` substring, `$cdc_`, plugins stub
+18. `Notification.permission` vs `permissions.query` consistency
+19. Extension ID leakage in stack traces (context, not block)
+20. Behavioral: keystroke cadence, scroll dynamics, mouse dynamics, form-fill ordering (server-side scoring)
 
 **Plus:** evaluate **Private State Tokens** as a complement — it is the only anti-fraud primitive Google explicitly committed to keeping in the October 2025 Privacy Sandbox wind-down.
 
@@ -605,7 +579,7 @@ These are signals requested in the brief for which **no credible published entro
 6. **Laperdrix, P., Rudametkin, W., Baudry, B. (2016). "Beauty and the Beast: Diverting Modern Web Browsers to Build Unique Browser Fingerprints."** IEEE S&P. AmIUnique dataset; 118,934 fingerprints; 89.4% desktop / 81% mobile unique. (PDF mirrors blocked by anti-bot at time of research; entropy figures taken from the 2019 survey's Table 3.)
 7. **Cao, Y., Li, S., Wijmans, E. (2017). "Cross-Browser Fingerprinting via OS and Hardware Level Features."** NDSS. 31 WebGL rendering tasks; >99% of 1,903 devices uniquely identified; cross-browser stable.
 8. **Gómez-Boix, A., Laperdrix, P., Baudry, B. (2018). "Hiding in the Crowd: An Analysis of the Effectiveness of Browser Fingerprinting at Large Scale."** WWW 2018. https://dl.acm.org/doi/abs/10.1145/3178876.3186097 — 2,067,942 fingerprints from a top-15 French site; 33.6% unique overall, 35.7% desktop, 18.5% mobile; per-attribute entropy table.
-9. **Vastel, A., Laperdrix, P., Rudametkin, W., Rouvoy, R. (2018). "FP-Stalker: Tracking Browser Fingerprint Evolutions."** IEEE S&P. https://www.usenix.org/conference/usenixsecurity18/presentation/vastel (companion FP-Scanner paper at the same venue). 45.52% change in 1 day; 51.8 days average tracking; 26% >100 days.
+9. **Vastel, A., Laperdrix, P., Rudametkin, W., Rouvoy, R. (2018). "FP-Stalker: Tracking Browser Fingerprint Evolutions."** IEEE S&P 2018 (the companion FP-Scanner paper, entry 10, is USENIX Security 2018). 45.52% change in 1 day; 51.8 days average tracking; 26% >100 days.
 10. **Vastel, A. et al. (2018). "FP-Scanner: The Privacy Implications of Browser Fingerprint Inconsistencies."** USENIX Security 18. https://www.usenix.org/conference/usenixsecurity18/presentation/vastel — detects countermeasures from inconsistencies and recovers original values.
 11. **Datta, A. et al. (2019). "Taming the Shape Shifter: Detecting Anti-fingerprinting Browsers."** (cited via the 2019 survey). 26 tools evaluated; 24 provide marginal protection.
 12. **Laperdrix, P., Bielova, N., Baudry, B., Avoine, G. (2019/2020). "Browser Fingerprinting: A Survey."** arXiv:1905.01051 / TWEB. https://arxiv.org/html/1905.01051v2 — **the source for the comparative entropy table (Table 3)** used throughout this report; defence taxonomy; adoption measurements.

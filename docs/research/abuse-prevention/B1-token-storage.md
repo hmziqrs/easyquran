@@ -5,7 +5,7 @@ Inputs: `DESIGN-v1.md` (Q1, line 69), `A1-threat-model.md` (§4b + F4), `A4-web-
 and the repo sources cited inline. Method: read the code, no guessing. Every claim carries file:line.
 
 **Verdict: cookie wins.** `ruxlog.device` — `HttpOnly; SameSite=Lax; Secure; Path=/api; Max-Age=2592000`
-(30 days). A4's cache-safety premise is false for a path-scoped cookie (§1), and the localStorage
+(30 days). The cache-safety objection to cookies is false for a path-scoped cookie (§1), and the localStorage
 option's only claimed advantage is already forfeited by the shipped `ruxlog.sid` cookie (§2).
 The losing option's strongest surviving argument is the cross-site API base (§5) — real, but it is
 not the shipped topology and it is guardable.
@@ -92,18 +92,12 @@ SSR talks to the API container directly (`INTERNAL_QURAN_API_BASE: http://api:88
 So there are two independent reasons the device cookie cannot affect the reader cache: the browser does
 not send it, and the SSR server never receives that request class at all.
 
-### 1e. What A4 got wrong
+### 1e. The rule is "no cookie on reader paths", not "no cookie"
 
-A4 §1, "Break condition A":
-
-> **Break condition A:** the token ever becomes a cookie (`document.cookie = ...`, or the API sets
-> one) → `cacheable === false` (line 350) and `applyHeaders` forces `private, no-store`.
-
-That is true for a `Path=/` cookie and **false** for a `Path=/api` cookie. The audit's own sentence
-"the token ever becomes a cookie" elides the only variable that matters: the Path attribute. A1 §4b
-(lines 202-207) already had this right. The A4 guard list (no `document.cookie` in `src/lib/device/**`,
-no device header in `hooks.server.ts`) should still ship — the guards are correct even though the
-blocking premise is not.
+"A device cookie breaks the reader cache" is true only for a cookie the browser attaches to reader
+requests — `document.cookie = ...` or any `Path=/` cookie — and false for a `Path=/api` cookie. The
+cache-protection guards (no `document.cookie` in `src/lib/device/**`, no device header or device-cookie read in
+`hooks.server.ts`) should still ship; they protect exactly the reader-path variant.
 
 ---
 
@@ -260,10 +254,12 @@ Rules for the device cookie:
    record. No rolling refresh: bumping `Max-Age` per request is a hot-path write, and the record's
    `expires_at` is the authority anyway. On expiry, the server sees an unknown token → "unknown device",
    never "new device" (DESIGN B2).
-3. **Rotate the token, keep the record.** A1's "rotate on login and privilege change" is only correct if
-   the _record_ (`device_records.id`, `device_key`) is stable and `token_hash` is re-written in the login
-   transaction. Rotating the record per login would make every login a new device and destroy the trust
-   model. The new cookie rides the same login response that already re-issues `ruxlog.sid`.
+3. **Do not rotate on login; keep the record.** Rotation has exactly two triggers: a fixed lifetime cap
+   (re-write `token_hash` in place on the same `device_records.id`) and revoke. A per-login rotation races
+   two tabs into two `token_hash` writes with one surviving cookie — an unknown device — and buys nothing,
+   because the token is not a privilege (F5-token-lifecycle F3). Rotating the _record_ per login would be
+   worse still: every login a new device. On each login, re-set the **same** cookie value with a fresh
+   `Max-Age` (it rides the login response that already re-issues `ruxlog.sid`) so the cookie tracks the record.
 4. **`/csrf/v1/generate` must not mint a device record.** It is CSRF-exempt
    (`static_csrf.rs:56-70`) and every anonymous visitor's first unsafe action passes through it
    (A4 §7a). Minting there creates a device row per drive-by and puts the mint behind an exempt path.
@@ -306,7 +302,7 @@ localStorage+IDB is the more robust transport in three ways, and they are real:
    cookie's failure mode is a silent one — omit `Path`, and the disk cache dies (or the token silently
    stops being sent, §2) with no error, only a perf/cost cliff and a broken device layer.
 3. **No new cookie on an origin whose own docs say "No cookies, ever"**
-   (`docs/locale-suggest.md:19-21`; `docs/quran-system.md:156-157` records the cookie→bypass rule).
+   (`docs/locale-suggest.md` §1 rule 2; `documentation/quran-system.md:157` records the cookie→bypass rule).
 
 Rebuttal, in order: (1) is not the shipped topology and is guardable (§7c-5); if a cross-site deployment
 ever appears, it must change transport deliberately — a documented, testable boundary, not a silent one.
@@ -395,23 +391,23 @@ be the place the token is minted or cleared.
 
 ## Findings
 
-### B1-F1 — A4's cache-break premise is false for a `Path=/api` cookie; the cookie wins the cache argument
+### B1-F1 — A `Path=/api` cookie does not break the reader cache; the cookie wins the cache argument
 
 **Severity: high. NEW.**
 Evidence: `web/src/hooks.server.ts:346-351` (cache decision), `:427` (`requestHasCookie` = bare presence),
 `:130-137` (`private, no-store`); `web/src/lib/server/quran-disk-cache.ts:51-57` (key has no request
 component); `docker-compose.yml:184-192` (Traefik routes `/api` to api:8888, strips the prefix);
 `vite.config.ts:97-102` (dev proxy); no `/api` route under `web/src/routes/`.
-A4 §1 "Break condition A" treats _any_ cookie as a cache-killer. Path is the variable that decides, and a
-`Path=/api` cookie is never attached to a `/t/**` navigation — and `/api/**` never reaches
-`hooks.server.ts` at all. Fix: adopt the cookie; keep A4's guard set (guards were right, premise was not).
+Path is the variable that decides: a `Path=/api` cookie is never attached to a `/t/**` navigation — and
+`/api/**` never reaches `hooks.server.ts` at all. Fix: adopt the cookie; keep A4's guard set, which
+protects the reader-path variant.
 
 ### B1-F2 — The disk cache is already bypassed for session-holders, so localStorage's cache-safety claim is moot
 
 **Severity: high. NEW (the implication; the bypass itself is the known item in A4's preamble).**
 Evidence: `rust/backend/api/src/main.rs:781-788` (session layer, no `with_path`); no `with_path` in
 `rust/backend/api/src` (grep); tower-sessions 0.14.0 `service.rs:135-141` (`path: "/".into()`),
-`:243` (`cookie.set_path`), `:108-113`; `docs/quran-system.md:156-157` ("Cookie-bearing or
+`:243` (`cookie.set_path`), `:108-113`; `documentation/quran-system.md:157` ("Cookie-bearing or
 session-setting responses bypass it").
 `ruxlog.sid` is `Path=/` and rides every reader request, so the 7-day cache only serves cookie-less
 visitors today. Adding a `Path=/api` device cookie changes nothing; the "keep the cache" argument for
@@ -430,11 +426,10 @@ every other API call); at `/api/device` it scopes to `/` (cache-killer). Fix: ha
 `Set-Cookie`, and make it a config value with a boot assertion if the API prefix ever becomes
 configurable. Guard: B1-F1's Rust assertion (`cookie.path() == Some("/api")`).
 
-### B1-F4 — A1's `__Host-`-style fix is unimplementable with `Path=/api`
+### B1-F4 — A `__Host-` prefix is unimplementable with `Path=/api`
 
 **Severity: medium. NEW.**
-Evidence: `A1-threat-model.md:204-207` proposes "`__Host-`-style cookie with `Path=/api`"; the
-`__Host-` prefix requires `Secure`, `Path=/`, and no `Domain`.
+Evidence: the `__Host-` prefix requires `Secure`, `Path=/`, and no `Domain`.
 The prefix and the path scoping are mutually exclusive, so the design cannot have both. Fix: plain
 `ruxlog.device` (or `__Secure-ruxlog.device` only if `Secure` is unconditionally on, which breaks LAN-http
 dev — `outbox.ts:22`), `Secure` gated on `cookie_secure` exactly like `ruxlog.sid`; record the reasoning in
@@ -466,10 +461,10 @@ guard, and state that a cross-site deployment must switch to a header-attached t
 **Severity: medium. NEW.**
 Evidence: `main.rs:779-788` (14-day inactivity session, `SameSite=Lax`, `HttpOnly`, `Secure` config);
 `crates/rux-auth/src/session/extractor.rs:96-124` (`cycle_id()` on login, both paths);
-`csrf_v1/controller.rs:10-25` (anonymous session mint); `A1-threat-model.md:292` ("rotate on login").
-Fix: `Max-Age=30d` aligned to the 30-day record retention, no rolling refresh, no `cycle_id()` coupling,
-no device record minted at `/csrf/v1/generate`, and rotation that re-writes `token_hash` on the stable
-record in the login transaction. Logout does not clear it (and the web client cannot — it is HttpOnly on
+`csrf_v1/controller.rs:10-25` (anonymous session mint).
+Fix: `Max-Age=30d` aligned to the 30-day record retention, re-set (same value) at each login and never per
+request, no `cycle_id()` coupling, no device record minted at `/csrf/v1/generate`, and no rotation on login —
+only a lifetime cap (re-writing `token_hash` in place on the stable record) and revoke. Logout does not clear it (and the web client cannot — it is HttpOnly on
 a path the web server never serves).
 
 ### B1-F8 — Offline is not a disqualifier: nothing reads the token offline, and replay attaches it automatically
@@ -490,10 +485,10 @@ device payloads" rule in its strongest form (nothing to enqueue with a cookie) a
 
 | #     | finding                                                                          | severity   | new?              |
 | ----- | -------------------------------------------------------------------------------- | ---------- | ----------------- |
-| B1-F1 | A4's cache-break premise falsified for `Path=/api`; cookie wins                  | high       | NEW               |
+| B1-F1 | a `Path=/api` cookie does not break the reader cache; cookie wins                | high       | NEW               |
 | B1-F2 | disk cache already bypassed by `ruxlog.sid` (`Path=/`) — localStorage claim moot | high       | NEW (implication) |
 | B1-F3 | explicit `Path=/api` mandatory; default-path trap                                | high       | NEW               |
-| B1-F4 | `__Host-` incompatible with `Path=/api` (A1's fix text)                          | medium     | NEW               |
+| B1-F4 | `__Host-` incompatible with `Path=/api`                                          | medium     | NEW               |
 | B1-F5 | device endpoints become CSRF-relevant; no token echo                             | medium     | NEW               |
 | B1-F6 | cross-site API base breaks cookie; shipped base is same-site                     | medium     | NEW               |
 | B1-F7 | lifetime/rotation vs 14-day session, `cycle_id()`, anonymous mint                | medium     | NEW               |

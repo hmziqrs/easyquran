@@ -11,7 +11,7 @@ what it leaves open, and what the operator does at 3am.
 The _plan_ does not, in five places:
 
 1. **WS1 is not the compliance minimum.** C4's own blocking register is ten items (B1–B10); WS1 covers
-   about four, and it publishes a policy text that is false in **13 specific sentences** the moment it
+   about four, and it publishes a policy text that is false in **12 specific sentences** the moment it
    ships. C4's one sequencing rule ("retention job before policy") is violated by the ordering.
 2. **WS2/WS3 are sized for a system that has cases.** They build a case state machine, queue caps/aging,
    and an appeal portal for a system with **zero** cases, while the five items that _are_ the ban's
@@ -67,22 +67,21 @@ workstream in C5 creates it.
 | 2   | "We store your IP address and browser string … **Kept for 90 days, then deleted**"                                               | `[WS6]` No sweeper exists; `user_sessions` is forever (C4 D3).                                                                                                                                                        |
 | 3   | "Push token … **90 days after your device last registered**"                                                                     | `[WS6]` No sweeper (C4 D4).                                                                                                                                                                                           |
 | 4   | "Account details … **deleted within 30 days of account deletion**"                                                               | True only if WS1's self-service delete ships; it is admin-only today (C4 D5).                                                                                                                                         |
-| 5   | "Anonymous usage analytics … **it is off unless you turn it on**"                                                                | False today (see #1).                                                                                                                                                                                                 |
+| 5   | "Usage analytics … **it is off unless you turn it on**"                                                                          | False today (see #1).                                                                                                                                                                                                 |
 | 6   | "Crash reports … **Only if analytics is ON**"                                                                                    | Crash reporting rides the same default-on pipeline (`boot/crash-reporting.ts:2-6`).                                                                                                                                   |
 | 7   | "Comments … **up to 12 months after we hide it**"                                                                                | `[WS6]` No sweeper; hidden comments are forever.                                                                                                                                                                      |
 | 8   | "Newsletter … **While subscribed + 12 months after you unsubscribe**"                                                            | `[WS6]` No sweeper; and the table does not even exist (C3 F8).                                                                                                                                                        |
 | 9   | "**Every restriction can be appealed, and the appeal is decided by a person**"                                                   | No appeal path exists; WS3 is later than WS1 in C5's order.                                                                                                                                                           |
 | 10  | "If we hide or remove something you posted … **we will tell you what was decided, why, and how to challenge it**"                | No notice channel; comment hide/delete is silent **today** (C4 D7 — live Art 17 exposure, and §11.1 below).                                                                                                           |
 | 11  | "the ban notice contains **a link that works without an account**"                                                               | No ban notice, no page.                                                                                                                                                                                               |
-| 12  | "every administrative read **is logged**"                                                                                        | `audit_logs` has zero writers (C3 F7).                                                                                                                                                                                |
-| 13  | "We use a small number of providers, **each under a data processing agreement** … **with a transfer impact assessment on file**" | `[missing]` No DPA/TIA/ROPA exist (C4 D16 — "nice-to-have before growth", but the policy asserts them as present). Also "We take backups" (item 4's honest-limit sentence) — **no backup exists at all** (C4 D15).    |
+| 12  | "We use a small number of providers, **each under a data processing agreement** … **with a transfer impact assessment on file**" | `[missing]` No DPA/TIA/ROPA exist (C4 D16 — "nice-to-have before growth", but the policy asserts them as present). Also "We take backups" (item 4's honest-limit sentence) — **no backup exists at all** (C4 D15).    |
 
 Also in the same text and in no workstream: minors ("we do not knowingly create accounts for children
 under 13 (or under 18 in India)", "no analytics or push for minors", "minors cannot post") — C4 D12/B8,
 India DPDP s.9(3) is a hard prohibition; and the children's section is a promise the schema cannot keep
 (`user` has no DOB/age field).
 
-**Net:** the policy text is not a copy task. It is a claim ledger, and 13 of its sentences are blocked
+**Net:** the policy text is not a copy task. It is a claim ledger, and 12 of its sentences are blocked
 on code that C5 schedules _after_ it or does not schedule at all.
 
 ---
@@ -102,7 +101,7 @@ non-ladder). So in v1 the state machine has:
 
 - no device evidence to link,
 - no automated rule to ladder,
-- **zero cases** (C3 §3: `user_bans = 0`, provably no automated ban, no admin route),
+- **zero cases** (C3 §3: `user_bans = 0`, no automated ban by configuration, no admin route),
 - no second reviewer to populate `second_reviewer_id` (B9 F4: one operator).
 
 Queue caps/aging/tiering with a 1–4 cases/day throughput ceiling and zero cases is a control for a
@@ -187,11 +186,11 @@ lifecycle, and no public endpoint that must be built to resist enumeration.
 - `enforcement_notices` row written **before** the send (poor-man's outbox — the row is the queue), then
   `notice_sent_at` / `delivery_state` updated. Without this ordering, an inline `tokio::spawn` crash
   leaves "sent" recorded for a mail that never left.
-- Delivery-state honesty: **C4 §4.3's parenthetical is wrong.** Adding the template to the transactional
-  set does not make it deliverable — transactional + suppressed is dropped with `Ok`
+- Delivery-state honesty: adding the template to the transactional set does not by itself make it
+  deliverable — transactional + suppressed is dropped with `Ok`
   (`mail/router.rs:241-258`). The correct fix: on a **Complaint**-reason suppression, send anyway
   (CAN-SPAM exempts transactional messages; a marketing complaint must not block a legal notice); on a
-  **Bounce**-reason suppression, do not send and record `delivery_state='no_contact_details'` (C4 D9).
+  **Bounce**-reason suppression, do not send and record `delivery_state='suppressed'` (H3 #22).
   That distinction is the whole point of the field.
 - Appeal intake = monitored mailbox (`appeals@easyquran.fyi` — must actually exist; see D11) + one SOP
   paragraph: who reads it, response window, self-review recorded honestly, reversal → revoke ban.
@@ -309,12 +308,12 @@ prerequisite of the other.
 Mostly **reliability with a cost tail**, and C5 files it as abuse work at position 8. B3's findings are
 not adversarial-only:
 
-- **F2 (the biggest):** the disk cache and the edge cache are disabled by _any_ cookie, and the
-  anonymous CSRF bootstrap mints `ruxlog.sid` for every visitor (`router.rs:57-60`, `main.rs:781-788`;
-  predicate `hooks.server.ts:345-351`, `:130-137`). The **default** state of a real visitor is
-  "cookie present" → `private, no-store` → full SSR on every reader page. That is a site-wide
-  performance bug for every user, attacker or not. The fix is a marker cookie
-  (`ruxlog.auth=1` set only on login) or a path-scoped session cookie (O8) plus a test.
+- **F2 (the biggest):** the disk cache and the edge cache are disabled by _any_ cookie: GA4's
+  default-on `_ga` on every returning reader, plus `ruxlog.sid` once a visitor's first unsafe `/api` call
+  mints an anonymous session (E6; `router.rs:57-60`, `main.rs:781-788`; predicate
+  `hooks.server.ts:345-351`, `:130-137`). The **default** state of a returning visitor is "cookie present" → `private, no-store` → full SSR on every reader page. That is a site-wide
+  performance bug for every user, attacker or not. The fix is a path-scoped session cookie plus a
+  name-specific cache predicate keyed on a login-only marker (E6 P0.1), plus a test.
 - **F1:** every translated render funnels through **one global 600/min internal bucket**
   (`rate_limit.rs:68-79`, `PathKey::Fixed("quran-v1")`). ~600 requests/min from one IP 429s _every_
   translated page and `.md` on the site. No credential, no cost. The secondary hazard is worse for
@@ -324,7 +323,7 @@ not adversarial-only:
   `Accept-Encoding` gets 14.1 MB per request; one IP at 600/min = up to 8.4 GB/min of origin egress;
   `.json` is not edge-cached by default (B3 F3).
 - **F6:** with a partially published R2 bucket, the all-or-nothing memo turns **one** request into up to
-  379 outbound HEADs through the shared `http_client` that also serves mail, billing and FCM (B3 F6).
+  380 outbound HEADs in prod (382 non-prod), serialized by the memo mutex, through the shared `http_client` that also serves mail, billing and FCM (B3 F6).
 - **F11:** one IP cycling 378 translation ids thrashes the 8-entry / 48 MB corpus pool (B3 F11).
 
 Honest caveat: this is demonstrated **by construction, not by an observed outage** — production has no
@@ -411,7 +410,7 @@ work, not the whole pre-`53d3d421` pipeline.
    plan: `ban_create_bumps_session_auth_secret`, `idx_user_bans_user_active` via `EXPLAIN QUERY PLAN`,
    `reader_cache_predicate_ignores_anonymous_csrf_cookie`, `no_device_cookie_on_reader_routes`,
    `retention_boot_invariant`. B7 §4 ranks these as the invariants most likely to break silently.
-4. **Doc truth** (`docs/history.md:38`, `DEPLOYMENT.md:69,74`, `rust/backend/api/AGENTS.md` sentence,
+4. **Doc truth** (`documentation/history.md:36`, `DEPLOYMENT.md:69,74`, `rust/backend/api/AGENTS.md` sentence,
    stale `images.yml` comments).
 5. **Do not restore** `cargo-audit` inline (install + network on cold runners) unless cached; keep it
    as a scheduled job or drop it. Keep `deny.toml` policy as is (B7 §2.1: not relaxed).
@@ -505,14 +504,14 @@ split either re-opens the lockout or weakens the comment limiter).
 - The `token_state` field at the decisive event **requires a token to exist**, so C1's numerator can
   only be populated _after_ WS8 ships — i.e. you must build B to measure whether B is justified. C3
   does not flag this circularity.
-- **C3's C2 query is broken twice** (C3 §4, C2):
-  1. `b2.user_id = (SELECT user_id FROM device_account_links WHERE token_id = l.token_id LIMIT 1)`
-     picks an **arbitrary** linked user, not the banned user the CTE selected;
-  2. `l.first_seen > b2.created_at` compares an INTEGER-epoch column (C3's own mandatory rule, from
-     B8 F7) against a TEXT `CURRENT_TIMESTAMP` column. In SQLite, INTEGER sorts before TEXT, so the
-     comparison is **always false** → `recaptured = 0` → C2 reads **0% recapture** → "the token already
-     catches everything" → never build C. The measurement is biased toward the answer that ends the
-     project.
+- **A recapture query must select the banned user explicitly and compare epoch to epoch** (C3 §4's C2
+  query does both). Two easy mistakes bias it toward ending the project:
+
+1.  picking the linked user with `(SELECT user_id … LIMIT 1)` selects an **arbitrary** linked user,
+    not the banned one;
+2.  comparing an INTEGER-epoch `first_seen` (B8 F7) with the TEXT `user_bans.created_at`
+    (`CURRENT_TIMESTAMP`) is **always false** in SQLite (INTEGER sorts before TEXT) → `recaptured = 0` →
+    C2 reads **0% recapture** → "the token already catches everything" → never build C.
 
 ### 10.3 The gate I would use
 
@@ -539,8 +538,7 @@ does not exist before the token does.
 If built: evidence-only; the token never gates a privilege; WS9b's guards in the same release.
 
 **Gate C (fingerprint):** keep B2's C1/C2/C3, but mark C1/C2 **"not computable until the token
-exists"** (C3 F5) rather than "pending", fix C3's C2 query (compare epoch to epoch, select the banned
-user explicitly), and add C4 (B's own linkage FP budget). Replace G0.3/G0.4 with the B2-style
+exists"** (C3 F5) rather than "pending", and add C4 (B's own linkage FP budget). Replace G0.3/G0.4 with the B2-style
 operator-recorded case count above. **A condition that cannot be measured cannot gate a build** —
 including this one, until the ledger exists.
 
@@ -578,8 +576,8 @@ C4 §7's BLOCKING list vs C5 WS0–WS9:
 ### 11.3 Incident response does not exist — the 3am question
 
 Uploads are live (`media_v1 /create` behind `verified_with_role::<ROLE_AUTHOR>`; verified email does not
-stop CSAM), comments are live, and there is: no `NoOpModerator` replacement (returns `safe: true`), no
-hash list, no NCMEC path, no `legal_holds`, no LE contact, no preservation SOP, no breach-notification
+stop CSAM), comments are live, and there is: no image moderation at all (`IMAGE_MODERATION_ENABLED=false` →
+`image_moderator = None`; `NoOpModerator` is dead code), no hash list, no NCMEC path, no `legal_holds`, no LE contact, no preservation SOP, no breach-notification
 runbook (Art 33/34), no on-call. WS5 exists but is marked "(a) **if** uploads accept untrusted content"
 and depends on WS1/WS2. The honest reading: **WS5 is mandatory now**, and it needs a 0.5–1 d runbook
 that is not in any workstream: _hide → preserve (hold row) → report (NCMEC if a US nexus; local LE
@@ -608,7 +606,8 @@ that cannot succeed. Not in any workstream. Fix: add the migration (columns are 
 ### 11.6 Other unassigned surfaces (checked)
 
 - **Billing card testing:** `/billing/v1/checkout` is behind `auth_guard::authenticated` (not verified)
-  at 60/min/IP (`router.rs`), and nine providers are wired. A fresh account can create checkout sessions
+  at 60/min/IP (`router.rs`), with 11 env-gated provider registrations (the module is mounted but
+  eight of its nine tables are unmigrated — E3). A fresh account can create checkout sessions
   → card testing/chargebacks → processor risk. The webhook receiver is public but verifies signatures
   and dedups by body hash (comments at `controller.rs:34,76`), so the webhook side looks sound. The
   plan has zero billing items. Add a per-account checkout cap + require verified email. Medium.
@@ -640,19 +639,30 @@ Phase 0 — truth and availability (no new identity, no FP, unblocks everything)
    rule, `/_quran/*` limit, robots/llms/bulk doc — **3–4 d**
 4. **Measure** 429 log fix + block ledger + `just abuse-report` — **0.5–1 d**
 
-Phase 1 — enforcement + incident response (ships as one bundle): 5. **WS2a** ban contract: admin API + index + idempotent create + session kill + banned UX + audit
-writer + `enforcement_notices` — **4–6 d** 6. **WS3a** notice + record + email redress + micro/small assessment + **comment-moderation notice
-wiring (§11.1)** — **2.5–3.5 d** 7. **WS5** image moderation + hash interface + `legal_holds` + IR/NCMEC/breach runbook — **3.5–5.5 d** 8. **WS9a** shared-device precedence rules as written operator policy (B5 P1–P6) — **0.5 d**
+Phase 1 — enforcement + incident response (ships as one bundle):
 
-Phase 2 — abuse reduction where harm lands: 9. **WS4a** limiter correctness + fresh-account privilege limits + comment hardening + Gmail dot-alias
+5. **WS2a** ban contract: admin API + index + idempotent create + session kill + banned UX + audit
+   writer + `enforcement_notices` — **4–6 d**
+6. **WS3a** notice + record + email redress + micro/small assessment + **comment-moderation notice
+   wiring (§11.1)** — **2.5–3.5 d**
+7. **WS5** image moderation + hash interface + `legal_holds` + IR/NCMEC/breach runbook — **3.5–5.5 d**
+8. **WS9a** shared-device precedence rules as written operator policy (B5 P1–P6) — **0.5 d**
 
-- registration soft caps + Turnstile deploy check + OAuth door — **6–8.5 d**
+Phase 2 — abuse reduction where harm lands:
 
+9. **WS4a** limiter correctness + fresh-account privilege limits + comment hardening + Gmail dot-alias +
+   registration soft caps + Turnstile deploy check + OAuth door — **6–8.5 d**
 10. **WS4b** Turnstile on login/reset **with** the fallback ladder — defer until the ladder exists
 
-Phase 3 — retention, then the full policy: 11. **WS6** sweeper + erasure receipts + backups/runbook + boot invariants — **4–6 d** 12. **WS1b** full policy text (C4 §2) + ar translation — **0.5–1 d**
+Phase 3 — retention, then the full policy:
 
-Phase 4 — device, gated: 13. **Gate B** (§10.3) → **WS8** token (evidence-only) + **WS9b** guards, same release — **7–11 d** 14. **Gate C** (§10.3) → fingerprint tranche WS10–WS14 — **38–61 d**
+11. **WS6** sweeper + erasure receipts + backups/runbook + boot invariants — **4–6 d**
+12. **WS1b** full policy text (C4 §2) + ar translation — **0.5–1 d**
+
+Phase 4 — device, gated:
+
+13. **Gate B** (§10.3) → **WS8** token (evidence-only) + **WS9b** guards, same release — **7–11 d**
+14. **Gate C** (§10.3) → fingerprint tranche WS10–WS14 — **38–61 d**
 
 **True smallest v1 = ≈28–42 dev-days + 1–2 policy days.** The device tranche is not in v1.
 
@@ -666,14 +676,13 @@ analytics consent, retention job, deletion claim, contact address, content notic
 newsletter, consent integrity). C4 §7: "B3's retention job must land before B2's policy is published."
 Fix: WS1a truthful interim policy now (2–3 d); WS1b full text after WS6.
 
-**F2 — Thirteen sentences in C4's §2 policy are false on the day WS1 ships. NEW. Critical.**
+**F2 — Twelve sentences in C4's §2 policy are false on the day WS1 ships. NEW. Critical.**
 Evidence: §1.2 table — analytics "off unless you turn it on" (default `true`, `consent.svelte.ts:16`),
-all four retention cells (`[WS6]`), appeal/notice claims (WS3 later), "administrative read is logged"
-(`audit_logs` zero writers), DPA/TIA "on file" and "we take backups" (neither exists), minors/India.
+all four retention cells (`[WS6]`), appeal/notice claims (WS3 later), DPA/TIA "on file" and "we take backups" (neither exists), minors/India.
 Fix: publish only the claims the code honours; move the rest behind WS6/WS3/D12/D16.
 
 **F3 — WS2's case state machine + queue caps/aging are over-engineered for a system with zero cases and duplicate C4's `enforcement_notices`. NEW. High.**
-Evidence: C3 §3 (zero cases, provably no automated ban); D26 (enforcement_cases + case_events) carries
+Evidence: C3 §3 (zero cases, no automated ban by configuration); D26 (enforcement_cases + case_events) carries
 device evidence and the L0–L7 ladder, both deferred; B9 F4 (one operator). Fix: minimum = `user_bans`
 API + index + session kill + banned UX + audit row + `enforcement_notices` row; defer the state machine
 and queue machinery with the device tranche.
@@ -688,10 +697,9 @@ Evidence: C4 §4.1 ("Art 20 exempt while micro/small"; "Art 22 — No — nothin
 duty is not to build it automated"). Fix: notice email + record row + monitored-mailbox redress now
 (1.5–2.5 d); build the tokenized page at the first real ban; keep the email-only route as the primary.
 
-**F6 — C4 §4.3's transactional-set fix is wrong: transactional + suppressed is dropped with `Ok`, and Complaint-vs-Bounce suppression must be distinguished. NEW. High.**
-Evidence: C4 §0 line 34 + `mail/router.rs:241-258` (transactional suppressed → `Ok`); C4 §4.3 claims the
-set change prevents silent swallowing. Fix: record `delivery_state`; send on Complaint-reason
-suppression (CAN-SPAM exempts transactional), skip on Bounce and record `no_contact_details`; write the
+**F6 — Adding the enforcement template to the transactional set does not make it deliverable: transactional + suppressed is dropped with `Ok`, and Complaint-vs-Bounce suppression must be distinguished. NEW. High.**
+Evidence: C4 §0 line 34 + `mail/router.rs:241-258` (transactional suppressed → `Ok`). Fix: record `delivery_state`; send on Complaint-reason
+suppression (CAN-SPAM exempts transactional), skip on Bounce and record `suppressed` (H3 #22); write the
 notice row before the send.
 
 **F7 — WS4 ranks the wrong things and guards one door: OAuth account creation bypasses every admission control. NEW. High.**
@@ -712,9 +720,9 @@ volume (C4 D3). Fix: order = WS2a/WS3a (new tables carry `expires_at INTEGER` + 
 creation) → WS6 sweeper → WS1b policy; if forced, sweeper first.
 
 **F10 — WS7 is reliability work filed as abuse work at position 8; it is the only workstream addressing a demonstrated availability risk and belongs first. NEW. High.**
-Evidence: B3 F2 (any cookie kills both caches; the anonymous CSRF cookie is the default state), F1 (one
+Evidence: B3 F2 (any cookie kills both caches; GA4's `_ga` is the default state of every returning reader, E6), F1 (one
 global 600/min internal bucket → one IP 429s every translated page site-wide), F3 (14.1 MB offline pack
-unlimited = 8.4 GB/min egress), F6 (379 HEADs/request through the shared mail/billing/FCM http client),
+unlimited = 8.4 GB/min egress), F6 (up to 380 HEADs/request in prod through the shared mail/billing/FCM http client),
 F11. Fix: move the non-identity subset to phase 0 (3–4 d); cut ASN tier and harvest-shape score.
 
 **F11 — WS8 is inside the "smallest defensible v1" without the Gate 0 that C1/C3 require; at zero base rate it is a 12-month bearer identifier with no product. NEW. High.**
@@ -739,8 +747,8 @@ policy text). Fix: WS3a wires `post_comment_v1`; fold D2/D10/D11/D13/D18 into WS
 D16/D15 as named artefacts.
 
 **F15 — Missing: incident response. Uploads and comments are live; there is no 3am runbook, no preservation, no NCMEC/LE path, no breach runbook. NEW. High.**
-Evidence: `media_v1 /create` behind verified ROLE_AUTHOR (uploads live); `NoOpModerator` returns
-`safe: true`; no `legal_holds`; WS5 is conditional and depends on WS1/WS2; C3 §6.4 calls the ban button
+Evidence: `media_v1 /create` behind verified ROLE_AUTHOR (uploads live); no image moderation
+(`IMAGE_MODERATION_ENABLED=false` → `image_moderator = None`); no `legal_holds`; WS5 is conditional and depends on WS1/WS2; C3 §6.4 calls the ban button
 an incident-response gap. Fix: make WS5 mandatory, add the 0.5–1 d runbook (hide → preserve → report →
 ban → notice) + breach SOP.
 
@@ -748,7 +756,7 @@ ban → notice) + breach SOP.
 Evidence: `layer.rs:323` `debug!` at `RUST_LOG=info` → per-route 429s invisible (C3 F4);
 `rate_limit_state` deletes expired rows with no history (C3 F1); `newsletter_subscribers` has no
 migration while `POST /newsletter/v1/subscribe` is mounted (C3 F8); `/billing/v1/checkout` is
-authenticated-only at 60/min/IP with nine providers wired. Fix: promote the 429 log to `warn!`; add the
+authenticated-only at 60/min/IP (billing mounted, non-functional — E3). Fix: promote the 429 log to `warn!`; add the
 block ledger inside the existing flush transaction; `just abuse-report`; newsletter migration or unmount;
 per-account checkout cap + verified-email requirement.
 

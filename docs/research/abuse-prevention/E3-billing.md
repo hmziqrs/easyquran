@@ -129,7 +129,7 @@ Nuances:
 
 **Count.** `main.rs:241-416` registers **11** env-gated providers via `try_init`: `stripe`, `polar`,
 `lemon_squeezy`, `paddle`, `crypto`, `crypto_multi`, `razorpay`, `mercado_pago`, `airwallex`,
-`revolut`, `paypal` (10 source modules; `crypto` twice). C4's "9 providers" undercounts; the
+`revolut`, `paypal` (10 source modules; `crypto` twice). The
 `services/billing/README.md` table lists 5 and is stale. **No billing env var appears in
 `.env.example` or `docker-compose.yml`** (the API container reads `.env` via `env_file`,
 `docker-compose.yml:119`), so whether any provider is live in production is not determinable from the
@@ -189,7 +189,7 @@ Legend: **D** = defended in code today (tables absent means nothing is _reachabl
 
 Options as posed:
 
-- **(a) Add the missing migrations.** Smallest _table_ work (one `m000012` for 8 tables + constraints,
+- **(a) Add the missing migrations.** Smallest _table_ work (one migration, next free number, for 8 tables + constraints,
   ≈0.5-1 day), but it is the **unsafe** option: the moment `plans` exists, an admin can create a plan
   and `POST /billing/v1/checkout` returns a live PSP URL — with the open redirect, no card-testing
   control, two dead verifiers, unconstrained tables, and no refund mapping outside Stripe. D5 2c's
@@ -314,7 +314,7 @@ hash the PAN yourself; never store the CVV**"):
 
 **Before any payment can be accepted (the re-enable checklist):**
 
-1. `m000012` for 8 tables with `UNIQUE(provider, provider_payment_id)`,
+1. One migration (next free number) for 8 tables with `UNIQUE(provider, provider_payment_id)`,
    `UNIQUE(user_id, post_id)`, `UNIQUE(discount_codes.code)`, INTEGER-epoch timestamps (C4 §3 note).
 2. Fix Paddle (HMAC `h1` over `ts:body`) and Revolut (`v1.` prefix) verifiers, each with an
    independent-signer test.

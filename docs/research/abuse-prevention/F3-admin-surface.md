@@ -41,8 +41,8 @@ Verified corrections to the prior reports, stated up front:
 1. **E1 F1 is confirmed** — deleting a comment cascades `comment_flags` (`m000001_init.rs:298-308`,
    `post_comment/actions.rs:384-387`). FKs are enforced per connection by sqlx, so the cascade is real
    today, not theoretical.
-2. **E1 F12 / A8 F10 are half wrong.** No `route_layer` uses `ROLE_MODERATOR`, but inline
-   `is_moderator()` checks give a Moderator real powers (§3.4). "Dead role" is wrong; "no route gate" is right.
+2. **`ROLE_MODERATOR` gates no route, but it is not dead.** No `route_layer` uses it, yet inline
+   `is_moderator()` checks give a Moderator real powers (§3.5).
 3. **D5 item 10's unmetered list is incomplete** — `/analytics/v1`, `/admin/route/v1`, `/admin/acl/v1`,
    `/admin/bans`, `/email_verification/v1`, `/forgot_password/v1` also have no limiter (§6).
 4. **D5 item 5's "undo deletes ID ranges" is confirmed and worse than stated**: `seed_all` also creates
@@ -95,7 +95,7 @@ Legend — **Role** = minimum `role_min` (0 user / 1 author / 2 moderator / 3 ad
 | --- | ------------------- | ------------------------------------------- | ---------------------- | ----- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 17  | **Delete media**    | `/media/v1/delete/{id}`                     | 1 (own) **or 2** (any) | no    | **no**     | R2 object deleted, row deleted, `media_variants` CASCADE, `posts.featured_image_id` → NULL, `categories.cover/logo` → NULL. **No usage check**: media in a live published post can be deleted. |
 | 18  | View / list / usage | `/media/v1/{view,list/query,usage/details}` | 1 (own) or 2 (all)     | no    | n/a        | Moderator reads any user's media **and the owner's email** (`controller.rs:763`)                                                                                                               |
-| 19  | Create              | `/media/v1/create`                          | 1                      | 30    | no         | —                                                                                                                                                                                              | moderation is **absent** when `IMAGE_MODERATION_ENABLED` is false (E1 F5) |
+| 19  | Create              | `/media/v1/create`                          | 1                      | no    | —          | moderation is **absent** when `IMAGE_MODERATION_ENABLED` is false (E1 F5)                                                                                                                      |
 
 ### 1.5 Analytics (`analytics_v1`, **no limiter**)
 
@@ -129,16 +129,16 @@ Legend — **Role** = minimum `role_min` (0 user / 1 author / 2 moderator / 3 ad
 
 ### 1.9 Mail / newsletter / verification (operator mail)
 
-| #   | Action                          | Endpoint                                       | Role   | RL       | Audit | Blast radius                                                                                                                                                  |
-| --- | ------------------------------- | ---------------------------------------------- | ------ | -------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 29  | List suppressions               | `GET /mail/v1/suppression`                     | 3      | none     | no    | every suppressed address + diagnostic                                                                                                                         |
-| 30  | **Add suppression**             | `POST /mail/v1/suppression`                    | 3      | none     | no    | **per-address auth kill switch**: a suppressed address silently drops verification + password-reset mail (`router.rs:251-259` logs `debug!` and returns `Ok`) |
-| 31  | Remove suppression              | `DELETE /mail/v1/suppression`                  | 3      | none     | no    | un-suppresses a bounced/complained address → reputation damage                                                                                                |
-| 32  | Webhook                         | `POST /mail/v1/webhook/{provider}`             | public | none     | no    | HMAC+timestamp+replay verified; performs an HMAC per request on the single connection (D5 1c)                                                                 |
-| 33  | **Newsletter send**             | `POST /newsletter/v1/send`                     | 3      | 100      | no    | mails **every confirmed subscriber**; subject/body free-form; background task; no cap, no cancel, no confirm                                                  |
-| 34  | Subscriber list                 | `POST /newsletter/v1/subscribers/list`         | 3      | 100      | no    | subscriber emails                                                                                                                                             |
-| 35  | **Issue verification code**     | `POST /email_verification/v1/admin/issue_code` | 3      | **none** | no    | emails a code to any user's address, at line rate → mail-bomb any user; no rank check (can target a SuperAdmin's address)                                     |
-| 36  | List / delete verification rows | `/admin/list`, `/admin/delete`                 | 3      | none     | no    | delete = the target must re-request                                                                                                                           |
+| #   | Action                          | Endpoint                                       | Role   | RL       | Audit | Blast radius                                                                                                                                                              |
+| --- | ------------------------------- | ---------------------------------------------- | ------ | -------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 29  | List suppressions               | `GET /mail/v1/suppression`                     | 3      | none     | no    | every suppressed address + diagnostic                                                                                                                                     |
+| 30  | **Add suppression**             | `POST /mail/v1/suppression`                    | 3      | none     | no    | **per-address auth kill switch**: a suppressed address silently drops verification + password-reset mail (`router.rs:251-259` logs `debug!` and returns `Ok`)             |
+| 31  | Remove suppression              | `DELETE /mail/v1/suppression`                  | 3      | none     | no    | un-suppresses a bounced/complained address → reputation damage                                                                                                            |
+| 32  | Webhook                         | `POST /mail/v1/webhook/{provider}`             | public | none     | no    | HMAC+timestamp+replay verified; performs an HMAC per request on the single connection (D5 1c)                                                                             |
+| 33  | **Newsletter send**             | `POST /newsletter/v1/send`                     | 3      | 100      | no    | mails **every confirmed subscriber**; subject/body free-form; background task; no cap, no cancel, no confirm                                                              |
+| 34  | Subscriber list                 | `POST /newsletter/v1/subscribers/list`         | 3      | 100      | no    | subscriber emails                                                                                                                                                         |
+| 35  | **Issue verification code**     | `POST /email_verification/v1/admin/issue_code` | 3      | **none** | no    | emails a code to any user's address, ≤29/h per recipient and uncapped across recipients (G3 §6.1) → mail-bomb any user; no rank check (can target a SuperAdmin's address) |
+| 36  | List / delete verification rows | `/admin/list`, `/admin/delete`                 | 3      | none     | no    | delete = the target must re-request                                                                                                                                       |
 
 ### 1.10 Content config (category / tag / billing / notification)
 
@@ -147,7 +147,7 @@ Legend — **Role** = minimum `role_min` (0 user / 1 author / 2 moderator / 3 ad
 | 37  | **Delete category**                                                                       | `POST /category/v1/delete/{id}` | 3          | **none** | no    | **`posts.category_id` is ON DELETE CASCADE** → every post in the category, with its revisions, views, likes, comments and comment flags. One request, no confirmation, no record. (NEW — no prior report covers this.) |
 | 38  | Create/update category, list/query                                                        | `/category/v1/*`                | 3 (writes) | none     | no    | public list/view unauthenticated                                                                                                                                                                                       |
 | 39  | Create/update/delete tag, view/query                                                      | `/tag/v1/*`                     | 3 (writes) | none     | no    | `posts.tag_ids` is JSON, no FK → stale ids survive a tag delete                                                                                                                                                        |
-| 40  | Plan CRUD, subscription cancel, payment/invoice/discount list, discount CRUD, post access | `/billing/v1/*`                 | 3          | 60       | no    | **dead module**: six tables have no migration (D5 2a) → 500s; latent the day the tables land                                                                                                                           |
+| 40  | Plan CRUD, subscription cancel, payment/invoice/discount list, discount CRUD, post access | `/billing/v1/*`                 | 3          | 60       | no    | **dead module**: eight of its nine tables have no migration (E3) → 500s; latent the day the tables land                                                                                                                |
 | 41  | **Create notification**                                                                   | `POST /notification/v1/create`  | 3          | 100      | no    | writes a row + up to 20 FCM pushes to any user; no per-recipient cap (D5 item 3)                                                                                                                                       |
 
 ### 1.11 Seed system (feature-gated `seed-system`, **not in the shipped image**)
@@ -544,7 +544,7 @@ live.
    restricted to SuperAdmin + the operator.
 4. Do **not** log the values read (no emails, no content) — log the _fact_ and the count. Otherwise the audit
    table becomes a second copy of the PII it is protecting.
-5. State the rule in `docs/security.md` (currently stale, E1 F11) so a future admin UI cannot add an
+5. State the rule in the docs (the abuse plan, then `documentation/history.md`) so a future admin UI cannot add an
    unlogged read path by accident.
 
 ---
@@ -687,7 +687,7 @@ Evidence: `user_v1/controller.rs:249-259` (create: `requested > caller_level` is
 Fix: audit the role transitions (§4.3), and decide whether Admin-minting needs SuperAdmin approval or a
 notification to the SuperAdmin.
 
-**F7 — `ROLE_MODERATOR` is not dead: no route gate uses it, but inline `is_moderator()` grants delete-any-media, read-any-email, and paywall bypass. NEW (corrects E1 F12 and A8 F10).**
+**F7 — `ROLE_MODERATOR` is not dead: no route gate uses it, but inline `is_moderator()` grants delete-any-media, read-any-email, and paywall bypass. NEW.**
 Evidence: `user/model.rs:49-51` (`role >= 2`); `media_v1/controller.rs:539-548` (view/delete any media),
 `:763` (owner email for staff); `post_v1/controller.rs:35-40` (paywall bypass), `:121` (`is_staff`),
 `:407-418` (all posts incl. drafts); `post_comment_v1/controller.rs:44-46` (hidden posts' comments);

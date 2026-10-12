@@ -2,7 +2,7 @@
 
 Auditor: reachability subagent. Date: 2026-10-12. Method: read the router/mounts, guards, migrations,
 deploy config (`docker-compose.yml`, `.env.example`, `settings.rs`, `main.rs`, `Dockerfile.api`,
-`.github/workflows/images.yml`, `justfile`), the web app (`web/src`), the four round-8/9 reports
+`.github/workflows/images.yml`, `justfile`), the web app (`web/src`), the round-8/9 reports
 (`G1-media.md`, `G2-sync-ugc.md`, `G3-device-fanout.md`, `E3-billing.md`, `F3-admin-surface.md`), plus a
 **live probe of production `https://easyquran.fyi/api`** (empty bodies / GETs only; no accounts created,
 no writes that persist — the one newsletter subscribe probe 500'd before reaching the DB).
@@ -168,23 +168,23 @@ planned as "one admin action from live", not as unreachable.
 
 ## 7. Promote-to-plan list (reachable today → must be promoted)
 
-| Finding                                                                              | Why promote                                                                  |
-| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| **G2-F1** folder upsert no cap (1.2M rows/h, ~340 MB/h/account)                      | verified user, UI-driven sync, live                                          |
-| **G2-F2** unbounded snapshot re-sent every round (~216 MB/h, ~660 GB/h responses)    | same; server-side comment admits "unbounded by design"                       |
-| **G2-F3** per-IP-only limit; legit heavy user ~3.4 GB/day                            | same                                                                         |
-| **G2-F4** client-supplied unclamped `updated_at` locks an account's devices          | same                                                                         |
-| **G2-F5** LWW, no tombstones, silent drops                                           | same                                                                         |
-| **G2-F7/F8/F9** comment edit-after-flag; flag-clear revert; self-flag/queue flooding | comments = verified → REACHABLE-API-ONLY                                     |
-| **G2-F10** like no unique; view dedup in-memory/fail-open; 288k rows/day/IP          | likes authenticated + view public → REACHABLE-API-ONLY                       |
-| **G2-F13** missing indices on the UGC/bookmark tables exercised above                | same reachable set; pool-of-1 amplification                                  |
-| **E3-F3** public `GET /billing/v1/plans` 500s anonymously                            | **live-confirmed in production**                                             |
-| **E3-F1/F2** paywall 500s the authenticated post feed / author query                 | authenticated ordinary user path, code-verified; no empty-input early return |
-| **G3-N1** device register accepts arbitrary token; silent victim-token transfer      | verified user, route live; UI exists when VAPID set                          |
-| **G3-N4 (read-path)** no per-recipient cap; `mark_all_read` N commits                | authenticated user, route live                                               |
-| **G3-N10** `/device/v1/list` returns raw FCM token                                   | verified user, route live                                                    |
-| **G3-N5** no web caller for the notification inbox; push opens generic `/account`    | plan-relevant: enforcement-notice path has no surface                        |
-| **G3-N7** newsletter confirm link targets a nonexistent web route; subscribe 500s    | public route, **live 500 confirmed**                                         |
+| Finding                                                                                                                   | Why promote                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **G2-F1** folder upsert no cap (1.2M rows/h, ~340 MB/h/account)                                                           | verified user, UI-driven sync, live                                          |
+| **G2-F2** unbounded snapshot re-sent every round (~216 MB per response after 1 h; ~660 GB of responses in the first hour) | same; server-side comment admits "unbounded by design"                       |
+| **G2-F3** per-IP-only limit; legit heavy user ~3.4 GB/day                                                                 | same                                                                         |
+| **G2-F4** client-supplied unclamped `updated_at` locks an account's devices                                               | same                                                                         |
+| **G2-F5** LWW, no tombstones, silent drops                                                                                | same                                                                         |
+| **G2-F7/F8/F9** comment edit-after-flag; flag-clear revert; self-flag/queue flooding                                      | comments = verified → REACHABLE-API-ONLY                                     |
+| **G2-F10** like no unique; view dedup in-memory/fail-open; 288k rows/day/IP                                               | likes authenticated + view public → REACHABLE-API-ONLY                       |
+| **G2-F13** missing indices on the UGC/bookmark tables exercised above                                                     | same reachable set; pool-of-1 amplification                                  |
+| **E3-F3** public `GET /billing/v1/plans` 500s anonymously                                                                 | **live-confirmed in production**                                             |
+| **E3-F1/F2** paywall 500s the authenticated post feed / author query                                                      | authenticated ordinary user path, code-verified; no empty-input early return |
+| **G3-N1** device register accepts arbitrary token; silent victim-token transfer                                           | verified user, route live; UI exists when VAPID set                          |
+| **G3-N4 (read-path)** no per-recipient cap; `mark_all_read` N commits                                                     | authenticated user, route live                                               |
+| **G3-N10** `/device/v1/list` returns raw FCM token                                                                        | verified user, route live                                                    |
+| **G3-N5** no web caller for the notification inbox; push opens generic `/account`                                         | plan-relevant: enforcement-notice path has no surface                        |
+| **G3-N7** newsletter confirm link targets a nonexistent web route; subscribe 500s                                         | public route, **live 500 confirmed**                                         |
 
 Not promoted (with reason): all G1 findings (latent role); E3-F4…F12 (latent behind tables/providers;
 F12 informational); G2-F6 (no fix needed — state the invariant); G2-F11/F12 (Author-gated); G3-N2/N3

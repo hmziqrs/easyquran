@@ -1,22 +1,21 @@
 # C6 — Plan-shape review: the final abuse-prevention plan document
 
 **NEW.** Reviewer pass over the _shape_ of the plan that will be written to `docs/` — not the design.
-Inputs read: `AGENTS.MD`; `docs/quran-system.md`; `docs/security.md` (working tree; replaces the
-staged-deleted `docs/security-hardening-2026-10-11.md`, read from HEAD via `git show`); `docs/next-features.md`;
-`docs/locale-suggest.md`; `docs/README.md`; `docs/history.md`; `docs/remaining/feature-gap-catalogue.md`
+Inputs read: `AGENTS.MD`; `documentation/quran-system.md`; `docs/security-hardening-2026-10-11.md` (deleted in the
+docs restructure, read via `git show`); `docs/next-features.md`;
+`docs/locale-suggest.md`; `docs/README.md`; `documentation/history.md`; `docs/remaining/feature-gap-catalogue.md`
 (P09/P10); `docs/remaining/copy-corrections.md` (C02); `web/README.md`; `deploy/README.md`;
 `DESIGN-v1.md`; `A3`, `A5`, `A6`, `B6`, `B7`, `B8`, `B10`; `web/src/routes/(application)/__tests__/docs-divergence-guard.test.ts`;
 `web/src/lib/i18n/privacy-copy.ts`; `rust/backend/api/src/services/scheduler.rs`; `main.rs`; migration `lib.rs`.
 
-**Missing input (NEW).** `C5-decision-ledger.md` does not exist in this directory. The plan must build
-its own decision ledger from `DESIGN-v1.md` + the A/B/R2 reports. Do not cite a C5 file.
+C6 ran in parallel with C5, so C5's decision ledger was not an input here; the plan's §15 ledger draws
+on it.
 
-**Working-tree fact (NEW).** An uncommitted docs restructure is in the tree (106 entries): 76 staged
-deletions (incl. all three `security-*-2026-10-11.md` long-form reports), untracked new
-`docs/README.md`, `docs/history.md`, `docs/indopak.md`, `docs/locale-suggest.md`, `docs/security.md`.
-The plan must be authored against the **post-restructure tree**: index it in `docs/README.md`, treat
-`docs/security.md` as the live security record, and never resurrect deleted long-form docs
-(replaced text lives in git history; overviews name the commit to `git show`).
+**Docs tree (NEW).** The docs restructure deleted the long-form reports (incl. all three
+`security-*-2026-10-11.md`) and added `docs/README.md`, `documentation/history.md`, `documentation/indopak.md` and
+`docs/locale-suggest.md`. Author the plan against that tree: index it in `docs/README.md`, record landed
+security work in `documentation/history.md`, and never resurrect deleted long-form docs (replaced text lives in
+git history; overviews name the commit to `git show`).
 
 ---
 
@@ -27,22 +26,22 @@ top-level under `docs/` (the old `docs/plan/` folder is gone from the working tr
 compacted to top level, e.g. `locale-suggest.md` came from `docs/plan/09-locale-suggest.md`).
 
 **Alternative if the owner keeps the device framing:** `docs/device-identity.md`. Do not use both.
-Do not date the filename — dates belong to records (`security-hardening-2026-10-11.md` @ HEAD), not
+Do not date the filename — dates belong to records (`security-hardening-2026-10-11.md`, now in git history), not
 to live plans (`next-features.md`, `locale-suggest.md`).
 
 **One doc. No companion verification doc (NEW).** Precedent, three ways:
 
-| Precedent                                      | What it proves                                                                                                                                                                            |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/locale-suggest.md`                       | A draft spec is a single self-contained doc: Status, guarantee/non-negotiables, spec sections, Docs to amend, Tests, manual matrix, Open questions.                                       |
-| `docs/next-features.md` (~1,350 lines)         | A large batch stays one doc: §0 context, per-feature Build/Acceptance/Touch, §9 normative design, §10 EC catalogue, §11 open questions, §12 sequencing, §13 absorbed map, §14 superseded. |
-| `docs/security-hardening-2026-10-11.md` (HEAD) | The security-record template: Implemented protections / Evidence and limits / Rollout / Final checks — one doc, with rollout + verification inside it.                                    |
+| Precedent                                             | What it proves                                                                                                                                                                            |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/locale-suggest.md`                              | A draft spec is a single self-contained doc: Status, guarantee/non-negotiables, spec sections, Docs to amend, Tests, manual matrix, Open questions.                                       |
+| `docs/next-features.md` (~1,350 lines)                | A large batch stays one doc: §0 context, per-feature Build/Acceptance/Touch, §9 normative design, §10 EC catalogue, §11 open questions, §12 sequencing, §13 absorbed map, §14 superseded. |
+| `docs/security-hardening-2026-10-11.md` (git history) | The security-record template: Implemented protections / Evidence and limits / Rollout / Final checks — one doc, with rollout + verification inside it.                                    |
 
 The plan's rollout/verification sections are the "companion" — inline, not a second file. A separate
 verification doc would duplicate the manual matrix + abort criteria and rot independently.
 
-**Post-landing compaction:** when it lands, the record compacts into `docs/security.md` (or
-`history.md`), matching how the three 2026-10-11 reports were folded. The plan should say so.
+**Post-landing compaction:** when it lands, the record compacts into `documentation/history.md`, matching how
+the three 2026-10-11 reports were folded. The plan should say so.
 
 ---
 
@@ -83,7 +82,7 @@ Per-section content notes:
 - **§0 Context.** What to load (`AGENTS.MD`, `web/README.md`, `rust/backend/api/AGENTS.md`,
   `rust/backend/api/migration/README.md`, `deploy/README.md`, caveman incl. subagents). The repo
   facts that shape every step: pool = 1 connection, no staging environment, every master push
-  auto-deploys, `user_bans` exists with zero callers, `BanUnit` is IP-only, device_v1 = FCM.
+  auto-deploys, `user_bans` exists with zero writers (`check_ban` reads it at login), `BanUnit` is IP-only, device_v1 = FCM.
   **Hard-rule compliance statement goes here:** Quran DBs immutable; `db/` gitignored; no SHA-256
   over Quran data in any automated path (device HMAC is unrelated crypto and must stay out of the
   sha-guarded files — `web/src/lib/quran/wire.ts`, `web/src/lib/data/quran-types.ts`, the
@@ -94,7 +93,7 @@ Per-section content notes:
   content API, internal SSR); no device × reader-data join; no automated L5/L6; no reuse for
   analytics/personalisation; retention enforced by `expires_at` + sweeper, not prose; account and
   credential first, device is evidence only; minors and India handled.
-- **§2 Current state.** Table with `file:line` for: `user_bans` model + `check_ban` zero callers;
+- **§2 Current state.** Table with `file:line` for: `user_bans` model (`check_ban` wired at login; create/revoke zero callers);
   `BanUnit` IP-only (`dto.rs:16-43`); fixed limits 600/30/600/120; escalation default-off;
   `device_v1` FCM + `MAX_DEVICES_PER_USER = 20`; `AuthSessionState` no serde attrs (`state.rs:6-26`);
   `sessions.device` overloaded (UA / NULL / WebAuthn type); `audit_logs` zero writers; no appeals
@@ -117,14 +116,14 @@ Per-section content notes:
   feature); W10 doc-truth cleanup.
 - **§5 Data model and retention.** Exact tables (`device_records`, `device_sessions`,
   `device_evidence`, `device_bans`, `appeals`, `legal_holds`, shadow tables), columns, indexes
-  (partial UNIQUE `device_bans WHERE revoked_at IS NULL`), FK actions (no FK from `device_sessions`
+  (partial UNIQUE `device_bans (device_record_id) WHERE revoked_at IS NULL`; a live ban pins the record — B8 §1.1), FK actions (no FK from `device_sessions`
   to users/user_sessions), `expires_at NOT NULL` + CHECK on every device table, the per-table ladder
   (keyed record 30d, ban 12mo, evidence/aggregates per schedule), the field-level strip on expiry,
   the retention job's module + registration point (own spawn after `start_scheduler`,
   `main.rs:761`; 6h interval + jitter; ≤500-row batches; **no `DELETE … LIMIT`** on this SQLite
   build; ban guard on both record and session deletes), evidence = decision metadata only.
-- **§6 Enforcement.** Rules as data with `rule_version`; thresholds 80/40 + hysteresis + randomized
-  enforcement delay, never exposed to clients; shadow mode mechanism (AtomicU64 counters + bounded
+- **§6 Enforcement.** Rules as data with `rule_version`; thresholds 80/40 + hysteresis + a fixed
+  documented grace period (no randomized delay — B9 F10), never exposed to clients; shadow mode mechanism (AtomicU64 counters + bounded
   ring, off-path 60s flush, separate from the 10s durability flush); promotion gates G1–G7 with
   numbers; abort criteria; runtime pause/resume; L4 = queue-only with no user-visible restriction;
   L5/L6 human-approved or auto-reversing; single-operator compensating control named honestly.
@@ -187,52 +186,52 @@ Per-section content notes:
     sha-guard file-list carve-out), `db/` gitignored, translated routes SSR + 7-day cache never SSG,
     no nested ternaries, es-toolkit named imports, no standalone `.oxlintrc.json`.
 12. **Migration numbering** — say "next free migration number" (or explicitly reconcile with
-    `next-features.md`: `m000012` = bookmarks, `m000013` = reading sessions). **Never hard-code
-    `m000012` for device work** — the reports all do and it collides (see §7, flag 1).
+    `next-features.md`, which reserves `m000012` for reading sessions). **Never hard-code a number for
+    device work** — it collides (see §8, flag 1).
 13. **Commit convention** — "Always commit to the current branch"; each phase its own commit(s).
 14. **No broken links.** Report IDs cited as plain text (A1 §x, B6 §y), not as relative links —
-    the raw reports live outside the repo. Any in-repo links must resolve (docs-divergence-guard
-    checks `docs/quran-system.md` + `AGENTS.MD` links; README/history convention expects all).
+    the raw reports are deleted once the plan is implemented, so links would break. Any in-repo links must resolve (docs-divergence-guard
+    checks `documentation/quran-system.md` + `AGENTS.MD` links; README/history convention expects all).
 
 ---
 
 ## 4. Docs that must be AMENDED in the same change (exact reason)
 
-| Doc                                       | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/quran-system.md`                    | **Part 4 (Rust ingress, rate limiting, bans, prewarm)** is the ingress/ban contract; device bans, per-credential limits and edge attestation change it. **Part 1 (Caching / Web delivery)** only if reader-path behaviour changes — it must not; state that and keep the disk-cache invariant. **Part 6 (Known gaps)** for the `IP_SOURCE` doc mismatch if touched. Machine-guarded by `docs-divergence-guard` — edits must not introduce banned SSG/artifact-safety claims and links must resolve. |
-| `docs/security.md`                        | The live security record. Add the device/abuse work (or a pointer) under a new section; move items out of "Remaining" as they land. Its CI-gate sentence is accurate; keep it accurate. Do not cite the staged-deleted `security-hardening-2026-10-11.md` as current truth (its publication-gate claims are false at HEAD — B7 §3).                                                                                                                                                                 |
-| `docs/history.md`                         | Line 38 claims "Resolved since: CI now runs the web/Rust suites" — **false** (B7 §3). Fix in the same change as the W9 gate restore, or the plan must not repeat the claim.                                                                                                                                                                                                                                                                                                                         |
-| `docs/README.md`                          | Index the plan under "Plans and backlog" (post-restructure table).                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `docs/next-features.md`                   | Boundary, not edit-by-default: EC-19 (mid-session ban copy), §9.5 (logout/expiry/quarantine), R2-08 (adopted, do not re-implement), P10 (account/data deletion — device DSAR plugs into it), P09 (reminders — unrelated). If the plan supersedes anything, add a §14-style superseded entry.                                                                                                                                                                                                        |
-| `docs/remaining/copy-corrections.md`      | C02 ("Privacy sync and deletion placeholders") is completed/superseded by the policy rewrite + P10 flow; update the ledger entry.                                                                                                                                                                                                                                                                                                                                                                   |
-| `docs/remaining/feature-gap-catalogue.md` | P10 evidence list gains the device-data deletion path; add the shipped abuse-prevention facts to the parity register if relevant.                                                                                                                                                                                                                                                                                                                                                                   |
-| Privacy pages (in-repo)                   | `web/src/routes/(marketing)/privacy/+page.svelte` → `web/src/lib/i18n/privacy-copy.ts` → `web/src/lib/i18n/m/privacy.ts` → `web/messages/en.json`, `web/messages/ar.json` (remove the "placeholder text, not legal advice" marker in `legal_placeholder_note`/`legal_updated_date` when the real policy lands). Terms too: `terms-copy.ts` + terms messages — DSA Art 14 needs abuse bans named as a contractual ground. Arabic wording needs fluent review.                                        |
-| `web/README.md`                           | New public env var (`PUBLIC_DEVICE_COLLECTION`) must be declared in `web/src/env.ts` **and** `web/server.ts` `DYNAMIC_PUBLIC_ENV_VARS` (pinned by `server-headers.test.ts`); update the check/lint/test statements if W9 changes enforcement.                                                                                                                                                                                                                                                       |
-| `deploy/README.md`                        | Owns: origin-ingress restriction to Cloudflare ranges, the `IP_SOURCE` doc, the `/admin/bans/export` feed contract (device bans must NOT enter it), the new Dokploy env vars, the backup/restore runbook (none exists today), and the one-deploy-trigger decision (`dokploy-auto-update.sh` vs `images.yml`).                                                                                                                                                                                       |
-| `AGENTS.MD`                               | Only if new hard rules are added — e.g. "device signals never on reader routes; fingerprinting APIs only in the device adapter; no device × reader-data join". The hard rules list is link-guarded (docs-divergence-guard).                                                                                                                                                                                                                                                                         |
-| `rust/backend/api/AGENTS.md`              | Its "guards fail the build" sentence is false as a machine claim (B7 §3); fix with W9.                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `rust/backend/api/migration/README.md`    | Load-on-touch doc; add the device migration's idempotency/`IF NOT EXISTS`/up-twice rules and the numbering reconciliation.                                                                                                                                                                                                                                                                                                                                                                          |
-| `.github/workflows/images.yml`            | Not prose but part of the change: restore gate blocks, fix stale comments, add gates to `publish.needs` (B7 §6.1, §8).                                                                                                                                                                                                                                                                                                                                                                              |
-| `DEPLOYMENT.md`                           | Lines 69/74–76 are false/pnpm-era (B7 §3); W9 corrects them.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Doc                                          | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `documentation/quran-system.md`              | **Part 4 (Rust ingress, rate limiting, bans, prewarm)** is the ingress/ban contract; device bans, per-credential limits and edge attestation change it. **Part 1 (Caching / Web delivery)** only if reader-path behaviour changes — it must not; state that and keep the disk-cache invariant. **Part 6 (Known gaps)** for the `IP_SOURCE` doc mismatch if touched. Machine-guarded by `docs-divergence-guard` — edits must not introduce banned SSG/artifact-safety claims and links must resolve. |
+| `documentation/history.md` (security record) | The deleted `security-*-2026-10-11.md` reports were folded into `history.md`; when the abuse work lands, record it there. Do not cite the deleted `security-hardening-2026-10-11.md` as current truth (its publication-gate claims are false at HEAD — B7 §3).                                                                                                                                                                                                                                      |
+| `documentation/history.md`                   | Line 36 claims "Resolved since: CI now runs the web/Rust suites" — **false** (B7 §3). Fix in the same change as the W9 gate restore, or the plan must not repeat the claim.                                                                                                                                                                                                                                                                                                                         |
+| `docs/README.md`                             | Index the plan under "Plans and backlog" (post-restructure table).                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `docs/next-features.md`                      | Boundary, not edit-by-default: EC-19 (mid-session ban copy), §9.5 (logout/expiry/quarantine), R2-08 (adopted, do not re-implement), P10 (account/data deletion — device DSAR plugs into it), P09 (reminders — unrelated). If the plan supersedes anything, add a §14-style superseded entry.                                                                                                                                                                                                        |
+| `docs/remaining/copy-corrections.md`         | C02 ("Privacy sync and deletion placeholders") is completed/superseded by the policy rewrite + P10 flow; update the ledger entry.                                                                                                                                                                                                                                                                                                                                                                   |
+| `docs/remaining/feature-gap-catalogue.md`    | P10 evidence list gains the device-data deletion path; add the shipped abuse-prevention facts to the parity register if relevant.                                                                                                                                                                                                                                                                                                                                                                   |
+| Privacy pages (in-repo)                      | `web/src/routes/(marketing)/privacy/+page.svelte` → `web/src/lib/i18n/privacy-copy.ts` → `web/src/lib/i18n/m/privacy.ts` → `web/messages/en.json`, `web/messages/ar.json` (remove the "placeholder text, not legal advice" marker in `legal_placeholder_note`/`legal_updated_date` when the real policy lands). Terms too: `terms-copy.ts` + terms messages — DSA Art 14 needs abuse bans named as a contractual ground. Arabic wording needs fluent review.                                        |
+| `web/README.md`                              | New public env var (`PUBLIC_DEVICE_COLLECTION`) must be declared in `web/src/env.ts` **and** `web/server.ts` `DYNAMIC_PUBLIC_ENV_VARS` (pinned by `server-headers.test.ts`); update the check/lint/test statements if W9 changes enforcement.                                                                                                                                                                                                                                                       |
+| `deploy/README.md`                           | Owns: origin-ingress restriction to Cloudflare ranges, the `IP_SOURCE` doc, the `/admin/bans/export` feed contract (device bans must NOT enter it), the new Dokploy env vars, the backup/restore runbook (none exists today), and the one-deploy-trigger decision (`dokploy-auto-update.sh` vs `images.yml`).                                                                                                                                                                                       |
+| `AGENTS.MD`                                  | Only if new hard rules are added — e.g. "device signals never on reader routes; fingerprinting APIs only in the device adapter; no device × reader-data join". The hard rules list is link-guarded (docs-divergence-guard).                                                                                                                                                                                                                                                                         |
+| `rust/backend/api/AGENTS.md`                 | Its "guards fail the build" sentence is false as a machine claim (B7 §3); fix with W9.                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `rust/backend/api/migration/README.md`       | Load-on-touch doc; add the device migration's idempotency/`IF NOT EXISTS`/up-twice rules and the numbering reconciliation.                                                                                                                                                                                                                                                                                                                                                                          |
+| `.github/workflows/images.yml`               | Not prose but part of the change: restore gate blocks, fix stale comments, add gates to `publish.needs` (B7 §6.1, §8).                                                                                                                                                                                                                                                                                                                                                                              |
+| `DEPLOYMENT.md`                              | Lines 69/74–76 are false/pnpm-era (B7 §3); W9 corrects them.                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ---
 
 ## 5. What the plan must NOT do
 
-1. **Re-propose landed controls.** `docs/security.md` records what landed: recent-auth grants for
+1. **Re-propose landed controls.** Landed (git history; `documentation/history.md`): recent-auth grants for
    trust changes, Argon2 password-admission semaphore, Turnstile fail-closed registration, passkey
-   fixes, push token ownership (`m000011`), R2-08 account isolation, 14-day absolute session age,
+   fixes, push token ownership (`m000011`), R2-08 account isolation, 14-day inactivity session expiry,
    R2-07 redirect validation, config fail-closed. The plan builds on them. Specifically:
    **"step-up = existing fresh-auth grants" is dead** (grants cannot challenge); do not resurrect it.
 2. **Duplicate `next-features.md`.** EC-19 (banned/revoked account mid-session — copy/UX), §9.5
    (logout/expiry/quarantine policy), R2-08 (committed `fbf5edcd`/`d1c47299`; adopt as regression
    tests, never re-design), P10 (self-service account/data deletion — device DSAR extends it),
    P09 (goal reminders — unrelated). Reference, do not re-specify.
-3. **Edit `docs/my-plan-raw.md`.** Read-only owner intent (`docs/README.md:36-37`).
+3. **Edit `documentation/my-plan-raw.md`.** Read-only owner intent (`docs/README.md:36-37`).
 4. **Touch the Quran DBs.** Immutable; `db/` gitignored; no schema/versioning; no hashing; device
    crypto stays out of sha-guarded files.
-5. **Hard-code `m000012` for device work** (collides with next-features' reservation).
+5. **Hard-code a migration number for device work** (`m000012` collides with next-features' reservation).
 6. **Claim CI enforcement that does not exist** (B7). State "not enforced today" until W9 lands.
 7. **Promise what the stack cannot do:** server-side TLS/JA4 collection (Traefik has no TLS hook; CF
    JA4 is Enterprise+BM; no Worker in repo), KMS-backed field encryption (no KMS; only env-held
@@ -259,7 +258,7 @@ Per-section content notes:
 4. Does it say where a device ban is enforced (own namespace / boot-hydrated in-process map, **not**
    `BanUnit`, **not** the export feed) and where the un-ban path lives?
 5. Does it say "next free migration number" (or explicitly reconcile with next-features'
-   m000012/m000013) and require idempotent DDL + an up-twice test?
+   `m000012`) and require idempotent DDL + an up-twice test?
 6. Does it state the session-payload compat rule (`#[serde(default)]`, append-only, legacy decode
    test) and order compat before the writer?
 7. Does it say exactly where the device payload attaches (`AuthClient.#request`), what is exempt,
@@ -272,7 +271,7 @@ Per-section content notes:
 11. Does it name the shadow mechanism (atomics + bounded ring, off-path 60s flush, not the 10s
     flush), the shadow tables, and the status endpoint?
 12. Does it give the promotion gate numbers (14/30 days, ≥50k evals, ≥200 accounts, ≤5%/≤1% FP,
-    κ≥0.6, ≤15% unknown, ≤+1 ms p99, zero request-path writes) and the abort criteria (>20% on one
+    a human-labelled sample (κ needs a second rater, which a solo operator lacks — C5 O5), ≤15% unknown, ≤+1 ms p99, zero request-path writes) and the abort criteria (>20% on one
     cohort; two consecutive G3/G5 failures)?
 13. Does it state L5/L6 human approval (or auto-reversal ≤72h), the pause/resume endpoint, and the
     single-operator compensating control instead of an unstaffable two-person promise?
@@ -292,7 +291,7 @@ Per-section content notes:
     count, auth-client call counts, env-var test) plus the guards it adds?
 21. Does it include a manual matrix with concrete rows (real signal capture, Turnstile, forged edge
     header, ban→appeal→unban, 31-day retention, proxy header limits, ITP eviction)?
-22. Does it list docs to amend with per-file reasons (quran-system Part 4, security.md, history.md:38,
+22. Does it list docs to amend with per-file reasons (quran-system Part 4, history.md:36,
     README index, privacy/terms copy + messages, web/README, deploy/README, AGENTS.MD, migration
     README)?
 23. Does it state the gate commands and that they are **not currently enforced** (B7), with W9
@@ -312,7 +311,6 @@ Per-section content notes:
 - "18.5 % mobile uniqueness" (2018 French-site study, transferred to this audience).
 - "45.52 % churn ⇒ our key churns" (coarse key ≠ the study's attribute set).
 - "measured 3.78 ms / 50–400 ms" presented as one measured pair (only the first is measured).
-- Cloudflare Workers pricing (no URL in the report).
 
 **Absolute claims that are false as written:**
 
@@ -339,28 +337,26 @@ not age verification.
 
 ## 8. Length and structure trade-off — recommendation
 
-**One plan doc, self-contained, with a compact decision ledger as §15; do NOT ship the 30+ raw
-reports as repo docs (NEW recommendation).**
+**One plan doc, self-contained, with a compact decision ledger as §15; the raw reports are working
+material, not plan docs (NEW recommendation).**
 
-- The repo is actively compacting docs (working-tree restructure: 76 deletions; long-form in git
-  history). Adding 30 report files fights that direction and re-creates rot surface.
+- The repo compacts docs (long-form in git history). The owner keeps the raw reports git-tracked in
+  `docs/research/abuse-prevention/` (with a README digest) only until the plan is implemented, then
+  deletes them.
 - The plan must stand alone when executed months later: every load-bearing decision needs its
   outcome + reason in the plan, not in a report the implementer may never read.
 - §15 ledger shape: one row per decision — `decision | source (report ID, §) | status
-(adopted/dropped/superseded) | plan section`. Plain-text report IDs, no relative links (files are
-  outside the repo; broken links violate repo link conventions).
-- If the owner wants the evidence in-repo: one digest only, `docs/research/abuse-prevention/README.md`
-  (precedent: `docs/research/ux-audit/README.md`), not 30 files.
+(adopted/dropped/superseded) | plan section`. Plain-text report IDs, no relative links (the reports
+  are deleted after implementation; broken links violate repo link conventions).
 - Size budget: ~1,000–1,500 lines is normal here (`next-features.md` ≈ 1,350). Prefer one long doc
   over a doc tree. Legal artifacts (DPIA, LIA, SOPs) are deliverables with owners, not plan sections —
   list them; don't write them inside the plan.
 
 **Flags for the coordinator (NEW):**
 
-1. **Migration-number collision:** every device report says `m000012`; `next-features.md:42,649-655`
-   reserves `m000012` (bookmarks) and `m000013` (reading sessions). The plan must use "next free
-   number" or reconcile explicitly. This is the single most likely concrete implementation collision.
-2. **Docs restructure in flight:** author against the post-restructure tree; do not resurrect deleted
-   docs; `docs/history.md:38` is false until W9.
+1. **Migration-number collision:** `next-features.md` reserves `m000012` for reading sessions
+   (`:311,654,680`). Device work must use "next free number" or reconcile explicitly. This is the single most likely concrete implementation collision.
+2. **Docs restructure:** author against the post-restructure tree; do not resurrect deleted
+   docs; `documentation/history.md:36` is false until W9.
 3. **CI truth:** the plan's own gates are not machine-enforced; W9 (gate restore) is a prerequisite
    (B6 §10), not optional, and belongs in the same change as the doc-truth fixes.

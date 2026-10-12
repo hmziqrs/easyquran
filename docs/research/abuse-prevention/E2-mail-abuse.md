@@ -9,7 +9,7 @@ verified detail, the arithmetic, and the fix).
 Scope: `rust/backend/api/src/services/mail/**`, `src/modules/{forgot_password_v1,email_verification_v1,
 newsletter_v1,mail_v1,auth_v1}/**`, `src/router.rs`, `src/main.rs`, `src/services/{abuse_limiter,rate_limit,
 turnstile,turnstile}`, `src/db/sea_models/email_suppression/**`, `migration/m000001_init.rs`, `web/src/lib/
-auth/**`, `.env.example`, `deploy/README.md`, `docs/security.md`, and the Cloudflare Email Service docs
+auth/**`, `.env.example`, `deploy/README.md`, and the Cloudflare Email Service docs
 (REST API, limits, pricing) as of 2026-10.
 
 ---
@@ -33,8 +33,8 @@ commit is `3b2b375f` (2026-08-26, "Replaces the SC-006 uniform envelope … with
 `"No account exists for that email"`; `:572-582` asserts the affirmative success envelope and forbids
 `"if an account exists"`). The web client is wired to it (`web/src/lib/auth/flows.svelte.ts:562-564` special-
 cases 404; `web/src/lib/auth/auth-copy.ts:5` `NO_ACCOUNT_EXISTS`; test `forgot-password-flow.test.ts:70-79`).
-`docs/security.md:90-92` records the decision as **open** ("Keep, or return identical responses for unknown
-addresses"), so the fix is finishing a flagged decision, not reverting a closed one.
+No committed doc records the decision (`documentation/history.md` does not mention it), so the fix finishes an
+undocumented decision rather than reverting a recorded one.
 
 Timing differs too, and the difference is large: the exists-path `await`s the provider HTTP call inside the
 request (`controller.rs:403-411`), the unknown-path returns after one indexed lookup. There is also a
@@ -50,11 +50,11 @@ Also note: the per-account limiter runs **before** the user lookup, so the 429 p
 
 **Same question for the other paths:**
 
-| Endpoint                                   | Oracle?                                                                                                                                                                                                                                                                                                                                                                                              | Evidence                                                                                                                                |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /auth/v1/register` (duplicate email) | **No.** Unique violation is classified (`DuplicateEmail`) and answered with the byte-identical 201 `{"message":"Registration accepted"}`; no verification mail is sent for the existing address; tests pin status+body identity (`auth_v1/controller.rs:519-525, 540-568`; tests `:1395, 1435-1455`). Residual: a small timing delta (failed INSERT vs INSERT+spawn) — not a reliable remote oracle. |                                                                                                                                         |
-| `POST /email_verification/v1/resend`       | **No existence oracle** (requires an authenticated session; recipient is the session user's own email, `email_verification_v1/mod.rs:9-12`; `controller.rs:65-71`). It _does_ leak mail-send outcomes (429/502/422) and can be used to burn the user's own bucket.                                                                                                                                   |                                                                                                                                         |
-| `POST /newsletter/v1/subscribe`            | **Yes, once the table exists** — an arbitrary-recipient send with no account concept. Today it 500s before the send (table missing).                                                                                                                                                                                                                                                                 | `newsletter_v1/controller.rs:55-124`; migration has zero `newsletter` hits; dev DB `.tables` lacks `newsletter_subscribers` (C3 F8:605) |
+| Endpoint                                   | Oracle?                                                                                                                                                                                                                                                                                                                                                                                              | Evidence                                                                                                                            |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /auth/v1/register` (duplicate email) | **No.** Unique violation is classified (`DuplicateEmail`) and answered with the byte-identical 201 `{"message":"Registration accepted"}`; no verification mail is sent for the existing address; tests pin status+body identity (`auth_v1/controller.rs:519-525, 540-568`; tests `:1395, 1435-1455`). Residual: a small timing delta (failed INSERT vs INSERT+spawn) — not a reliable remote oracle. |                                                                                                                                     |
+| `POST /email_verification/v1/resend`       | **No existence oracle** (requires an authenticated session; recipient is the session user's own email, `email_verification_v1/mod.rs:9-12`; `controller.rs:65-71`). It _does_ leak mail-send outcomes (429/502/422) and can be used to burn the user's own bucket.                                                                                                                                   |                                                                                                                                     |
+| `POST /newsletter/v1/subscribe`            | **Yes, once the table exists** — an arbitrary-recipient send with no account concept. Today it 500s before the send (table missing).                                                                                                                                                                                                                                                                 | `newsletter_v1/controller.rs:55-124`; migration has zero `newsletter` hits; dev DB `.tables` lacks `newsletter_subscribers` (C3 F8) |
 
 ### 1.2 No global/provider cap for transactional mail — **CONFIRMED**
 
@@ -137,16 +137,16 @@ below. The tera templates (`welcome`, `payment_receipt`, `subscription_confirmat
 `templates::render` has zero production callers — so **billing receipts, welcome mail, comment
 notifications, and any contact form do not send mail at all.**
 
-| #   | Route                                                             | Auth                                  | Recipient chosen by                                                                  | Volume cap today                                                                                 | Abuse it enables                                                                                                                         |
-| --- | ----------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `POST /forgot_password/v1/request`                                | public                                | attacker (any address that has an account; mail goes to that account's real mailbox) | per-IP 3/360 s→1 h, 5/900 s→24 h; per-account same; router per-recipient 29/h→1 h, ~87/24 h→24 h | existence oracle (§1.1); targeted reset-mail harassment; victim lockout (429) for 1 h with 3 requests, 24 h with ~5 paced; no global cap |
-| 2   | `POST /auth/v1/register`                                          | public + Turnstile (required in prod) | attacker (arbitrary submitted address)                                               | nest 100/min/IP; per-recipient 29/h; **no global/provider cap**                                  | N unique addresses → N verification emails; bounce farming at 100/min/IP → 144 k/day/IP; account-existence masked (good)                 |
-| 3   | `POST /email_verification/v1/resend`                              | authenticated, unverified             | own email only                                                                       | per-user 3/360 s→1 h, 5/900 s→24 h; router per-recipient 29/h                                    | self-bucket burning; no external recipient control; leaks send outcome (429/502)                                                         |
-| 4   | `POST /email_verification/v1/admin/issue_code`                    | ROLE_ADMIN                            | target user's email                                                                  | **no controller limiter**; router per-recipient 29/h                                             | admin-only; a compromised admin can mail any user's address (29/h each, no global cap)                                                   |
-| 5   | `POST /newsletter/v1/subscribe`                                   | public                                | attacker (arbitrary)                                                                 | per-email 5/60 s, per-IP 20/60 s, nest 100/min/IP, marketing provider 50/min+500/h               | **dead today** (no table); once the table lands: arbitrary-recipient confirmation mailer (≤4/min/address, ≤19/min/IP)                    |
-| 6   | `POST /newsletter/v1/send`                                        | ROLE_ADMIN                            | all `Confirmed` subscribers                                                          | marketing provider 50/min+500/h; 1.3 s pacing; per-recipient content dedup 300 s                 | admin-only; body/subject arbitrary; no `List-Unsubscribe` (CAN-SPAM/Gmail bulk)                                                          |
-| 7   | `POST /mail/v1/webhook/{provider}`                                | public (HMAC)                         | n/a — inbound only                                                                   | none (§1.3)                                                                                      | unmetered HMAC/JSON CPU on a pool-of-1 host                                                                                              |
-| 8   | billing receipts / welcome / comment notifications / contact form | —                                     | —                                                                                    | —                                                                                                | **no sender exists** (templates unused; contact page is a `mailto:` link)                                                                |
+| #   | Route                                                             | Auth                                  | Recipient chosen by                                                                  | Volume cap today                                                                                 | Abuse it enables                                                                                                                                          |
+| --- | ----------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `POST /forgot_password/v1/request`                                | public                                | attacker (any address that has an account; mail goes to that account's real mailbox) | per-IP 3/360 s→1 h, 5/900 s→24 h; per-account same; router per-recipient 29/h→1 h, ~87/24 h→24 h | existence oracle (§1.1); targeted reset-mail harassment; victim lockout (429) for 1 h with 3 requests, 24 h with ≈8 timed requests (D1 §1); no global cap |
+| 2   | `POST /auth/v1/register`                                          | public + Turnstile (required in prod) | attacker (arbitrary submitted address)                                               | nest 100/min/IP; per-recipient 29/h; **no global/provider cap**                                  | N unique addresses → N verification emails; bounce farming at 100/min/IP → 144 k/day/IP; account-existence masked (good)                                  |
+| 3   | `POST /email_verification/v1/resend`                              | authenticated, unverified             | own email only                                                                       | per-user 3/360 s→1 h, 5/900 s→24 h; router per-recipient 29/h                                    | self-bucket burning; no external recipient control; leaks send outcome (429/502)                                                                          |
+| 4   | `POST /email_verification/v1/admin/issue_code`                    | ROLE_ADMIN                            | target user's email                                                                  | **no controller limiter**; router per-recipient 29/h                                             | admin-only; a compromised admin can mail any user's address (29/h each, no global cap)                                                                    |
+| 5   | `POST /newsletter/v1/subscribe`                                   | public                                | attacker (arbitrary)                                                                 | per-email 5/60 s, per-IP 20/60 s, nest 100/min/IP, marketing provider 50/min+500/h               | **dead today** (no table); once the table lands: arbitrary-recipient confirmation mailer (≤4/min/address, ≤19/min/IP)                                     |
+| 6   | `POST /newsletter/v1/send`                                        | ROLE_ADMIN                            | all `Confirmed` subscribers                                                          | marketing provider 50/min+500/h; 1.3 s pacing; per-recipient content dedup 300 s                 | admin-only; body/subject arbitrary; no `List-Unsubscribe` (CAN-SPAM/Gmail bulk)                                                                           |
+| 7   | `POST /mail/v1/webhook/{provider}`                                | public (HMAC)                         | n/a — inbound only                                                                   | none (§1.3)                                                                                      | unmetered HMAC/JSON CPU on a pool-of-1 host                                                                                                               |
+| 8   | billing receipts / welcome / comment notifications / contact form | —                                     | —                                                                                    | —                                                                                                | **no sender exists** (templates unused; contact page is a `mailto:` link)                                                                                 |
 
 No open relay: `canonicalize_recipient` rejects CR/LF, comma, semicolon, `<`, `>` and display names
 (`router.rs:319-351`); the CF request is JSON; the SMTP path parses a `Mailbox`. There is no user-supplied
@@ -280,7 +280,8 @@ conservative and scale with reputation/account standing; `429 email.sending.erro
 **Vector B — reset-mail harassment/lockout (targeted, not mass).**
 
 - Controller: request 1 sends; request 2 within 60 s → 429 (delay); request 3 within 360 s → 1 h block;
-  ~5 paced requests → 24 h block. So **3 requests = 1 h of no recovery for a victim; ~5 = 24 h**.
+  ≈8 timed requests → 24 h block (≥4 blocked retries in the block's last 15 min, then 1 after expiry — D1 §1).
+  So **3 requests = 1 h of no recovery for a victim; ≈8 = 24 h**.
 - Router: 29 sends/h then 1 h block; paced 29/h × 3 h → the 24 h Long block.
 - Mass cost: each attacker IP yields ~1 send/day before its own block, so per victim/day ≈ 87 emails
   (87 IPs). Mail cost ≈ 87 × $0.00035 = **$0.03/victim/day**; the attacker's real cost is proxy IPs. This
@@ -330,8 +331,8 @@ verification, because recovery is the availability-critical path.
 
 ### F-2 Oracle fix (enforcement: `forgot_password_v1::generate`, `controller.rs:320-420`)
 
-1. Unknown email (`:345-349`): run the same work as the exists path — `forgot_password::Entity::generate_code()`
-   - `hash_code()` (discard) — then fall through to the **same** 200 response. Do not return 404.
+1. Unknown email (`:345-349`): run the same work as the exists path — `forgot_password::Entity::generate_code()` +
+   `hash_code()` (discard) — then fall through to the **same** 200 response. Do not return 404.
 2. In-delay (`:359-365`): return the **same** 200 without sending (the previous code is still valid; the
    user's 6-digit code has a 3-hour expiry, `html_templates.rs:42`).
 3. Success: `tokio::spawn` the provider send (mirroring register, `auth_v1/controller.rs:506-517`), log
@@ -346,7 +347,7 @@ verification, because recovery is the availability-critical path.
 6. Web: delete the 404 special-case (`flows.svelte.ts:562-564`), neutralize `NO_ACCOUNT_EXISTS`
    (`auth-copy.ts:5`), rewrite `forgot-password-flow.test.ts:70-79` to assert the request step advances to
    the code step on 200 regardless of account existence.
-7. Delete/close the open item at `docs/security.md:90-92` with the decision recorded.
+7. Record the decision in `documentation/history.md`.
 
 ### F-3 Suppression fail-closed (enforcement: `MailRouter::send`, `router.rs:243-250`)
 
@@ -356,7 +357,7 @@ let suppressed = match self.lookup_suppressed(&msg.to).await {
     Err(()) => {
         router_metrics.suppression_check_failed.add(1, &[]);
         // Fail closed: never mail an address we cannot prove is unsuppressed.
-        if transactional { return Ok(SendReceipt::default()); } // anti-enumeration: identical envelope, no send
+        if transactional { return Ok(SendReceipt { suppressed: true, ..Default::default() }); } // same envelope to the caller; the flag lets the notice path record `suppressed` (G3 P0.1)
         return Err(MailError::Suppressed);
     }
 };
@@ -524,9 +525,9 @@ Severity: Critical > High > Med > Low. Every finding is **NEW** unless marked EX
 Evidence: `modules/forgot_password_v1/controller.rs:314-318` (decision), `:343-349` (404), `:359-365`
 (in-delay 429), `:403-411` (sync send → timing/502), `:542-552, 572-582` (tests pin it);
 `rust/crates/ruxlog-types/src/error.rs:232,245`; web `flows.svelte.ts:562-564`, `auth-copy.ts:5`,
-`forgot-password-flow.test.ts:70-79`; `docs/security.md:90-92`; commit `3b2b375f`.
+`forgot-password-flow.test.ts:70-79`; commit `3b2b375f`.
 Fix: §7 F-2 — uniform 200 + background send + dummy hash work; rewrite the three source-pinning tests; update
-the web flow; close the doc item.
+the web flow; record the decision in `documentation/history.md`.
 
 **M2 — No global/provider cap for transactional mail; the "transactional" classification bypasses the only
 provider limiter.**
@@ -566,7 +567,7 @@ marketing; alert.
 send errors are silently swallowed; duplicate subscribe will be a 500 oracle.**
 **EXTENDS (C3 F8 / D5 1e)** · **Severity: Med (on activation)**. Evidence:
 `newsletter_v1/controller.rs:55-124` (caps `:63-87`, send `:113` `let _ =`), missing migration
-(C3 F8:605), dev DB table list, `newsletter_v1/validator.rs:7-10` (no alias check).
+(C3 F8), dev DB table list, `newsletter_v1/validator.rs:7-10` (no alias check).
 Fix: §7 F-5.1/5.5 + F-1 + F-6.
 
 **M8 — No `List-Unsubscribe`/`List-Unsubscribe-Post`; unsubscribe requires the token; token stored
@@ -575,11 +576,11 @@ plaintext.**
 · **Severity: Med** (CAN-SPAM/GDPR/ePrivacy; Gmail bulk requirements). Evidence: grep `List-Unsubscribe` in
 `services/mail/` → 0 hits; `cloudflare.rs:228-239` (`CfSendRequest` has no `headers` field) though the CF
 REST API supports it; `newsletter_v1/controller.rs:128-150` (token-bound unsubscribe);
-`db/sea_models/newsletter_subscriber/model.rs:13` (plaintext token); C4 D10:65.
+`db/sea_models/newsletter_subscriber/model.rs:13` (plaintext token); C4 D10.
 Fix: §7 F-5.2-5.4.
 
 **M9 — The per-recipient transactional bucket is a lockout lever: blocked attempts accumulate, so 3 requests
-block a victim's reset for 1 h and ~5 paced requests for 24 h; a paced sender reaches a 24 h recipient block
+block a victim's reset for 1 h and ≈8 timed requests for 24 h; a paced sender reaches a 24 h recipient block
 after ~87 sends.**
 **NEW** · **Severity: Med**. Evidence: `rux-request-gate/src/store.rs:303-320` (blocked path appends
 attempts), `:326-349` (temp branch wins; Long only when short < 30), `router.rs:33-40`;

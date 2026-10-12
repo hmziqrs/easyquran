@@ -12,9 +12,10 @@ know how it works" is treated as absent.
 **What I did not find new problems in** (stated up front, per the brief): the session-binding primitives are
 sound — `cycle_id()` on login (`crates/rux-auth/src/session/extractor.rs:101,121`), `session_auth_hash`
 recomputed per request (`:53`), process-local revocation set plus durable `revoked_at`, opaque
-`ruxlog.sid` cookie with 14-day absolute TTL. The client-IP resolution path is also well built: forwarded
-headers are peer-gated, and a missing `CF-Connecting-IP` in production is a hard 400
-(`src/middlewares/client_ip.rs:113-148`). The problems below are in how DESIGN-v0 _uses_ these primitives,
+`ruxlog.sid` cookie with a 14-day inactivity expiry. The client-IP resolution path is peer-gated, and a missing
+`CF-Connecting-IP` in production is a hard 400 (`src/middlewares/client_ip.rs:113-148`) — but the default
+trusted set is all of RFC1918 and nothing strips or overwrites the header, so any container on the shared
+Docker network can forge it (F1-ingress-trust). The problems below are in how DESIGN-v0 _uses_ these primitives,
 not in the primitives.
 
 ---
@@ -201,8 +202,8 @@ A careful reader of DESIGN-v0 would assume the following. None of them hold.
 
 Net: as specified (stable, `localStorage`, and the ban key), the token is worse than no token for the
 XSS/shared-device case, and no better for the evasion case. It becomes net-positive only with
-HttpOnly + rotation + additive-evidence-only semantics. The clean version of that fix is a
-`__Host-`-style cookie with `Path=/api`: cookies are path-scoped, so a `/api`-scoped cookie is never sent on
+HttpOnly + rotation + additive-evidence-only semantics. The clean version of that fix is an
+HttpOnly cookie with an explicit `Path=/api` (not `__Host-`, which requires `Path=/`): cookies are path-scoped, so a `/api`-scoped cookie is never sent on
 the `/t/**` document request and the 7-day disk cache (DESIGN:32) is untouched — the design's stated reason
 for choosing `localStorage` does not actually require `localStorage`.
 
@@ -270,7 +271,7 @@ works: the attacker rotates their _own_ device binding so the real user returns 
 
 Path 2 — **step-up fatigue without any attacker at all.** Safari's storage cap and iOS 26's denial of
 long-lived script storage mean the token disappears on a timer; browser/OS updates change the fingerprint
-(R2-fingerprint-science §2.3: 45.52% of fingerprints change after one day; §2.4: GPU driver and OS updates
+(R2-fingerprint-science §2.3: 45.52% of fingerprints change after one day on FP-Stalker's attribute set; §2.4: GPU driver and OS updates
 change canvas/WebGL wholesale). A legitimate user on Safari or Firefox FPP will generate "new device"
 events repeatedly. With no per-user prompt cap and no way for the legitimate user to satisfy the challenge
 except by _being_ the same device, this is a lockout loop dressed as a security control.
@@ -285,16 +286,16 @@ breaks across multiple API instances. Expanding step-up to device events makes t
 
 ## 5. Top 8 attacks ranked by likelihood × damage, with the minimal fix
 
-| #   | Attack                                                                                                                                                                           | L×D                 | Minimal design change                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | Client-authored coherence/tamper booleans ⇒ Layer 1 detection bypassed by one line of JS (F1)                                                                                    | Certain × high      | Server recomputes coherence from a **closed, typed** payload (enums and small ints only, no free-form strings); accept that a coarse typed subset _is_ stored under the 30-day keyed retention and amend Layer 0's "no raw values" claim accordingly. Never score a client-supplied boolean.                                                                                                                                                                             |
-| 2   | Anonymous device-record farming ⇒ row growth + per-request writes + 10-second flush amplification on single-writer SQLite (F2)                                                   | High × high         | (a) No per-request DB write: fold `last_seen` into the existing 10s snapshot/flush, or drop `seen_count` entirely; (b) hard cap new device records per (IP unit, day) and per user; (c) validate the payload against a fixed schema _before_ any insert, and return a cheap 400 for invalid payloads; (d) never key the ban/limit store by an attacker-influenced cardinality.                                                                                           |
-| 3   | Device signal only exists on account-touching flows ⇒ the scraping abuse the design exists to stop is never seen (F5)                                                            | Certain × high      | Make the collector send its own unauthenticated, rate-limited beacon from all pages (including reader routes) keyed by IP unit + `device_key`, independent of `AuthClient`. A client-side beacon does not touch the `/t/**` disk cache. If that is unacceptable, state plainly that anonymous abuse is addressed only by the edge signal + IP-unit cost, and remove the claim that the device axis covers it.                                                            |
-| 4   | Bearer device token in `localStorage`/IDB on an origin whose CSP trusts third-party script origins ⇒ token theft ⇒ device-trust transfer + forged linkage (F4)                   | Med-high × high     | Move the token to a server-set `HttpOnly; Secure; SameSite=Lax; Path=/api` cookie (path-scoped ⇒ `/t/**` cache untouched). Rotate on login and privilege change; bind the token to the session at login; treat possession as **additive evidence only**, never as authority; drop `gstatic`/`googletagmanager` from `script-src` if they are not actually used.                                                                                                          |
-| 5   | Edge signature does not bind IP/query/body; Worker omits headers it cannot fill ⇒ header smuggling; key in shared container env + default trusted CIDR ⇒ in-network forgery (F6) | Med × high          | Sign `CF-Connecting-IP` + path-with-query + a body digest; have the Worker **strip** all `X-Eq-Edge-*` before setting its own; verify a closed, mandatory, versioned header set; require Authenticated Origin Pulls or a Cloudflare Tunnel so the origin is unreachable otherwise; keep the edge key in a separate secret, not the general `.env`; make unknown-kid/clock-skew fail _open for read-only GETs_ with an alarm, so a rotation mistake is not a site outage. |
-| 6   | Device-key ban axis: unstable under browser/driver updates (evasion) and cohort-wide (collateral bans) (F3)                                                                      | Certain × med-high  | Remove `device_key` as a standalone ban unit. Keep it as a weighted edge in the graph and make the durable ban **account-scoped**; require a second independent edge (credential or network or content) before any device-correlated enforcement; make the corroboration requirement a code precondition of the ban write, not a policy sentence.                                                                                                                        |
-| 7   | Step-up is not a challenge primitive; triggers are attacker-influenceable; global grant cap ⇒ lockout and fatigue (F7)                                                           | Med-high × med-high | Implement step-up as a real session-bound challenge (WebAuthn UV or TOTP) with a **per-user** rate limit and no global cap; cap prompts (e.g. 1 per 5 minutes per session); a device mismatch may only _raise_ the requirement and must be satisfiable by the legitimate user; never let a client-asserted device signal gate a user action; re-bind the session's device only after a successful challenge.                                                             |
-| 8   | Pepper has no versioning/rotation; leak or backup restore breaks or reveals the entire device store (F8)                                                                         | Low-med × high      | Per-purpose keys (`device:v1`, `edge:v1`); per-row key id + dual-key read window; the pepper lives in a secret store outside the DB backup; a documented "restore → re-key" runbook; and a launch decision on whether the pepper is retained for erasure (R2-session-binding-rba §8.5) — either answer is fine, an implicit answer is not.                                                                                                                               |
+| #   | Attack                                                                                                                                                                           | L×D                 | Minimal design change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Client-authored coherence/tamper booleans ⇒ Layer 1 detection bypassed by one line of JS (F1)                                                                                    | Certain × high      | Server recomputes coherence from a **closed, typed** payload (enums and small ints only, no free-form strings); accept that a coarse typed subset _is_ stored under the 30-day keyed retention and amend Layer 0's "no raw values" claim accordingly. Never score a client-supplied boolean.                                                                                                                                                                                                                                            |
+| 2   | Anonymous device-record farming ⇒ row growth + per-request writes + 10-second flush amplification on single-writer SQLite (F2)                                                   | High × high         | (a) No per-request DB write: fold `last_seen` into the existing 10s snapshot/flush, or drop `seen_count` entirely; (b) hard cap new device records per (IP unit, day) and per user; (c) validate the payload against a fixed schema _before_ any insert, and return a cheap 400 for invalid payloads; (d) never key the ban/limit store by an attacker-influenced cardinality.                                                                                                                                                          |
+| 3   | Device signal only exists on account-touching flows ⇒ the scraping abuse the design exists to stop is never seen (F5)                                                            | Certain × high      | State plainly that anonymous abuse is addressed only by the edge signal + IP-unit cost, and remove the claim that the device axis covers it. (An unauthenticated beacon from reader pages would mint device records for anonymous readers — a privacy and retention hazard with no DSAR path, F12; the adopted design mints records only at authenticated login, F5-token-lifecycle.)                                                                                                                                                   |
+| 4   | Bearer device token in `localStorage`/IDB on an origin whose CSP trusts third-party script origins ⇒ token theft ⇒ device-trust transfer + forged linkage (F4)                   | Med-high × high     | Move the token to a server-set `HttpOnly; Secure; SameSite=Lax; Path=/api` cookie (path-scoped ⇒ `/t/**` cache untouched). Bind the token to the session at login; rotate only at a fixed lifetime cap and on revoke (rotating on every login races across tabs and buys nothing, F5-token-lifecycle); treat possession as **additive evidence only**, never as authority. Keep `gstatic`/`googletagmanager` in `script-src`: Firebase Analytics (on by default) loads gtag from them — HttpOnly is the fix for theft, not CSP removal. |
+| 5   | Edge signature does not bind IP/query/body; Worker omits headers it cannot fill ⇒ header smuggling; key in shared container env + default trusted CIDR ⇒ in-network forgery (F6) | Med × high          | Sign `CF-Connecting-IP` + path-with-query + a body digest; have the Worker **strip** all `X-Eq-Edge-*` before setting its own; verify a closed, mandatory, versioned header set; require Authenticated Origin Pulls or a Cloudflare Tunnel so the origin is unreachable otherwise; keep the edge key in a separate secret, not the general `.env`; make unknown-kid/clock-skew fail _open for read-only GETs_ with an alarm, so a rotation mistake is not a site outage.                                                                |
+| 6   | Device-key ban axis: unstable under browser/driver updates (evasion) and cohort-wide (collateral bans) (F3)                                                                      | Certain × med-high  | Remove `device_key` as a standalone ban unit. Keep it as a weighted edge in the graph and make the durable ban **account-scoped**; require a second independent edge (credential or network or content) before any device-correlated enforcement; make the corroboration requirement a code precondition of the ban write, not a policy sentence.                                                                                                                                                                                       |
+| 7   | Step-up is not a challenge primitive; triggers are attacker-influenceable; global grant cap ⇒ lockout and fatigue (F7)                                                           | Med-high × med-high | Implement step-up as a real session-bound challenge (WebAuthn UV or TOTP) with a **per-user** rate limit and no global cap; cap prompts (e.g. 1 per 5 minutes per session); a device mismatch may only _raise_ the requirement and must be satisfiable by the legitimate user; never let a client-asserted device signal gate a user action; re-bind the session's device only after a successful challenge.                                                                                                                            |
+| 8   | Pepper has no versioning/rotation; leak or backup restore breaks or reveals the entire device store (F8)                                                                         | Low-med × high      | Per-purpose keys (`device:v1`, `edge:v1`); per-row key id + dual-key read window; the pepper lives in a secret store outside the DB backup; a documented "restore → re-key" runbook; and a launch decision on whether the pepper is retained for erasure (R2-session-binding-rba §8.5) — either answer is fine, an implicit answer is not.                                                                                                                                                                                              |
 
 Remaining (below the top 8, still worth closing): appeal/notice as an oracle and laundering path plus an
 unaudited admin surface (F9); published deterministic thresholds as a calibration target (F10); purpose
@@ -342,10 +343,10 @@ cardinality the client controls).
 
 **Severity: high. NEW.**
 Why it breaks: DESIGN:37 bans on `device_key`, which DESIGN:35 derives from hardware/platform/locale/screen
-components. Fingerprints are not stable (R2-fingerprint-science §2.3: 45.52% change after one day; §2.4:
+components. Fingerprints are not stable (R2-fingerprint-science §2.3: 45.52% change after one day, on FP-Stalker's larger attribute set; §2.4:
 driver/OS/browser updates change WebGL and canvas wholesale), so a browser update is ban evasion, and
 anti-detect profiles (R2-evasion-counters §1.1) make it free. In the other direction the components are
-coarse (mobile uniqueness 18.5%, overall 33.6% — R2-fingerprint-science §2.1), so identical hardware +
+coarse (a 2018 study on a French commercial site measured 18.5% mobile / 33.6% overall uniqueness — R2-fingerprint-science §2.1), so identical hardware +
 locale + screen buckets collapse to one key and a device ban is a cohort ban. DESIGN:45 says device may
 "only ban with corroboration", but nothing makes corroboration a precondition of the ban write. In the repo,
 `BanUnit` is IP-only and rejects non-IP strings (`src/modules/admin_bans_v1/dto.rs:31-38`), the admin list
@@ -371,9 +372,10 @@ transfers device trust and forges a high-weight linkage edge — the "ant trap" 
 by anonymous visitors too.
 Concrete fix: server-set `HttpOnly; Secure; SameSite=Lax; Path=/api` cookie (path-scoped, so `/t/**` document
 requests never carry it and the disk cache is untouched — the design's stated reason for `localStorage` does
-not hold). Rotate on login and privilege change; bind to the session at login; treat possession as additive
-evidence only. Remove `gstatic`/`googletagmanager` from `script-src` if nothing loads them (the repo has no
-GTM/gtag usage — `grep googletagmanager web/src` → only the CSP line).
+not hold). Bind to the session at login; rotate only at a fixed lifetime cap and on revoke (per-login rotation races
+across tabs, F5-token-lifecycle); treat possession as additive evidence only. Keep `gstatic`/`googletagmanager`
+in `script-src`: Firebase Analytics (`web/src/lib/boot/analytics.ts`, on by default) loads gtag from them at
+runtime, so removing them breaks analytics while HttpOnly already removes the theft path.
 
 ### F5 — The device signal exists only where `AuthClient` is used, so anonymous scraping is invisible
 
@@ -386,10 +388,10 @@ and the OAuth flow (`oauth-flow.svelte.ts:102,145`); the root layout gates the s
 transmits a device payload, and a scraper that does not run JS never loads the collector at all. The design's
 stated goal is effective banning of abusive actors, but the device axis covers only clients that already
 have an account, which are exactly the clients already bannable by `user_id`.
-Concrete fix: give the collector its own unauthenticated, rate-limited beacon sent from all pages, including
-reader routes (a client-side beacon does not affect the `/t/**` disk cache). Key it by IP unit +
-`device_key`, cap it, and make it cheap. Otherwise, state explicitly in the design that anonymous abuse is
-addressed only by edge signals and IP-unit cost, and drop the implied coverage claim.
+Concrete fix: state explicitly in the design that anonymous abuse is addressed only by edge signals and
+IP-unit cost, and drop the implied coverage claim. Do not add an unauthenticated device beacon on reader
+pages: it would mint device records for anonymous readers with no DSAR path (F12) — the adopted design mints
+records only at authenticated login (F5-token-lifecycle).
 
 ### F6 — Edge signing does not bind the client IP, query, or body; Worker-omitted headers are smuggleable; the key shares the container env
 
@@ -471,8 +473,9 @@ the enforcement ladder (L1→L2→L3 transitions are observable via status codes
 makes the boundary stable and repeatable, which is good for audit and bad for adversarial robustness.
 Concrete fix: never expose a per-request score or reason to the client (and keep notices generic — see F9);
 keep decision thresholds server-side and coarse; require a server-derived, non-forgeable signal class
-(edge-signed TLS/ASN, IP unit, credential state) for any enforcement above L2; and add a small randomised
-enforcement delay so the boundary is not a precise measurement instrument.
+(edge-signed TLS/ASN, IP unit, credential state) for any enforcement above L2; and use a fixed, documented
+grace period before a transition takes effect (not a randomised delay — that breaks reproducibility, DSAR
+answers and Art 22(3) contestation).
 
 ### F11 — Purpose limitation is asserted, not enforced; `audit_logs` reuse contradicts "raw signals never stored"
 

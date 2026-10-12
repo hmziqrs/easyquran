@@ -24,7 +24,7 @@ Inputs: `DESIGN-v0.md`; `R2-ban-operations.md` (ban models, evasion linkage, app
 **Enforcement primitives that exist but are not wired to any operator surface:**
 
 1. **`user_bans`** (m000001): `user_id, reason, banned_by, expires_at, created_at, revoked_at, revoked_by`. Full model + actions (`create`, `revoke`, `get_active_ban`, `admin_list`, `list_by_user`) in `db/sea_models/user_ban/`. Enforced by `check_ban` → `BanStatus` (`rux-auth/src/traits.rs`, supports reason/expiry/banned_by; permanent = no expiry) behind `auth_guard` `not_banned()` with a 5-min cache. **Zero callers create or revoke a ban; no admin route exists.** `NewUserBan::permanent()` is callable directly.
-2. **Role ladder** `User 0 / Author 1 / Moderator 2 / Admin 3 / SuperAdmin 4` (`auth_guard.rs`, `ruxlog-types/enums/user.rs`). `ROLE_MODERATOR` is **defined and unused by every route**.
+2. **Role ladder** `User 0 / Author 1 / Moderator 2 / Admin 3 / SuperAdmin 4` (`auth_guard.rs`, `ruxlog-types/enums/user.rs`). No route _gate_ uses `ROLE_MODERATOR`, but inline `is_moderator()` (= role ≥ 2) checks already grant delete-any-media, read-any-email, paywall bypass and hidden-post comments (F3 §3.5) — a live privilege tier.
 3. **`audit_logs`** table + sea_orm model exist; **zero writers** (grep across `src/` finds only the model). Columns include `ip_address`, `user_agent` — in tension with the design's Layer 0.
 4. **IP escalation engine** (`services/escalation.rs`, `config/settings.rs:313`): default **OFF** (`QURAN_BAN_ESCALATION_ENABLED=false`), requires `QURAN_BAN_ALLOWLIST`, temp ban 1 h after 5 attempts/1 h, long ban 7 d after 20 attempts/24 h, `max_active_bans` cap, **never permanent**. Observation state is process-local (`SuspiciousWindow`, capped 10k identities) — lost on restart.
 5. **Notifications**: `notifications` table (`user_id, kind, title, body, data, read_at, created_at`), `NotificationKind` = `new_comment, new_follower, payment_received, post_published, mention, system` — **no enforcement kind**.
@@ -96,7 +96,7 @@ Per device record (one screen per case, list view with filters):
 | `export evidence`                   | frozen case bundle (JSON)                                                          | Admin                             |
 | policy/thresholds                   | rule version, thresholds, allowlist                                                | SuperAdmin                        |
 
-**ACL fit:** `ROLE_MODERATOR` (level 2) is currently dead. Seat it here: **read + propose + annotate = Moderator; suspend/lift/finalize = Admin; policy/ACL = SuperAdmin** (matching `admin_acl_v1`). This gives the design's "different reviewer" a real seat the day a second human exists, at zero extra work — and it keeps the operator from needing SuperAdmin for routine work.
+**ACL fit:** `ROLE_MODERATOR` (level 2) has no route gate today, but its inline `is_moderator()` powers (delete any media, read any user's email, paywall bypass — F3 §3.5) must be narrowed before anyone is promoted. Then seat it here: **read + propose + annotate = Moderator; suspend/lift/finalize = Admin; policy/ACL = SuperAdmin** (matching `admin_acl_v1`). This gives the design's "different reviewer" a real seat the day a second human exists, at zero extra work — and it keeps the operator from needing SuperAdmin for routine work.
 
 ### Minimum viable UI: API + TUI/CLI, not a web admin app
 
@@ -200,21 +200,21 @@ Email-only fails the "durable, accessible while suspended" requirement and gives
 
 Minimum dashboard a solo operator can maintain. All numbers computed from `enforcement_cases`, `appeals`, `device_records`, `user_bans`, `rate_limit_state` — **one endpoint, on demand** (pool = 1 connection; never a scheduled job writing metrics).
 
-| Metric                                                            | Source                             | Cadence              | Target                                 |
-| ----------------------------------------------------------------- | ---------------------------------- | -------------------- | -------------------------------------- |
-| Open cases by level + oldest age                                  | `enforcement_cases`                | daily glance (2 min) | oldest < 72 h                          |
-| **Precision** = upheld ÷ (upheld + overturned)                    | cases                              | weekly               | ≥95% permanent, ≥90% suspension        |
-| Overturn rate = overturned appeals ÷ decided appeals              | `appeals`                          | weekly               | <5% (red >15%)                         |
-| Proactive reinstatements (auto-reversals + second-look reversals) | cases                              | weekly               | >0, trending up                        |
-| `expired_without_review` count                                    | cases                              | weekly               | 0                                      |
-| Evidence-freeze coverage                                          | cases                              | weekly               | 100%                                   |
-| Notice coverage (L4+)                                             | cases                              | weekly               | 100%                                   |
-| Second-look lag (median proposal→finalize)                        | cases                              | weekly               | ≥24 h                                  |
-| SLA breaches (appeal overdue)                                     | `appeals`                          | weekly               | 0                                      |
-| Retention job: expired evidence deleted / failures                | evidence                           | weekly               | 100% / 0                               |
-| L5 cases past expiry not closed                                   | cases                              | daily                | 0                                      |
-| Device fan-out (devices with ≥3 accounts)                         | `device_records`/`device_sessions` | monthly              | informational, **not** an abuse metric |
-| **NOT "bans issued"**                                             | —                                  | —                    | never a headline                       |
+| Metric                                                            | Source                             | Cadence              | Target (normative — no platform publishes achieved rates) |
+| ----------------------------------------------------------------- | ---------------------------------- | -------------------- | --------------------------------------------------------- |
+| Open cases by level + oldest age                                  | `enforcement_cases`                | daily glance (2 min) | oldest < 72 h                                             |
+| **Precision** = upheld ÷ (upheld + overturned)                    | cases                              | weekly               | ≥95% permanent, ≥90% suspension                           |
+| Overturn rate = overturned appeals ÷ decided appeals              | `appeals`                          | weekly               | <5% (red >15%)                                            |
+| Proactive reinstatements (auto-reversals + second-look reversals) | cases                              | weekly               | >0, trending up                                           |
+| `expired_without_review` count                                    | cases                              | weekly               | 0                                                         |
+| Evidence-freeze coverage                                          | cases                              | weekly               | 100%                                                      |
+| Notice coverage (L4+)                                             | cases                              | weekly               | 100%                                                      |
+| Second-look lag (median proposal→finalize)                        | cases                              | weekly               | ≥24 h                                                     |
+| SLA breaches (appeal overdue)                                     | `appeals`                          | weekly               | 0                                                         |
+| Retention job: expired evidence deleted / failures                | evidence                           | weekly               | 100% / 0                                                  |
+| L5 cases past expiry not closed                                   | cases                              | daily                | 0                                                         |
+| Device fan-out (devices with ≥3 accounts)                         | `device_records`/`device_sessions` | monthly              | informational, **not** an abuse metric                    |
+| **NOT "bans issued"**                                             | —                                  | —                    | never a headline                                          |
 
 Implementation: one `GET /admin/enforcement/metrics` (ROLE_ADMIN) following the `analytics_v1::dashboard_summary` raw-SQL pattern, and a `just admin metrics` printer. Cadence: daily glance, weekly 15-minute review, monthly threshold replay ("what would new thresholds have done to the last 90 days of proposals?" — possible only because cases are stored), and an immediate second look + KPI check after any L6.
 
@@ -254,15 +254,22 @@ Reasons:
 
 ### SOP for a preservation request (write this down before it is needed)
 
-1. **Intake**: one address (e.g. `legal@`), one case id; verify the sender against the agency's published contact, not the email's own claims.
-2. **Classify**: (a) preservation request — comply immediately, no process needed; (b) subpoena — subscriber records only, check scope; (c) court order/warrant — contents; (d) emergency (imminent risk of death/serious injury) — voluntary disclosure permitted.
-3. **Freeze**: create a `legal_holds` row (new table: `id, case_id, received_at, agency, agent_contact, request_type, scope_json, preserve_until, status, notes`); link subjects (`legal_hold_subjects`: `hold_id, user_id, device_record_id, case_id`); **the retention job must consult this table and skip held rows.** This is the single most important addition — today no retention job exists at all, and once one does, a hold must be able to stop it.
-4. **Preserve from**: `users`, `user_sessions` (ip_address, device, last_seen, revoked_at), `auth_session_binding`, `user_bans`, `audit_logs`, `notifications`, `devices`, `enforcement_cases` + `case_evidence`, `appeals`, tower `sessions`.
-5. **Acknowledge in writing** with the case id and the window end (90 days + 90-day renewal). Do not promise what is not retained.
-6. **Do not disclose** without process; log every disclosure (`audit_logs` with `action='legal_disclosure'`, `resource_type='case'`, `resource_id=case_id`, metadata = scope; the table exists but has zero writers — the design must wire writers, or add `legal_disclosures`).
-7. **Calendar** the 90-day expiry and renewal.
-8. **Respond narrowly**: minimum data, structured, indexed; never the whole database.
-9. **CSAM path**: report to NCMEC (mandatory), 1-year preservation, access-limited storage; do not wait for a preservation letter.
+The generic workflow — intake to one address with a case id and sender verification, classify (preservation /
+subpoena / court order / emergency), freeze, acknowledge in writing with the window end (90 + 90 days), never
+disclose without process, calendar the expiry, respond narrowly, and the mandatory CSAM path (NCMEC report,
+1-year preservation) — is R2-ban-operations §8. What this repo has to add:
+
+1. **Freeze**: a `legal_holds` row (new table: `id, case_id, received_at, agency, agent_contact, request_type,
+scope_json, preserve_until, status, notes`) with linked subjects (`legal_hold_subjects`: `hold_id, user_id,
+device_record_id, case_id`); **the retention job must consult this table and skip held rows.** This is the
+   single most important addition — today no retention job exists at all, and once one does, a hold must be able
+   to stop it.
+2. **Preserve from**: `users`, `user_sessions` (ip_address, device, last_seen, revoked_at), `auth_session_binding`,
+   `user_bans`, `audit_logs`, `notifications`, `devices`, `enforcement_cases` + `case_evidence`, `appeals`, tower
+   `sessions`. Intake address: `legal@` (the contact addresses need a working MX first).
+3. **Disclosure log**: every disclosure writes `audit_logs` with `action='legal_disclosure'`,
+   `resource_type='case'`, `resource_id=case_id`, metadata = scope (the table exists but has zero writers — the
+   design must wire writers, or add `legal_disclosures`).
 
 ### Retention conflicts the design must resolve
 
@@ -293,23 +300,23 @@ Theatre is the default outcome of "review your own decision later". Make it mech
 
 ## 9. Ranking: impact ÷ effort, and what to cut
 
-| Feature                                                      | Abuse-reduction impact                              | Operator effort | Eng effort | Verdict                      |
-| ------------------------------------------------------------ | --------------------------------------------------- | --------------- | ---------- | ---------------------------- |
-| Per-credential rate limits (limiter keys are IP/route today) | **H** (research #1; also fixes credential stuffing) | L (automated)   | L          | **v1 — do first**            |
-| L1–L3 auto + device axis + auto-expiry                       | H                                                   | L               | M          | **v1**                       |
-| Case table + notices + auto-close/expiry job                 | H (auditability, precision)                         | M               | M          | **v1**                       |
-| Evidence freeze on L4+                                       | H (defensibility)                                   | L (automated)   | M          | **v1**                       |
-| Appeal channel (email + token page + table)                  | M (legal risk)                                      | M               | M          | **v1**                       |
-| Second-look gate                                             | M                                                   | M               | L          | **v1**                       |
-| Legal hold + SOP                                             | M (rare, high stakes)                               | L               | L          | **v1**                       |
-| Metrics endpoint                                             | M                                                   | L               | L          | **v1**                       |
-| Device console API + TUI                                     | M                                                   | M               | M          | **v1 (thin)**                |
-| L4 as a user-visible state                                   | L (no publishing surface)                           | M               | M          | **cut → queue-only case**    |
-| Web admin UI                                                 | 0 (same actions as CLI)                             | M               | H          | **cut**                      |
-| Entity graph / clustering                                    | L (no observed threat)                              | M               | H          | **cut (§6)**                 |
-| Automatic device bans                                        | M but negative (FP risk on shared hardware)         | —               | M          | **cut — operator-only bans** |
-| Appeal uploads / case threads                                | 0                                                   | M               | M          | **cut**                      |
-| Payment/phone/email-reputation linkage                       | 0 (no payments)                                     | —               | —          | **cut**                      |
+| Feature                                                                                                                                           | Abuse-reduction impact                      | Operator effort | Eng effort | Verdict                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | --------------- | ---------- | ---------------------------- |
+| Per-credential rate limit correctness (`login:<email>` and five other account keys exist; they count successes and can lock a victim out — B2 F2) | **H** (also fixes credential stuffing)      | L (automated)   | L          | **v1 — do first**            |
+| L1–L3 auto + device axis + auto-expiry                                                                                                            | H                                           | L               | M          | **v1**                       |
+| Case table + notices + auto-close/expiry job                                                                                                      | H (auditability, precision)                 | M               | M          | **v1**                       |
+| Evidence freeze on L4+                                                                                                                            | H (defensibility)                           | L (automated)   | M          | **v1**                       |
+| Appeal channel (email + token page + table)                                                                                                       | M (legal risk)                              | M               | M          | **v1**                       |
+| Second-look gate                                                                                                                                  | M                                           | M               | L          | **v1**                       |
+| Legal hold + SOP                                                                                                                                  | M (rare, high stakes)                       | L               | L          | **v1**                       |
+| Metrics endpoint                                                                                                                                  | M                                           | L               | L          | **v1**                       |
+| Device console API + TUI                                                                                                                          | M                                           | M               | M          | **v1 (thin)**                |
+| L4 as a user-visible state                                                                                                                        | L (no publishing surface)                   | M               | M          | **cut → queue-only case**    |
+| Web admin UI                                                                                                                                      | 0 (same actions as CLI)                     | M               | H          | **cut**                      |
+| Entity graph / clustering                                                                                                                         | L (no observed threat)                      | M               | H          | **cut (§6)**                 |
+| Automatic device bans                                                                                                                             | M but negative (FP risk on shared hardware) | —               | M          | **cut — operator-only bans** |
+| Appeal uploads / case threads                                                                                                                     | 0                                           | M               | M          | **cut**                      |
+| Payment/phone/email-reputation linkage                                                                                                            | 0 (no payments)                             | —               | —          | **cut**                      |
 
 **Cut list rationale, one line each:** the entity graph and web admin UI are the two largest builds with the least abuse reduction; L4 as a visible state creates the silent-permanent risk the design otherwise avoids; automatic device bans contradict the design's own shared-device rule; uploads/threads add attack surface (file handling) to a channel that needs three text fields.
 
@@ -364,10 +371,10 @@ Theatre is the default outcome of "review your own decision later". Make it mech
    Evidence: `NewUserBan::permanent()` is callable from anywhere; no `second_look`/`effective_not_before` fields anywhere; design says "L6 ban + second look" with no mechanism.
    Fix: `proposed → final` state machine; permanent only via `finalize_case()`; mandatory 24 h/72 h delay; fixed checklist + fresh-evidence read; lapse auto-downgrades to L5.
 
-10. **`ROLE_MODERATOR` is dead and is the natural seat for the device console.**
+10. **`ROLE_MODERATOR` has no route gate and is the natural seat for the device console — once its inline powers are narrowed.**
     Severity: Medium.
-    Evidence: `auth_guard.rs:18–22` defines level 2; no module uses `ROLE_MODERATOR` (grep over `modules/*/mod.rs`).
-    Fix: read/propose/annotate = Moderator; suspend/lift/finalize = Admin; policy/ACL = SuperAdmin — this also gives the "different reviewer" a real ACL seat.
+    Evidence: `auth_guard.rs:18–22` defines level 2; no module's route gate uses `ROLE_MODERATOR` (grep over `modules/*/mod.rs`), but inline `is_moderator()` checks grant delete-any-media, read-any-email and paywall bypass (`media_v1/controller.rs:539-548`, `user/model.rs:49-51`; F3 §3.5).
+    Fix: first restrict media delete to Admin and remove the email/paywall reads from the inline checks; then read/propose/annotate = Moderator; suspend/lift/finalize = Admin; policy/ACL = SuperAdmin — this also gives the "different reviewer" a real ACL seat.
 
 11. **The export-token pattern must not be extended to device mutations.**
     Severity: Medium.

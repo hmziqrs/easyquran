@@ -62,11 +62,11 @@ Two secondary observations:
 
 Admission controls in front of the semaphore on `POST /auth/v1/log_in`:
 
-| Control                             | Limit                                                                               | Consequence for a flood                                                                               |
-| ----------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Per-IP nest limiter (matched route) | 100/min/IP = **1.67 admitted req/s per IP**                                         | 20–48 IPs sustain saturation at H=25–60 ms                                                            |
-| Per-account limiter `login:{email}` | **2 admitted attempts per 360 s**, 3rd sets a 1 h Temp block, 5th a 24 h Long block | Fresh random emails dodge it entirely; sustaining 50/s over 6 min costs ~9,000 distinct email strings |
-| Turnstile                           | only on `register` (fail-closed in prod)                                            | **login has no captcha**                                                                              |
+| Control                             | Limit                                                                                                             | Consequence for a flood                                                                               |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Per-IP nest limiter (matched route) | 100/min/IP = **1.67 admitted req/s per IP**                                                                       | 20–48 IPs sustain saturation at H=25–60 ms                                                            |
+| Per-account limiter `login:{email}` | **2 admitted attempts per 360 s**, 3rd sets a 1 h Temp block; the 24 h Long block needs ≈8 timed attempts (D1 §1) | Fresh random emails dodge it entirely; sustaining 50/s over 6 min costs ~9,000 distinct email strings |
+| Turnstile                           | only on `register` (fail-closed in prod)                                                                          | **login has no captcha**                                                                              |
 
 Attacker cost to fully deny login/register/reauth/2FA:
 
@@ -97,9 +97,9 @@ three legitimate login attempts gets 429**. At **6 IPs** with H=60 ms, d ≈ 100
 
 ### 1.6 The documented reason the semaphore exists (and what a fix must preserve)
 
-- `docs/security.md:57-59`: "one shared semaphore (default concurrency 2) over every Argon2 path,
+- The code states the design: one shared semaphore (default concurrency 2) over every Argon2 path,
   held inside the blocking closure; saturation returns 429; a transient 429 preserves the reset
-  grant without extending it."
+  grant without extending it (`password_work.rs:8-64`; `forgot_password_v1/controller.rs:97-118`).
 - Commit `bed80b13` ("fix(security): bound password work and gate hardened releases") added it; its
   now-deleted companion doc (`git show bed80b13:docs/security-hardening-2026-10-11.md`, absent at
   HEAD) states the intent: **"Admission budgeting follows OWASP's password hashing cost and
@@ -161,15 +161,15 @@ usable during a login flood.
 
 ### 2.1 Facts per map
 
-| Map                                          | Capacity             | TTL    | At capacity                       | Eviction code                                                   |
-| -------------------------------------------- | -------------------- | ------ | --------------------------------- | --------------------------------------------------------------- |
-| `passkey_state::STATES`                      | 10,000               | 300 s  | **evicts oldest entry globally**  | `min_by_key(                                                    | (_, (_, issued_at)) | *issued_at)`→`map.remove` (`passkey_state.rs:104-112`) |
-| `oauth::state::OAUTH_STATES`                 | 10,000               | 600 s  | **evicts oldest globally**        | `min_by_key(... stored_at)` → remove (`oauth/state.rs:142-150`) |
-| `oauth::state::NATIVE_NONCES`                | 10,000               | 600 s  | **evicts oldest globally**        | `min_by_key(... issued_at)` → remove (`oauth/state.rs:71-79`)   |
-| `pending_login::GRANTS`                      | 10,000               | 300 s  | **429 fail-closed** (no eviction) | `pending_login.rs:85-87`                                        |
-| `fresh_auth::GRANTS` (3 purposes incl. link) | 10,000               | 300 s  | **429 fail-closed** (no eviction) | `fresh_auth.rs:100-102,176-178`                                 |
-| `forgot_password::reset_token`               | 10,000 tracked users | 600 s  | **503 fail-closed**               | `forgot_password_v1/controller.rs:70-75`                        |
-| `billing::checkout_intent::INTENT_STORE`     | **unbounded**        | 3600 s | grows until reaped on next access | `billing_v1/controller.rs:50-74`                                |
+| Map                                          | Capacity             | TTL    | At capacity                       | Eviction code                                                                                |
+| -------------------------------------------- | -------------------- | ------ | --------------------------------- | -------------------------------------------------------------------------------------------- |
+| `passkey_state::STATES`                      | 10,000               | 300 s  | **evicts oldest entry globally**  | `min_by_key(\|(_, (_, issued_at))\| *issued_at)` → `map.remove` (`passkey_state.rs:104-112`) |
+| `oauth::state::OAUTH_STATES`                 | 10,000               | 600 s  | **evicts oldest globally**        | `min_by_key(... stored_at)` → remove (`oauth/state.rs:142-150`)                              |
+| `oauth::state::NATIVE_NONCES`                | 10,000               | 600 s  | **evicts oldest globally**        | `min_by_key(... issued_at)` → remove (`oauth/state.rs:71-79`)                                |
+| `pending_login::GRANTS`                      | 10,000               | 300 s  | **429 fail-closed** (no eviction) | `pending_login.rs:85-87`                                                                     |
+| `fresh_auth::GRANTS` (3 purposes incl. link) | 10,000               | 300 s  | **429 fail-closed** (no eviction) | `fresh_auth.rs:100-102,176-178`                                                              |
+| `forgot_password::reset_token`               | 10,000 tracked users | 600 s  | **503 fail-closed**               | `forgot_password_v1/controller.rs:70-75`                                                     |
+| `billing::checkout_intent::INTENT_STORE`     | **unbounded**        | 3600 s | grows until reaped on next access | `billing_v1/controller.rs:50-74`                                                             |
 
 E5's claim is confirmed verbatim: the two eviction paths remove the **oldest** entry, which is
 whoever issued earliest — i.e. the challenge most likely to belong to a legitimate user already
@@ -302,8 +302,7 @@ exactly why the credential-keyed counter matters more.
 `POST /forgot_password/v1/request` answers unknown emails with **404 `RecordNotFound` + "No account
 exists for that email"** (`forgot_password_v1/controller.rs:343-349`). This is a **deliberate,
 test-pinned product decision** (`:314-317` comment; `:541-552` test
-`unknown_email_answers_explicit_record_not_found`; `docs/security.md` "Remaining" item 5 lists it
-as an open product decision). Every other auth path masks existence: register masks duplicates
+`unknown_email_answers_explicit_record_not_found`; no committed doc records the decision, E2 §1.1). Every other auth path masks existence: register masks duplicates
 (`auth_v1/controller.rs:519-535`), login uses the dummy verify (`services/auth.rs:86-89`). The
 anti-enumeration defence exists everywhere **except here**.
 
@@ -315,7 +314,7 @@ Chain: enumerate an email → hit `generate` repeatedly → mail flood + reset-f
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | Confirm an email is an account (privacy leak, targeting input) | **Yes**                                                                                                                                                                                                                                                 | `:343-349`                                                                              |
 | Flood a victim's inbox with reset mail                         | **Yes, throttled**: per-account limiter `forgot_password_request:account:{email}` (2 admitted per 360 s, then 1 h, then 24 h) plus a 60 s `is_in_delay()` send gate (`:326-373`). So ~2–3 mails/account/hour, then the account's reset path is blocked. | `:326-342`, `:357-365`; config `:21-28`                                                 |
-| Deny the victim's **password reset** for up to 24 h            | **Yes** — the account key blocks after 5 attempts in 15 min (blocked calls keep appending, `rux-request-gate/src/store.rs:303-320`)                                                                                                                     | `:337-342`                                                                              |
+| Deny the victim's **password reset** for up to 24 h            | **Yes** — the account key blocks 1 h after 3 attempts and 24 h after ≈8 timed attempts (blocked calls keep appending, `rux-request-gate/src/store.rs:303-320`)                                                                                          | `:337-342`                                                                              |
 | Deny the victim's **login**                                    | **No** — separate key (`login:{email}`)                                                                                                                                                                                                                 | key names `auth_v1/controller.rs:134-140` vs `forgot_password_v1/controller.rs:337-342` |
 | Burn mail-provider quota / reputation                          | **Yes** — one shared `MailRouter` for transactional + marketing (E5 B3); reset mail competes with verification mail                                                                                                                                     | `main.rs:29-124,648-652`                                                                |
 | Timing oracle on unknown emails                                | **Yes, secondary** — unknown emails return fast (no mail send); known emails pay the mail transport. Detectable even when status is masked later.                                                                                                       | `:395-411`                                                                              |
@@ -338,7 +337,7 @@ Chain: enumerate an email → hit `generate` repeatedly → mail flood + reset-f
 
 1. **Restore a uniform response for `request`** (200 with the same body for known/unknown, mail only
    for known) — or keep the honest answer but gate it behind Turnstile + a strict per-IP cap. This
-   is a product decision already flagged in `docs/security.md`; the audit position: mask it.
+   is an undocumented product decision; the audit position: mask it.
 2. **Mount `rate_limit_layer` on both nests** (`router.rs:81-83`), matching the rest of the router.
 3. **Failure-only counting**: the `verify` limiter currently counts allowed calls (a user who
    mistypes a code 3 times gets a 1 h block; that is intended for brute force but also punishes
@@ -522,7 +521,7 @@ breaks in-flight passkey/2FA/OAuth/recovery flows and the money path's checkout 
 `db/sea_models/user/actions.rs:81-84,216-218,355-358,440-443` (register/change/admin),
 `auth_v1/controller.rs:616,730-734,882-886` (backup codes, 10 Argon2 ops per permit). Argon2
 default m=19 MiB t=2 p=1 (`argon2-0.5.3/src/params.rs:42,52,61`; measured p50 11.6 ms locally,
-VPS est. 25–60 ms). Documented intent: `docs/security.md:57-59`, `deploy/README.md:221-222`.
+VPS est. 25–60 ms). Documented intent: `git show bed80b13:docs/security-hardening-2026-10-11.md`, `deploy/README.md:221-222`.
 **Fix:** queue-with-timeout (1.5 s) + global waiter cap + separate dummy lane + reserved
 authenticated lane + saturation telemetry (see §1.7). Keep the memory bound.
 
@@ -540,8 +539,7 @@ works); typo dead-end because `update` requires `verified`. Web client sends onl
 
 **Evidence:** `forgot_password_v1/controller.rs:343-349` (404 + explicit message), test-pinned
 `:541-552`, product comment `:314-317`; no nest limiter `router.rs:81-83`; per-IP/per-account
-limiters `:326-342` (2 admitted per 360 s); reset grants process-local `:30-172` (TTL 600 s);
-`docs/security.md` "Remaining" #5 records the open decision.
+limiters `:326-342` (2 admitted per 360 s); reset grants process-local `:30-172` (TTL 600 s).
 **Fix:** uniform response (or Turnstile-gated honest answer), mount `rate_limit_layer`, failure-only
 verify counting, persist/sign reset grants.
 
@@ -622,7 +620,7 @@ gets a 200 and no change.
   `db/sea_models/forgot_password/actions.rs`, `auth_v1/controller.rs`, `router.rs`, `main.rs`,
   `rate_limit.rs`, `abuse_limiter.rs`, `rux-request-gate/src/store.rs`,
   `rux-auth/src/session/{extractor,state}.rs`, `middleware/guard.rs`, `webauthn.rs`, `twofa.rs`,
-  `docker-compose.yml`, `docs/security.md`, `deploy/README.md`, `.env.example`.
+  `docker-compose.yml`, `deploy/README.md`, `.env.example`.
 - Greps: `password_work|PASSWORD_WORK`, `abuse_limiter::limiter` across modules,
   `OnceLock|LazyLock|static .*Mutex`, `.terminate(`, `PASSWORD_WORK_CONCURRENCY` repo-wide.
 - History: `git show bed80b13:docs/security-hardening-2026-10-11.md` (the admission rationale);

@@ -32,7 +32,8 @@ transaction — deleting `sessions` rows is unnecessary and costs a binding look
 pool-of-1 connection. The `unverified` guard omission is real (`auth_guard.rs:46-55`) and must be fixed,
 but note the integration test cannot observe it once the secret rotates (the extractor kills the session
 first), so the guard fix needs a requirements-level test. `NotificationKind` gains a variant safely (no
-exhaustive matches). The next migration number is **m000012** (verified free; m000001–m000011 exist).
+exhaustive matches). The migration takes the **next free number** at implementation time (`m000012` is unused in code today,
+but `next-features.md` reserves it for reading sessions).
 
 **Corrected estimate: 7–10.5 dev-days** for the bundle as defined (D2's 4–6 d "WS2a" excludes the notice
 email, the suppression fix, the banned UX, and the ar i18n; C1's A2+A3+A4+A5-subset is 6.5–10 d but A4
@@ -46,7 +47,7 @@ includes a portal this bundle drops). Item-by-item in §11.
 
 | #   | Item                                                                                         | Why it is in the contract                                                                                                               |
 | --- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | m000012: one-active-ban index + `enforcement_notices`                                        | Without the index, `get_active_ban` is a scan per login + per 5-min refresh on pool-of-1; without the table there is no decision record |
+| 1   | m0000NN: one-active-ban index + `enforcement_notices`                                        | Without the index, `get_active_ban` is a scan per login + per 5-min refresh on pool-of-1; without the table there is no decision record |
 | 2   | `/admin/users/bans` list/create/revoke/resend-notice, ROLE_ADMIN + CSRF                      | Today no account can be banned at all (zero writers; `user_ban/actions.rs:11,31` unused)                                                |
 | 3   | Session kill (rotate `session_auth_secret` in the ban transaction)                           | A ban that takes ≤5 min and leaves the session alive is not an enforcement primitive (C1 F9)                                            |
 | 4   | Banned UX: classifier + panel + i18n (en+ar)                                                 | Today the banned user is told "Email or password is incorrect." (`auth-copy.ts:80-88,137-139`)                                          |
@@ -67,10 +68,11 @@ template), newsletter-500 fix (D2 F16, separate), web admin UI (D30: API + TUI o
 
 ### 1.1 Number
 
-**m000012 is the next free number** — verified: `migration/src/lib.rs:3-13` lists m000001–m000011 and
-`grep -rn "m000012|m000013"` returns nothing. Reserve it; if the newsletter/other migration lands first,
-renumber **both** the file and the `Migrator::migrations()` entry (`migration/src/lib.rs:20-56`).
-File: `migration/src/m000012_ban_contract.rs` + `mod m000012_ban_contract;` + `Box::new(...)` entry.
+**Take the next free number when this lands** — `migration/src/lib.rs:3-13` lists m000001–m000011 and no
+code uses `m000012`, but `next-features.md` reserves it for reading sessions, so do not hard-code it. If
+another migration lands first, renumber **both** the file and the `Migrator::migrations()` entry
+(`migration/src/lib.rs:20-56`). File: `migration/src/m0000NN_ban_contract.rs` + `mod m0000NN_ban_contract;` +
+`Box::new(...)` entry.
 
 ### 1.2 Exact DDL (verified against real SQLite)
 
@@ -113,7 +115,7 @@ CREATE TABLE IF NOT EXISTS "enforcement_notices" (
     "second_reviewer_id" INTEGER,            -- always NULL with one operator (O6)
     "notice_channel" TEXT,                   -- 'email' | 'in_app' | 'none'
     "notice_sent_at" INTEGER,
-    "notice_delivery_state" TEXT,            -- 'sent' | 'no_contact_details' | 'send_failed'
+    "notice_delivery_state" TEXT, -- 'sent' | 'suppressed' | 'no_contact_details' | 'send_failed'
     "appeal_token_hash" TEXT,                -- unused in this bundle (email-first appeals)
     "appeal_window_ends_at" INTEGER,
     "appeal_submitted_at" INTEGER,
@@ -196,12 +198,12 @@ UPDATE user_bans SET revoked_at = <now RFC3339>, revoked_by = NULL
 New module `src/modules/admin_user_bans_v1/{mod.rs,dto.rs,controller.rs}`, merged (not nested) in
 `src/router.rs` next to `admin_bans_v1` (`router.rs:150-153`) so the absolute operator URLs are exact:
 
-| Route                                      | Method | Auth                                             | CSRF                                     | Notes                                            |
-| ------------------------------------------ | ------ | ------------------------------------------------ | ---------------------------------------- | ------------------------------------------------ |
-| `/admin/users/bans`                        | GET    | session `ROLE_ADMIN` (`verified_with_role::<3>`) | n/a (safe method)                        | list; `?user_id=&active_only=&page=`             |
-| `/admin/users/bans`                        | POST   | same                                             | yes (global `csrf_guard`, `main.rs:842`) | create                                           |
-| `/admin/users/bans/{ban_id}/revoke`        | POST   | same                                             | yes                                      | revoke + optional appeal outcome                 |
-| `/admin/users/bans/{ban_id}/notice/resend` | POST   | same                                             | yes                                      | re-send after `send_failed`/`no_contact_details` |
+| Route                                      | Method | Auth                                             | CSRF                                     | Notes                                    |
+| ------------------------------------------ | ------ | ------------------------------------------------ | ---------------------------------------- | ---------------------------------------- |
+| `/admin/users/bans`                        | GET    | session `ROLE_ADMIN` (`verified_with_role::<3>`) | n/a (safe method)                        | list; `?user_id=&active_only=&page=`     |
+| `/admin/users/bans`                        | POST   | same                                             | yes (global `csrf_guard`, `main.rs:842`) | create                                   |
+| `/admin/users/bans/{ban_id}/revoke`        | POST   | same                                             | yes                                      | revoke + optional appeal outcome         |
+| `/admin/users/bans/{ban_id}/notice/resend` | POST   | same                                             | yes                                      | re-send after `send_failed`/`suppressed` |
 
 - **No export token on this module.** The bearer pattern stays read-only IP-bans only
   (`admin_bans_v1/mod.rs:13-33`; A8 F11). Do not merge the two DTOs; `/admin/bans` is IP bans and
@@ -510,7 +512,7 @@ that the banned state never falls into the credential path.
 
 Email-first (D2 §3.2): `mailto:appeals@easyquran.fyi`. No page, no token, no i18n route, no enumeration
 surface. **Pre-ship check: the mailbox must actually exist** (Cloudflare Email Routing for
-`easyquran.fyi`; D1 claim 4 verified the MX exists, D2 D11 requires the address to be real). The notice
+`easyquran.fyi`; D1 claim 4 verified the MX exists, C4 D11 requires the address to be real). The notice
 email says "reply to this email or write to appeals@easyquran.fyi"; the panel shows the same address.
 The tokenized page is deferred to the first real ban (D2 §3.2, C1 F11's portal half).
 
@@ -578,13 +580,13 @@ if let Some(reason) = self.lookup_suppression(&msg.to).await? {
 
 - `SendReceipt` gains `#[serde(default)] pub suppressed: bool` (`provider.rs:24-32`); update the two
   struct literals (`cloudflare.rs:150-154`, `smtp.rs:119-123`).
-- Enforcement-scoped, not global: verification/reset keep today's drop-on-complaint behaviour (deliverability
-  - the anti-enumeration shape), and no other template changes.
+- Enforcement-scoped, not global: verification/reset keep today's drop-on-complaint behaviour (deliverability +
+  the anti-enumeration shape), and no other template changes.
 - **Bounce (permanent or in-cooldown) and Manual suppression:** do not send; receipt `suppressed: true`;
-  the caller records `notice_delivery_state='no_contact_details'` (D2 F6's second half).
+  the caller records `notice_delivery_state='suppressed'` (H3 #22; D2 F6's second half).
 - Transport/provider error: record nothing yet; the row stays with `notice_sent_at IS NULL` and the
   response reports it; `resend_notice` is the retry path.
-- The caller maps the receipt: sent -> `'sent'`; suppressed -> `'no_contact_details'`; Err -> `'send_failed'`.
+- The caller maps the receipt: sent -> `'sent'`; suppressed -> `'suppressed'`; Err -> `'send_failed'`.
 
 ### 6.3 `NotificationKind` + in-app row
 
@@ -601,10 +603,10 @@ if let Some(reason) = self.lookup_suppression(&msg.to).await? {
 ### 6.4 No-email fallback
 
 Every user row has an email (no nullable column), so "no address" cannot happen today. The real fallback is
-a suppressed/bouncing address: `no_contact_details` on the row, the in-app copy, and the admin response
+a suppressed/bouncing address: `suppressed` on the row, the in-app copy, and the admin response
 surfaces the state so the operator can reach the user another way (the decision still stands; the SOP says
 how). Do **not** block the ban when the mailer has no provider configured — an operator must be able to act
-when mail is down; instead the response reports `send_failed`/`no_contact_details` loudly (log at `warn!`).
+when mail is down; instead the response reports `send_failed`/`suppressed` loudly (log at `warn!`).
 
 ---
 
@@ -635,15 +637,19 @@ Rust, in-memory SQLite + `oneshot` (pattern: `tests/admin_bans_export.rs:55-120`
 11. `enforcement_notice_sent_despite_complaint_suppression` — router unit test: suppression row reason
     `complaint` + `TEMPLATE_ENFORCEMENT` -> receipt `suppressed == false`; reason `bounce` -> `suppressed ==
 true`; verification + complaint -> `suppressed == true` (regression guard for §6.2).
-12. `m000012_is_idempotent_and_keeps_notices_on_down` — up twice; pre-dedupe keeps MAX(id) and revokes the
+12. `m0000NN_is_idempotent_and_keeps_notices_on_down` — up twice; pre-dedupe keeps MAX(id) and revokes the
     older duplicate; index present; `down()` drops the index and **the table survives** (migration-crate
     tests, m000008 pattern).
 13. `notice_survives_user_deletion` — create ban + notice, `User::admin_delete`, notice row still present
     with `subject_id` intact (evidence preservation, F8).
 
-Web (vitest, `web/`): 14. `auth-copy.test.ts` — `403 AUTH_006 -> banned` (this is the regression the one-line fix fails),
-`403 AUTH_BANNED -> banned`, `403 AUTH_004 -> credential` unchanged, `429 -> rate-limit` wins. 15. `login-flow.test.ts` — banned login sets `flow.banned`, clears `genericError`, does not call
-`setUser`/`transition`. 16. `i18n:check` + `i18n:namespaces:check` green (en+ar parity, barrel regenerated).
+Web (vitest, `web/`):
+
+14. `auth-copy.test.ts` — `403 AUTH_006 -> banned` (this is the regression the one-line fix fails),
+    `403 AUTH_BANNED -> banned`, `403 AUTH_004 -> credential` unchanged, `429 -> rate-limit` wins.
+15. `login-flow.test.ts` — banned login sets `flow.banned`, clears `genericError`, does not call
+    `setUser`/`transition`.
+16. `i18n:check` + `i18n:namespaces:check` green (en+ar parity, barrel regenerated).
 
 All three web gates (`bun run check`, `bun run lint`, `bun run test`) and the touched-crate Rust gates
 (`cargo fmt --check`, `cargo clippy --all-targets -D warnings`, `cargo test`) must be green (D2 WS0 scope).
@@ -658,7 +664,7 @@ pre-ship checklist, not a flag.
 
 **Order (one release; three commits, deploy only when C is green):**
 
-1. **A — migration** (`m000012` + migration tests). No behavior change; runs at boot.
+1. **A — migration** (`m0000NN` + migration tests). No behavior change; runs at boot.
 2. **B — backend contract** (module + session kill + audit + notice + guard fix + clear-on-ban + mail
    changes). With B alone and zero bans, behavior is unchanged; do not let it sit deployed across a ban
    (an operator could ban before C ships and the login would still say "Email or password is incorrect").
@@ -754,8 +760,8 @@ comment with the existing admin route (whose notice wiring is the sibling PR). N
 
 | File                                                                       | Change                                                                                                                                   |
 | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `migration/src/m000012_ban_contract.rs`                                    | new: pre-dedupe, partial unique index, `enforcement_notices` + 2 indexes, transactional up, index-only down, up-twice/keep-on-down tests |
-| `migration/src/lib.rs`                                                     | register `m000012_ban_contract`                                                                                                          |
+| `migration/src/m0000NN_ban_contract.rs`                                    | new: pre-dedupe, partial unique index, `enforcement_notices` + 2 indexes, transactional up, index-only down, up-twice/keep-on-down tests |
+| `migration/src/lib.rs`                                                     | register `m0000NN_ban_contract`                                                                                                          |
 | `src/db/sea_models/user_ban/actions.rs`                                    | widen `create`/`revoke` to `ConnectionTrait`; add `revoke_expired`                                                                       |
 | `src/db/sea_models/user/actions.rs`                                        | add `rotate_session_auth_secret<T: ConnectionTrait>`                                                                                     |
 | `src/db/sea_models/enforcement_notice/{mod,model,slice,actions}.rs`        | new entity: model, `NewEnforcementNotice`, create/find_by_ban_id/mark_notice_sent/set_appeal_outcome                                     |
@@ -803,7 +809,7 @@ comment with the existing admin route (whose notice wiring is the sibling PR). N
 
 | Item                                                                                                                  | Days         | Basis                                                        |
 | --------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------ |
-| m000012 + migration tests (incl. pre-dedupe, up-twice, keep-on-down)                                                  | 0.5          | m000008/m000011 patterns exist                               |
+| m0000NN + migration tests (incl. pre-dedupe, up-twice, keep-on-down)                                                  | 0.5          | m000008/m000011 patterns exist                               |
 | Admin module: DTOs, validation, role rules, list (with notice state join), create/revoke/resend, router               | 2.0–3.0      | C1 A3 (2.5–3.5) minus the index/session-kill (counted below) |
 | Session-kill primitive + transaction orchestration + audit writer                                                     | 0.5–1.0      | C1 A5-subset                                                 |
 | Notice: template, tera, transactional semantics, suppression reason, `SendReceipt.suppressed`, delivery state, resend | 1.0–1.5      | D2's email-only WS3a (1.5–2.5) minus appeal/SOP split        |
@@ -853,7 +859,7 @@ Evidence: `services/auth.rs:267-287` (tower-id lookup needed to delete), `:49-75
 Evidence: `mail/router.rs:241-259` (transactional suppressed -> `Ok`), `:119-135` (`lookup_suppressed`
 discards the reason; Complaint is `permanent`, `email_suppression/actions.rs:36`), `provider.rs:17-22`.
 Fix: `lookup_suppression` returns the reason; send-despite-suppression only for `TEMPLATE_ENFORCEMENT` +
-`Complaint`; `SendReceipt.suppressed` for `no_contact_details` (§6.2); test 11.
+`Complaint`; `SendReceipt.suppressed` → `suppressed` (§6.2); test 11.
 
 **F7 — `enforcement_notices` needs `ban_id`; subject_id alone is ambiguous after a re-ban, and the revoke path must update the exact decision record. NEW. Medium.**
 Evidence: C4 §4.4 DDL (no ban link); `user_ban/actions.rs:31-54` (revoke by ban id);

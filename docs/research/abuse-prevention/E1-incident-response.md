@@ -50,7 +50,7 @@ anyone.
 **The rule: the database is the channel; email is the fallback.** A report that exists only in a mailbox has no
 SLA clock, no retention, no audit, and no existence after the operator's mail account is compromised. So:
 
-### 1.1 The store (migration `m000012_incident_response.rs`)
+### 1.1 The store (migration `m0000NN_incident_response.rs`, next free number)
 
 ```sql
 CREATE TABLE reports (
@@ -275,9 +275,10 @@ SELECT :case_id, 'media_meta',
 FROM media WHERE id = :media_id;
 
 -- 7. the operator action record — audit_logs gets its first writer
-INSERT INTO audit_logs (user_id, action, resource_type, resource_id, metadata, created_at)
+-- created_at is left to its TEXT CURRENT_TIMESTAMP default: an epoch here would mix formats (B8 F7)
+INSERT INTO audit_logs (user_id, action, resource_type, resource_id, metadata)
 VALUES (:admin_id, 'case_open', 'case', :case_id,
-        json_object('report_id', :report_id, 'level', :level, 'retention_class', :class), :now);
+        json_object('report_id', :report_id, 'level', :level, 'retention_class', :class));
 
 -- 8. the hold (see §5 for class → preserve_until)
 INSERT INTO legal_holds (case_id, authority, request_type, scope_json, received_at, preserve_until, status)
@@ -364,7 +365,7 @@ CREATE TABLE enforcement_notices (
   decided_by INTEGER, decided_at INTEGER NOT NULL,
   second_reviewer_id INTEGER,
   notice_channel TEXT, notice_sent_at INTEGER,
-  notice_delivery_state TEXT,        -- sent|suppressed|no_contact_details|pending
+  notice_delivery_state TEXT, -- sent|suppressed|no_contact_details|send_failed (queue = notice_sent_at IS NULL)
   appeal_token_hash TEXT,
   appeal_window_ends_at INTEGER,
   retention_class TEXT NOT NULL DEFAULT 'enforcement_12mo'
@@ -435,9 +436,8 @@ Report via `report.cybertip.org` (the CyberTipline form). Keep this text ready:
 > On {UTC date/time} an account ({user_id}, {email if known}, created {date}) posted {text|image|link} at
 > {URL}. We removed it from public view at {time} and preserved the records below for one year per 18 U.S.C.
 > §2258A(h). We have not viewed or downloaded the material. Account action: {terminated|suspended}.
-> Preserved: content row, report rows, account row, session rows (IP/user-agent, timestamps), media object key
->
-> - hash. **This is a provider report under 18 U.S.C. §2258A.** We will respond to follow-up at the address above.
+> Preserved: content row, report rows, account row, session rows (IP/user-agent, timestamps), media object key +
+> hash. **This is a provider report under 18 U.S.C. §2258A.** We will respond to follow-up at the address above.
 
 Statutory points to keep straight: report **as soon as reasonably possible**; the report itself is a 1-year
 preservation request; preserved material must be **secure, access-limited, and consistent with NIST's CSF**;
@@ -469,7 +469,7 @@ disclose the minimum (account email, last IP, session times), log it.
 - **No MLAT, no foreign-process verification.** Foreign agencies route through the US DOJ/MLAT or their
   national hotline; we honour §2703(f) preservation from any agency but do not disclose to foreign LE without
   US process.
-- **If the operator is outside the US**, §2258A's provider duty may not bind him directly and local possession
+- **If the operator is outside the US**, §2258A's provider duty may not bind the operator directly and local possession
   law may differ. The defensible default is unchanged: report apparent CSAM to NCMEC (it accepts reports from
   anywhere) and to the national hotline (INHOPE member) if one exists; preserve the minimum (identifiers,
   URL, hash — not necessarily the bytes) and get local legal advice before implementing any byte-preservation
@@ -692,8 +692,8 @@ Everything else is optimisation for a volume that does not exist yet.
 
 ## 12. Attack 4 — the chicken-and-egg: is this premature?
 
-**The case for "premature."** C3 measured zero: zero comments, zero flags, zero bans, zero suppressions, zero
-audit rows, production request-to-session ratio normal. The probability of a CSAM report this quarter is very
+**The case for "premature."** C3 measured zero on every surface it could read: zero comments, zero flags, zero
+bans, zero suppressions, zero audit rows (production numbers were not obtainable). The probability of a CSAM report this quarter is very
 low. A case system for zero cases is exactly the error D5 names elsewhere ("optimises a control for a threat
 with no measured base rate"), and the same 4–5 days are owed to the retention/DSAR work that is _already_
 non-compliant (Art 5(1)(e) on `user_sessions`; the Art 17 notice on the live hide/delete). An untested
@@ -778,13 +778,11 @@ the operator's only "act" destroys the record, and the appeal is impossible afte
 Fix: build the ban path (§4) before anyone uses delete; forbid `admin_delete` while a case is open; soft-delete
 window; write `audit_logs` from the delete path.
 
-**F3 — `post_views` has a live public writer of raw IP + raw UA, contradicting the retention plan's
-"seed-only writers". NEW. High.**
+**F3 — `post_views` has a live public writer of raw IP + raw UA. NEW. High.**
 Evidence: `post_v1/mod.rs:63-67` puts `/track_view/{post_id}` on the **public** (no-auth) router;
 `post_v1/controller.rs:346-386` reads `ClientIp` + the `User-Agent` header and calls
 `post/actions.rs:608-647`, which inserts `ip_address` + `user_agent` into `post_views`
-(`m000001_init.rs:165-176`). C4 §3 line 162 records the intended rule: "seed-only writers — **never enable** for
-live traffic". The web client does not call it (grep: 0 hits), but any client can.
+(`m000001_init.rs:165-176`). The web client does not call it (grep: 0 hits), but any client can.
 Fix: drop the IP/UA from the insert (the product need is a view count), or hash the IP + coarsen the UA; add
 `post_views` to the retention schedule; rate-limit the route.
 
@@ -800,11 +798,11 @@ triage writes state, never deletes; the queue endpoint filters `state='new'`.
 unmoderated and the CSAM path has no detector. NEW. High (correction).**
 Evidence: `main.rs:499` `IMAGE_MODERATION_ENABLED` defaults **false** → `state.storage.image_moderator = None`
 (`main.rs:519-521`); `media_v1/controller.rs:272` `if let Some(moderator)` is skipped entirely when `None`;
-`NoOpModerator` (`image_moderation/mod.rs:34-49`) is used only by its own unit test. D5 §1/B2 fact 13 describe a
-"NoOp moderator returning `safe: true`" — the outcome is the same (nothing is checked) but the mechanism is
-different (no call, not a permissive verdict), and the distinction matters for the runbook: there is no verdict
+`NoOpModerator` (`image_moderation/mod.rs:34-49`) is used only by its own unit test. A "NoOp moderator returning
+`safe: true`" would give the same outcome (nothing is checked), but the mechanism is different (no call, not
+a permissive verdict), and the distinction matters for the runbook: there is no verdict
 to rely on.
-Fix: correct the record; either enable a provider (`IMAGE_MODERATION_URL` + key) or state in the runbook that
+Fix: either enable a provider (`IMAGE_MODERATION_URL` + key) or state in the runbook that
 uploads are unmoderated and the CSAM path must never depend on a classifier; gate author creation.
 
 **F6 — There is no public, unauthenticated report channel; the only live intake is a comment flag plus a
@@ -820,7 +818,7 @@ quarterly test sends.
 **F7 — The first retention sweeper will delete law-enforcement evidence unless it ships hold-aware; the
 `user_sessions` 90-day fix and the §2703(f) 90+90-day window collide. NEW. High.**
 Evidence: `user_sessions.device`/`ip_address` are the only identity-to-network evidence and have no expiry
-(`m000001_init.rs:48-57`); C4 §3 lines 154-155 propose 90 days + NULL on revoke; B8 §4 designs the hold for the
+(`m000001_init.rs:48-57`); C4 §3 proposes 90 days + NULL on revoke; B8 §4 designs the hold for the
 device layer only; A8 §7 point 4 lists `user_sessions` in the preserve-from set but does not sequence the
 sweeper. A §2703(f) request arriving at day 85 of inactivity finds the columns NULLed at day 90.
 Fix: `legal_holds` + `legal_hold_subjects` ship **in the same PR** as the first sweeper; every delete carries
@@ -840,8 +838,8 @@ on create.
 why and the platform cannot record that it could not tell them. NEW. High.**
 Evidence: `mail/router.rs:251-259` — suppressed transactional send logs `debug!` and returns
 `Ok(SendReceipt::default())`; `is_transactional` covers only verification + password_reset
-(`provider.rs:17-22`); `mail/templates/` has six templates, none enforcement. C4 §4.3 says to add the template
-to the transactional set; the new fact is the silent-drop mechanism and the missing
+(`provider.rs:17-22`); `mail/templates/` has six templates, none enforcement. Adding the template to the
+transactional set alone inherits the silent drop; the new fact is that mechanism and the missing
 `notice_delivery_state='suppressed'` record that DSA Art 17's "where contact details are known" conditional
 requires.
 Fix: template + transactional class + a delivery-state write on the enforcement path + a test that a suppressed
@@ -856,20 +854,19 @@ minimum viable design: reuse FCM + `devices` for the operator's own P0 push; dig
 public `/quran/health/ready` for the free external monitor.
 Fix: intake → push + mail on `kind IN (csam,threat)`; daily digest; external uptime monitor; 429 `warn!`.
 
-**F11 — The runbook has no home, no owner, and no drill; `docs/security.md` still says "nothing is deployed
-yet", and no report assigns the work. NEW. Medium-High.**
-Evidence: no `docs/incident-response.md`; `docs/security.md:9` stale; D5 §4 asks for the runbook; D5 §4's
+**F11 — The runbook has no home, no owner, and no drill, and no report assigns the work. NEW. Medium-High.**
+Evidence: no `docs/incident-response.md`; D5 §4 asks for the runbook; D5 §4's
 runner-up states no report assigns an owner to the blocking list.
 Fix: write `docs/incident-response.md` (§13 one-pager + §7 drill + the dated log); run one drill; put the
 quarterly date in the calendar with the owner's name.
 
-**F12 — The Moderator role exists, is assignable, and gates nothing; the cheapest second-reviewer path is
+**F12 — The Moderator role exists, is assignable, and gates no route; the cheapest second-reviewer path is
 already built and unused. NEW. Medium.**
 Evidence: `ruxlog-types/enums/user.rs:16-19` (`moderator`, i32 = 2); `auth_guard.rs:20` `ROLE_MODERATOR`;
-`user_v1` `admin_update` accepts the role string (`controller.rs:333-346`); no route uses `ROLE_MODERATOR` (grep).
-A8 §4/§8 design the single-operator second look; the new fact is that the ACL separation the design asks for is
+`user_v1` `admin_update` accepts the role string (`controller.rs:333-346`); no route uses `ROLE_MODERATOR` (grep), but inline
+`is_moderator()` checks already grant delete-any-media, read-any-email and paywall bypass (F3 §3.5). A8 §4/§8 design the single-operator second look; the new fact is that the ACL separation the design asks for is
 already present.
-Fix: gate the triage queue at `ROLE_MODERATOR`; record `single_operator_control=1` on every case now; when a
+Fix: narrow those inline powers first (F3 §3.5); gate the triage queue at `ROLE_MODERATOR`; record `single_operator_control=1` on every case now; when a
 second human exists, `ROLE_MODERATOR` proposes and `ROLE_ADMIN` decides with no code change.
 
 ---

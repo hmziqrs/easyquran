@@ -9,29 +9,27 @@ prod. B3's own claims are treated as hypotheses, not inputs.
 
 **Answer up front.** B3 is directionally right and its headline is real: **the web origin has no
 limiter, the only internal SSR bucket is global, and one anonymous IP can turn translated reading
-off site-wide.** Four corrections change the fix set:
+off site-wide.** Two corrections and two sharpenings change the fix set:
 
-1. **B3 F2 is worse than written.** The cache predicate is "any cookie", and GA4 (`_ga`) is set by
-   default on every reader session — so _every returning reader_ is on the uncached path, not just
-   visitors who touched `/api`. The same predicate also disables the **service-worker caches**, a
-   third cache B3 did not count. (Verified: `hooks.server.ts:427,130`; `service-worker.ts:123-128`;
+1. **Any cookie also kills the service-worker caches.** The cache predicate is "any cookie", and
+   GA4's default-on `_ga` puts _every returning reader_ on the uncached path (B3 F2). The same predicate
+   also disables the **service-worker caches** — a third cache. (Verified: `hooks.server.ts:427,130`; `service-worker.ts:123-128`;
    `consent.svelte.ts:16,70-80`.)
-2. **B3 F1's fix 3 is not implementable as written.** HTML and `.md` SSR call the _same_ API route
+2. **The `.md` bucket needs a render-class signal (B3 F1 fix 3).** HTML and `.md` SSR call the _same_ API route
    (`/quran/sources/{id}/range`); the API cannot tell them apart. A render-class signal from the web
    is required before any `…-md` bucket can exist.
-3. **B3 F6's 379 is wrong twice.** Production advertises 2 scripts → **380** HEADs (non-prod 382),
+3. **The artifact fan-out serializes.** Production advertises 2 scripts → **380** HEADs (non-prod 382),
    and the memo mutex is held across the fan-out, so N concurrent requests run N _sequential_
-   sweeps, not one.
-4. **B3 F1's failure description is wrong in the safe direction.** A 429 from the internal API does
+   sweeps, not one (B3 F6).
+4. **The failure is silent (B3 F1).** A 429 from the internal API does
    not surface as a 429; `loadTranslationRangeData` swallows it and the reader gets an **empty 200
    page** marked `x-eq-translation-pending`. Worse for observability (invisible in logs), better for
    UX, and it is why this outage can happen without anyone noticing.
 
-One B3 sub-claim is wrong and load-bearing for the _cost model_: **translated `.md` is not
-"uncached"**. A 512-entry in-process range cache (`translation-range-cache.ts`) serves repeats of the
+One detail is load-bearing for the _cost model_: **translated `.md` is partly cached**. A 512-entry in-process range cache (`translation-range-cache.ts`) serves repeats of the
 same `(sourceId, from, to)` with zero internal calls. The flood still works — it needs distinct
 `(source, range)` keys, of which there are ~7.9 k ≫ 512 — but the per-request internal cost of a
-`.md` crawl is lower than B3 assumed.
+`.md` crawl is lower than a per-request call.
 
 ---
 
@@ -51,7 +49,7 @@ same `(sourceId, from, to)` with zero internal calls. The flood still works — 
 - Limit: `state.settings.rate_limit.internal_requests_per_minute.max(1)`,
   `QURAN_INTERNAL_REQUESTS_PER_MINUTE`, default **600**, window 60 s
   (`rate_limit.rs:69-74`; `config/settings.rs:462`). Documented as policy, not measured capacity
-  (`docs/quran-system.md:277`).
+  (`documentation/quran-system.md:277`).
 - The identity is granted only by constant-time match of `x-easyquran-internal-token`
   (`client_ip.rs:92-106`); present-but-invalid falls through to external resolution and warns.
 - The layer stack attaches it to the public Quran router only (`main.rs:910-912`), alongside the
@@ -159,9 +157,9 @@ access-control-request-headers` header from the CORS layer (B3 said "`Vary: Acce
 - Live probes also confirm the reader HTML is uncached at the edge (`cf-cache-status: DYNAMIC`,
   `cache-control: no-cache`) and carries `vary: Accept` — the fragmentation B3 F4 describes.
 
-### Q6 — Verify the 379-HEAD fan-out
+### Q6 — Verify the HEAD fan-out
 
-**Confirmed in shape; 380 (prod) / 382 (non-prod), and worse than B3 wrote because it serializes.**
+**Confirmed: 380 (prod) / 382 (non-prod), and it serializes.**
 
 - `resolve_sources` builds one candidate per advertised script + every catalogue translation, then
   spawns a `JoinSet` of HEADs bounded by `Semaphore::new(32)`, each verified against
@@ -172,7 +170,7 @@ access-control-request-headers` header from the CORS layer (B3 said "`Vary: Acce
   (`controller.rs:915`; scripts `:821`). With any single unverified/missing/size-mismatched artifact,
   the guard never trips, so **every** request re-runs the full sweep and stamps `no-store`
   (`:924-928`).
-- **Amplification B3 missed:** the mutex guard is held across the `resolve_sources(...).await`
+- **Amplification:** the mutex guard is held across the `resolve_sources(...).await`
   (`controller.rs:901-920`), so concurrent requests serialize and _each_ performs its own sweep.
   N inbound requests → N sequential 380-HEAD sweeps through the shared `http_client` (also used by
   mail/billing/FCM, `:995-997`). The effective inbound rate collapses to ~1.5 req/s while this
@@ -191,8 +189,7 @@ access-control-request-headers` header from the CORS layer (B3 said "`Vary: Acce
   `try_get_with` with a build semaphore (`quran/translation_pool.rs:228-297`); byte bound enforced
   after each build (`:275`).
 - Catalogue sizes measured: min 790,528 B, median 1,327,104 B, p90 2,985,984 B, max 13,029,376 B;
-  total 645,926,912 B (616.0 MiB). B3's "1.1–1.6 MB each" is wrong: the **byte cap, not the count
-  cap, is the binder** — the pool holds ~4 entries for a 12 MB corpus mix, ~8 for typical 1.3 MB
+  total 645,926,912 B (616.0 MiB). The **byte cap binds once large corpora are resident** — the pool holds ~4 entries for a 12 MB corpus mix, ~8 for typical 1.3 MB
   ones.
 - One IP can enumerate all 378 ids through `/quran/sources/{id}/range` (or `/surah/{n}`) at
   600/min: 378 cold builds per cycle, each a disk read + parse, evicting each other; every request
@@ -206,23 +203,22 @@ access-control-request-headers` header from the CORS layer (B3 said "`Vary: Acce
 Legend: **C** confirmed at source · **C\*** confirmed with correction · **W** wrong (with the
 correct value) · **U** understated (real scope is larger).
 
-| B3  | Claim                                                                                            | Verdict | Correction / evidence                                                                                                                                                                                                                                                                                                                                                                                            |
-| --- | ------------------------------------------------------------------------------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F1  | web origin has no limiter; one global 600/min internal bucket; one IP starves translated reading | **C\*** | Key/limit/attach confirmed (Q1/Q2). Corrections: (a) attack needs distinct `(source,range)` keys because of the 512-entry range cache; (b) reader-visible effect is an empty 200 pending page, not a 429 (Q2); (c) fix 3 (`…:quran-v1-md`) is not implementable without a render-class signal — HTML and `.md` hit the same API route; (d) the web→API fallback bucket is _escalatable_, not just shared (E6-F5) |
-| F2  | any cookie defeats disk + edge cache; anonymous CSRF cookie is the default state                 | **U**   | Predicate confirmed verbatim (`hooks.server.ts:427,130,346-351`). Reach is larger: GA4 `_ga` (default-on) makes it the state for every returning reader, not only `/api` touchers; and the SW caches die by the same predicate (`service-worker.ts:123-128`). The CSRF cookie itself is _not_ minted on a first reader visit                                                                                     |
-| F3  | 14.1 MB unauthenticated pack, unlimited, `.json` not edge-cached                                 | **C**   | Measured 14,158,643 / 589,573 / 1,635; serving path + headers confirmed; live `cf-cache-status: DYNAMIC` on the immutable pack                                                                                                                                                                                                                                                                                   |
-| F4  | no committed edge-cache contract; permutation + `Vary: Accept` fragmentation                     | **C\*** | Contract absence + live DYNAMIC confirmed. Permutation surface is _smaller_ for range (`RangeTextQuery` has only `from`/`to`; junk params 400) but _unbounded_ for `/ayahs?keys=` (order permutations of ≤50 keys); `Vary` on API responses is `Accept-Encoding` + the CORS triple, not Accept-Encoding only. NEW: error responses carry no `Cache-Control` (E6-F7)                                              |
-| F5  | cheapest bulk path exists, undocumented, no contract/contact                                     | **C**   | `RESPONSE_CAP=300` (`quran/store.rs:5`), `download_url` per source (`controller.rs:960,978-990`), 378 entries / 616.0 MiB measured, no bulk doc, `renderLlmsIndex()` has no bulk section (`seo/render.ts:53`)                                                                                                                                                                                                    |
-| F6  | 379-HEAD fan-out on partial R2 state                                                             | **C\*** | **380** prod / 382 non-prod (2 advertised scripts + 378); memo mutex held across the sweep → N sequential sweeps for N requests; shared `http_client` saturation (`controller.rs:893-938,945-1020`)                                                                                                                                                                                                              |
-| F7  | Turnstile is registration-only; no challenge/pass mechanism                                      | **C**   | `services/turnstile.rs` single entry point; sole caller `auth_v1/controller.rs:470`; no pass-cookie code                                                                                                                                                                                                                                                                                                         |
-| F8  | limiter key space is IP-unit-only; residential pool defeats it free                              | **C**   | `RequestIdentity` enum, canonical `/32` `/64` (`layer.rs:239-243,378-390`); no ASN/network dimension. D2 already cut this from phase 0                                                                                                                                                                                                                                                                           |
-| F9  | no harvest-pattern detection                                                                     | **C**   | No sequential/variance/ETag-indifference logic; escalation is 4xx-history only (`config/settings.rs:306-378`)                                                                                                                                                                                                                                                                                                    |
-| F10 | new limiter dimensions multiply the 10 s flush                                                   | **C**   | `snapshot()` returns every live bucket (`store.rs:123-155`); flush upserts per row in one txn (`rate_limit_store.rs:180-229`). Any new _persisted_ dimension pays here; phase-0 limiters are web-side in-memory, so unaffected                                                                                                                                                                                   |
-| F11 | one IP cycles 378 ids and thrashes the 8-entry/48 MB pool                                        | **C\*** | Config confirmed. Sizes are 0.77–12.4 MB (median 1.27, one 12.4) → the byte cap binds first (~4–8 resident). Demand-counter inflation confirmed (`main.rs:594-646`)                                                                                                                                                                                                                                              |
-| F12 | API robots.txt is ruxlog residue; no crawl policy for expensive variants                         | **C**   | `router.rs:236-246` (`Sitemap: https://ruxlog.com/…`); `web/static/robots.txt` has `Disallow:` empty; `/offline/` crawlable                                                                                                                                                                                                                                                                                      |
+| B3  | Claim                                                                                                                                               | Verdict | Correction / evidence                                                                                                                                                                                                                                                                                                                                                                   |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1  | web origin has no limiter; one global 600/min internal bucket; one IP starves translated reading                                                    | **C**   | Key/limit/attach confirmed (Q1/Q2), including: (a) the attack needs distinct `(source,range)` keys because of the 512-entry range cache; (b) the reader-visible effect is an empty 200 pending page (Q2); (c) the `…:quran-v1-md` bucket needs a render-class signal — HTML and `.md` hit the same API route; (d) the web→API fallback bucket is _escalatable_, not just shared (E6-F5) |
+| F2  | any cookie defeats disk + edge cache; `_ga` (every returning reader) and `ruxlog.sid` (after any `/api` call) make cookie-present the default state | **C\*** | Predicate confirmed verbatim (`hooks.server.ts:427,130,346-351`). Also: the SW caches die by the same predicate (`service-worker.ts:123-128`), and the CSRF cookie itself is _not_ minted on a first reader visit                                                                                                                                                                       |
+| F3  | 14.1 MB unauthenticated pack, unlimited, `.json` not edge-cached                                                                                    | **C**   | Measured 14,158,643 / 589,573 / 1,635; serving path + headers confirmed; live `cf-cache-status: DYNAMIC` on the immutable pack                                                                                                                                                                                                                                                          |
+| F4  | no committed edge-cache contract; permutation + `Vary: Accept` fragmentation                                                                        | **C**   | Contract absence + live DYNAMIC confirmed. Range permutations are 2 (`RangeTextQuery` has only `from`/`to`; junk params 400); `/ayahs?keys=` is unbounded (order permutations of ≤50 keys); API `Vary` is `Accept-Encoding` + the CORS triple. NEW: error responses carry no `Cache-Control` (E6-F7)                                                                                    |
+| F5  | cheapest bulk path exists, undocumented, no contract/contact                                                                                        | **C**   | `RESPONSE_CAP=300` (`quran/store.rs:5`), `download_url` per source (`controller.rs:960,978-990`), 378 entries / 616.0 MiB measured, no bulk doc, `renderLlmsIndex()` has no bulk section (`seo/render.ts:53`)                                                                                                                                                                           |
+| F6  | 380-HEAD fan-out (prod; 382 non-prod) on partial R2 state, serialized                                                                               | **C**   | 2 advertised scripts + 378 catalogue entries; memo mutex held across the sweep → N sequential sweeps for N requests; shared `http_client` saturation (`controller.rs:893-938,945-1020`)                                                                                                                                                                                                 |
+| F7  | Turnstile is registration-only; no challenge/pass mechanism                                                                                         | **C**   | `services/turnstile.rs` single entry point; sole caller `auth_v1/controller.rs:470`; no pass-cookie code                                                                                                                                                                                                                                                                                |
+| F8  | limiter key space is IP-unit-only; residential pool defeats it free                                                                                 | **C**   | `RequestIdentity` enum, canonical `/32` `/64` (`layer.rs:239-243,378-390`); no ASN/network dimension. D2 already cut this from phase 0                                                                                                                                                                                                                                                  |
+| F9  | no harvest-pattern detection                                                                                                                        | **C**   | No sequential/variance/ETag-indifference logic; escalation is 4xx-history only (`config/settings.rs:306-378`)                                                                                                                                                                                                                                                                           |
+| F10 | new limiter dimensions multiply the 10 s flush                                                                                                      | **C**   | `snapshot()` returns every live bucket (`store.rs:123-155`); flush upserts per row in one txn (`rate_limit_store.rs:180-229`). Any new _persisted_ dimension pays here; phase-0 limiters are web-side in-memory, so unaffected                                                                                                                                                          |
+| F11 | one IP cycles 378 ids and thrashes the 8-entry/48 MB pool                                                                                           | **C**   | Config confirmed. Sizes are 0.77–12.4 MB (median 1.27, mean ≈1.6) → ~8 resident for typical corpora, ~4 once a large one is resident (byte cap). Demand-counter inflation confirmed (`main.rs:594-646`)                                                                                                                                                                                 |
+| F12 | API robots.txt is ruxlog residue; no crawl policy for expensive variants                                                                            | **C**   | `router.rs:236-246` (`Sitemap: https://ruxlog.com/…`); `web/static/robots.txt` has `Disallow:` empty; `/offline/` crawlable                                                                                                                                                                                                                                                             |
 
-**Not in B3, found here:** the SW caches die with the disk cache (F2 scope); the internal 429 is
-swallowed into an empty 200 (F1 observability); the public-fallback bucket is the _escalatable_ one
+**Not in B3, found here:** the SW caches die with the disk cache (F2 scope); the public-fallback bucket is the _escalatable_ one
 (F1 secondary, sharpened); the pack is fetched with `cache: "no-store"` by the offline engine, so the
 browser never reuses it; disk-cache stats exist and have no reader; error responses carry no
 `Cache-Control`.
@@ -244,8 +240,8 @@ ship alone. Estimates are engineering-only.
    `main.rs:781-788` — add `.with_path("/api")` to `SessionManagerLayer`. The browser then never
    attaches `ruxlog.sid` to `/t/**` or any reader path. Verified safe: all browser→API traffic is
    under `/api` (Traefik strips the prefix only upstream of the browser), and the web SSR never reads
-   `ruxlog.sid`. This is C2's resolution (C2 §2: "the disk cache's real fix is `.with_path("/api")`
-   on the session layer").
+   `ruxlog.sid`. This is the first half of C2 §2's fix; the marker
+   and the name-specific predicate below are the second.
 2. API: mint an auth marker (the predicate must stay _correct_, not just permissive).
    New `middlewares/auth_marker.rs`, layered on the private router next to `private_no_store`:
    ```rust
@@ -324,7 +320,7 @@ Exempt the Docker healthcheck `/health/quran`.
    - `Fixed("quran-v1-range")` — `/sources/{id}/range` (bulk read, where a flood starves).
    - `Fixed("quran-v1")` — the existing global backstop, unchanged, applied last.
 3. Keep the global backstop at 600 and raise it only after measuring real capacity
-   (`docs/quran-system.md:277` documents it as policy). The web's global miss budget (P0.2) is the
+   (`documentation/quran-system.md:277` documents it as policy). The web's global miss budget (P0.2) is the
    primary control; the API buckets are damage-class separation.
 4. Do **not** add these to persistence: they reuse the existing `PathKey::Fixed` mechanism on the
    in-memory gate store; the flush only sees the same key space as today (B3 F10 unaffected).
@@ -379,7 +375,7 @@ egress IP — and that bucket is the **escalatable** content bucket (`main.rs:91
 ### P0.6 — Canonical query order + honest `Vary` + no-store on errors — 0.5–1 d
 
 **Files:** `rust/backend/api/src/modules/quran_v1/controller.rs`, `src/error/response.rs`,
-`web/src/hooks.server.ts`, `web/server.ts`, `docs/quran-system.md`.
+`web/src/hooks.server.ts`, `web/server.ts`, `documentation/quran-system.md`.
 
 1. `source_range` (`controller.rs:1258-1276`): after validation, build the canonical query from the
    _effective_ clamped values (`from={f}&to={t}`, both always present) and, when the raw query
@@ -472,8 +468,8 @@ range cache (512 entries) amortizes the API cost.
 | P0.5 | A client that reinstalls the offline pack >20×/day or pulls >100 MB/day/IP gets 429 until the next day. SW install path unaffected (one download per build)                                                                                                                                                                                              | Unit test for the byte budget (charge = negotiated size); a test that `/offline/manifest.json` is not byte-charged                                                                                                                                                                                                                                                      | `curl -sS -D - -o /dev/null https://…/offline/pack.<id>.json` ×6 → 6th is 429; with `Accept-Encoding: br` the charge is 589,573 not 14,158,643                                                                 |
 | P0.6 | Third-party API clients that permute `from`/`to` or `keys` order get one 308 (browsers/curl follow). The app's own fetcher already uses canonical order                                                                                                                                                                                                  | Rust tests: canonical URL idempotence (no redirect loop), `from>to` still 400, `keys` sort/dedupe, and an ETag test that permuted and canonical URLs share one ETag                                                                                                                                                                                                     | `curl -sSI 'https://…/api/quran/sources/en.sahih/range?to=10&from=1'` → `308` with `location: …?from=1&to=10`; then the canonical URL → `200` + `cf-cache-status: HIT` once the rule is live                   |
 | P0.7 | `/quran/sources` may still return a partial list while R2 is incomplete (same as today), but converges instead of re-sweeping; no reader impact                                                                                                                                                                                                          | Rust test: memo with one missing artifact → first request sweeps, second request does zero HEADs within the retry floor; after the artifact appears, the list is complete and cached                                                                                                                                                                                    | In a dev env, point one catalogue entry at a missing object and watch the logs/metric for one sweep per minute instead of one per request                                                                      |
-| P0.8 | None                                                                                                                                                                                                                                                                                                                                                     | Build test: the generated manifest matches the baked catalogue count and contains no `sha256` field (extend the existing catalogue-sha guard)                                                                                                                                                                                                                           | `curl -sS https://…/.well-known/quran-bulk.json                                                                                                                                                                | head`; `/llms.txt`shows the Bulk data section;`robots.txt`disallows`/offline/`                             |
-| P0.9 | None (adds fields to a Docker-internal readiness payload)                                                                                                                                                                                                                                                                                                | Readiness test updated for the new fields; a WARN assertion on the swallowed-error path                                                                                                                                                                                                                                                                                 | `curl -sS http://localhost:8080/health/quran                                                                                                                                                                   | jq`after a translated page →`entries`/`bytes` move; force a 429 with a local API stub and confirm the WARN |
+| P0.8 | None                                                                                                                                                                                                                                                                                                                                                     | Build test: the generated manifest matches the baked catalogue count and contains no `sha256` field (extend the existing catalogue-sha guard)                                                                                                                                                                                                                           | `curl -sS https://…/.well-known/quran-bulk.json \| head`; `/llms.txt` shows the Bulk data section; `robots.txt` disallows `/offline/`                                                                          |
+| P0.9 | None (adds fields to a Docker-internal readiness payload)                                                                                                                                                                                                                                                                                                | Readiness test updated for the new fields; a WARN assertion on the swallowed-error path                                                                                                                                                                                                                                                                                 | `curl -sS http://localhost:8080/health/quran \| jq` after a translated page → `entries`/`bytes` move; force a 429 with a local API stub and confirm the WARN                                                   |
 
 ---
 
@@ -526,12 +522,12 @@ Fix: P0.1 — `.with_path("/api")` on the session cookie, a login-only `ruxlog.a
 Evidence: `web/src/lib/server/quran-translation-page.ts:199-211` (catch-all → `ayahs: []`), `:99-110` (error mapped then thrown, swallowed by the caller); `web/src/lib/server/reader-route-guards.ts:33-45` (`x-eq-translation-pending: 1`, `noindex`); `hooks.server.ts:380` (pending pages refused by the disk cache); `quran/api-availability.ts:28-31,80-83` (429 is a _neutral_ failure → the breaker never opens). Result: one IP pins the global internal bucket and every translated page renders empty — indistinguishable from "translation not published" to a reader and invisible to the operator.
 Fix: P0.9 (WARN + counter on the swallowed failure; surface disk-cache stats), P0.2 (shed with 503 + Retry-After instead of rendering empty when the global budget is exhausted).
 
-### E6-F3 — The internal SSR bucket is global (`ratelimit:internal-webssr:quran-v1`), the web origin has no limiter, and B3's md/range split is not implementable without a new signal. **CONFIRMS B3 F1 with corrections. Severity: blocker.**
+### E6-F3 — The internal SSR bucket is global (`ratelimit:internal-webssr:quran-v1`), the web origin has no limiter, and B3's md/range split is not implementable without a new signal. **CONFIRMS B3 F1. Severity: blocker.**
 
 Evidence: `rust/backend/api/src/middlewares/rate_limit.rs:68-79` (limit `QURAN_INTERNAL_REQUESTS_PER_MINUTE` default 600, `PathKey::Fixed("quran-v1")`); `crates/rux-request-gate/src/layer.rs:239-243,278` (key construction); `client_ip.rs:92-106` (token → `InternalServiceId::WebSsr`); `main.rs:910-912` (attach); `web/server.ts` + `web/src/hooks.server.ts` (no limiter — grep-verified); `web/src/lib/server/quran-translation-page.ts:82-98` (both HTML and `.md` fetch `/sources/{id}/range`); `translation-range-cache.ts:4,24-46` (512-entry range cache changes the attack key space); live `x-ratelimit-limit: 600` on the public API.
 Fix: P0.2 (per-IP miss limit + global web budget) and P0.3 (render-class header + route-class buckets), keeping the global backstop.
 
-### E6-F4 — The artifact fan-out is 380 HEADs in production (not 379) and serialized by the memo mutex, so N requests run N sequential sweeps. **CORRECTS B3 F6. Severity: medium-high.**
+### E6-F4 — The artifact fan-out is 380 HEADs in production and serialized by the memo mutex, so N requests run N sequential sweeps. **CONFIRMS B3 F6. Severity: medium-high.**
 
 Evidence: `controller.rs:945-1020` (`resolve_sources` + `Semaphore::new(32)` + shared `http_client` note at `:995-997`); `:915` (`if resolved.len() == total` — all-or-nothing memo); `:901-920` (mutex held across the await); `:821` (scripts equivalent); `quran/store.rs:58-63` + `controller.rs:43-45` (2 advertised scripts in prod) + 378 catalogue entries (`db/quran/translations/index.min.json`) = 380.
 Fix: P0.7 — per-artifact verified set, retry floor, single-flight waiters, cold-resolve metric.
@@ -541,14 +537,14 @@ Fix: P0.7 — per-artifact verified set, retry floor, single-flight waiters, col
 Evidence: `quran-translation-page.ts:33-41` (`requireApiBase` falls back to `QURAN.apiBase`), `:51` (`usingInternal` false → no token), `:63` (token only sent to the internal base — correct); `main.rs:912` (the content layer is the only one carrying `.with_escalation(escalation)`); `config/settings.rs:306-378` (escalation: Temp 1 h after 5 blocks, Long 7 d after 20, allowlist-gated, default-off); `middlewares/rate_limit.rs:57-63` (600/min). A missing env var therefore routes the whole site's SSR through one external IP bucket that can, when escalation is enabled, be banned for 7 days.
 Fix: P0.4 — production boot error; the test at `quran-translation-page.test.ts:230-239` keeps the dev fallback.
 
-### E6-F6 — The translation pool binds at ~4–8 entries (byte cap first), and one IP can cycle all 378 ids, evicting the working set and inflating the durable demand counter. **CORRECTS B3 F11. Severity: medium.**
+### E6-F6 — The translation pool binds at ~4–8 entries (byte cap first), and one IP can cycle all 378 ids, evicting the working set and inflating the durable demand counter. **CONFIRMS B3 F11 (with measured sizes). Severity: medium.**
 
 Evidence: `config/settings.rs:277-301` (`QURAN_MAX_RESIDENT_TRANSLATIONS=8`, `QURAN_MAX_RESIDENT_TRANSLATION_BYTES=48 MiB`, idle TTL 1800 s); `quran/translation_pool.rs:228-297` (`try_get_with` single-flight, `enforce_byte_bound` at `:275`); measured sizes min 0.77 MB / median 1.27 MB / p90 2.85 MB / max 12.4 MB, total 616.0 MiB; `controller.rs:1258-1296` (`get_or_build` on `source_range`); `main.rs:594-646` (demand flush every 6th tick).
 Fix: P0.2 (miss limiter bounds the cycle rate); optionally a per-identity distinct-source budget and a metric on pool churn (P0.9).
 
-### E6-F7 — The edge contract is missing, error responses carry no `Cache-Control`, and HTML is negotiated on the same URL with `Vary: Accept` — so a Cache Everything rule on `/api/**` could pin 4xx and one on HTML would be a correctness bug. **CORRECTS B3 F4 + NEW. Severity: high.**
+### E6-F7 — The edge contract is missing, error responses carry no `Cache-Control`, and HTML is negotiated on the same URL with `Vary: Accept` — so a Cache Everything rule on `/api/**` could pin 4xx and one on HTML would be a correctness bug. **CONFIRMS B3 F4 + NEW. Severity: high.**
 
-Evidence: `quran_v1/cache.rs:5-8` (correct `s-maxage`), live `cf-cache-status: DYNAMIC` on `/api/quran/surahs` and on the immutable pack; `rust/backend/api/src/error/response.rs:88-120` (no `Cache-Control` on errors); `hooks.server.ts:152-154` + `server.ts:314-321` (`Vary: Accept` on every reader HTML); `web/src/lib/server/markdown-negotiation.ts` + `hooks.server.ts:444-457` (same URL returns markdown for `Accept: text/markdown`); `deploy/README.md` (no Cache Rule text anywhere); `docs/quran-system.md:146` ("Quran responses are edge-cacheable" — intent without a rule).
+Evidence: `quran_v1/cache.rs:5-8` (correct `s-maxage`), live `cf-cache-status: DYNAMIC` on `/api/quran/surahs` and on the immutable pack; `rust/backend/api/src/error/response.rs:88-120` (no `Cache-Control` on errors); `hooks.server.ts:152-154` + `server.ts:314-321` (`Vary: Accept` on every reader HTML); `web/src/lib/server/markdown-negotiation.ts` + `hooks.server.ts:444-457` (same URL returns markdown for `Accept: text/markdown`); `deploy/README.md` (no Cache Rule text anywhere); `documentation/quran-system.md:146` ("Quran responses are edge-cacheable" — intent without a rule).
 Fix: P0.5 (Cache Rules + the HTML exclusion) and P0.6 (canonical queries, `Vary` cleanup, `no-store` on errors).
 
 ### E6-F8 — The offline engine fetches the pack with `cache: "no-store"`, and the edge does not cache it either, so every install re-downloads from the origin. **NEW. Severity: medium.**
@@ -575,19 +571,19 @@ Fix: P0.8 — `Disallow: /offline/`, bulk-data pointer in `/llms.txt`, and delet
 
 ## Appendix A — exact key strings and limit values (verified)
 
-| Layer                             | Key                                                                | Limit                                      | Where                                                |
-| --------------------------------- | ------------------------------------------------------------------ | ------------------------------------------ | ---------------------------------------------------- |
-| Public content (external IP unit) | `ratelimit:{ip_unit}:quran-v1` (`203.0.113.5/32`, `2001:db8::/64`) | 600/60 s, escalatable                      | `rate_limit.rs:57-63`; `layer.rs:239-243,278`        |
-| Internal SSR (all routes)         | `ratelimit:internal-webssr:quran-v1`                               | `QURAN_INTERNAL_REQUESTS_PER_MINUTE` (600) | `rate_limit.rs:68-79`; `settings.rs:462`             |
-| Readiness                         | `ratelimit:{tcp_peer}:quran-health`                                | 120/60 s                                   | `rate_limit.rs:107-115`                              |
-| Public search                     | `ratelimit:{ip_unit}:/quran/search`                                | 30/60 s                                    | `main.rs:899-901`                                    |
-| `/api/sitemap.xml`                | `ratelimit:{ip_unit}:/sitemap.xml`                                 | 30/60 s                                    | `router.rs:53-56`                                    |
-| `/api/csrf/v1/generate`           | `ratelimit:{ip_unit}:/csrf/v1/generate`                            | 60/60 s                                    | `router.rs:57-60`                                    |
-| Auth nest (per matched route)     | `ratelimit:{ip_unit}:/auth/v1/*`                                   | 100/60 s                                   | `router.rs:72-76`                                    |
-| Disk cache entry                  | `build-{buildId}**{sourceId}**{kind}__{a}[__b]__ui-{en             | ar}`                                       | 7 d TTL, 256 MB, mtime-LRU                           | `quran-disk-cache.ts:11-13,51-57,162-211`; `hooks.server.ts:45-53` |
-| Range cache entry                 | `{sourceId}:{from}-{to}`                                           | 512 entries, single-flight, in-process     | `translation-range-cache.ts:4,24-46,62-78`           |
-| Translation pool                  | Moka, count 8 / bytes 48 MiB / TTL 1800 s                          | —                                          | `settings.rs:299-301`; `translation_pool.rs:228-297` |
-| Offline pack                      | `/offline/pack.{buildId}.json`                                     | 14,158,643 B raw / 589,573 B br            | measured; `gen-offline-pack.ts:152-196`              |
+| Layer                             | Key                                                                | Limit                                      | Where                                                              |
+| --------------------------------- | ------------------------------------------------------------------ | ------------------------------------------ | ------------------------------------------------------------------ |
+| Public content (external IP unit) | `ratelimit:{ip_unit}:quran-v1` (`203.0.113.5/32`, `2001:db8::/64`) | 600/60 s, escalatable                      | `rate_limit.rs:57-63`; `layer.rs:239-243,278`                      |
+| Internal SSR (all routes)         | `ratelimit:internal-webssr:quran-v1`                               | `QURAN_INTERNAL_REQUESTS_PER_MINUTE` (600) | `rate_limit.rs:68-79`; `settings.rs:462`                           |
+| Readiness                         | `ratelimit:{tcp_peer}:quran-health`                                | 120/60 s                                   | `rate_limit.rs:107-115`                                            |
+| Public search                     | `ratelimit:{ip_unit}:/quran/search`                                | 30/60 s                                    | `main.rs:899-901`                                                  |
+| `/api/sitemap.xml`                | `ratelimit:{ip_unit}:/sitemap.xml`                                 | 30/60 s                                    | `router.rs:53-56`                                                  |
+| `/api/csrf/v1/generate`           | `ratelimit:{ip_unit}:/csrf/v1/generate`                            | 60/60 s                                    | `router.rs:57-60`                                                  |
+| Auth nest (per matched route)     | `ratelimit:{ip_unit}:/auth/v1/*`                                   | 100/60 s                                   | `router.rs:72-76`                                                  |
+| Disk cache entry                  | `build-{buildId}__{sourceId}__{kind}__{a}[__b]__ui-{en\|ar}`       | 7 d TTL, 256 MB, mtime-LRU                 | `quran-disk-cache.ts:11-13,51-57,162-211`; `hooks.server.ts:45-53` |
+| Range cache entry                 | `{sourceId}:{from}-{to}`                                           | 512 entries, single-flight, in-process     | `translation-range-cache.ts:4,24-46,62-78`                         |
+| Translation pool                  | Moka, count 8 / bytes 48 MiB / TTL 1800 s                          | —                                          | `settings.rs:299-301`; `translation_pool.rs:228-297`               |
+| Offline pack                      | `/offline/pack.{buildId}.json`                                     | 14,158,643 B raw / 589,573 B br            | measured; `gen-offline-pack.ts:152-196`                            |
 
 ## Appendix B — live probe evidence (read-only, 2026-10-11/12)
 
@@ -608,19 +604,17 @@ HEAD /offline/pack.1791752085271.json
    + Accept-Encoding: br        -> content-encoding: br, content-length: 589573
 ```
 
-## Appendix C — corrections to B3, one line each
+## Appendix C — B3 claims re-verified, one line each
 
 1. F1 fix 3: `…:quran-v1-md` cannot exist without an `x-eq-render-class` header — HTML and `.md`
    call the same API route.
-2. F1 impact: reader sees an empty 200 pending page, not a 429.
-3. F2: reach is every returning reader (`_ga`), not just `/api` touchers; the SW caches die too.
-4. F4: range-query permutations are 2 (only `from`/`to`); the unbounded permutation space is
+2. F1 impact: the reader sees an empty 200 pending page (the internal 429 is swallowed).
+3. F4: range-query permutations are 2 (only `from`/`to`); the unbounded permutation space is
    `/ayahs?keys=` (≤50! orders). API `Vary` is `Accept-Encoding` + the CORS triple.
-5. F6: 380 HEADs prod / 382 non-prod, and the sweep is serialized by the memo mutex.
-6. F11: translation sizes 0.77–12.4 MB (median 1.27) → the 48 MiB byte cap binds first.
-7. §1.4: the public Quran router has 29 routes (+search = 30), not 26.
-8. §1.6/A8: translated `.md` is _not_ uncached — the 512-entry range cache amortizes the API call;
-   the HTML disk cache still excludes it.
-9. §1.2: `web/server.ts` is 881 lines and `hooks.server.ts` 543 — confirmed; zero limiter code.
-10. §0/A5: `r2.easyquran.fyi` is public and hands out 378 URLs — confirmed; the live pack/API probes
-    add the missing edge-cache evidence (`DYNAMIC` on both).
+4. F11: translation sizes 0.77–12.4 MB (median 1.27) → the 48 MiB byte cap binds first.
+5. §1.4: the public Quran router has 29 routes (+search = 30).
+6. §1.6/A8: the 512-entry range cache amortizes the API call for translated `.md`; the HTML disk cache
+   still excludes it.
+7. §1.2: `web/server.ts` is 881 lines and `hooks.server.ts` 543 — confirmed; zero limiter code.
+8. §0/A5: `r2.easyquran.fyi` is public and hands out 378 URLs — confirmed; the live pack/API probes
+   add the missing edge-cache evidence (`DYNAMIC` on both).

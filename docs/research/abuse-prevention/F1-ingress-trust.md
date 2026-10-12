@@ -7,7 +7,7 @@ source: `rust/backend/api/src/middlewares/client_ip.rs`, `src/config/settings.rs
 `src/modules/admin_bans_v1/controller.rs`, `crates/rux-request-gate/src/ip.rs`,
 `docker-compose.yml`, `docker-compose.local.yml`, `deploy/README.md`,
 `web/server.ts`, `web/src/lib/server/quran-translation-page.ts`, `web/scripts/assert-headers.sh`,
-`.env.example`, `docs/security.md`, `docs/quran-system.md`.
+`.env.example`, `documentation/quran-system.md`.
 Dependency sources read: `client-ip-0.2.1`, `axum-client-ip-1.3.1` (both in the cargo registry).
 External facts verified against primary sources: Traefik v3 docs + `forwarded_header.go`
 (XHeadersSet, ipAllowList remote-addr semantics, `headers.customRequestHeaders`), Cloudflare docs
@@ -95,7 +95,7 @@ Preconditions and gains per path. "Forged" always means an attacker-chosen `CF-C
 Shodan) **and** the host's 80/443 (Dokploy's Traefik) reachable from the internet — i.e. the
 manual firewall/allowlist step in `deploy/README.md:377-392` is missing or incomplete. The repo
 cannot show either side (see §4); the deploy doc admits the negative test is owner-run and
-unverified (`:407-409`), and `docs/security.md:84` says the same ("none of this is verified yet").
+unverified (`:407-409`).
 **Gain.** Send `Host: easyquran.fyi` + `CF-Connecting-IP: <anything>` to Traefik. Traefik matches
 the api router, forwards the header verbatim; the api's peer is Traefik (private, trusted) → the
 header is believed → `RequestIdentity::External(<anything>)`. Full identity forgery: unlimited
@@ -229,8 +229,7 @@ range-sanity check.
 **Cannot show (outside the repo):** whether the host firewall or Traefik itself restricts 80/443
 to Cloudflare ranges; whether the origin IP is exposed by any direct DNS record; whether ACME
 renewal depends on a publicly reachable port (relevant to §6). `deploy/README.md:377-392` states
-the rule is required and owner-run; `:407-409` states the negative test is unverified;
-`docs/security.md:84` confirms.
+the rule is required and owner-run; `:407-409` states the negative test is unverified.
 
 **Conclusion.** Internet attackers cannot reach the api unless they can reach Traefik on 443 with
 a matching Host — that is the (a)/(c) path, and it hinges entirely on out-of-repo firewall state.
@@ -658,7 +657,7 @@ Evidence: `deploy/README.md:377-392` ("MUST deny public origin ingress", owner-r
 scaffolding"); `web/scripts/assert-headers.sh:9-15,222-223` (warn only); repo contains no Traefik
 allowlist, no `wrangler.toml`, no `cloudflared` config, no CF zone config (grep for
 `ipAllowList|wrangler|cloudflared|origin.pull|mTLS` → only comments/docs; `.wrangler` appears only
-in ignore files); `docs/security.md:84` confirms unverified.
+in ignore files).
 Fix: ship the allowlist as code — Traefik `ipallowlist` labels in `docker-compose.yml` (§6.1) or
 Tunnel — and turn the assert script's reminder into a hard check; add the canary (§6.5).
 
@@ -716,7 +715,7 @@ Fix: per-zone/per-hostname AOP or Tunnel **plus** the CF-zone Transform Rule mar
 Evidence: `settings.rs:195-205` accepts `XRealIp`, `TrueClientIp`, `RightmostXForwardedFor`,
 `RightmostForwarded`, `CloudFrontViewerAddress`; prod rejects only `ConnectInfo` (`:208-215`).
 In this chain Traefik sets `X-Real-Ip` from the peer (CF edge IP) and sanitises XFF; `True-Client-IP`
-is Enterprise-only and spoofable in stacked-CDN setups (CF docs). `docs/quran-system.md:275-276`
+is Enterprise-only and spoofable in stacked-CDN setups (CF docs). `documentation/quran-system.md:275-276`
 documents the intended source.
 Fix: in production, require exactly `CfConnectingIp`; reject the rest with a clear error.
 
@@ -750,7 +749,7 @@ Fix: §8 — E6 must share the marker-gated identity and must not use XFF.
 ## Appendix — what this audit could not verify from the repo
 
 1. Whether the live origin accepts non-CF ingress (host firewall / Dokploy Traefik config lives
-   outside the repo; `deploy/README.md:377-409` says manual; `docs/security.md:84` says unverified).
+   outside the repo; `deploy/README.md:377-409` says manual and unverified).
 2. Whether the origin IP is exposed by any direct DNS record or historical record.
 3. Whether Dokploy's Traefik supports the exact label/version surface assumed here (the compose
    uses `ipAllowList` v3 syntax; Dokploy's Traefik version is not pinned in the repo).

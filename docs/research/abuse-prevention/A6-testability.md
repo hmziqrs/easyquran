@@ -56,7 +56,7 @@ Notation: **T** = testable in-repo with existing runners; **S** = testable only 
 - **Runner:** vitest; `web/src/lib/auth/__tests__/auth-client.test.ts` is the exact template:
   `vi.mock("$app/env/public", …)` at top, `vi.spyOn(globalThis, "fetch")` + real `Response` objects,
   assertions on `(url, init)` pairs.
-- **T**: header attached to `/auth/**`, `/user/**`, `/bookmark/**` calls; absent on `exempt: true`; absent when
+- **T**: header attached only on the allowlisted security paths (login, register, 2FA, passkey, credential change — A4 §7), never on `/csrf/v1/generate` or `/user/v1/get`; absent on `exempt: true`; absent when
   the provider yields nothing; provider rejection never fails the request (mirror the existing
   `"rotation refresh is best-effort and does not fail the originating request"` test, line 252).
 - **S**: the provider must be constructor-injected (`new AuthClient(signals)`), because `#request` is private
@@ -83,15 +83,16 @@ Notation: **T** = testable in-repo with existing runners; **S** = testable only 
 - **M**: pepper rotation in production (rotating the pepper re-keys every device → every device looks new →
   step-up storms; needs a staging run and an ops runbook).
 
-### (d) `device_records` / `device_sessions` (m000012)
+### (d) `device_records` / `device_sessions` (device migration; next free number, `NN` below)
 
 - **Runner:** `cargo test -p migration` (inline `#[cfg(test)] mod tests`) + `Migrator::up` from `tests/*.rs`.
 - **T** (see §4): fresh `up` creates the table, columns, `UNIQUE(device_key)`, `(user_id)`/`(last_seen)` indexes,
   defaults, and the FK actions; `up` twice is idempotent; `down` drops; a full `Migrator::up` run creates the
-  index (catches "forgot to register m000012 in `migration/src/lib.rs`" — the m000010 bug class).
+  index (catches "forgot to register the migration in `migration/src/lib.rs`" — the m000010 bug class).
 - **Gap the design must close:** `user_id … SET NULL` is a _foreign-key action_. SQLite enforces FKs only with
-  `PRAGMA foreign_keys = ON`; sea-orm's sqlite connection does not necessarily enable it. Unless the test
-  explicitly turns it on, "user deleted → device record survives with NULL user" is unverified.
+  `PRAGMA foreign_keys = ON`; production enables it at connect (`db/sea_connect.rs:50`), but a test harness that
+  calls `Database::connect` directly does not. Unless the test explicitly turns it on, "user deleted → device
+  record survives with NULL user" is unverified.
 - **M**: applying the migration to the live DB (row counts, wall time).
 
 ### (e) Risk engine + hysteresis
@@ -287,7 +288,9 @@ export const deviceCollector = new DeviceCollector();
 export class AuthClient {
   constructor(private readonly device: DeviceCollector = deviceCollector) {}
   async #request<T>(method: string, path: string, opts: RequestOpts = {}) {
-    const payload = await this.device.payload().catch(() => null); // best-effort, never blocks
+    // Synchronous read of an already-collected payload: never await the collector inside #request —
+    // it would delay the session probe and can trip the 12 s abort (A4 §3). Allowlisted paths only (A4 §7).
+    const payload = isDevicePath(path) ? this.device.cachedPayload() : null;
     if (payload) headers["x-eq-device"] = encodePayload(payload);
     // ...existing body unchanged...
   }
@@ -327,9 +330,11 @@ it("the adapter never uses canvas/audio hashing at all (Layer 0)", () => {
 });
 ```
 
-**G2 — device payload never attached to reader routes; token never becomes a cookie.**
-Rots silently: a cookie-carried device token flips `requestHasCookie` in `hooks.server.ts:427` → `cacheable`
-false at line 346-351 → the 7-day SSR disk cache stops caching for every reader. No error, just slower pages.
+**G2 — device payload never attached to reader routes; no device cookie reaches reader paths.**
+Rots silently: a device cookie visible on reader requests (`document.cookie`, or a `Path=/` cookie) flips
+`requestHasCookie` in `hooks.server.ts:427` → `cacheable` false at line 346-351 → the 7-day SSR disk cache stops
+caching for every reader. No error, just slower pages. (A server-set HttpOnly cookie scoped to `Path=/api` is never
+sent on reader paths; client code must never write a cookie at all.)
 
 ```ts
 it("reader fetch paths carry no device header", () => {
@@ -357,7 +362,7 @@ Rots silently: someone adds "devices per surah" to the admin dashboard and the A
 
 ```ts
 it("the device migration references no reader table", () => {
-  const m = read("../rust/backend/api/migration/src/m000012_device_identity.rs");
+  const m = read("../rust/backend/api/migration/src/m0000NN_device_identity.rs");
   for (const t of ["bookmark", "reading", "recitation", "search_history", "post_view", "comment"]) {
     expect(m, `device migration must not reference ${t}`).not.toMatch(new RegExp(t, "i"));
   }
@@ -397,7 +402,7 @@ it("the device payload wire shape carries no raw values", async () => {
 ```rust
 #[test]
 fn device_schema_has_no_raw_signal_columns() {
-    let m = include_str!("../migration/src/m000012_device_identity.rs");
+    let m = include_str!("../migration/src/m0000NN_device_identity.rs");
     for banned in ["user_agent", "raw_signals", "renderer TEXT", "screen_width", "plugins TEXT"] {
         assert!(!m.contains(banned), "device_records must not carry raw column: {banned}");
     }
@@ -439,7 +444,7 @@ it("the offline pack and sync outbox carry no device token", () => {
 });
 ```
 
-## 4. Migration testing (m000012)
+## 4. Migration testing (the device migration)
 
 What the repo's precedent demands (all three patterns exist; the new migration should combine them):
 
@@ -466,10 +471,10 @@ What the repo's precedent demands (all three patterns exist; the new migration s
 - `down` must be real: `DROP TABLE` for the new tables and `DROP INDEX IF EXISTS` for indexes added to
   existing tables (m000008's `down` only drops the index because the dedupe is irreversible — the new
   migration should say which parts are irreversible in the same comment style);
-- register it: `mod m000012_…;` + `Box::new(m000012_…::Migration)` in `migration/src/lib.rs:3-56`, with the
+- register it: `mod m0000NN_…;` + `Box::new(m0000NN_…::Migration)` in `migration/src/lib.rs:3-56`, with the
   one-line "what it is for" comment the neighbours carry.
 
-Minimum test list for m000012 (≈7 tests): fresh up columns+indexes; defaults; UNIQUE rejects a second
+Minimum test list for the device migration (≈7 tests): fresh up columns+indexes; defaults; UNIQUE rejects a second
 `device_key`; `device_sessions` UNIQUE(user_session_id) + FK; `up` twice; `down` drops table+indexes; full
 `Migrator::up` creates the index.
 
@@ -594,7 +599,7 @@ Not affected: `web/src/routes/(application)/__tests__/nav-guard.test.ts` (reader
 
 Rust:
 
-1. `migration/src/m000012_device_identity.rs` (inline tests) — fresh up / defaults / UNIQUE / idempotent /
+1. `migration/src/m0000NN_device_identity.rs` (inline tests) — fresh up / defaults / UNIQUE / idempotent /
    down / full-migrator. ~7 tests.
 2. `tests/device_identity_regressions.rs` — HMAC key vector + pepper isolation + component-order
    canonicalization; `device_records` UNIQUE + FK SET NULL (with `PRAGMA foreign_keys=ON`); `device_sessions`

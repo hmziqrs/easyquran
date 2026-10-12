@@ -27,15 +27,15 @@ round-4 reports did not catch, each of which changes the work:
    ≤5-min lag through the session cache, the client shows a banned user "Email or password is incorrect",
    and shipping a ban without notice + appeal turns a 3-line admin route into a silent permanent lockout.
 
-Corrected estimate: **A core ≈ 13–20 dev-days, B ≈ 9–14** (vs B2's 8–12 + 6–10), plus 1–2 policy days.
+Corrected estimate: **A core ≈ 12–17 dev-days, B ≈ 9–14** (vs B2's 8–12 + 6–10), plus 1–2 policy days.
 Corrected PR order in §8; abort gate in §8.3.
 
 ---
 
 ## 0. Scope note
 
-The four round-4 reports named in the brief are `B2`, `B9`, `B10`, `B3`, `B4`, `B5`, `B8`, `A8`; all exist
-and were read in full (B10's own "B\* reports do not exist" note is stale — they were written after it).
+The eight reports named in the brief are `B2`, `B9`, `B10`, `B3`, `B4`, `B5`, `B8`, `A8`; all exist
+and were read in full.
 Where a finding here **confirms** an existing report it is labelled _confirms_; where it is new it is
 labelled **NEW**. The task's "mark NEW" is honoured per finding in §9.
 
@@ -106,8 +106,9 @@ Consequences, all verified:
   duplicates with the same success envelope — `auth_v1/controller.rs:519-525` — so existence is _masked_,
   but the lockout does not require knowing that an account exists: the block is created regardless).
 - **Expensive tier (corrected):** 5 requests → 24 h is **not** one-shot. It requires attempts _inside_
-  the 900 s window when a temp block expires. An attacker can force it: send 3 (temp block), wait ~50 min,
-  send 3 more (blocked but appended), then one request after expiry → long block. Or simply let the
+  the 900 s window when a temp block expires. An attacker can force it: send 3 (temp block), wait until the last 15 min
+  of the block, send 4 more (blocked but appended), then one request after expiry → long block (≈8 timed
+  requests; 3 + 3 + 1 leaves `long_count = 4`, one short). Or simply let the
   victim's retries do it. So the 24 h weapon exists, but the mechanism is the **blocked-path append**, and
   a fix that only switches to "failures-only" without touching `store.rs:303-315` leaves the escalation
   intact (a blocked request is not a password failure, yet it counts as one).
@@ -251,7 +252,7 @@ verified, Firebase Analytics is live), and XSS anywhere on the origin yields ful
 - **Against XSS, B adds nothing over the session cookie.** The session cookie is HttpOnly too
   (`main.rs:781-788`), same theft properties, same CSP dependency.
 - **B adds a second, longer-lived credential.** The token lives ~12 months (B2 B1/B2 policy: "token 12 mo,
-  links 12 mo"); the session lives 14 days (`main.rs:782`). An XSS or a shared-computer visitor who
+  links 12 mo"); the session expires after 14 days of inactivity (`main.rs:782`). An XSS or a shared-computer visitor who
   captures the token holds a 12-month identifier that survives logout and password change.
 - **Consequence is attribution poisoning, not account takeover** — today. The token is not an auth
   credential: stealing it does not grant access. But it _does_ let the holder make the victim's device
@@ -347,8 +348,8 @@ wired into login (`auth_v1/controller.rs:153-166`), OAuth (`oauth/login.rs:321`)
    **NEW**
 2. **The 5-min cache is per-session, server-side, and not invalidatable.** Unban has the mirror problem:
    a user can be locked out for up to 5 minutes after unban. Accept and document, or add a
-   `ban_epoch` to `AuthSessionState` and compare on read (a serde-compatible field with a default — B10
-   §1.3 warns that adding a field without `#[serde(default)]` breaks every live session). **NEW**
+   `ban_epoch` to `AuthSessionState` and compare on read (a serde-compatible field with a default — A3 F1:
+   adding a field without `#[serde(default)]` breaks every live session). **NEW**
 3. **No index on `user_bans`** (§1, `m000001_init.rs:58-73`): the ban lookup becomes a table scan every
    5 min per active user on a pool-of-1 connection. Add
    `CREATE INDEX IF NOT EXISTS idx_user_bans_user_active ON user_bans (user_id, revoked_at, expires_at)`
@@ -383,9 +384,9 @@ wired into login (`auth_v1/controller.rs:153-166`), OAuth (`oauth/login.rs:321`)
   Web-side this is `auth-copy.ts` + `flows.svelte.ts` + tests; it must keep `bun run check/lint/test`
   green.
 - **Notice + appeal:** `NotificationKind` has no `Enforcement` variant and the in-app channel is
-  unreachable for a session that is 403'd; mail suppression can silently drop a notice and
-  `is_transactional()` covers only verification + password_reset (B9 F8, verified against
-  `services/mail/router.rs`). B9 finding 12's irreducible minimum applies to the **shipped** ban feature:
+  unreachable for a session that is 403'd; `is_transactional()` covers only verification + password_reset, so
+  a notice to a suppressed address fails with `Err(Suppressed)` — and would be dropped silently with `Ok` if
+  simply added to the transactional set (B9 Q4, verified against `services/mail/router.rs:241-258`). B9 finding 12's irreducible minimum applies to the **shipped** ban feature:
   a ban without a durable notice and an unauthenticated appeal route is a silent permanent lockout —
   the Art 17 / Art 22(3) exposure the reports assign to C lands on A1 instead. **Same-change
   requirements: (a) a durable notice channel with delivery proof, (b) `POST /appeal/v1/submit` +
@@ -426,7 +427,7 @@ users — B2's conclusion survives this audit.
 | A1  | **Limiter correctness** (new `abuse_peek`/`abuse_record` on the store trait + in-memory impl + `PersistentStore` wrapper; callers `login`, `totp`, `reauth`, `totp_setup`; config split; blocked-path append removed; ban-check-before-limiter; tests) | `crates/rux-request-gate/src/store.rs`, `abuse.rs`; `services/abuse_limiter.rs`; `auth_v1/controller.rs`              | ~250 LOC + 120 test LOC | **1.5–2.5** |
 | A2  | **Client banned/credential split** (remove AUTH_006 from `CREDENTIAL_TYPES`, add `banned` kind + copy, login flow stops retrying, tests)                                                                                                               | `web/src/lib/auth/auth-copy.ts`, `flows.svelte.ts`, `__tests__/*`                                                     | ~80 LOC                 | **0.5–1**   |
 | A3  | **Ban wiring** (`modules/admin_user_bans_v1/{mod,dto,controller}.rs`, router mount, ROLE_ADMIN + CSRF, idempotent create, revoke, list; `session_auth_secret` bump on create; migration index)                                                         | new module ~350 LOC, `router.rs`, `user/actions.rs`, migration                                                        | ~450 LOC                | **2.5–3.5** |
-| A4  | **Ban notice + appeal minimum** (mail template + `is_transactional` entry + `NotificationKind::Enforcement`; `appeals` table + `POST /appeal/v1/submit` + tokenized page + rate limit + uniform responses)                                             | `services/mail/*`, `ruxlog-types/enums/notification.rs`, new `appeal_v1`, web page                                    | ~450 LOC + migration    | **3–4**     |
+| A4  | **Ban notice + appeal minimum** (mail template exempt from the suppression drop + delivery state + `NotificationKind::Enforcement`; `appeals` table + `POST /appeal/v1/submit` + tokenized page + rate limit + uniform responses)                      | `services/mail/*`, `ruxlog-types/enums/notification.rs`, new `appeal_v1`, web page                                    | ~450 LOC + migration    | **3–4**     |
 | A5  | **Audit writers** (`services/audit.rs` + call sites: ban lifecycle, auth events, admin mutations; index; retention note)                                                                                                                               | new service ~150 LOC + ~15 call sites                                                                                 | ~300 LOC                | **1.5–2.5** |
 | A6  | **Registration admission** (per-IP/ASN in-memory caps + allowlist, Turnstile prod wiring + deploy check, verification-identity canonicalization + cap, metrics)                                                                                        | `auth_v1/controller.rs`, new `services/registration_policy.rs`, config, migration (identity hash column), deploy docs | ~400 LOC + migration    | **2.5–3.5** |
 | A7  | **Fresh-account privilege limits + comment hardening** (age-gated caps, link/repetition heuristic, flag auto-hide)                                                                                                                                     | `post_comment_v1/*`, config                                                                                           | ~250 LOC                | **1.5–2**   |
@@ -455,8 +456,8 @@ Policy: 1–2 days. **A+B total ≈ 22–33 dev-days + 1–2 policy**, vs B2's 1
 
 ### 7.3 Migrations
 
-- **m000012**: `CREATE INDEX IF NOT EXISTS idx_user_bans_user_active ON user_bans (user_id, revoked_at, expires_at)`; `appeals` table (id, case ref, token_hash, state, created/expires); `users.verification_identity_hash TEXT` (nullable, additive — `ALTER TABLE ADD COLUMN` with NULL default only, A10 F9); `audit_logs` index if the retention/query plan needs one.
-- **m000013** (Option B): `device_tokens`, `device_account_links`; all retention columns INTEGER epoch (B8 F7); no CASCADE FK to users (evidence outlives accounts — B8 F12).
+- **First migration (next free number)**: `CREATE INDEX IF NOT EXISTS idx_user_bans_user_active ON user_bans (user_id, revoked_at, expires_at)`; `appeals` table (id, case ref, token_hash, state, created/expires); `users.verification_identity_hash TEXT` (nullable, additive — `ALTER TABLE ADD COLUMN` with NULL default only, A10 F9); `audit_logs` index if the retention/query plan needs one.
+- **Second migration** (Option B): `device_tokens`, `device_account_links`; all retention columns INTEGER epoch (B8 F7); no CASCADE FK to users (evidence outlives accounts — B8 F12).
 - Both: `up()` pure DDL, `IF NOT EXISTS`, idempotent — sea-orm-migration 1.1.20 does **not** wrap SQLite migrations in a transaction (B10 §1.1 verified), so a crash mid-run re-runs.
 
 ### 7.4 Tests (the minimum that pins the fixes)
@@ -595,7 +596,7 @@ path too, or an explicit decision to accept the hard block.
 ### F6 — The B token is a second 12-month bearer identifier with no authentication power; HttpOnly prevents reads, not use, so it adds no XSS resistance over the session cookie and doubles the theft window. **NEW**
 
 **Severity: High.**
-**Evidence:** session cookie is HttpOnly with 14-day expiry (`main.rs:781-788`); B2 B2 proposes
+**Evidence:** session cookie is HttpOnly with a 14-day inactivity expiry (`main.rs:781-788`); B2 B2 proposes
 `HttpOnly; Path=/api` with 12-month token/links retention; CSP trusts gstatic/googletagmanager/
 challenges.cloudflare.com with live Firebase Analytics (B10 §1.10 verified). Any same-origin script can
 `fetch` `/api/**` and use the cookie; theft consequence is attribution poisoning (linking a victim's
@@ -646,10 +647,11 @@ check the ban before the limiter (or skip counting banned attempts); keep `bun r
 ### F11 — Shipping the ban without a durable notice and an unauthenticated appeal converts A1 into the silent-permanent-lockout liability the reports assigned to C. **NEW (scoped to A1)**
 
 **Severity: High.**
-**Evidence:** `NotificationKind` has no Enforcement variant (A8 §0 item 5; B9 F8); mail suppression
-drops notices and returns Ok (`services/mail/router.rs`, B9 F8); no appeal module (A8 F7); a banned
+**Evidence:** `NotificationKind` has no Enforcement variant (A8 §0 item 5; B9 F8); a notice to a
+suppressed address is never delivered (`Err(Suppressed)` today; silent `Ok` if the template is made
+transactional — `services/mail/router.rs:241-258`, B9 Q4); no appeal module (A8 F7); a banned
 session is 403'd out of the in-app channel.
-**Fix:** A4 (notice template added to `is_transactional`, delivery state recorded, `appeals` table +
+**Fix:** A4 (notice template exempt from the suppression drop, delivery state recorded, `appeals` table +
 `POST /appeal/v1/submit` + tokenized no-referrer/noindex page + rate limit + uniform responses) ships in
 PR2/PR3, not later.
 

@@ -28,17 +28,19 @@ So:
 
 - A device token in `localStorage` + IDB never enters a request → `/t/**` stays `cacheable`,
   hit path at `hooks.server.ts:361-372` intact, write path at `376-389` intact.
-- **Break condition A:** the token ever becomes a cookie (`document.cookie = ...`, or the API sets
-  one) → `cacheable === false` (line 350) and `applyHeaders` forces `private, no-store`
-  (`hooks.server.ts:130-137`). This is the `docs/locale-suggest.md:19-21` non-negotiable
-  ("No cookies, ever").
+- **Break condition A:** the token becomes a cookie that reaches reader paths (`document.cookie = ...`,
+  or an API cookie with `Path=/`) → `cacheable === false` (line 350) and `applyHeaders` forces
+  `private, no-store` (`hooks.server.ts:130-137`). The predicate is cookie _presence on the request_, so a
+  cookie scoped to `Path=/api` is never sent with `/t/**` and leaves the cache intact. (`docs/locale-suggest.md`
+  §1 rule 2, "No cookies, ever", is that feature's own rule for client-written cookies.)
 - **Break condition B:** SSR on a reader route ever _varies_ by a device header. Because the disk
   key and the SW page key are header-blind (see §4), the first writer's HTML is served to everyone
   else; a poisoned entry lives up to 7 days (`quran-disk-cache.ts:12`, TTL via `stat.mtimeMs`).
 - **Break condition C:** the collector is _invoked_ from the reader path in a way that delays SSR?
   No — collection is client-side only; the risk is only client CPU (see §3).
 
-**Design must avoid:** (1) any cookie for the device token, including a "rotated token" cookie;
+**Design must avoid:** (1) any device cookie that reaches reader paths — if the token is a cookie it must be
+server-set with an explicit `Path=/api` (never `Path=/`, never `document.cookie`);
 (2) any server-side branch in `/t/**` (or any cached HTML path) that reads a device header/param;
 (3) relying on `Vary` — `applyHeaders` only appends `Vary: Accept` for markdown/404
 (`hooks.server.ts:148-154`), and the disk cache ignores `Vary` entirely. If the server ever needs a
@@ -154,7 +156,8 @@ by the SW. No SW change is needed for transport. The SW must **not** be taught t
 `674-716`) — pathname+search only, header-blind — so any device-header-dependent document would be
 served wrong from cache. `isCacheable` refuses `private`/`no-store` (`:123-128`), which is what
 keeps authenticated documents out today; that is a second reason the token must never become a
-cookie (any cookie makes reader documents `private, no-store` per `hooks.server.ts:136-137`).
+cookie on reader paths (any cookie on the request makes reader documents `private, no-store` per
+`hooks.server.ts:136-137`; a `Path=/api` cookie is not sent there).
 
 If offline device-announce is ever wanted, it is a **new SW responsibility**, not a free by-product
 of the fetch path: new message type in `lib/offline/messages.ts` (union at `:21-32`), and a new IDB
@@ -315,7 +318,7 @@ New guards (house "machine guard" style — raw-source assertions like
 4. `web/src/lib/device/__tests__/device-prerender-guard.test.ts`
    - assert every browser-API entry point in `src/lib/device/**` is behind a `browser` check
      (source assertion), and that prerendered layouts contain no device import.
-5. Extend `docs-divergence-guard.test.ts` style: assert `docs/quran-system.md` records "device
+5. Extend `docs-divergence-guard.test.ts` style: assert `documentation/quran-system.md` records "device
    payload never rides `/t/**`, no device cookie" so the contract can't silently drift.
 
 ---
@@ -349,7 +352,7 @@ Also: the collector module must not be a top-level side-effect importer — `no-
 
 The design's `device_records` / `device_sessions` / `/admin/devices` must use a distinct vocabulary
 (e.g. `client_records`, `/identity/v1/...`) or every future reader will conflate a fingerprint
-identity with a push subscription. Rename now, before m000012 is written.
+identity with a push subscription. Rename now, before the device migration is written.
 
 ---
 
@@ -375,10 +378,10 @@ If the design's L4 "hold for review" or an appeal notice must be visible, note:
 
 The design cites `docs/plan/09-locale-suggest.md`. That path does not exist in this repo:
 `docs/plan/` is gone; the compacted doc is `docs/locale-suggest.md`, whose "No cookies, ever"
-rule is at `docs/locale-suggest.md:19-21` (the file itself records the move at `:4-6`).
+rule is §1 rule 2.
 Additionally, `docs-divergence-guard.test.ts:96-151` fails the test run if any doc under `docs/`
 claims translated reader routes are prerendered/SSG, so the device design must not describe
-`/t/**` as prerendered when it lands. Update `docs/quran-system.md` (Part 5 divergence record) and
+`/t/**` as prerendered when it lands. Update `documentation/quran-system.md` (Part 5 divergence record) and
 `docs/locale-suggest.md` §7's amendment list in the same change as the device layer.
 
 ---

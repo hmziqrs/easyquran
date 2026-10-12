@@ -73,18 +73,18 @@ never an enforcement unit (`DESIGN-v1` B1/B3, `A1` F3, `A2` F1/F2).
 
 ### 1.2 Server-side data (existing or cheap to add)
 
-| Source                                         | Fields                                                                                                              | Status                                                          |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Request headers (page JS **cannot** set these) | `User-Agent`, `Sec-CH-UA`, `Sec-CH-UA-Platform`, `Sec-CH-UA-Mobile`, `Accept-Language`, `Sec-Fetch-*`, HTTP version | present                                                         |
-| Edge-signed headers (Ed25519, `DESIGN-v1` B4)  | `country`, `asn`, `JA4` when the plan exposes it, `cf-ray`, client IP                                               | designed                                                        |
-| IP unit                                        | `/24` v4, `/48` v6 + ASN bucket (`middlewares/client_ip.rs`)                                                        | present                                                         |
-| Gate store (in-memory, flushed every 10 s)     | fixed-window counters, block state, escalation suspicious counters                                                  | present                                                         |
-| Auth events                                    | credential id, outcome, session id, timestamp                                                                       | needs an aggregate ring in the gate store                       |
-| Ban state                                      | `user_bans` (wired), `device_bans`, `device_sessions`                                                               | `user_bans` exists with zero callers (`DESIGN-v1` B1)           |
-| Content                                        | server-computed normalized hash of post/comment bodies                                                              | present                                                         |
-| Quotas                                         | per-credential and per-API-key counters                                                                             | **missing today**; `R2-evasion` §10 ranks this #1 impact/effort |
-| Request shape                                  | matched route template, status, response bytes, timestamp                                                           | present in metrics; needs a bounded per-subject rolling sketch  |
-| Registration                                   | creation time, normalized identifier domain, `device_key`                                                           | present                                                         |
+| Source                                         | Fields                                                                                                               | Status                                                                                                                                                |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Request headers (page JS **cannot** set these) | `User-Agent`, `Sec-CH-UA`, `Sec-CH-UA-Platform`, `Sec-CH-UA-Mobile`, `Accept-Language`, `Sec-Fetch-*`, HTTP version  | present                                                                                                                                               |
+| Edge-signed headers (Ed25519, `DESIGN-v1` B4)  | `country`, `asn`, `JA4` when the plan exposes it, `cf-ray`, client IP                                                | designed                                                                                                                                              |
+| IP unit                                        | `/32` v4, `/64` v6 (canonical `BanUnit`); an ASN bucket would need a Worker header or a baked IP→ASN table (B3 §4.2) | IP unit present; ASN missing                                                                                                                          |
+| Gate store (in-memory, flushed every 10 s)     | fixed-window counters, block state, escalation suspicious counters                                                   | present                                                                                                                                               |
+| Auth events                                    | credential id, outcome, session id, timestamp                                                                        | needs an aggregate ring in the gate store                                                                                                             |
+| Ban state                                      | `user_bans` (wired), `device_bans`, `device_sessions`                                                                | `user_bans` exists with zero callers (`DESIGN-v1` B1)                                                                                                 |
+| Content                                        | server-computed normalized hash of post/comment bodies                                                               | **missing** (only `media.content_hash` exists) — R04b/R10/R11 need it added                                                                           |
+| Quotas                                         | per-credential and per-API-key counters                                                                              | per-credential counters exist (`login:`, `totp:`, `reauth:`, `forgot_password_*`, `email_verify:` — B2 §0) but count successes; no API keys exist yet |
+| Request shape                                  | matched route template, status, response bytes, timestamp                                                            | present in metrics; needs a bounded per-subject rolling sketch                                                                                        |
+| Registration                                   | creation time, normalized identifier domain, `device_key`                                                            | creation time + email present; `device_key` is designed, not built                                                                                    |
 
 **Hot-path discipline (`rate_limit_store.rs:1`):** no rule may add a DB write or read to the request path.
 Scored rules evaluate from the gate store + session payload on the existing ticker; observations are
@@ -151,14 +151,14 @@ score = Σ over classes C ∈ {H, S, T, P} of min(CLASS_CAP, best_rule_in_family
 CLASS_CAP = 40
 ```
 
-| Level                    | Enter     | Exit | Class precondition (enforced in code)                                     |
-| ------------------------ | --------- | ---- | ------------------------------------------------------------------------- |
-| L1 throttle              | 20        | 10   | any                                                                       |
-| L2 challenge             | 40        | 20   | any (so **P alone maxes out at L2** — arithmetic, not policy)             |
-| L3 cooldown              | 60        | 30   | ≥2 distinct classes, ≥1 of them H or S                                    |
-| L4 proposal (queue-only) | 80        | 40   | ≥2 classes with both contributing ≥20, ≥1 H or S; or a deterministic rule |
-| L5/L6                    | human     | —    | never automatic; two-person for permanent (`DESIGN-v1` B5)                |
-| L7                       | statutory | —    | CSAM hash / court order / NEA                                             |
+| Level                    | Enter     | Exit | Class precondition (enforced in code)                                                                                                                     |
+| ------------------------ | --------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L1 throttle              | 20        | 10   | any                                                                                                                                                       |
+| L2 challenge             | 40        | 20   | any (so **P alone maxes out at L2** — arithmetic, not policy)                                                                                             |
+| L3 cooldown              | 60        | 30   | ≥2 distinct classes, ≥1 of them H or S                                                                                                                    |
+| L4 proposal (queue-only) | 80        | 40   | ≥2 classes with both contributing ≥20, ≥1 H or S; or a deterministic rule                                                                                 |
+| L5/L6                    | human     | —    | never automatic; permanent needs a recorded second look — two-person where a second reviewer exists, otherwise auto-expiry + recorded self-review (B9 F4) |
+| L7                       | statutory | —    | CSAM hash / court order / NEA                                                                                                                             |
 
 Consequences, all deliberate:
 
@@ -168,8 +168,8 @@ Consequences, all deliberate:
 - The ban threshold (80) and restore threshold (40) from `DESIGN-v1` B5 remain the outer pair; the ladder
   thresholds above are nested inside them.
 - Hysteresis is per-level (enter/exit in the table) **and** per-rule (§4). The outer pair is never
-  exposed to the client, and enforcement carries a randomized 0–30 s delay so the boundary is not a
-  measurement instrument (A1 F10).
+  exposed to the client, and enforcement takes effect after a fixed, documented grace period — not a
+  randomized delay, which would break reproducibility, DSAR answers and Art 22(3) contestation (B9 F10).
 
 **Evidence families** (dedup unit — only the best rule in a family contributes, never the sum):
 
@@ -302,7 +302,7 @@ Hysteresis shown as enter/exit. Action is the **ceiling** the rule may reach alo
 - **Kind.** Scored, L4 queue-only, **never a ban input alone** (`A2` §3.3; `DESIGN-v1` B1 "device signals
   may challenge; they may never be the sole cause of a ban").
 - **Precision.** Unmeasured. Sourced priors bound the error in both directions: 45.52% of fingerprints
-  change after one day (P1), so "same device" is a weak positive; mobile uniqueness is 18.5% (P3), so
+  change after one day (P1, on FP-Stalker's larger attribute set), so "same device" is a weak positive; mobile uniqueness was 18.5% on a 2018 French population (P3), so
   "same key" is partly "same model + locale + screen bucket" and the FP is a _cohort_, not a person.
 - **Cheapest evasion.** Anti-detect profile or a different phone (`R2-evasion` §1.1). Residual: R04a and
   R04b — which is why the linkage family is designed around credentials and content, not devices.
@@ -594,7 +594,7 @@ targets above the published platform benchmarks precisely because the proxy is o
 every one of those cases the attacker's counter is "be consistent" or "rewrite the content" — which is
 cheap. The honest conclusion: the rules that survive an adaptive attacker are the deterministic,
 non-forgeable, server-state ones (R01, R04a, R04b, R06, R11) plus the shape rules as cost multipliers
-(R07–R09). The coherence rules buy roughly the measured ~48% evasion reduction (`R2-evasion` §3, P9) and
+(R07–R09). The coherence rules buy at best the 45–48% evasion reduction measured against commercial vendors (`R2-evasion` §3, P9) and
 nothing more; they must never be the sole basis of a restriction, which is why every one of them is capped
 at L2.
 
@@ -604,14 +604,14 @@ at L2.
 
 Enforced from day one — deterministic, non-forgeable, action bounded and reversible:
 
-| ID                        | Action ceiling                                  | Why it is defensible without measurement                                                                                                |
-| ------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **R01**                   | L1 progressive delay; L4 queue at the 24 h tier | A counter; the action is delay, not lock; a mistyped password costs 8 s                                                                 |
-| **R04a**                  | L4 queue-only + human, ≤72 h hard expiry        | The design's own deterministic class (`DESIGN-v1` B5: "prior ban + credential reuse"); no restriction is imposed before a human sees it |
-| **R04b**                  | L4 queue + human; CSAM → L7                     | Same; statutory path for CSAM is not optional                                                                                           |
-| **R06**                   | L1 → 429; L2 on a key after 3 windows           | Quota, published; `R2-evasion` §10 ranks it #1 impact/effort and `DESIGN-v1` B1 says it is missing today                                |
-| **R09 (quota tier only)** | L1                                              | Existing search-isolation intent (`quran_v1/mod.rs:56`)                                                                                 |
-| **G01–G07**               | suppress / step-down only                       | Guards can only reduce action, never increase it                                                                                        |
+| ID                        | Action ceiling                                  | Why it is defensible without measurement                                                                                                                          |
+| ------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **R01**                   | L1 progressive delay; L4 queue at the 24 h tier | A counter; the action is delay, not lock; a mistyped password costs 8 s                                                                                           |
+| **R04a**                  | L4 queue-only + human, ≤72 h hard expiry        | The design's own deterministic class (`DESIGN-v1` B5: "prior ban + credential reuse"); no restriction is imposed before a human sees it                           |
+| **R04b**                  | L4 queue + human; CSAM → L7                     | Same; statutory path for CSAM is not optional                                                                                                                     |
+| **R06**                   | L1 → 429; L2 on a key after 3 windows           | Quota, published; `R2-evasion` §10 ranks it #1 impact/effort. Per-credential counters already exist (B2 §0) — R06 makes them failure-only and adds per-key quotas |
+| **R09 (quota tier only)** | L1                                              | Existing search-isolation intent (`quran_v1/mod.rs:56`)                                                                                                           |
+| **G01–G07**               | suppress / step-down only                       | Guards can only reduce action, never increase it                                                                                                                  |
 
 Everything else — R02, R03, R04c, R05, R07, R08, R09-shape, R10, R11, R12–R17 — runs in **L0 shadow mode**
 under §6 and is enabled only by passing the gate.
@@ -639,7 +639,7 @@ deliberate, measured decision — not a launch default.
 | CDP `Runtime.enable` / DevTools trap                                 | (b) DevTools presence       | DevTools open is ~6% of desktop sessions (P10); the tell also breaks quarterly (row 2). Dropped.                                                     |
 | Tor / VPN / incognito / privacy-hardened OS as a risk input          | (b)                         | `A2` F8: a challenge is a hard block behind national filters and in Tor; `A2` §5.2 item 7: matching a masking signature _lowers_ risk.               |
 | IP reputation / ASN block / residential-range block                  | (c) + (b)                   | 4 of 5 residential-proxy requests are legitimate household traffic (P8); blocking would hit the app's own mobile/CGNAT audience (`R2-evasion` §2.4). |
-| `device_key` match alone → ban                                       | (c)                         | Cohort key: 18.5% mobile uniqueness (P3); a device ban is a cohort ban (`A1` F3, `A2` F1/F2/F3).                                                     |
+| `device_key` match alone → ban                                       | (c)                         | Cohort key (P3: low mobile uniqueness even with richer signals); a device ban is a cohort ban (`A1` F3, `A2` F1/F2/F3).                              |
 | New-device event → step-up                                           | (c)                         | 32% of instances clear cookies in 8 months (P4); iOS home-screen and in-app contexts are separate storage (P5).                                      |
 | Low interval entropy alone → block                                   | (c)                         | A single distribution is one signal; R07 requires four terms and caps at L1/L2.                                                                      |
 | Disposable email domain alone → block                                | (c)                         | Domain lists have real FPs (plus-addressing, small ISPs, universities); it is one term inside R05.                                                   |
@@ -652,22 +652,22 @@ deliberate, measured decision — not a launch default.
 
 ## 10. Sourced priors (the numbers behind the FP/TP reasoning)
 
-| #   | Number                                                                                                                        | Source                                                                             |
-| --- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| P1  | 45.52% of fingerprints change after one day; average trackable 51.8 days; 26% trackable >100 days                             | FP-Stalker, Vastel et al., USENIX Security 2018, via `R2-fingerprint-science` §2.3 |
-| P2  | FP-Stalker rule-based F1 drops 86.1% → 75.9% as the DB grows 100K → 1M fingerprints; learning variant cannot scale past ~300K | Li & Cao, IMC 2020, via `R2-fingerprint-science` §2.2                              |
-| P3  | 33.6% overall unique; 18.5% mobile unique                                                                                     | Gómez-Boix et al. 2018 (Hiding in the Crowd), via `R2-fingerprint-science` §2.1    |
-| P4  | 32% of browser instances cleared cookies in 8 months                                                                          | Li & Cao, IMC 2020, via `R2-fingerprint-science` §2.3                              |
-| P5  | ~31% of mobile web sessions are in-app-browser sessions (secondary, flagged)                                                  | MobiLoud 2026, via `A2` F11                                                        |
-| P6  | Naive UA↔UA-CH check flags 90.62% of Indian mobile traffic                                                                    | StatCounter Sept 2026, via `A2` F6                                                 |
-| P7  | Opera is 3.51% of Indian mobile traffic                                                                                       | StatCounter Sept 2026, via `A2` F10                                                |
-| P8  | 4 of 5 requests from residential-proxy IPs are legitimate household traffic                                                   | Cloudflare, via `R2-evasion` §2.2                                                  |
-| P9  | 52.93% avg evasion vs DataDome, 44.56% vs BotD; consistency rules cut evasion 48.11% / 44.95%                                 | FP-Inconsistent, arXiv 2406.07647, ACM IMC'25, via `R2-evasion` §3                 |
-| P10 | DevTools open ≈6% of desktop sessions                                                                                         | FingerprintJS, via `R2-fingerprint-science` §7.2                                   |
-| P11 | ~20K users of Canvas-Blocker-class extensions                                                                                 | Vastel 2024, via `A2` F6                                                           |
-| P12 | No platform publishes account-ban precision; no vendor publishes a device-fingerprint ban FP rate                             | `R2-ban-operations` §4                                                             |
-| P13 | Targets: ban-proposal precision ≥95% permanent, ≥90% suspension; appeal overturn <5%                                          | `R2-ban-operations` §9                                                             |
-| P14 | ~$8.85 per account is the unit cost of the abuse being defended against                                                       | Meta Q1 2025, via `R2-evasion` §7.1                                                |
+| #   | Number                                                                                                                                          | Source                                                                          |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| P1  | 45.52% of fingerprints change after one day; average trackable 51.8 days; 26% trackable >100 days (larger attribute set than this design's key) | FP-Stalker, Vastel et al., IEEE S&P 2018, via `R2-fingerprint-science` §2.3     |
+| P2  | FP-Stalker rule-based F1 drops 86.1% → 75.9% as the DB grows 100K → 1M fingerprints; learning variant cannot scale past ~300K                   | Li & Cao, IMC 2020, via `R2-fingerprint-science` §2.2                           |
+| P3  | 33.6% overall unique; 18.5% mobile unique (one French commercial site, with canvas/WebGL/audio)                                                 | Gómez-Boix et al. 2018 (Hiding in the Crowd), via `R2-fingerprint-science` §2.1 |
+| P4  | 32% of browser instances cleared cookies in 8 months                                                                                            | Li & Cao, IMC 2020, via `R2-fingerprint-science` §2.3                           |
+| P5  | ~31% of mobile web sessions are in-app-browser sessions (secondary, flagged)                                                                    | MobiLoud 2026, via `A2` F11                                                     |
+| P6  | Naive UA↔UA-CH check flags 90.62% of Indian mobile traffic                                                                                      | StatCounter Sept 2026, via `A2` F6                                              |
+| P7  | Opera is 3.51% of Indian mobile traffic                                                                                                         | StatCounter Sept 2026, via `A2` F10                                             |
+| P8  | 4 of 5 requests from residential-proxy IPs are legitimate household traffic                                                                     | Cloudflare, via `R2-evasion` §2.2                                               |
+| P9  | 52.93% avg evasion vs DataDome, 44.56% vs BotD; consistency rules cut evasion 48.11% / 44.95%                                                   | FP-Inconsistent, arXiv 2406.07647, ACM IMC'25, via `R2-evasion` §3              |
+| P10 | DevTools open ≈6% of desktop sessions                                                                                                           | FingerprintJS, via `R2-fingerprint-science` §7.2                                |
+| P11 | ~20K users of Canvas-Blocker-class extensions                                                                                                   | Vastel 2024, via `A2` F6                                                        |
+| P12 | No platform publishes account-ban precision; no vendor publishes a device-fingerprint ban FP rate                                               | `R2-ban-operations` §4                                                          |
+| P13 | Normative targets (no platform publishes achieved rates): ban-proposal precision ≥95% permanent, ≥90% suspension; appeal overturn <5%           | `R2-ban-operations` §9                                                          |
+| P14 | ~$8.85 per account is the unit cost of the abuse being defended against                                                                         | Meta Q1 2025, via `R2-evasion` §7.1                                             |
 
 ---
 
@@ -681,14 +681,13 @@ cardinality), F3 (device as ban unit). A weight cap still lets one input be the 
 `A1` F3 notes that "corroboration" in v0 is a policy sentence with no mechanism behind it.
 Fix: `score = Σ min(40, best_rule_per_class)` over H/S/T/P, with L3+ requiring ≥2 classes and ≥1 non-P. This
 makes "one signal cannot escalate" arithmetic. Ban 80 / restore 40 stay the outer pair; the ladder nests
-inside; enforcement carries a randomized 0–30 s delay (`A1` F10).
+inside; enforcement takes effect after a fixed, documented grace period (B9 F10).
 
 ### F2 — Per-credential failure counters must throttle, never lock, or the counter becomes an account-lockout DoS
 
 **Severity: high. NEW.**
-Evidence: `R2-evasion` §10 item 1 recommends per-credential counters as the #1 countermeasure, and
-`R2-evasion` §9 row 10 says "lock on _credential_". Taken literally, an attacker can lock any account by
-failing logins on it — a targeted DoS on a specific reader, from any IP, for free. The existing repo
+Evidence: `R2-evasion` §10 item 1 recommends per-credential counters as the #1 countermeasure. Implemented as
+a lock, they let an attacker lock any account by failing logins on it — a targeted DoS on a specific reader, from any IP, for free. The existing repo
 escalation path is IP-only and default-OFF (`escalation.rs`), so this would be new attack surface.
 Fix: R01 caps at progressive delay (1–8 s) plus a session-scoped challenge; never an account lock, never a
 credential suspension. The 24 h tier opens an L4 queue case _for the account being attacked_, which is a

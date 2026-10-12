@@ -64,11 +64,11 @@ The dated version:
 - **Because WS2/WS3 are ordered after WS0**, the ban contract — the item that makes the app able to
   respond at all — never starts. Because WS7a (reader cost work) sits later in "Phase 0", the disk
   cache stays off for every cookie-holder, and the translated reader stays the slowest page in the app.
-- **The C3 §5 one-hour measurement is never run.** It needed host access (a prod DB copy) and one hour;
-  the plan schedules neither. Six months on, the base rate is still unmeasured, so every later decision
+- **The C3 §5 measurement is never run.** It needed host access (a prod DB copy) and 2–3 hours the
+  first time; the plan schedules neither. Six months on, the base rate is still unmeasured, so every later decision
   is still calibrated blind — the exact condition C3 was written to end.
 - **2027-04-12.** The plan's ledger: two landed commits (the 429 `debug!`→`warn!` word, the newsletter
-  unmount/`docs/history.md` correction) out of 28–42 dev-days. The app still cannot ban anyone; the
+  unmount/`documentation/history.md` correction) out of 28–42 dev-days. The app still cannot ban anyone; the
   login limiter still locks out any account with three requests; the reader still bypasses the disk
   cache for every cookie-holder; the newsletter table still does not exist.
 
@@ -107,20 +107,20 @@ The dated version:
   product.
 - **The report recipe reads zeros** in every abuse column (bans were made but the wave's accounts were
   banned _after_ the fact, not prevented). The only non-zero is 429 warn lines: 1.1M/month on
-  `quran-v1`, from 41 IPs. Cloudflare shows a request-to-session ratio of 180:1; March 2027 egress is
+  `quran-v1`, from 41 IPs. Cloudflare's per-IP/ASN distribution puts the same 41 IPs on top; March 2027 egress is
   2.9 TB against a 0.4 TB baseline. That is bulk reading of a public text — measured, visible, and
   deliberately not defended: the harvest-shape score was cut, the ASN cost tier was cut, and the reader
   path has no identity by design.
 - **2027-04-05.** The operator adds the OAuth cap — three days of work the plan did not include.
 
 **Early warning signal.** At plan review, `rg -l 'turnstile|admission' rust/backend/api/src/modules/*_auth_v1/`
-returns nothing, and the `just abuse-report` recipe has no reader-path / ASN / request-to-session column.
+returns nothing, and the `just abuse-report` recipe has no reader-path / per-IP / ASN column.
 The first wave's provider is the one whose module has no cap.
 
 **Plan change.** (1) Extend the admission rule to all five OAuth callbacks (per-IP/day + a
 per-verification-identity cap; no Turnstile — it breaks the redirect flow) **or** state the residual in
-the plan as a named risk. (2) Add the reader-path columns (429 counts by route and identity class +
-the Cloudflare request-to-session ratio) to the report recipe so "abuse did not decrease" is a visible
+the plan as a named risk. (2) Add the reader-path columns (429 counts by route and identity class + the Cloudflare per-IP/ASN
+distribution, D3 §2) to the report recipe so "abuse did not decrease" is a visible
 number, not an opinion. (3) Name the app's real threat list (bulk reading, takedown, review-bombing;
 R2-evasion §8.1–8.2) and mark which workstream addresses which — the plan currently defends only the
 account axis.
@@ -160,10 +160,9 @@ visible before the first ban exists.
 **Plan change.** (1) Bundle WS9a's four rules into the ban release: device is never a ban unit; a
 shared-device self-claim never clears an account ban; device friction never gates login/reading/
 recovery/appeals; a second independent corroborator is required before enforcement. (2) Require a
-`corroborator ∈ {credential_reuse, content_match, ip, none}` field on every ban. (3) Fix notice
-delivery in the same PR: write the notice row **before** the send; send on Complaint suppression; on
-Bounce record `delivery_state='no_contact_details'`; add `NotificationKind::Enforcement` to
-`is_transactional`. (4) Give the appeal a response clock (7 days) and a queue-aging alert.
+`corroborator ∈ {credential_reuse, content_match, ip, none}` field on every ban. (3) Fix notice delivery in the same PR: write the notice row **before** the send; send despite a
+Complaint suppression for the enforcement template only (E4 verdict item 3); on Bounce record
+`delivery_state='suppressed'` (H3 #22); add `TEMPLATE_ENFORCEMENT_NOTICE` to `is_transactional`. (4) Give the appeal a response clock (7 days) and a queue-aging alert.
 
 ### 1.4 (d) A privacy/legal incident — "the erasure that could not be honoured"
 
@@ -184,7 +183,7 @@ The dated version:
     written as a _test_ and skipped, because tests are optional and ship gates are not.
   - Deletion is not physical erasure: no `PRAGMA secure_delete`, no checkpoint, so the row bytes remain
     in the SQLite file and its WAL (B8 F2). O17 (physical-erasure strategy) was never decided.
-  - The published policy says "deleted within 30 days" — one of the 13 sentences D2 §1.2 predicted
+  - The published policy says "deleted within 30 days" — one of the 12 sentences D2 §1.2 predicted
     would be false on the day the policy shipped.
   - The Phase 1 `appeals` free text (a user explaining his religious context — special-category
     material) has no `expires_at`/`retention_class`, because the plan specified retention columns for
@@ -250,8 +249,8 @@ Ramadan. (6) Add a synthetic translated-page check with an alert on the empty-sh
 | Story                       | Early warning signal (observable before the failure)                                                                                                                                  | Plan change that prevents it                                                                                                                                                                                            |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | (a) Never implemented       | Day 14: ≥4 blocking open questions (O8/O13/O1/O17) unresolved and PR#1 = WS0. Day 30: no commit to `images.yml`; the C3 §5 measurement not run.                                       | First 10 days = truth bundle + measurement (no CI, no legal capacity needed); WS0 timeboxed 2 d with a web-only fallback and no gating of WS1a/WS7a/WS2a; O8/O13/O1/O17 decided in the plan text; first five PRs named. |
-| (b) Abuse did not decrease  | At review: zero admission checks in the five OAuth modules; the report recipe has no reader/ASN/ratio column; the plan names no scraping/takedown/review-bombing item.                | Extend admission to all OAuth callbacks or state the residual; add reader-path + request-to-session columns to the recipe; name the real threat list and map workstreams to it.                                         |
-| (c) False-positive ban wave | At review: no shared-device line in the ban SOP; no required corroborator field; no Complaint/Bounce distinction in the notice path; no appeal clock/owner.                           | Bundle WS9a's four rules + corroborator field into the ban release; fix notice delivery (row before send; Complaint sends; Bounce → `no_contact_details`); appeal clock 7 d + aging alert.                              |
+| (b) Abuse did not decrease  | At review: zero admission checks in the five OAuth modules; the report recipe has no reader/per-IP/ASN column; the plan names no scraping/takedown/review-bombing item.               | Extend admission to all OAuth callbacks or state the residual; add reader-path + per-IP/ASN columns to the recipe; name the real threat list and map workstreams to it.                                                 |
+| (c) False-positive ban wave | At review: no shared-device line in the ban SOP; no required corroborator field; no Complaint/Bounce distinction in the notice path; no appeal clock/owner.                           | Bundle WS9a's four rules + corroborator field into the ban release; fix notice delivery (row before send; Complaint sends for the enforcement template only; Bounce → `suppressed`); appeal clock 7 d + aging alert.    |
 | (d) Privacy/legal incident  | New tables lack `expires_at`/`retention_class`; sweeper dry-run deletes 0 rows past expiry with no count check; erasure claim ships before the backup job and O17; no artefact owner. | Retention columns at creation + sweeper config in the same PR; boot invariant as a ship gate; policy only after sweeper green; O17 decided; LIA/ROPA owner named or the claim removed.                                  |
 | (e) Reader breaks at peak   | No baseline number when the first ceiling is committed; no shared-IP step-down or logged-in exemption; change window before Ramadan; no synthetic reader check.                       | Measure first; ceilings ≥4× measured peak; logged-in exemption + shared-IP step-down; F1 marker gate first; 3× load test; ship outside the pre-Ramadan window; synthetic check + alert.                                 |
 
@@ -279,8 +278,8 @@ writers).
 
 **The 1/10th version.** The single workstream that matters most is the **enforcement-and-notice
 contract**: the five-item ban contract (`/admin/users/bans` list/create/revoke with reason + expiry +
-`banned_by`; the partial index; idempotent create; per-user `session_auth_secret` session kill; the
-banned UX with `AUTH_006` removed from `CREDENTIAL_TYPES` and the ban check before the limiter) **plus**
+`banned_by`; the partial index; idempotent create; per-user `session_auth_secret` session kill; the banned UX with an explicit `banned` classifier branch for `AUTH_006`/`AUTH_BANNED` ahead of the
+credential-status fallback (E4 verdict item 2) and the ban check before the limiter) **plus**
 the audit writer **plus** the enforcement notice + email redress (`enforcement_notices` row before the
 send, Complaint/Bounce delivery honesty, `NotificationKind::Enforcement`) **plus** the comment-hide/
 delete notice wiring. ≈5–6 dev-days, ~1/5–1/6 of 28–42; the honest floor is not 1/10th because the
@@ -315,8 +314,9 @@ can cause an outage or a legal exposure are in no workstream:
    unauthenticated caller can saturate it and make **every** login, registration, reauth and backup-code
    check return 429. Complete auth DoS with no account required.
 3. **Mail bombing (E5 #6/A5, B3).** Registration sends a verification mail to an attacker-chosen address
-   at 100/min/IP with no per-recipient or global budget; the newsletter path shows the intended pattern
-   and this path lacks it. Burning the provider's reputation turns into a silent auth outage
+   at up to 100/min/IP (Turnstile-gated in prod) with a per-recipient bucket (≤29/h) but no global budget —
+   the provider-wide bucket is skipped for transactional mail (E2 §2); the newsletter path shows the
+   intended pattern and this path lacks it. Burning the provider's reputation turns into a silent auth outage
    (`deploy/README.md:463-506` already warns this).
 4. **Account-existence oracle + missing nest limiters (E5 #5/B2).** `forgot_password/v1/request` returns
    `RecordNotFound` for unknown emails by design, and the `forgot_password`/`email_verification` nests
@@ -414,9 +414,9 @@ per-credential limits did not block a single legitimate user._
    implied).
 5. **Bundle WS9a (0.5 d) into the ban release**: the four rules, a shared-device/shared-IP line in the
    ban SOP, and a required `corroborator` field on every ban.
-6. **Fix notice delivery in the same PR**: notice row before send; send on Complaint suppression;
-   Bounce → `delivery_state='no_contact_details'`; `NotificationKind::Enforcement` added to
-   `is_transactional`; appeal response clock (7 d) + queue-aging alert.
+6. **Fix notice delivery in the same PR**: notice row before send; send despite a Complaint suppression
+   for the enforcement template only (E4); Bounce → `delivery_state='suppressed'` (H3 #22);
+   `TEMPLATE_ENFORCEMENT_NOTICE` added to `is_transactional`; appeal response clock (7 d) + queue-aging alert.
 7. **Extend registration admission to all five OAuth callbacks** (per-IP/day + per-verification-identity
    cap; no Turnstile) or state the residual as a named risk in the plan.
 8. **Every new table carries `expires_at INTEGER NOT NULL` + CHECK + `retention_class` at creation** and
@@ -453,7 +453,7 @@ per-credential limits did not block a single legitimate user._
    actions.**
 2. **The base rate is measured, not assumed.** **Threshold: 2/2 quarterly `abuse-report` runs committed
    to `docs/abuse/` (Q1 + Q2 2027), each within 10 days of quarter end, each containing the C3 §5 five
-   counters + the Cloudflare request-to-session ratio; the 429 `warn!` line verified live; the plan's
+   counters + the Cloudflare per-IP/ASN distribution; the 429 `warn!` line verified live; the plan's
    base-rate sentence updated with the dated numbers.**
 3. **The controls did not harm the audience or the reader.** **Threshold: 0 confirmed false-positive
    enforcement actions (0 overturned appeals where the ban's recorded corroborator was `none`); 0

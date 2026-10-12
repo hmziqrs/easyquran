@@ -7,20 +7,20 @@ and the C1/C2/C3 conditions as carried by `C5-decision-ledger.md` (O14/O18) and 
 Marking: **NEW** = not stated in C1–C5/B10; _confirms_ = re-derivation of an existing finding.
 
 **Verdict up front.** The plan's instinct is right — measure before building, use what already exists —
-and the four-step shape is close to the cheapest possible. But as written it is **not runnable and not
-trustworthy**:
+and the four-step shape is close to the cheapest possible. But read naively it is **not runnable and not
+trustworthy**, in five ways:
 
-1. Step 4's log window is not 720 h. Every master push recreates the containers; `docker logs` reaches
-   back only to the current container's start. The one log signal that already exists (failed logins,
-   WARN + client IP) is not in the plan; the block grep as written extracts the wrong field.
-2. The headline indicator (CF requests ÷ GA4 sessions > ~50) has no baseline, mismatched units, an
+1. The log window is not 720 h. Every master push recreates the containers; `docker logs` reaches
+   back only to the current container's start. Failed logins (WARN + client IP) are the one log signal
+   that already exists, and a greedy block grep extracts the wrong field.
+2. A CF requests ÷ GA4 sessions ratio ("> ~50") has no baseline, mismatched units, an
    undercounted denominator (ad blockers, deniers, JS-less bots) and an inflated numerator (SSR-adjacent
    asset churn, SW/offline pack, prefetch). It cannot support a build/stop decision.
 3. C1 and C2 are **not computable at all before WS2 and WS8**, and the C1 instrument C3 recommends
    (`audit_logs` reuse) is on C5's _rejected-by-evidence_ list (#20) and contradicts the adopted case
    model (D26). C1 also has a selection-bias defect that survives WS8: the case population is defined by
    the detector being evaluated.
-4. "Provably zero automated bans" is a default-value inference, not a proof — the deployed `.env` is not
+4. Zero automated bans is a default-value inference, not a proof — the deployed `.env` is not
    in the repo — and the DB cross-check only looks back ≤7 days.
 5. The "stop if zero" conclusion is directionally right but must be time-boxed and re-worded: the
    measurement is structurally blind to scraping, distributed credential stuffing, and the one documented
@@ -69,14 +69,13 @@ Consequences:
 
 **The grep.** `crates/rux-request-gate/src/abuse.rs:57-63` records the _span_ field `scope = %key_prefix`
 (the full key, e.g. `login:user@example.com`), while the block event at `:109-115` re-uses the field name
-`scope` for the `BlockScope` enum (`Temp`/`Long`). The line therefore contains two `scope=` fields. C3's
-`sed -E 's/.*scope=([^ ]+).*/\1/'` is greedy and extracts the **last** one — `Temp`/`Long` — so Step 4's
-"per-identity blocks" actually counts blocks by scope, not by identity. Fix: take the first occurrence
+`scope` for the `BlockScope` enum (`Temp`/`Long`). The line therefore contains two `scope=` fields. A
+greedy `sed -E 's/.*scope=([^ ]+).*/\1/'` extracts the **last** one — `Temp`/`Long` — so a
+"per-identity blocks" count becomes a count by scope, not by identity. Fix: take the first occurrence
 (`grep -o 'scope=[^ ]*' | head -1` per line, or grep the span prefix `request{scope=`). Also note the
 block line is emitted once per block window, so it counts blocks, not requests. **NEW**
 
-**The missing signal.** C3 §1b row 14 and §3 claim failed logins "are not recorded anywhere". That is
-true of the database and false of the logs:
+**The missing signal.** Failed logins are not recorded in the database, but they are in the logs:
 
 - `warn!(client_ip = %secure_ip, "Invalid credentials")` — `auth_v1/controller.rs:226` (WARN ≥ INFO, so
   emitted at `RUST_LOG=info`).
@@ -86,7 +85,7 @@ true of the database and false of the logs:
 the generic success envelope")` — `:523`; `warn!(error, "Registration failed")` — `:527`.
 
 So the cheapest credential-stuffing / registration-pressure instrument in the whole stack is a `grep` over
-logs that already exist — and C3's Step 4 does not include it. (Limits: the failure line carries IP, not
+logs that already exist — and a block-only Step 4 misses it. (Limits: the failure line carries IP, not
 email; per-account targeting is invisible; and the window is §1.2's window.) **NEW**
 
 **What the numbers still cannot show even when collected.** Per-account attempt volume; per-email
@@ -96,13 +95,7 @@ the web→API SSR hop bypasses Cloudflare entirely, `docker-compose.yml:63-66`).
 
 ### 1.3 Step 3 — the DB copy can be stale or torn
 
-The prod DB runs WAL (`sea_connect.rs:48`). C3's copy command copies only `easyquran.db`:
-
-```bash
-docker run --rm -v easyquran_api_data:/data:ro … cp /data/easyquran.db /out/prod-copy.db
-```
-
-In WAL mode, recent committed data lives in `easyquran.db-wal`. Copying the main file alone yields a
+The prod DB runs WAL (`sea_connect.rs:48`), so copying only `easyquran.db` is unsafe. In WAL mode, recent committed data lives in `easyquran.db-wal`. Copying the main file alone yields a
 snapshot that can be **behind by an unbounded number of recent transactions** (or, if the WAL is
 mid-checkpoint, inconsistent), and `immutable=1` makes it worse: it tells SQLite to ignore the WAL, so the
 copy silently reads an older state. The fix is `sqlite3 ".backup"` against a read-only connection (or
@@ -141,7 +134,7 @@ days-old deployment, log windows measured in days).
 
 ---
 
-## 2. Attack the key indicator: `CF requests ÷ GA4 sessions > ~50`
+## 2. Why `CF requests ÷ GA4 sessions > ~50` cannot be the indicator
 
 **What inflates the numerator (legitimate):**
 
@@ -162,7 +155,7 @@ days-old deployment, log windows measured in days).
 - JS-disabled and privacy browsers.
 - No consent banner on the reader (C5 D42), so there is no way to know the denial rate — it is unmeasured.
 
-**What the plan gets wrong structurally:** the ratio divides requests (all clients, all resource types,
+**Structurally:** the ratio divides requests (all clients, all resource types,
 including cache HITs) by sessions (JS users only, 30-min windows). The two quantities do not share a
 denominator, a time base, or a client population. The threshold "~50" has no measured baseline for this
 app — an SSR app with a service worker, a disk cache, and a 14 MB pack can plausibly sit anywhere in
@@ -285,7 +278,7 @@ move is signal.
 
 ---
 
-## 6. Attacking "provably zero automated bans"
+## 6. What "zero automated bans" proves
 
 **What it proves.** That the _response mechanism_ is disabled: `QURAN_BAN_ESCALATION_ENABLED` defaults to
 false (`settings.rs:349`) and is absent from `docker-compose.yml`; `user_bans` has no writers. Therefore no
@@ -296,7 +289,7 @@ event that would have been banned is instead an unenforced request, invisible fo
 credential abuse) visible only as an unlogged-in-DB WARN. The two statements are different in kind:
 "the engine is off" is a code/config fact; "there is no abuse" is a population fact.
 
-**And "provably" is too strong as written.** The proof rests on a code default plus absence from the
+**And it is not a proof.** It rests on a code default plus absence from the
 _repo's_ compose file. The deployed `.env` is written by Dokploy on the server and is not in the repo
 (`docker-compose.yml` header + `env_file: [.env]` at `:35,119`). `QURAN_BAN_ESCALATION_ENABLED=true` plus
 `QURAN_BAN_ALLOWLIST` in the server `.env` would enable the engine with zero repo changes. The DB
@@ -457,22 +450,33 @@ for the same filter. Read it as a Pareto, not a ratio. Second cheapest (no token
 5. By `cacheStatus` + `edgeResponseStatus` (HIT/MISS/DYNAMIC; 2xx/4xx/5xx).
 6. `firewallEventsAdaptiveGroups` by action/source — **label as sampled**.
 
-**Step 2 — GA4 (10 min), sanity only.** 7. Sessions + users, 30 d. Compute `U = CF document requests ÷ GA4 sessions` once, and report `U` as the
-undercount factor. Do **not** use the ratio as the indicator.
+**Step 2 — GA4 (10 min), sanity only.**
 
-**Step 3 — prod DB copy (30 min), read-only, WAL-safe.** 8. Copy with `sqlite3 'file:/data/easyquran.db?mode=ro' ".backup /out/prod-copy.db"` (or copy `.db`,
-`-wal`, `-shm` together); `PRAGMA integrity_check`; check freshness (max `created_at` vs container
-start). Then run C3's queries (a)–(k) with these fixes: (i) label `rate_limit_state` a snapshot with a
-≤ 7-day lookback; (ii) keep (e) but add the dot-alias grouping; (iii) keep (f) as context only;
-(iv) drop (g) or mark it blog-only; (v) run (k) twice, 24 h apart, to get a rate. 9. Add the §7 dashboard numbers.
+7. Sessions + users, 30 d. Compute `U = CF document requests ÷ GA4 sessions` once, and report `U` as
+   the undercount factor. Do **not** use the ratio as the indicator.
 
-**Step 4 — logs (15 min), with the corrected window and greps.** 10. Window = container start (enumerate old containers if the operator wants more). 11. Greps: `Invalid credentials` and `Login attempt` (per-IP counts — the stuffing signal); `Request
-    blocked by abuse limiter` with the **first** `scope=` extracted (block counts by key); `Banned user
-    attempted login`; `Registration failed` / `existing email`; `mail bounce event` / `mail complaint
-    event` (domain only).
+**Step 3 — prod DB copy (30 min), read-only, WAL-safe.**
 
-**Step 5 — write it down (10 min).** 12. One paragraph: date, window, instrument list, the 8 numbers, the CF Pareto, `U`, and the cannot-see
-list. Put the CF Pareto and the numbers in the plan doc; put the triggers (§5) next to them.
+8. Copy with `sqlite3 'file:/data/easyquran.db?mode=ro' ".backup /out/prod-copy.db"` (or copy `.db`,
+   `-wal`, `-shm` together); `PRAGMA integrity_check`; check freshness (max `created_at` vs container
+   start). Then run C3's queries (a)–(k) with these fixes: (i) label `rate_limit_state` a snapshot with
+   a ≤ 7-day lookback; (ii) keep (e) but add the dot-alias grouping; (iii) keep (f) as context only;
+   (iv) drop (g) or mark it blog-only; (v) run (k) twice, 24 h apart, to get a rate.
+9. Add the §7 dashboard numbers.
+
+**Step 4 — logs (15 min), with the corrected window and greps.**
+
+10. Window = container start (enumerate old containers if the operator wants more).
+11. Greps: `Invalid credentials` and `Login attempt` (per-IP counts — the stuffing signal); `Request
+blocked by abuse limiter` with the **first** `scope=` extracted (block counts by key); `Banned user
+attempted login`; `Registration failed` / `existing email`; `mail bounce event` / `mail complaint
+event` (domain only).
+
+**Step 5 — write it down (10 min).**
+
+12. One paragraph: date, window, instrument list, the 8 numbers, the CF Pareto, `U`, and the
+    cannot-see list. Put the CF Pareto and the numbers in the plan doc; put the triggers (§5) next to
+    them.
 
 ---
 
@@ -537,7 +541,7 @@ interval + channel breakdown (§10 Gate 1).
 master push via Dokploy redeploy (`deploy/README.md:21-28`, `:180-181`; pull-only stack,
 `docker-compose.yml:41-50,114-117`), so `docker logs` reaches only the current container; `--since 720h`
 silently returns less. `abuse.rs:57-63` sets span `scope = %key_prefix`; `:109-115` re-uses `scope` for
-`BlockScope`; C3's greedy `sed` captures `Temp`/`Long`, not the key.
+`BlockScope`; a greedy `sed` captures `Temp`/`Long`, not the key.
 **Fix:** window = `docker inspect -f '{{.State.StartedAt}}'`; enumerate old containers by id if more is
 wanted; add a `logging:` block with `max-size`/`max-file` on the next deploy; grep the **first**
 `scope=` (`grep -o 'scope=[^ ]*' | head -1`).
@@ -547,11 +551,11 @@ wanted; add a `logging:` block with `max-size`/`max-file` on the next deploy; gr
 **Severity: High.**
 **Evidence:** `warn!(client_ip = %secure_ip, "Invalid credentials")` (`auth_v1/controller.rs:226`);
 `info!(client_ip, "Login attempt")` (`:129`); `warn!(user_id, "Banned user attempted login")` (`:155`);
-registration at `:466,523,527`. C3 §1b row 14 and §3 assert the opposite for logs.
+registration at `:466,523,527`.
 **Fix:** add these greps to Step 4 and count per IP; record that per-email targeting remains invisible
 (the line carries IP only).
 
-### F4 — The headline indicator is not trustworthy; replace it with a CF-internal Pareto + ratio and a measured GA4 undercount. **NEW**
+### F4 — A CF ÷ GA4 ratio is not a trustworthy indicator; use a CF-internal Pareto + ratio and a measured GA4 undercount. **NEW**
 
 **Severity: High.**
 **Evidence:** GA4 consent defaults granted (`consent.svelte.ts:16`) but blockers (CSP allows gtag/gstatic,
@@ -570,7 +574,7 @@ C3's C2 CTE joins live `user_bans`; `audit_logs` subject is `SET NULL`.
 **Fix:** evidence rows with no FK / denormalized subject id (D23); key C2 on the case↔token link; record
 the ban snapshot inside the case row at decision time.
 
-### F6 — "Provably zero automated bans" is a default inference; the deployed `.env` is not in the repo and the DB lookback is ≤ 7 days. **NEW**
+### F6 — Zero automated bans is a default inference; the deployed `.env` is not in the repo and the DB lookback is ≤ 7 days. **NEW**
 
 **Severity: High.**
 **Evidence:** `settings.rs:349` default false; absence from `docker-compose.yml`; but `env_file: [.env]`
@@ -582,8 +586,8 @@ enforcement-history vs abuse-rate distinction (§6).
 ### F7 — The DB copy can be stale or torn on a WAL database. **NEW**
 
 **Severity: Medium-High.**
-**Evidence:** `PRAGMA journal_mode=WAL` (`sea_connect.rs:48`); C3 Step 3 copies only `easyquran.db` and
-queries with `immutable=1`, which ignores the WAL.
+**Evidence:** `PRAGMA journal_mode=WAL` (`sea_connect.rs:48`); copying only `easyquran.db`, or querying
+with `immutable=1` (which ignores the WAL), reads an older state.
 **Fix:** `sqlite3 'file:/data/easyquran.db?mode=ro' ".backup /out/prod-copy.db"` (or copy `.db`/`-wal`/`-shm`
 together), then `PRAGMA integrity_check` + a freshness check.
 
@@ -623,8 +627,8 @@ check, manual takedown field); phrase the conclusion as §4's honest sentence.
 ### F12 — The plan has no owner, no instrument list, and an unrealistic time budget. **NEW**
 
 **Severity: Low-Medium.**
-**Evidence:** C3 §5 "under one hour" excludes CF token creation, GA4 property access, host access, and
-copy verification; no named owner; no output format.
+**Evidence:** a one-hour budget excludes CF token creation, GA4 property access, host access, and copy
+verification; no named owner; no output format.
 **Fix:** budget 2–3 h once / 10–15 min per repeat; name the owner; write the one-page output (date, window,
 instrument list, numbers, cannot-see list) into the plan doc; put the triggers next to it.
 
