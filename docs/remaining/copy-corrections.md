@@ -4,6 +4,9 @@ EasyQuran is under active development. Entries below are expected placeholders o
 copy—not defects in a released product. Keep this standalone ledger for the pre-release content pass,
 when wording should be aligned with the features selected for launch.
 
+Sequencing: this ledger is worked by phase **R** in [`master-plan.md`](../master-plan.md) — the
+pre-release copy pass. Currently open: C03, C04, C08.
+
 > **Updated 2026-10-12 (§9.8 copy pass):** copy now lives in `web/messages/*.json` (the old
 > `content.ts` links below are dead). Resolved this pass: **C01** (auth copy scoped to bookmarks +
 > reading sessions; notes stay local), **C02** (privacy/terms sync + deletion claims trimmed to the
@@ -65,14 +68,14 @@ That describes an offline audio cache that does not exist.
 **Before release:** make this match the final audio/offline policy. If audio remains deferred, limit
 the answer to shipped offline reading behavior.
 
-## C05 — Recitation preview placeholder on landing
+## C05 — Recitation preview placeholder on landing — RESOLVED 2026-10-12
 
-[`(marketing)/+page.svelte`](<../../web/src/routes/(marketing)/+page.svelte>) says search, bookmarks,
-and recitation “are there when you need them,” then says the full player is “only a preview.” No
+[`(marketing)/+page.svelte`](<../../web/src/routes/(marketing)/+page.svelte>) said search, bookmarks,
+and recitation “are there when you need them,” then said the full player is “only a preview.” No
 working preview was found in production reader code; design variants are not product features.
 
-**Before release:** connect this statement to a working preview/player, or describe recitation as
-planned.
+Resolved: the landing bands were retired — the page makes no recitation/preview/player claim
+(checked 2026-10-13).
 
 ## C06 — Full-Quran and translation rollout placeholders — RESOLVED 2026-10-12
 
@@ -106,7 +109,7 @@ count as available product features.
 Progress 2026-10-12: About, FAQ, Privacy, Terms, the auth modal/register strings, the
 merge-review dialog, and the sync surfaces (bookmark sign-in note, session-expired banner,
 sign-out unsynced notice — §9.8) now pass the truth test (C01/C02/C06/C07 + `auth_merge_*`).
-Not yet swept: the marketing landing page (C03/C04/C05 territory), reader empty/loading/settings
+Not yet swept: the marketing landing page (C03/C04 territory), reader empty/loading/settings
 labels, and any future store/PWA descriptions.
 
 ## Suggested corrected capability statement

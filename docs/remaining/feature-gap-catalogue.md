@@ -4,6 +4,9 @@ This standalone catalogue records what Quran.com exposes, what EasyQuran current
 remains. “Parity” means workflow coverage, not visual imitation. Development-only placeholder copy
 does not count as a shipped feature or a product defect.
 
+Sequencing: the next parity batch is phase **P** in [`master-plan.md`](../master-plan.md), scoped
+from the P0 rows (R01–R05, P01).
+
 ## Reader, recitation, and study
 
 ### R01 — Recitation audio and persistent player — Missing · P0
@@ -515,7 +518,7 @@ popup shipped too (next-features Feature 10): one-time `ar`/`en` suggestion from
 `navigator.languages` on home/reader/app-chrome surfaces, accept = full-reload link, permanent
 per-locale dismissal in `easyquran.localeSuggest`
 ([`LocaleSuggest.svelte`](../../web/src/lib/components/i18n/LocaleSuggest.svelte),
-[`docs/plan/09-locale-suggest.md`](../plan/09-locale-suggest.md)).
+[`docs/locale-suggest.md`](../locale-suggest.md)).
 
 **Remaining:** fluent Arabic review for the localized (but unpublished) `about`/`faq`/`contact`/`privacy`/`terms`
 pages; RTL polish (physical utilities, reader arrows); localized `.md`/`.txt` representations; more

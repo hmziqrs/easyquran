@@ -8,15 +8,12 @@ a plan here is fully implemented and verified, the owner distils a permanent rec
 
 Repo-wide hard rules live in [`AGENTS.MD`](../AGENTS.MD).
 
-## Active plans and backlog
+## Sequencing
 
-| Doc                                                                            | Status                                                                                |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| [`next-features.md`](next-features.md)                                         | Feature batch + sync design — **shipped (PR #31)**; frozen as verification baseline   |
-| [`abuse-prevention.md`](abuse-prevention.md)                                   | Draft abuse-prevention and enforcement plan; evidence in `research/abuse-prevention/` |
-| [`abuse-write-endpoints.md`](abuse-write-endpoints.md)                         | Implementation slice: rate limits for the new write endpoints                         |
-| [`account-ux.md`](account-ux.md)                                               | Implementation slice: slim chrome + primitives + localization for /account            |
-| [`locale-suggest.md`](locale-suggest.md)                                       | Feature 10 spec (feature shipped; doc pending retirement with the verification pass)  |
-| [`remaining/next-features-followups.md`](remaining/next-features-followups.md) | Post-PR-#31 verification ledger; keeps next-features.md pristine                      |
-| [`remaining/feature-gap-catalogue.md`](remaining/feature-gap-catalogue.md)     | Parity register against quran.com                                                     |
-| [`remaining/copy-corrections.md`](remaining/copy-corrections.md)               | Pre-release copy ledger                                                               |
+Execution order lives in **[`master-plan.md`](master-plan.md)** — the phase-ordered registry
+(V → A1 → A2…A19 → P → R, with U alongside). Every plan here carries a "Sequenced by" line near
+its status pointing at its phase; that registry, not this folder listing, is the source of truth
+for status.
+
+Frozen: [`next-features.md`](next-features.md) takes zero edits until phase V's single correction
+pass; [`research/`](research/) is raw evidence — cited, never rewritten.
