@@ -15,7 +15,9 @@ import {
 type Wire = string | number | boolean | null;
 
 function folderWire(
-  overrides: Partial<Record<"id" | "name" | "createdAt" | "updatedAt", Wire>> = {},
+  overrides: Partial<
+    Record<"id" | "name" | "kind" | "position" | "createdAt" | "updatedAt", Wire>
+  > = {},
 ) {
   return {
     id: "f1",
@@ -63,13 +65,25 @@ describe("verseKeyOf / parseVerseKey", () => {
 });
 
 describe("decodeBookmarkFolder", () => {
-  it("decodes a valid row", () => {
+  it("decodes a valid row, defaulting kind/position when absent", () => {
     expect(decodeBookmarkFolder(folderWire())).toEqual({
       id: "f1",
       name: "Ramadan",
+      kind: "generic",
+      position: null,
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-01-02T00:00:00Z",
     });
+  });
+
+  it("decodes study-set kind and manual position", () => {
+    const folder = decodeBookmarkFolder(folderWire({ kind: "daily", position: 3 }));
+    expect(folder?.kind).toBe("daily");
+    expect(folder?.position).toBe(3);
+  });
+
+  it("rejects an unknown folder kind", () => {
+    expect(decodeBookmarkFolder(folderWire({ kind: "weekly" }))).toBeNull();
   });
 
   it("rejects malformed rows", () => {

@@ -13,9 +13,17 @@ export const SURAH_MAX = 114;
 export const AYAH_MAX = 286;
 export const FOLDER_NAME_MAX = 100;
 
+/** Study-set label (§11.7: name-only) — lockstep with the server's `valid_folder_kind`. */
+export type BookmarkFolderKind = "generic" | "daily" | "learning";
+
+export const FOLDER_KINDS: readonly BookmarkFolderKind[] = ["generic", "daily", "learning"];
+
 export interface BookmarkFolder {
   readonly id: string;
   readonly name: string;
+  readonly kind: BookmarkFolderKind;
+  /** Manual order (LWW integer); null = unpositioned, sorts after positioned. */
+  readonly position: number | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -43,6 +51,9 @@ export type BookmarksMutation =
       readonly kind: "folder.upsert";
       readonly id: string;
       readonly name: string;
+      /** Wire name `folderKind` — `kind` is already the mutation discriminator. */
+      readonly folderKind?: BookmarkFolderKind;
+      readonly position?: number | null;
       readonly updatedAt: string;
     }
   | { readonly kind: "folder.delete"; readonly id: string; readonly updatedAt: string };
@@ -116,7 +127,19 @@ export function decodeBookmarkFolder(raw: unknown): BookmarkFolder | null {
   const createdAt = decodeTimestamp(obj.createdAt);
   const updatedAt = decodeTimestamp(obj.updatedAt);
   if (createdAt === undefined || updatedAt === undefined) return null;
-  return { id, name, createdAt, updatedAt };
+  // Absent kind = pre-kind server snapshot → "generic"; an UNKNOWN kind is a
+  // malformed row → dropped, not silently re-labelled.
+  const rawKind = asString(obj.kind);
+  if (rawKind !== undefined && !FOLDER_KINDS.includes(rawKind as BookmarkFolderKind)) return null;
+  const position = asNumber(obj.position, -1_000_000, 1_000_000);
+  return {
+    id,
+    name,
+    kind: (rawKind as BookmarkFolderKind | undefined) ?? "generic",
+    position: position ?? null,
+    createdAt,
+    updatedAt,
+  };
 }
 
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed bookmark row from the sync response; this decoder is its boundary parser.
