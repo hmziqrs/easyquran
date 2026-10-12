@@ -156,6 +156,69 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
+describe("account page sessions list rendering", () => {
+  it("renders parsed device labels and formatted last-seen stamps, never raw UA or ISO", async () => {
+    h.authClient.get.mockImplementation((path: string) => {
+      if (path === "/auth/v1/reauth/status") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          data: { ready: false, has_password: true, two_fa_enabled: false },
+          error: null,
+          rotated: false,
+        });
+      }
+      if (path === "/user/v1/identities") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          data: IDENTITY_SUMMARY,
+          error: null,
+          rotated: false,
+        });
+      }
+      if (path === "/auth/v1/sessions/list") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          data: {
+            data: [
+              {
+                id: 3,
+                is_current: true,
+                device:
+                  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+                last_seen: "2026-10-12T07:47:12.919710Z",
+              },
+              { id: 4, is_current: false, device: "", last_seen: "not-a-date" },
+            ],
+          },
+          error: null,
+          rotated: false,
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        data: { data: [] },
+        error: null,
+        rotated: false,
+      });
+    });
+    mountPage();
+    await settle();
+
+    const text = target.textContent ?? "";
+    expect(text).toContain("Chrome · macOS");
+    expect(text).toContain("Last seen ");
+    expect(text).not.toContain("919710");
+    expect(text).not.toContain("T07:47");
+    // Missing UA degrades to the generic label; unparsable stamp hides the line.
+    expect(text).toContain("Unknown device");
+    expect(text.indexOf("Last seen ")).toBe(text.lastIndexOf("Last seen "));
+  });
+});
+
 describe("account page link-flow params", () => {
   it("shows the success banner and clears ?linked via goto replace", async () => {
     h.url = new URL("https://eq.test/account?linked=github");

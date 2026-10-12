@@ -27,6 +27,13 @@
   });
 </script>
 
+<!-- Title lives here, not in +page.svelte: children are gated behind the session
+     probe (`ready`), so a page-level title never reaches the SSR HTML — same
+     reason the (auth) layout owns its titles (auth-page-meta.ts). -->
+<svelte:head>
+  <title>Account · EasyQuran</title>
+</svelte:head>
+
 <main id="main" tabindex="-1">
   <Container width="narrow" class="py-16">
     {#if ready}

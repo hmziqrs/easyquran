@@ -20,6 +20,7 @@
     resolveAccountView,
     resolveLinkNotice,
     sessionDeviceLabel,
+    sessionLastSeenLabel,
     ANONYMOUS_CTA_HREF,
     REGISTER_HREF,
     type LinkNotice,
@@ -141,10 +142,6 @@
   }
 </script>
 
-<svelte:head>
-  <title>Account</title>
-</svelte:head>
-
 {#if view === "loading"}
   <div
     class="flex flex-col items-center gap-4 py-12 text-center"
@@ -240,20 +237,22 @@
       {:else}
         <ul class="flex flex-col gap-2">
           {#each sessions as s (s.id)}
+            {@const device = sessionDeviceLabel(s.userAgent)}
+            {@const lastSeen = sessionLastSeenLabel(s.lastSeenAt, copy.locale)}
             <li
               class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line-2 bg-bg-2 px-4 py-3"
             >
               <div class="flex flex-col gap-0.5">
                 <span class="text-sm font-medium">
-                  {sessionDeviceLabel(s.userAgent)}
+                  {device}
                   {#if s.isCurrent}
                     <span
                       class="ms-2 rounded-pill bg-accent-soft px-2 py-0.5 text-xs text-accent"
                     >This session</span>
                   {/if}
                 </span>
-                {#if s.lastSeenAt}
-                  <span class="text-xs text-fg-3">Last seen {s.lastSeenAt}</span>
+                {#if lastSeen}
+                  <span class="text-xs text-fg-3">Last seen {lastSeen}</span>
                 {/if}
               </div>
               <Button
