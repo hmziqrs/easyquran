@@ -53,7 +53,7 @@ word translation, transliteration, hover/hold vs below-word display, language, a
 **EasyQuran today:** an ayah renders as one plain text span in
 [`VerseRow.svelte`](<../../web/src/routes/(application)/_reader/VerseRow.svelte>). The only
 word-oriented code aligns search highlights; it is not a token corpus or reader tool. Word-level
-navigation is explicitly deferred in [`documentation/quran-system.md`](../documentation/quran-system.md).
+navigation is explicitly deferred in [`documentation/quran-system.md`](../../documentation/quran-system.md).
 
 **Remaining:** immutable, licensed word/token source; canonical word coordinates; Arabic token
 display; per-word meaning/transliteration; word audio/timing; token popovers; word permalink/highlight
@@ -77,7 +77,7 @@ The primary SSG/SSR routes and their cache keys are untouched; the `?more=<id>,<
 is stripped from cache keys by the service worker; selected extras (and the primary) pin against
 OPFS eviction; each extra renders with its own language/direction and translator attribution; and
 share/copy deliberately excludes extras. Full contract: [Part 1 of
-`documentation/quran-system.md`](../documentation/quran-system.md), “Multiple stacked translations”.
+`documentation/quran-system.md`](../../documentation/quran-system.md), “Multiple stacked translations”.
 
 **Remaining:** side-by-side or parallel comparison presentation — extras currently stack vertically
 beneath the primary, verse mode only; per-extra font controls. Word-by-word source and
@@ -140,10 +140,10 @@ translation, and word-by-word sizing.
 Uthmani, Simple-clean, IndoPak, Tajweed) with a script picker in Settings → Reading (reader
 schema v4); Tajweed markup renders as colored runs.
 
-**Remaining:** 15/16-line Mushaf layout (see [`mushaf-rendering-research.md`](../documentation/mushaf-rendering-research.md));
+**Remaining:** 15/16-line Mushaf layout (see [`mushaf-rendering-research.md`](../../documentation/mushaf-rendering-research.md));
 per-source font controls; production IndoPak (script is production-disabled; its v4 OFL font
 covers every corpus character and passes desktop/Android verification, but exact edition
-provenance and qualified review remain open). See [`indopak.md`](../documentation/indopak.md). Quran DB remains
+provenance and qualified review remain open). See [`indopak.md`](../../documentation/indopak.md). Quran DB remains
 immutable.
 
 ### R09 — Pin and compare verses — Missing · P1
@@ -375,7 +375,7 @@ pagination, and voice input.
 highlights and keyboard access. Delivered in the command palette (Aug 2026): typo-tolerant surah
 matching (fold keys + bounded edit distance), surah/juz alias nicknames (`tabarak`, `amma`), and
 offline translation full-text search over the user's cached translation DBs (worker-local) —
-see [`search-system.md`](../documentation/search-system.md). Delivered on a dedicated
+see [`search-system.md`](../../documentation/search-system.md). Delivered on a dedicated
 [`/app/search`](<../../web/src/routes/(application)/search/+page.svelte>) page (Aug 2026):
 multi-translation merged search (client-side batches of 3 concurrent worker searches), per-source
 sections with load-more pagination, shareable `?q`/`?t` URLs, and translation download management.
@@ -384,7 +384,7 @@ The reader drawer is intentionally untouched and still calls one 20-result query
 - [`Results.svelte`](<../../web/src/routes/(application)/_reader/Results.svelte>)
 - [`search.ts`](../../web/src/lib/quran/search.ts)
 - [`search/types.ts`](../../web/src/lib/quran/search/types.ts)
-- [`search-system.md`](../documentation/search-system.md)
+- [`search-system.md`](../../documentation/search-system.md)
 
 **Remaining:** reader drawer surface for the new search; relevance ranking for translation hits;
 recent queries (privacy-gated); voice input with unsupported/permission/error states. Preserve
@@ -513,7 +513,7 @@ reconnect and metadata.
 **EasyQuran:** UI chrome is localized in `en`/`ar` and shipped — Paraglide v2, `/` + `/ar/`
 marketing routes, scheme-A reader URLs (unprefixed `en` canonicals at the site root, `/ar/**`
 twins via the hooks reroute — no `/app` marker), locale switcher, RTL base, localized
-SEO/hreflang/sitemap ([`documentation/quran-system.md`](../documentation/quran-system.md) Part 2). The locale-suggest
+SEO/hreflang/sitemap ([`documentation/quran-system.md`](../../documentation/quran-system.md) Part 2). The locale-suggest
 popup shipped too (next-features Feature 10): one-time `ar`/`en` suggestion from
 `navigator.languages` on home/reader/app-chrome surfaces, accept = full-reload link, permanent
 per-locale dismissal in `easyquran.localeSuggest`
@@ -535,7 +535,7 @@ source and out of reader server cache keys.
 repo.
 
 - [`manifest.webmanifest`](../../web/static/manifest.webmanifest)
-- [`documentation/quran-system.md`](../documentation/quran-system.md)
+- [`documentation/quran-system.md`](../../documentation/quran-system.md)
 
 **Remaining:** strategic choice first. If approved, share API/source/parity contracts, personal sync,
 audio licensing/download policy, deep links, platform accessibility, store compliance, telemetry/
