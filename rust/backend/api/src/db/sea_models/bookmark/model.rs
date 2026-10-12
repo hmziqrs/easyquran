@@ -9,8 +9,17 @@ pub struct Model {
     pub user_id: i32,
     /// NULL = root / uncategorized.
     pub folder_id: Option<String>,
+    /// '' = global/legacy sentinel — the uniqueness key never carries NULL.
+    pub session_id: String,
+    /// Translation context metadata; never part of the uniqueness key.
+    pub source_id: Option<String>,
     pub surah: i32,
     pub ayah: i32,
+    /// Range end; stored as `end = start` for single-ayah rows.
+    pub end_surah: i32,
+    pub end_ayah: i32,
+    /// Tombstone marker (§9.3): deleted rows keep protecting their key.
+    pub deleted_at: Option<DateTimeWithTimeZone>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }
