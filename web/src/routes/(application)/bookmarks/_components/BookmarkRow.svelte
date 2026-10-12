@@ -2,7 +2,7 @@
   import { Icon } from "#lib/components/icon/index.js";
   import { cn } from "#lib/utils.js";
   import type { BookmarksCopy } from "#lib/i18n/bookmarks-copy.js";
-  import type { Bookmark, BookmarkFolder } from "#lib/bookmarks/schema.js";
+  import type { BookmarkFolder } from "#lib/bookmarks/schema.js";
 
   /**
    * One row component for signed-in AND anonymous bookmarks (Feature 2.4):
@@ -125,7 +125,7 @@
       >
       <!-- ACCT-04: a "Move to…" menu (folder glyph + destination) vs a bare select. -->
       <span class="inline-flex items-center gap-1 text-[12.5px] text-foreground-secondary">
-        <Icon name="rows" size={13} class="text-muted" aria-hidden="true" />
+        <Icon name="rows" size={13} class="text-muted" />
         {copy.moveTo}
       </span>
       <select

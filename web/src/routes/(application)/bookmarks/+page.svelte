@@ -202,6 +202,7 @@
     if (target < 0 || target >= sortedFolders.length) return;
     const next = [...sortedFolders];
     const [moved] = next.splice(index, 1);
+    if (moved === undefined) return;
     next.splice(target, 0, moved);
     for (const [slot, folder] of next.entries()) {
       if (folder.position !== slot) bookmarks.updateFolder(folder.id, { position: slot });
