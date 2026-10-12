@@ -2,6 +2,15 @@
   import { page } from "$app/state";
   import { QuranScript, type QuranScript as QuranScriptValue } from "#lib/data/quran-types.js";
   import { parseTajweedSegments, tajweedRuleColor } from "#lib/quran/view/tajweed.js";
+  import { parseTransliterationSegments } from "#lib/quran/text-marks.js";
+  import { translationIdFromSegments } from "#lib/data/quran.js";
+  import { TRANSLATION_BY_ID } from "#lib/data/translations.js";
+  import { getLocale } from "#lib/paraglide/runtime.js";
+  import {
+    reader_translation_empty_verse,
+    reader_transliteration_legend,
+  } from "#lib/i18n/m/reader.js";
+  import type { UiLocale } from "#lib/i18n/locales.js";
   import AyahOrnament from "./AyahOrnament.svelte";
   import IndoPakAyah from "./IndoPakAyah.svelte";
 
@@ -25,12 +34,58 @@
 
   const segments = $derived(script === QuranScript.Tajweed ? parseTajweedSegments(text) : null);
   const revealed = $derived(page.url.hash === `#ayah-${vKey.replace(":", "-")}`);
+
+  // TRX-11: the translation line's direction is the route translation's
+  // declared direction (catalogue), never a dir="auto" guess; off-route
+  // reading flow (no /t/** segments) keeps auto.
+  const routeDirection = $derived.by(() => {
+    const lang = page.params.lang;
+    const translator = page.params.translator;
+    if (lang === undefined || translator === undefined) return undefined;
+    return TRANSLATION_BY_ID.get(translationIdFromSegments(lang, translator))?.direction;
+  });
+  const translationDir = $derived(routeDirection ?? "auto");
+
+  const empty = $derived(isTranslation && !pending && text.trim() === "");
+  const translit = $derived(
+    isTranslation && !pending && !empty && text.includes("<")
+      ? parseTransliterationSegments(text)
+      : null,
+  );
+
+  function emptyNote(): string {
+    const lang = page.params.lang;
+    const translator = page.params.translator;
+    const name =
+      lang !== undefined && translator !== undefined
+        ? TRANSLATION_BY_ID.get(translationIdFromSegments(lang, translator))?.name
+        : undefined;
+    // SAFETY: paraglide is compiled for exactly the UI locales (en/ar), so
+    // getLocale() only ever returns a UiLocale at runtime.
+    return reader_translation_empty_verse(
+      { translator: name ?? translationLang ?? lang ?? "" },
+      { locale: getLocale() as UiLocale },
+    );
+  }
+
+  function legend(): string {
+    return reader_transliteration_legend(undefined, { locale: getLocale() as UiLocale });
+  }
 </script>
 
 <span id="ayah-{vKey.replace(':', '-')}" data-verse-key={vKey} class:revealed-ayah={revealed}>
   {#if isTranslation}
-    <span class="verse-text translation-text text-translation-foreground" lang={translationLang} dir="auto">
-      {#if pending}<span class="pending" aria-hidden="true"></span>{:else}{text}{/if}<span class="ayah-marker" data-verse-anchor={vKey}>{n}</span>
+    <span class="verse-text translation-text text-translation-foreground" lang={translationLang} dir={translationDir}>
+      {#if pending}<span class="pending" aria-hidden="true"></span>
+      {:else if empty}<span class="verse-missing">{emptyNote()}</span>
+      {:else if translit}
+        {#each translit as segment, index (index)}
+          {#if segment.underline}<u class="translit-long">{segment.text}</u>
+          {:else if segment.strong}<b class="translit-assimilated">{segment.text}</b>
+          {:else}{segment.text}{/if}
+        {/each}
+      {:else}{text}{/if}<span class="ayah-marker" data-verse-anchor={vKey}>{n}</span>
+      {#if translit}<span class="translit-legend">{legend()}</span>{/if}
     </span>
   {:else}
     <span class="verse-text arabic-text text-quran-foreground" class:indopak={script === QuranScript.IndoPak} dir="rtl" lang="ar">
@@ -72,6 +127,34 @@
 
   .ayah-marker {
     margin-inline-end: 0.55em;
+  }
+
+  /* Empty translation verse (TRX-11): an editorial note, not verse text. */
+  .verse-missing {
+    color: var(--muted);
+    display: inline-block;
+    font-family: "Onest Variable", "Onest", "Noto Naskh Arabic", system-ui, sans-serif;
+    font-size: 0.9em;
+    font-style: italic;
+    padding-block: 0.25rem;
+  }
+
+  .translit-legend {
+    color: var(--muted);
+    display: block;
+    font-family: "Onest Variable", "Onest", "Noto Naskh Arabic", system-ui, sans-serif;
+    font-size: 12px;
+    margin-top: 4px;
+  }
+
+  .translit-long {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+
+  .translit-assimilated {
+    font-weight: 600;
   }
 
   .pending {
