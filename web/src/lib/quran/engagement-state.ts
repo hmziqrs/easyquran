@@ -38,7 +38,12 @@ export interface ViewBump {
   sessionViews: number;
 }
 
-function todayLocal(): string {
+/**
+ * Device-local calendar day as `YYYY-MM-DD`. Exported for session kind:"daily"
+ * day buckets (next-features Feature 4.8): buckets stay derived per device-local
+ * day, never computed server-side (EC-36).
+ */
+export function todayLocal(): string {
   const d = new Date();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");

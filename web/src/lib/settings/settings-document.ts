@@ -16,6 +16,7 @@ import {
   ARABIC_FONT_MIN,
   READER_DEFAULTS,
   READER_MODE_VALUES,
+  TRANSLATION_FAMILY_VALUES,
   TRANSLATION_FONT_MAX,
   TRANSLATION_FONT_MIN,
   type ReaderMode,
@@ -32,6 +33,7 @@ export interface SettingsReadingDoc {
   arabicFont: ArabicFontId;
   arabicScript: QuranSourceId;
   translationSize: number;
+  translationFamily: TranslationFamily;
 }
 
 export interface SettingsDoc {
@@ -64,6 +66,7 @@ export interface SettingsReaderPort {
   setMode(mode: ReaderMode): void;
   setArabicFont(id: ArabicFontId): void;
   setArabicScript(id: QuranSourceId): void;
+  setTranslationFamily(family: TranslationFamily): void;
   bigger(): void;
   smaller(): void;
   growTranslation(): void;
@@ -119,6 +122,7 @@ function decodeReading(raw: unknown): SettingsReadingDoc {
     arabicFont: DEFAULT_ARABIC_FONT,
     arabicScript: READER_DEFAULTS.arabicScript,
     translationSize: READER_DEFAULTS.translationSize,
+    translationFamily: READER_DEFAULTS.translationFamily,
   };
   const stored = asObject(raw);
   if (!stored) return fallback;
@@ -131,6 +135,9 @@ function decodeReading(raw: unknown): SettingsReadingDoc {
     translationSize:
       asNumber(stored.translationSize, TRANSLATION_FONT_MIN, TRANSLATION_FONT_MAX) ??
       fallback.translationSize,
+    translationFamily:
+      asLiteral<TranslationFamily>(stored.translationFamily, TRANSLATION_FAMILY_VALUES) ??
+      fallback.translationFamily,
   };
 }
 
@@ -164,6 +171,7 @@ export function toSettingsDoc(stores: SettingsDocStores = { prefs, consent, read
       arabicFont: stores.reader.arabicFont,
       arabicScript: stores.reader.arabicScript,
       translationSize: Number.parseFloat(stores.reader.translationSizePx),
+      translationFamily: stores.reader.translationFamily,
     },
     privacy: { ...stores.consent.current },
   };
@@ -227,6 +235,8 @@ export function applySettingsDoc(
   stores.reader.setMode(doc.reading.mode);
   stores.reader.setArabicFont(doc.reading.arabicFont);
   applyArabicScript(stores.reader, doc.reading.arabicScript);
+  // Fan the family out before the final presentation pass below reads it back.
+  stores.reader.setTranslationFamily(doc.reading.translationFamily);
   applyFontSize(stores.reader, doc.reading.fontSize);
   applyTranslationSize(stores.reader, doc.reading.translationSize);
   stores.prefs.apply();
