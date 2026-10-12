@@ -18,6 +18,7 @@ survive refactors. Repo-wide hard rules live in [`AGENTS.MD`](../AGENTS.MD).
 | Doc                                                                              | Status                                                                                          |
 | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | [`next-features.md`](next-features.md)                                           | Next feature batch + sync design; wins over older plans on conflict                             |
+| [`remaining/next-features-followups.md`](remaining/next-features-followups.md)   | Post-PR-#31 verification ledger; keeps next-features.md pristine until a verification pass      |
 | [`abuse-prevention.md`](abuse-prevention.md)                                     | Draft abuse-prevention and enforcement plan; evidence in `research/abuse-prevention/`           |
 | [`locale-suggest.md`](locale-suggest.md)                                         | Draft spec for next-features Feature 10                                                         |
 | [`remaining/feature-gap-catalogue.md`](remaining/feature-gap-catalogue.md)       | Parity register against quran.com                                                               |
