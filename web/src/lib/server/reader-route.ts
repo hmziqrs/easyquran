@@ -1,8 +1,10 @@
 import { hizbRange } from "#lib/data/mushaf-divisions.js";
 import { RangeKind } from "#lib/data/quran-data.js";
 import { translationIdFromSegments } from "#lib/data/quran.js";
+import { snippetForSlug, SNIPPET_SLUG_SEGMENT } from "#lib/data/snippets.js";
 import { TRANSLATION_BY_ID, type BakedTranslationMetadata } from "#lib/data/translations.js";
 import { type UiDirection, type UiLocale } from "#lib/i18n/locales.js";
+import { isTafsirTranslation } from "#lib/quran/text-marks.js";
 import { QURAN_DATA } from "#lib/server/quran-data.js";
 
 interface ReaderIndexRoute {
@@ -28,7 +30,31 @@ interface TranslationReaderRoute {
   readonly index: number;
 }
 
-export type ParsedReaderRoute = ReaderIndexRoute | ArabicReaderRoute | TranslationReaderRoute;
+/** Curated snippet detail (`/azkar/{slug}`, Feature 7): Arabic, prerenderable. */
+interface SnippetReaderRoute {
+  readonly type: "snippet";
+  readonly slug: string;
+}
+
+/**
+ * Translated snippet detail (`/t/{lang}/{translator}/azkar/{slug}`, §11.6):
+ * SSR + 7-day disk cache, never SSG — the cache key rides `sourceId` +
+ * the `azkar` kind + the slug.
+ */
+interface TranslatedSnippetReaderRoute {
+  readonly type: "translated-snippet";
+  readonly sourceId: string;
+  readonly contentLanguage: string;
+  readonly contentDirection: UiDirection;
+  readonly slug: string;
+}
+
+export type ParsedReaderRoute =
+  | ReaderIndexRoute
+  | ArabicReaderRoute
+  | TranslationReaderRoute
+  | SnippetReaderRoute
+  | TranslatedSnippetReaderRoute;
 
 const SURAH_SEGMENT = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const CONTENT_LANGUAGE_SEGMENT = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
@@ -58,7 +84,13 @@ function translation(
   if (!CONTENT_LANGUAGE_SEGMENT.test(lang) || !TRANSLATOR_SEGMENT.test(translator)) return null;
   const sourceId = translationIdFromSegments(lang, translator);
   const metadata = TRANSLATION_BY_ID.get(sourceId);
-  return metadata ? { sourceId, metadata } : null;
+  if (!metadata) return null;
+  // Tafsir works are commentary, never reading translations (TRX-01): the
+  // parser refuses them so no reader route can render them in the verse
+  // position — hooks.server 308s them onto the Arabic reader with the tafsir
+  // stacked instead.
+  if (isTafsirTranslation(sourceId)) return null;
+  return { sourceId, metadata };
 }
 
 function surahRoute(slug: string): ArabicReaderRoute | null {
@@ -128,6 +160,29 @@ function translationRangeRoute(
   };
 }
 
+function snippetRoute(slug: string): SnippetReaderRoute | null {
+  if (!SNIPPET_SLUG_SEGMENT.test(slug) || !snippetForSlug(slug)) return null;
+  return { type: "snippet", slug };
+}
+
+function translatedSnippetRoute(
+  lang: string,
+  translator: string,
+  slug: string,
+): TranslatedSnippetReaderRoute | null {
+  const source = translation(lang, translator);
+  if (!source) return null;
+  const arabic = snippetRoute(slug);
+  if (!arabic) return null;
+  return {
+    type: "translated-snippet",
+    sourceId: source.sourceId,
+    contentLanguage: source.metadata.languageCode,
+    contentDirection: source.metadata.direction,
+    slug: arabic.slug,
+  };
+}
+
 /** Parse one canonical, prefix-less reader pathname. No query or fragment accepted. */
 export function parseReaderPath(pathname: string): ParsedReaderRoute | null {
   if (pathname.length > 256 || pathname.includes("%") || pathname.includes("//")) return null;
@@ -137,6 +192,12 @@ export function parseReaderPath(pathname: string): ParsedReaderRoute | null {
 
   let match = /^\/([^/]+)\/t\/([^/]+)\/([^/]+)$/u.exec(pathname);
   if (match) return translationSurahRoute(match[1]!, match[2]!, match[3]!);
+
+  match = /^\/t\/([^/]+)\/([^/]+)\/azkar\/([^/]+)$/u.exec(pathname);
+  if (match) return translatedSnippetRoute(match[1]!, match[2]!, match[3]!);
+
+  match = /^\/azkar\/([^/]+)$/u.exec(pathname);
+  if (match) return snippetRoute(match[1]!);
 
   match = /^\/t\/([^/]+)\/([^/]+)\/(page|juz|hizb)\/([^/]+)$/u.exec(pathname);
   if (match) {
@@ -229,6 +290,48 @@ export function rubRedirectTarget(pathname: string): SurahLocalRedirectTarget | 
   return { path, fragment: ayah === 1 ? "" : `#ayah-${surah.num}-${ayah}` };
 }
 
+export interface TafsirRedirectTarget {
+  /** Bare canonical Arabic reader path (surah root or range route). */
+  readonly path: string;
+  /** Tafsir catalogue id the caller appends to the ?more= stack. */
+  readonly moreId: string;
+}
+
+const TRANSLATED_SURAH = /^\/([^/]+)\/t\/([^/]+)\/([^/]+)$/u;
+const TRANSLATED_RANGE = /^\/t\/([^/]+)\/([^/]+)\/(page|juz|hizb)\/([1-9][0-9]*)$/u;
+
+function tafsirSourceId(lang: string, translator: string): string | null {
+  if (!CONTENT_LANGUAGE_SEGMENT.test(lang) || !TRANSLATOR_SEGMENT.test(translator)) return null;
+  const sourceId = translationIdFromSegments(lang, translator);
+  return isTafsirTranslation(sourceId) && TRANSLATION_BY_ID.has(sourceId) ? sourceId : null;
+}
+
+/**
+ * Redirect target for a tafsir reader URL (TRX-01, EC-50): `/{surah}/t/ar/muyassar`
+ * and `/t/ar/{muyassar|jalalayn}/{page|juz|hizb}/{n}` land on the Arabic reader
+ * with the tafsir stacked (`?more=`). Pure, like the other redirect builders —
+ * the hooks branch owns the /ar prefix, the query merge, and the fragment.
+ * Non-tafsir translations, unknown slugs/sources, and bad bounds yield null
+ * (caller falls through to the parse 404).
+ */
+export function tafsirRedirectTarget(pathname: string): TafsirRedirectTarget | null {
+  const range = TRANSLATED_RANGE.exec(pathname);
+  if (range) {
+    const moreId = tafsirSourceId(range[1]!, range[2]!);
+    const kind = rangeKindFromSegment(range[3]!);
+    const index = positiveInteger(range[4]!);
+    if (!moreId || !kind || index === null || !rangeIndexInRange(kind, index)) return null;
+    return { path: `/${range[3]}/${range[4]}`, moreId };
+  }
+  const surah = TRANSLATED_SURAH.exec(pathname);
+  if (surah) {
+    const moreId = tafsirSourceId(surah[2]!, surah[3]!);
+    if (!moreId || !QURAN_DATA.surahBySlug(surah[1]!)) return null;
+    return { path: `/${surah[1]}`, moreId };
+  }
+  return null;
+}
+
 function requiredParam(
   params: Record<string, string | undefined>,
   name: string,
@@ -258,6 +361,7 @@ export function parseReaderRoute(
   const lang = requiredParam(params, "lang", CONTENT_LANGUAGE_SEGMENT);
   const translator = requiredParam(params, "translator", TRANSLATOR_SEGMENT);
   const n = requiredParam(params, "n", POSITIVE_INTEGER);
+  const slug = requiredParam(params, "slug", SNIPPET_SLUG_SEGMENT);
 
   switch (routePattern) {
     case "/juz":
@@ -274,9 +378,15 @@ export function parseReaderRoute(
       return n ? parseReaderPath(`/juz/${n}`) : null;
     case "/hizb/[n]":
       return n ? parseReaderPath(`/hizb/${n}`) : null;
+    case "/azkar/[slug]":
+      return slug ? parseReaderPath(`/azkar/${slug}`) : null;
     case "/[surah]/t/[lang]/[translator]":
       return surah && lang && translator
         ? parseReaderPath(`/${surah}/t/${lang}/${translator}`)
+        : null;
+    case "/t/[lang]/[translator]/azkar/[slug]":
+      return lang && translator && slug
+        ? parseReaderPath(`/t/${lang}/${translator}/azkar/${slug}`)
         : null;
     case "/t/[lang]/[translator]/page/[n]":
       return lang && translator && n ? parseReaderPath(`/t/${lang}/${translator}/page/${n}`) : null;

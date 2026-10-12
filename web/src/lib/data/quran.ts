@@ -84,6 +84,16 @@ export const translationJuzPath = (lang: string, translator: string, n: number):
 export const translationHizbPath = (lang: string, translator: string, n: number): `/${string}` =>
   `/t/${lang}/${translator}/hizb/${n}`;
 
+/** Arabic snippet detail (`/azkar/{slug}`) — the curated range reader (Feature 7). */
+export const snippetPath = (slug: string): `/${string}` => `/azkar/${slug}`;
+
+/** Translated snippet detail — the `/t/**` twin, SSR + disk cache, never SSG (§11.6). */
+export const translationSnippetPath = (
+  lang: string,
+  translator: string,
+  slug: string,
+): `/${string}` => `/t/${lang}/${translator}/azkar/${slug}`;
+
 export const surahRouteContext = (sourceId: string): SurahRouteContext => {
   if (isArabicSourceId(sourceId)) return { kind: "arabic" };
   const { lang, translator } = translationSegmentsFromId(sourceId);
@@ -134,6 +144,12 @@ export const juzPathFor = (ctx: SurahRouteContext, n: number): `/${string}` =>
 
 export const hizbPathFor = (ctx: SurahRouteContext, n: number): `/${string}` =>
   ctx.kind === "arabic" ? `/hizb/${n}` : translationHizbPath(ctx.lang, ctx.translator, n);
+
+/** Snippet detail path preserving the active translation context (Feature 7.2). */
+export const snippetPathFor = (ctx: SurahRouteContext, slug: string): `/${string}` =>
+  ctx.kind === "arabic"
+    ? snippetPath(slug)
+    : translationSnippetPath(ctx.lang, ctx.translator, slug);
 
 const ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
 

@@ -12,6 +12,7 @@ import type {
   SurahLocalPageData,
   SurahRouteData,
   SurahNormalization,
+  TranslationDirection,
 } from "#lib/data/quran-types.js";
 import { OpenerKind, OpenerPackaging, QuranScript } from "#lib/data/quran-types.js";
 import { translationIdFromSegments } from "#lib/data/quran.js";
@@ -210,4 +211,65 @@ export async function loadTranslationRangeData(
     normalizations = [];
   }
   return toRangePageData(kind, index, entry, ayahs, normalizations);
+}
+
+/** One curated snippet ref resolved for a translated reader (Feature 7.3). */
+export interface TranslationSnippetGroup {
+  readonly surah: number;
+  readonly ayahStart: number;
+  readonly ayahEnd: number;
+  /** Translation rows; empty when the fetch degraded — the page marks itself pending. */
+  readonly ayahs: readonly Ayah[];
+}
+
+export interface TranslationSnippetPageData {
+  readonly sourceId: string;
+  readonly languageCode: string;
+  readonly direction: TranslationDirection;
+  readonly translationName: string;
+  readonly groups: readonly TranslationSnippetGroup[];
+}
+
+/**
+ * Translated snippet detail (`/t/{lang}/{translator}/azkar/{slug}`, §11.6):
+ * every curated ref fetched through the same cached, internally-authenticated
+ * range pipeline as the translated range routes. Per-group degradation (empty
+ * `ayahs`) keeps the page renderable while pending, mirroring
+ * `loadTranslationRangeData`'s degraded path.
+ */
+export async function loadTranslationSnippetData(
+  refs: readonly { surah: number; ayahStart: number; ayahEnd: number }[],
+  lang: string,
+  translator: string,
+  fetcher: TranslationFetcher,
+): Promise<TranslationSnippetPageData> {
+  const sourceId = translationIdFromSegments(lang, translator);
+  requireTranslationSource(sourceId, lang, translator);
+  const catalogue = TRANSLATION_CATALOGUE_BY_ID.get(sourceId);
+  // requireTranslationSource proved the id is in the catalogue.
+  if (!catalogue) throw error(500, `Catalogue miss for ${sourceId}`);
+  const groups = await Promise.all(
+    refs.map(async (ref) => {
+      const start = QURAN_DATA.globalIndexOf(ref.surah, ref.ayahStart);
+      const end = QURAN_DATA.globalIndexOf(ref.surah, ref.ayahEnd);
+      // Curated data: a bad ref is an authoring bug, not a user 404.
+      if (start === undefined || end === undefined || end < start) {
+        throw error(500, `Invalid snippet ref: ${ref.surah}:${ref.ayahStart}-${ref.ayahEnd}`);
+      }
+      let ayahs: Ayah[] = [];
+      try {
+        ayahs = (await fetchTranslationRange(sourceId, start, end, fetcher)).ayahs;
+      } catch {
+        ayahs = [];
+      }
+      return { surah: ref.surah, ayahStart: ref.ayahStart, ayahEnd: ref.ayahEnd, ayahs };
+    }),
+  );
+  return {
+    sourceId,
+    languageCode: catalogue.languageCode,
+    direction: catalogue.direction,
+    translationName: catalogue.name,
+    groups,
+  };
 }

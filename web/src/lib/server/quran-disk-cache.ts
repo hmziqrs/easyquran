@@ -4,7 +4,9 @@ import path from "node:path";
 import { version as appBuildId } from "$app/env";
 import { sumBy } from "es-toolkit";
 
-const KINDS = ["surah", "page", "juz", "hizb"] as const;
+// "azkar" keys the translated snippet detail (`/t/{lang}/{translator}/azkar/{slug}`,
+// §11.6): SSR output cached like every other /t/** route, addressed by slug.
+const KINDS = ["surah", "page", "juz", "hizb", "azkar"] as const;
 export type DiskCacheKind = (typeof KINDS)[number];
 
 const HTML_EXT = ".html";
@@ -48,7 +50,13 @@ function sanitizeComponent(value: string): string {
   return cleaned;
 }
 
-export function diskCacheKey(sourceId: string, kind: DiskCacheKind, a: number, b?: number): string {
+/** `a` is a route index, or the snippet slug for `kind === "azkar"`. */
+export function diskCacheKey(
+  sourceId: string,
+  kind: DiskCacheKind,
+  a: number | string,
+  b?: number,
+): string {
   // This namespaces disposable HTML by the web build so cached markup never points at assets
   // removed by a later deploy. Quran source identity remains `sourceId`; this is not data versioning.
   const parts = [`build-${appBuildId}`, sourceId, kind, String(a)];

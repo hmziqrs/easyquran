@@ -7,6 +7,7 @@ import {
   parseReaderRoute,
   rubRedirectTarget,
   surahLocalRedirectTarget,
+  tafsirRedirectTarget,
 } from "#lib/server/reader-route.js";
 
 import { reroute } from "../../../hooks";
@@ -247,5 +248,42 @@ describe("surahLocalRedirectTarget (removed surah-local shapes 308 with an ayah 
     expect(surahLocalRedirectTarget("/page/2")).toBeNull();
     // Legacy /app spellings belong to the hooks 308 map, never this parser.
     expect(surahLocalRedirectTarget("/app/al-baqarah/page/2")).toBeNull();
+  });
+});
+
+describe("tafsirRedirectTarget (tafsir routes 308 to the Arabic reader, tafsir stacked)", () => {
+  it("lands a translated tafsir surah on the Arabic surah root with the tafsir stacked", () => {
+    expect(tafsirRedirectTarget("/al-baqarah/t/ar/muyassar")).toEqual({
+      path: "/al-baqarah",
+      moreId: "ar.muyassar",
+    });
+    expect(tafsirRedirectTarget("/al-fatihah/t/ar/jalalayn")).toEqual({
+      path: "/al-fatihah",
+      moreId: "ar.jalalayn",
+    });
+  });
+
+  it("lands a translated tafsir range on the Arabic range route", () => {
+    expect(tafsirRedirectTarget("/t/ar/muyassar/juz/1")).toEqual({
+      path: "/juz/1",
+      moreId: "ar.muyassar",
+    });
+    expect(tafsirRedirectTarget("/t/ar/jalalayn/page/604")).toEqual({
+      path: "/page/604",
+      moreId: "ar.jalalayn",
+    });
+  });
+
+  it("returns null for plain translations, unknown sources/slugs, and bad bounds", () => {
+    expect(tafsirRedirectTarget("/al-fatihah/t/en/sahih")).toBeNull();
+    expect(tafsirRedirectTarget("/t/en/sahih/juz/1")).toBeNull();
+    expect(tafsirRedirectTarget("/not-a-surah/t/ar/muyassar")).toBeNull();
+    expect(tafsirRedirectTarget("/t/ar/muyassar/juz/31")).toBeNull();
+    expect(tafsirRedirectTarget("/juz/1")).toBeNull();
+  });
+
+  it("parseReaderPath refuses tafsir sources outright (never rendered in the verse position)", () => {
+    expect(parseReaderPath("/al-fatihah/t/ar/muyassar")).toBeNull();
+    expect(parseReaderPath("/t/ar/jalalayn/page/2")).toBeNull();
   });
 });

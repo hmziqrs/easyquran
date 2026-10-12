@@ -27,8 +27,10 @@ import {
   parseReaderRoute,
   rubRedirectTarget,
   surahLocalRedirectTarget,
+  tafsirRedirectTarget,
   type ParsedReaderRoute,
 } from "#lib/server/reader-route.js";
+import { READER_MORE_PARAM } from "#lib/reader/more-param.js";
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
 
@@ -46,9 +48,15 @@ function translationRouteCacheKey(
   route: ParsedReaderRoute | null,
   uiLocale: UiLocale | null,
 ): string | null {
-  if (!uiLocale || route?.type !== "translation") return null;
+  if (!uiLocale) return null;
   // Bounded UI-locale partition on top of the source-kind key: en/ar chrome
   // renders different shells over the same translation content.
+  if (route?.type === "translated-snippet") {
+    // Snippet detail is keyed by slug (§11.6): same 7-day disk-cache life as
+    // every other /t/** route, never SSG.
+    return `${diskCacheKey(route.sourceId, "azkar", route.slug)}__ui-${uiLocale}`;
+  }
+  if (route?.type !== "translation") return null;
   return `${diskCacheKey(route.sourceId, route.cacheKind, route.index)}__ui-${uiLocale}`;
 }
 
@@ -302,6 +310,36 @@ function surahLocalPageRedirect(event: RequestEvent): Response | null {
   });
 }
 
+/**
+ * Tafsir routes are commentary, never reading translations (TRX-01, EC-50):
+ * `/{surah}/t/ar/muyassar` and `/t/ar/{…}/{page|juz|hizb}/{n}` 308 to the
+ * Arabic reader with the tafsir stacked. The inbound `?more=` stack is merged
+ * (tafsir appended once), every other query param and the fragment ride
+ * along. Deterministic target → the same bounded public TTL as the other rows.
+ */
+function tafsirRouteRedirect(event: RequestEvent): Response | null {
+  const base = readerRequestBase(event.url.pathname);
+  const target = tafsirRedirectTarget(base.rel);
+  if (!target) return null;
+  const params = new URLSearchParams(building ? "" : event.url.search.slice(1));
+  const more = params.get(READER_MORE_PARAM);
+  const ids =
+    more !== null
+      ? more
+          .split(",")
+          .map((part) => part.trim())
+          .filter(Boolean)
+      : [];
+  if (!ids.includes(target.moreId)) ids.push(target.moreId);
+  params.set(READER_MORE_PARAM, ids.join(","));
+  const inboundHash = building ? "" : event.url.hash;
+  const location = `${base.prefix}${target.path}?${params.toString()}${inboundHash}`;
+  return new Response(null, {
+    status: 308,
+    headers: { location, "cache-control": "public, max-age=86400" },
+  });
+}
+
 function notFound(event: RequestEvent): Response {
   if (prefersMarkdown(event)) {
     return new Response(agentNotFoundMarkdown(), {
@@ -477,7 +515,8 @@ export const handle: Handle = async ({ event, resolve }) => {
     // Both redirect builders gate themselves on their rel regexes (numeric
     // alias, surah-local shapes), so attempt them for every request — cheap
     // null returns for everything else.
-    const readerRedirect = numericChapterRedirect(event) ?? surahLocalPageRedirect(event);
+    const readerRedirect =
+      numericChapterRedirect(event) ?? surahLocalPageRedirect(event) ?? tafsirRouteRedirect(event);
     if (readerRedirect) {
       response = readerRedirect;
     } else if (
