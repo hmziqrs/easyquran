@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 224 messages. Import this barrel, never
+// 269 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "#lib/paraglide/messages/reader_account.js";
@@ -16,31 +16,48 @@ export { reader_bookmark } from "#lib/paraglide/messages/reader_bookmark.js";
 export { reader_bookmark_verse } from "#lib/paraglide/messages/reader_bookmark_verse.js";
 export { reader_bookmarks_ayah } from "#lib/paraglide/messages/reader_bookmarks_ayah.js";
 export { reader_bookmarks_cancel } from "#lib/paraglide/messages/reader_bookmarks_cancel.js";
+export { reader_bookmarks_clear_selection } from "#lib/paraglide/messages/reader_bookmarks_clear_selection.js";
 export { reader_bookmarks_create_folder } from "#lib/paraglide/messages/reader_bookmarks_create_folder.js";
 export { reader_bookmarks_delete_folder } from "#lib/paraglide/messages/reader_bookmarks_delete_folder.js";
 export { reader_bookmarks_delete_folder_confirm } from "#lib/paraglide/messages/reader_bookmarks_delete_folder_confirm.js";
 export { reader_bookmarks_empty } from "#lib/paraglide/messages/reader_bookmarks_empty.js";
 export { reader_bookmarks_folder_empty } from "#lib/paraglide/messages/reader_bookmarks_folder_empty.js";
+export { reader_bookmarks_folder_kind_daily } from "#lib/paraglide/messages/reader_bookmarks_folder_kind_daily.js";
+export { reader_bookmarks_folder_kind_generic } from "#lib/paraglide/messages/reader_bookmarks_folder_kind_generic.js";
+export { reader_bookmarks_folder_kind_label } from "#lib/paraglide/messages/reader_bookmarks_folder_kind_label.js";
+export { reader_bookmarks_folder_kind_learning } from "#lib/paraglide/messages/reader_bookmarks_folder_kind_learning.js";
+export { reader_bookmarks_folder_progress } from "#lib/paraglide/messages/reader_bookmarks_folder_progress.js";
 export { reader_bookmarks_folders_heading } from "#lib/paraglide/messages/reader_bookmarks_folders_heading.js";
 export { reader_bookmarks_loading } from "#lib/paraglide/messages/reader_bookmarks_loading.js";
 export { reader_bookmarks_local_only } from "#lib/paraglide/messages/reader_bookmarks_local_only.js";
+export { reader_bookmarks_move_down } from "#lib/paraglide/messages/reader_bookmarks_move_down.js";
 export { reader_bookmarks_move_label } from "#lib/paraglide/messages/reader_bookmarks_move_label.js";
+export { reader_bookmarks_move_selected_to } from "#lib/paraglide/messages/reader_bookmarks_move_selected_to.js";
+export { reader_bookmarks_move_to } from "#lib/paraglide/messages/reader_bookmarks_move_to.js";
+export { reader_bookmarks_move_up } from "#lib/paraglide/messages/reader_bookmarks_move_up.js";
 export { reader_bookmarks_new_folder_label } from "#lib/paraglide/messages/reader_bookmarks_new_folder_label.js";
 export { reader_bookmarks_new_folder_placeholder } from "#lib/paraglide/messages/reader_bookmarks_new_folder_placeholder.js";
+export { reader_bookmarks_note_label } from "#lib/paraglide/messages/reader_bookmarks_note_label.js";
 export { reader_bookmarks_offline } from "#lib/paraglide/messages/reader_bookmarks_offline.js";
 export { reader_bookmarks_pending } from "#lib/paraglide/messages/reader_bookmarks_pending.js";
 export { reader_bookmarks_pending_one } from "#lib/paraglide/messages/reader_bookmarks_pending_one.js";
 export { reader_bookmarks_remove } from "#lib/paraglide/messages/reader_bookmarks_remove.js";
 export { reader_bookmarks_remove_label } from "#lib/paraglide/messages/reader_bookmarks_remove_label.js";
+export { reader_bookmarks_remove_selected } from "#lib/paraglide/messages/reader_bookmarks_remove_selected.js";
+export { reader_bookmarks_removed } from "#lib/paraglide/messages/reader_bookmarks_removed.js";
 export { reader_bookmarks_rename } from "#lib/paraglide/messages/reader_bookmarks_rename.js";
 export { reader_bookmarks_rename_label } from "#lib/paraglide/messages/reader_bookmarks_rename_label.js";
 export { reader_bookmarks_save } from "#lib/paraglide/messages/reader_bookmarks_save.js";
+export { reader_bookmarks_saved } from "#lib/paraglide/messages/reader_bookmarks_saved.js";
+export { reader_bookmarks_select_label } from "#lib/paraglide/messages/reader_bookmarks_select_label.js";
+export { reader_bookmarks_selected } from "#lib/paraglide/messages/reader_bookmarks_selected.js";
 export { reader_bookmarks_sign_in } from "#lib/paraglide/messages/reader_bookmarks_sign_in.js";
 export { reader_bookmarks_sign_in_note } from "#lib/paraglide/messages/reader_bookmarks_sign_in_note.js";
 export { reader_bookmarks_sync_error } from "#lib/paraglide/messages/reader_bookmarks_sync_error.js";
 export { reader_bookmarks_synced } from "#lib/paraglide/messages/reader_bookmarks_synced.js";
 export { reader_bookmarks_title } from "#lib/paraglide/messages/reader_bookmarks_title.js";
 export { reader_bookmarks_uncategorized } from "#lib/paraglide/messages/reader_bookmarks_uncategorized.js";
+export { reader_bookmarks_undo } from "#lib/paraglide/messages/reader_bookmarks_undo.js";
 export { reader_browse } from "#lib/paraglide/messages/reader_browse.js";
 export { reader_browse_ayah } from "#lib/paraglide/messages/reader_browse_ayah.js";
 export { reader_browse_juz } from "#lib/paraglide/messages/reader_browse_juz.js";
@@ -49,6 +66,7 @@ export { reader_browse_surah } from "#lib/paraglide/messages/reader_browse_surah
 export { reader_clear_search } from "#lib/paraglide/messages/reader_clear_search.js";
 export { reader_close_note_tafsir } from "#lib/paraglide/messages/reader_close_note_tafsir.js";
 export { reader_close_panel } from "#lib/paraglide/messages/reader_close_panel.js";
+export { reader_commentary_label } from "#lib/paraglide/messages/reader_commentary_label.js";
 export { reader_continue_reading } from "#lib/paraglide/messages/reader_continue_reading.js";
 export { reader_copied } from "#lib/paraglide/messages/reader_copied.js";
 export { reader_copy } from "#lib/paraglide/messages/reader_copy.js";
@@ -66,7 +84,17 @@ export { reader_downloading_quran } from "#lib/paraglide/messages/reader_downloa
 export { reader_enable } from "#lib/paraglide/messages/reader_enable.js";
 export { reader_full_surah } from "#lib/paraglide/messages/reader_full_surah.js";
 export { reader_hizb_item } from "#lib/paraglide/messages/reader_hizb_item.js";
+export { reader_home_done } from "#lib/paraglide/messages/reader_home_done.js";
+export { reader_home_edit } from "#lib/paraglide/messages/reader_home_edit.js";
+export { reader_home_hidden } from "#lib/paraglide/messages/reader_home_hidden.js";
+export { reader_home_hide } from "#lib/paraglide/messages/reader_home_hide.js";
 export { reader_home_label } from "#lib/paraglide/messages/reader_home_label.js";
+export { reader_home_move_down } from "#lib/paraglide/messages/reader_home_move_down.js";
+export { reader_home_move_up } from "#lib/paraglide/messages/reader_home_move_up.js";
+export { reader_home_read_in } from "#lib/paraglide/messages/reader_home_read_in.js";
+export { reader_home_read_in_arabic } from "#lib/paraglide/messages/reader_home_read_in_arabic.js";
+export { reader_home_read_in_with } from "#lib/paraglide/messages/reader_home_read_in_with.js";
+export { reader_home_reading_in } from "#lib/paraglide/messages/reader_home_reading_in.js";
 export { reader_index_ayah_count } from "#lib/paraglide/messages/reader_index_ayah_count.js";
 export { reader_index_juz_title } from "#lib/paraglide/messages/reader_index_juz_title.js";
 export { reader_index_page_sajda_legend } from "#lib/paraglide/messages/reader_index_page_sajda_legend.js";
@@ -177,6 +205,9 @@ export { reader_seo_translation_juz_description } from "#lib/paraglide/messages/
 export { reader_seo_translation_page_description } from "#lib/paraglide/messages/reader_seo_translation_page_description.js";
 export { reader_seo_yours_description } from "#lib/paraglide/messages/reader_seo_yours_description.js";
 export { reader_seo_yours_title } from "#lib/paraglide/messages/reader_seo_yours_title.js";
+export { reader_sessions_label } from "#lib/paraglide/messages/reader_sessions_label.js";
+export { reader_sessions_new_add } from "#lib/paraglide/messages/reader_sessions_new_add.js";
+export { reader_sessions_new_placeholder } from "#lib/paraglide/messages/reader_sessions_new_placeholder.js";
 export { reader_share } from "#lib/paraglide/messages/reader_share.js";
 export { reader_share_verse } from "#lib/paraglide/messages/reader_share_verse.js";
 export { reader_sidebar_description } from "#lib/paraglide/messages/reader_sidebar_description.js";
@@ -215,17 +246,31 @@ export { reader_tooltip_direction } from "#lib/paraglide/messages/reader_tooltip
 export { reader_tooltip_language } from "#lib/paraglide/messages/reader_tooltip_language.js";
 export { reader_tooltip_size } from "#lib/paraglide/messages/reader_tooltip_size.js";
 export { reader_tooltip_translator } from "#lib/paraglide/messages/reader_tooltip_translator.js";
+export { reader_translation_empty_verse } from "#lib/paraglide/messages/reader_translation_empty_verse.js";
 export { reader_translation_unavailable } from "#lib/paraglide/messages/reader_translation_unavailable.js";
 export { reader_translations_back } from "#lib/paraglide/messages/reader_translations_back.js";
 export { reader_translations_cap_note } from "#lib/paraglide/messages/reader_translations_cap_note.js";
 export { reader_translations_close } from "#lib/paraglide/messages/reader_translations_close.js";
+export { reader_translations_commentary } from "#lib/paraglide/messages/reader_translations_commentary.js";
 export { reader_translations_description } from "#lib/paraglide/messages/reader_translations_description.js";
 export { reader_translations_done } from "#lib/paraglide/messages/reader_translations_done.js";
 export { reader_translations_go_to } from "#lib/paraglide/messages/reader_translations_go_to.js";
 export { reader_translations_languages_label } from "#lib/paraglide/messages/reader_translations_languages_label.js";
 export { reader_translations_no_matches } from "#lib/paraglide/messages/reader_translations_no_matches.js";
 export { reader_translations_open } from "#lib/paraglide/messages/reader_translations_open.js";
+export { reader_translations_recent } from "#lib/paraglide/messages/reader_translations_recent.js";
 export { reader_translations_results } from "#lib/paraglide/messages/reader_translations_results.js";
 export { reader_translations_results_one } from "#lib/paraglide/messages/reader_translations_results_one.js";
+export { reader_transliteration_legend } from "#lib/paraglide/messages/reader_transliteration_legend.js";
 export { reader_unsupported } from "#lib/paraglide/messages/reader_unsupported.js";
+export { reader_widget_daily_ayah_open } from "#lib/paraglide/messages/reader_widget_daily_ayah_open.js";
+export { reader_widget_daily_ayah_title } from "#lib/paraglide/messages/reader_widget_daily_ayah_title.js";
+export { reader_widget_daily_ayah_unavailable } from "#lib/paraglide/messages/reader_widget_daily_ayah_unavailable.js";
+export { reader_widget_most_read_empty } from "#lib/paraglide/messages/reader_widget_most_read_empty.js";
+export { reader_widget_most_read_off } from "#lib/paraglide/messages/reader_widget_most_read_off.js";
+export { reader_widget_most_read_title } from "#lib/paraglide/messages/reader_widget_most_read_title.js";
+export { reader_widget_notes_empty } from "#lib/paraglide/messages/reader_widget_notes_empty.js";
+export { reader_widget_notes_title } from "#lib/paraglide/messages/reader_widget_notes_title.js";
+export { reader_widget_recents_count } from "#lib/paraglide/messages/reader_widget_recents_count.js";
+export { reader_widget_recents_empty } from "#lib/paraglide/messages/reader_widget_recents_empty.js";
 export { reader_your_note } from "#lib/paraglide/messages/reader_your_note.js";
