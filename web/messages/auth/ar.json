@@ -68,6 +68,7 @@
   "auth_connected_session_expired_error": "انتهت جلستك. سجّل الدخول مرة أخرى.",
   "auth_merge_title": "الدمج في حسابك",
   "auth_merge_description": "اختر ما يضيفه هذا الجهاز قبل أن تبدأ أي مزامنة.",
+  "auth_merge_verse": "الآية {ayah}",
   "auth_merge_summary": [
     {
       "declarations": ["input count", "local countPlural = count: plural"],

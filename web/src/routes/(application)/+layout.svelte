@@ -229,7 +229,13 @@
 />
 
 <style>
-  :global(body:has([data-reader-root]) > a[href="#main"]) {
+  /* Hide the root layout's skip link when this layout provides its own (both
+       target #main, so two rendered on focus). The old body > a selector never
+       matched — SvelteKit wraps body content in a single div — so both links
+       showed. The root link is a SIBLING of [data-reader-root] (the root
+       layout renders it ahead of the children render), while this layout's
+       own link lives inside the div and never matches. */
+  :global(a[href="#main"]:has(~ [data-reader-root])) {
     display: none;
   }
 </style>

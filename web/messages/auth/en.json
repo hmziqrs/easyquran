@@ -68,6 +68,7 @@
   "auth_connected_session_expired_error": "Your session has expired. Sign in again.",
   "auth_merge_title": "Merge into your account",
   "auth_merge_description": "Choose what this device adds before anything syncs.",
+  "auth_merge_verse": "verse {ayah}",
   "auth_merge_summary": [
     {
       "declarations": ["input count", "local countPlural = count: plural"],

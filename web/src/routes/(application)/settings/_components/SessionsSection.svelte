@@ -192,10 +192,9 @@
             <span class="text-caption text-muted">{reader_sessions_new_placeholder()}</span>
             <input
               type="text"
-              value={newName}
+              bind:value={newName}
               maxlength={SESSION_NAME_MAX}
               placeholder={reader_sessions_new_placeholder()}
-              onchange={(event) => (newName = event.currentTarget.value)}
               class={fieldClass} />
           </label>
           <label class="flex flex-col gap-1.5">

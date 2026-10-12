@@ -1,8 +1,12 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { Dialog as DialogPrimitive } from "bits-ui";
   import { Button } from "#lib/components/ui/button/index.js";
   import { Icon } from "#lib/components/icon/index.js";
+  import { loadQuranData, peekQuranData } from "#lib/data/quran-data-client.js";
+  import type { QuranData } from "#lib/data/quran-data.js";
   import {
+    auth_close,
     auth_merge_apply_unowned,
     auth_merge_back,
     auth_merge_description,
@@ -24,6 +28,7 @@
     auth_merge_summary,
     auth_merge_title,
     auth_merge_unowned,
+    auth_merge_verse,
   } from "#lib/i18n/m/auth.js";
   import { getLocale } from "#lib/paraglide/runtime.js";
   import type { UiLocale } from "#lib/i18n/locales.js";
@@ -37,6 +42,10 @@
     return {
       title: auth_merge_title(undefined, locale),
       description: auth_merge_description(undefined, locale),
+      close: auth_close(undefined, locale),
+      verse(ayah: number): string {
+        return auth_merge_verse({ ayah }, locale);
+      },
       summary(count: number): string {
         return auth_merge_summary({ count }, locale);
       },
@@ -73,12 +82,35 @@
   let showList = $state(false);
   let excluded = $state<Record<string, boolean>>({});
   let excludedSessions = $state<Record<string, boolean>>({});
+  // Surah catalogue for human row labels — usually already resident (the merge
+  // review fires after reader/auth surfaces loaded); loaded here otherwise.
+  let quranData = $state<QuranData | null>(peekQuranData() ?? null);
+
+  onMount(() => {
+    if (peekQuranData() === undefined) {
+      void loadQuranData().then(
+        (data) => {
+          quranData = data;
+        },
+        () => undefined,
+      );
+    }
+  });
 
   const rows = $derived(mergeReview.rows);
   const chosen = $derived(rows.filter((row) => !excluded[row.key]));
   const sessionRows = $derived(mergeReview.sessionRows);
   const chosenSessions = $derived(sessionRows.filter((row) => !excludedSessions[row.id]));
   const hasMergeable = $derived(rows.length > 0 || sessionRows.length > 0);
+
+  // Row label in the BookmarkRow format ("Al-Baqarah · verse 255"); the raw
+  // "2:255" key stays the row/checkbox identity but is only ever the visible
+  // name as the pre-catalogue fallback.
+  function rowTitle(row: MergeBookmarkRow): string {
+    const entry = quranData?.surahByNum(row.surah);
+    if (entry === undefined) return row.key;
+    return `${entry.name} · ${copy.verse(row.ayah)}`;
+  }
 
   // Selection is per-open: every close path resets it (effect-free on purpose).
   function close(): void {
@@ -119,14 +151,15 @@
       data-slot="merge-review-dialog"
       class="fixed left-1/2 top-1/2 z-[92] w-[calc(100vw-2rem)] max-w-[440px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-surface-raised outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
     >
-      <DialogPrimitive.Title class="sr-only">{copy.title}</DialogPrimitive.Title>
       <DialogPrimitive.Description class="sr-only">{copy.description}</DialogPrimitive.Description>
       <DialogPrimitive.Close
         class="absolute end-3.5 top-3.5 z-10 inline-flex size-9 items-center justify-center rounded-pill text-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        aria-label={copy.notNow}><Icon name="x" size={18} /></DialogPrimitive.Close
+        aria-label={copy.close}><Icon name="x" size={18} /></DialogPrimitive.Close
       >
       <div class="max-h-[82vh] overflow-y-auto px-6 py-7">
-        <h2 class="text-h3 text-foreground">{copy.title}</h2>
+        <!-- The visible title IS the dialog title (bits-ui renders an h2): the
+             former second sr-only copy gave the dialog two identical names. -->
+        <DialogPrimitive.Title class="text-h3 text-foreground">{copy.title}</DialogPrimitive.Title>
         {#if mergeReview.result}
           {@const res = mergeReview.result}
           <p class="mt-2 text-body-s text-foreground-secondary" role="status">
@@ -180,7 +213,7 @@
                     />
                   </span>
                   <label for="merge-row-{row.key}" class="flex flex-col gap-0.5">
-                    <span class="text-body-s text-foreground">{row.key}</span>
+                    <span class="text-body-s text-foreground">{rowTitle(row)}</span>
                     <span class="text-caption text-foreground-secondary">{copy.outcome(row)}</span>
                   </label>
                 </li>
