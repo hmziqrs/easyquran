@@ -18,6 +18,7 @@
     reader_sessions_bucket_day,
     reader_sessions_bucket_week,
     reader_sessions_delete,
+    reader_sessions_delete_confirm,
     reader_sessions_kind,
     reader_sessions_kind_daily,
     reader_sessions_kind_free,
@@ -45,6 +46,7 @@
   let newKind = $state<SessionKind>("free");
   let renamingId = $state<string | null>(null);
   let renameValue = $state("");
+  let confirmingId = $state<string | null>(null);
 
   onMount(() => {
     mounted = true;
@@ -78,6 +80,7 @@
   }
 
   function startRename(session: ReadingSession): void {
+    confirmingId = null;
     renamingId = session.id;
     renameValue = session.name;
   }
@@ -138,6 +141,18 @@
                 {reader_bookmarks_cancel()}
               </button>
             </form>
+          {:else if confirmingId === session.id}
+            <span class="min-w-0 flex-1 text-caption text-foreground-secondary">
+              {reader_sessions_delete_confirm({ name: session.name })}
+            </span>
+            <button
+              type="button"
+              class={dangerButton}
+              onclick={() => sessions.remove(session.id)}>{reader_sessions_delete()}</button>
+            <button
+              type="button"
+              class={actionButton}
+              onclick={() => (confirmingId = null)}>{reader_bookmarks_cancel()}</button>
           {:else}
             <span class="min-w-0 flex-1">
               <span class="block truncate text-[14.5px] font-medium text-foreground">
@@ -153,7 +168,7 @@
             <button
               type="button"
               class={dangerButton}
-              onclick={() => sessions.remove(session.id)}>{reader_sessions_delete()}</button>
+              onclick={() => (confirmingId = session.id)}>{reader_sessions_delete()}</button>
           {/if}
         </div>
       {/each}
@@ -168,13 +183,25 @@
                   {session.name}
                   <span class="text-caption text-muted">· {rowCaption(session)}</span>
                 </span>
-                <button
-                  type="button"
-                  class={actionButton}
-                  onclick={() => sessions.update(session.id, { archived: false })}>{reader_sessions_restore()}</button>
-                <button type="button" class={dangerButton} onclick={() => sessions.remove(session.id)}>
-                  {reader_sessions_delete()}
-                </button>
+                {#if confirmingId === session.id}
+                  <span class="min-w-0 flex-1 text-caption text-foreground-secondary">
+                    {reader_sessions_delete_confirm({ name: session.name })}
+                  </span>
+                  <button type="button" class={dangerButton} onclick={() => sessions.remove(session.id)}>
+                    {reader_sessions_delete()}
+                  </button>
+                  <button type="button" class={actionButton} onclick={() => (confirmingId = null)}>
+                    {reader_bookmarks_cancel()}
+                  </button>
+                {:else}
+                  <button
+                    type="button"
+                    class={actionButton}
+                    onclick={() => sessions.update(session.id, { archived: false })}>{reader_sessions_restore()}</button>
+                  <button type="button" class={dangerButton} onclick={() => (confirmingId = session.id)}>
+                    {reader_sessions_delete()}
+                  </button>
+                {/if}
               </li>
             {/each}
           </ul>

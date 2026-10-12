@@ -372,6 +372,7 @@
   "reader_sessions_archive": "Archive",
   "reader_sessions_restore": "Restore",
   "reader_sessions_delete": "Delete",
+  "reader_sessions_delete_confirm": "Delete “{name}”? Its reading progress is removed.",
   "reader_sessions_archived": "Archived",
   "reader_sessions_sync_error": "Couldn't save your latest position. It stays on this device and will retry on your next read."
 }

@@ -372,6 +372,7 @@
   "reader_sessions_archive": "أرشفة",
   "reader_sessions_restore": "استعادة",
   "reader_sessions_delete": "حذف",
+  "reader_sessions_delete_confirm": "حذف «{name}»؟ سيُحذف تقدّم قرائتها.",
   "reader_sessions_archived": "مؤرشفة",
   "reader_sessions_sync_error": "تعذّر حفظ آخر موضع قراءة. يبقى على هذا الجهاز وستُعاد محاولة إرساله عند قراءتك التالية."
 }
