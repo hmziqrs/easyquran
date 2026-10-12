@@ -32,6 +32,7 @@ import {
   reader_ayah_by_ayah,
   reader_ayahs,
   reader_bookmark,
+  reader_bookmark_range,
   reader_bookmark_verse,
   reader_browse,
   reader_browse_ayah,
@@ -165,6 +166,8 @@ import {
   reader_seo_yours_description,
   reader_seo_yours_title,
   reader_share,
+  reader_share_failed,
+  reader_share_unavailable,
   reader_share_verse,
   reader_sidebar_title,
   reader_sidebar_toggle,
@@ -323,10 +326,14 @@ export interface ReaderUiCopy {
     readonly bookmark: string;
     readonly removeBookmark: string;
     readonly bookmarkVerse: string;
+    /** Snippet-page affordance (Feature 7.5): bookmark every ref as its range row. */
+    readonly bookmarkRange: string;
     readonly copy: string;
     readonly copied: string;
     readonly copyAyah: string;
     readonly share: string;
+    readonly shareFailed: string;
+    readonly shareUnavailable: string;
     readonly shareVerse: string;
     readonly noteTafsir: string;
     readonly openNoteTafsir: string;
@@ -555,10 +562,13 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       bookmark: noArgs(reader_bookmark),
       removeBookmark: noArgs(reader_remove_bookmark),
       bookmarkVerse: noArgs(reader_bookmark_verse),
+      bookmarkRange: noArgs(reader_bookmark_range),
       copy: noArgs(reader_copy),
       copied: noArgs(reader_copied),
       copyAyah: noArgs(reader_copy_ayah),
       share: noArgs(reader_share),
+      shareFailed: noArgs(reader_share_failed),
+      shareUnavailable: noArgs(reader_share_unavailable),
       shareVerse: noArgs(reader_share_verse),
       noteTafsir: noArgs(reader_note_tafsir),
       openNoteTafsir: noArgs(reader_open_note_tafsir),

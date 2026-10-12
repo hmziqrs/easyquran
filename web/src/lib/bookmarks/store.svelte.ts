@@ -28,6 +28,8 @@ import {
 } from "./domain";
 import {
   FOLDER_NAME_MAX,
+  bookmarkRangeKeyOf,
+  isSingleVerseBookmark,
   newBookmarkEntityId,
   parseVerseKey,
   verseKeyOf,
@@ -157,9 +159,10 @@ export class BookmarksStore {
   #enqueueError = $state<string | null>(null);
   #pendingById = new Map<string, Bookmark>();
   /**
-   * In-flight `bookmark.delete` overlays: entity id → verse key. Key-scoped so
-   * a stale same-verse rival row cannot re-mark a pending delete (EC-40);
-   * widens to `(session, surah, ayah, end…)` when bookmark context lands (§9.1).
+   * In-flight `bookmark.delete` overlays: entity id → range key (start verse +
+   * range end, `bookmarkRangeKeyOf`). Key-scoped so a stale same-key rival row
+   * cannot re-mark a pending delete (EC-40); the key carries the range end
+   * since range bookmarks landed (§9.1/EC-51).
    */
   #pendingDeletes = new Map<string, string>();
   #pendingFoldersById = new Map<string, BookmarkFolder>();
@@ -264,10 +267,37 @@ export class BookmarksStore {
     const view = this.#viewIsCurrent();
     const rows = this.#bookmarks;
     if (!view) return undefined;
+    // Single rows only (EC-51): a range must not light the per-verse mark at
+    // its start verse nor be deleted by a per-verse toggle there.
     for (const pending of this.#pendingById.values()) {
-      if (pending.surah === surah && pending.ayah === ayah) return pending;
+      if (isSingleVerseBookmark(pending) && pending.surah === surah && pending.ayah === ayah) {
+        return pending;
+      }
     }
-    return rows.find((b) => b.surah === surah && b.ayah === ayah);
+    return rows.find((b) => isSingleVerseBookmark(b) && b.surah === surah && b.ayah === ayah);
+  }
+
+  /** Live row covering exactly this range (pending overlay first), or undefined. */
+  #effectiveRangeRow(
+    surah: number,
+    ayah: number,
+    endSurah: number,
+    endAyah: number,
+  ): Bookmark | undefined {
+    if (!this.#viewIsCurrent()) return undefined;
+    const covers = (b: Bookmark): boolean =>
+      b.surah === surah &&
+      b.ayah === ayah &&
+      (b.endSurah ?? b.surah) === endSurah &&
+      (b.endAyah ?? b.ayah) === endAyah;
+    for (const pending of this.#pendingById.values()) {
+      if (covers(pending)) return pending;
+    }
+    return this.#bookmarks.find(covers);
+  }
+
+  isRangeMarked(surah: number, ayah: number, endSurah: number, endAyah: number): boolean {
+    return this.#effectiveRangeRow(surah, ayah, endSurah, endAyah) !== undefined;
   }
 
   isBookmarked(surah: number, ayah: number): boolean {
@@ -323,7 +353,58 @@ export class BookmarksStore {
         updatedAt: bookmark.updatedAt,
       },
       () => {
-        if (this.#bookmarks.some((b) => b.surah === surah && b.ayah === ayah)) return;
+        // Single rows only: a same-verse range row must not block the single.
+        if (
+          this.#bookmarks.some(
+            (b) => isSingleVerseBookmark(b) && b.surah === surah && b.ayah === ayah,
+          )
+        ) {
+          return;
+        }
+        this.#bookmarks = [...this.#bookmarks, bookmark];
+      },
+      { bookmark },
+    );
+  }
+
+  /** Range bookmark (7.4/7.5): toggle `{surah}:{ayah}–{end}:{endAyah}`; anonymous → legacy single. */
+  toggleRange(surah: number, ayah: number, endSurah: number, endAyah: number): void {
+    if (this.#suspended) return;
+    if (this.#captureAccount() === null) {
+      this.#reader.toggleBookmark(verseKeyOf(surah, ayah));
+      return;
+    }
+    const existing = this.#effectiveRangeRow(surah, ayah, endSurah, endAyah);
+    if (existing) {
+      this.remove(existing.id);
+      return;
+    }
+    const bookmark: Bookmark = {
+      id: newBookmarkEntityId(),
+      folderId: null,
+      surah,
+      ayah,
+      endSurah,
+      endAyah,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    };
+    this.#enqueue(
+      {
+        kind: "bookmark.upsert",
+        id: bookmark.id,
+        folderId: null,
+        surah,
+        ayah,
+        endSurah,
+        endAyah,
+        updatedAt: bookmark.updatedAt,
+      },
+      () => {
+        // Durable list only — the overlay is in #pendingById already.
+        if (this.#bookmarks.some((b) => bookmarkRangeKeyOf(b) === bookmarkRangeKeyOf(bookmark))) {
+          return;
+        }
         this.#bookmarks = [...this.#bookmarks, bookmark];
       },
       { bookmark },
@@ -340,7 +421,9 @@ export class BookmarksStore {
       () => {
         this.#bookmarks = this.#bookmarks.filter((b) => b.id !== bookmarkId);
       },
-      { deletedVerseKey: verseKeyOf(row.surah, row.ayah) },
+      // Key-scoped (EC-40) on the full range key: deleting a range never
+      // hides a same-verse single from the snapshot.
+      { deletedVerseKey: bookmarkRangeKeyOf(row) },
     );
   }
 
@@ -355,6 +438,8 @@ export class BookmarksStore {
         folderId: restored.folderId,
         surah: restored.surah,
         ayah: restored.ayah,
+        endSurah: restored.endSurah ?? null,
+        endAyah: restored.endAyah ?? null,
         updatedAt: restored.updatedAt,
       },
       () => {
@@ -378,6 +463,8 @@ export class BookmarksStore {
         folderId,
         surah: updated.surah,
         ayah: updated.ayah,
+        endSurah: updated.endSurah ?? null,
+        endAyah: updated.endAyah ?? null,
         updatedAt: updated.updatedAt,
       },
       () => {
@@ -483,9 +570,11 @@ export class BookmarksStore {
     const newestPerVerse = new Map<string, Bookmark>();
     for (const bookmark of snapshot.bookmarks) {
       if (this.#pendingDeletes.has(bookmark.id)) continue;
-      const key = verseKeyOf(bookmark.surah, bookmark.ayah);
-      // EC-40: the delete is pending for the verse, not just this id — a rival
-      // row for the same verse from a stale snapshot cannot re-mark it either.
+      // Range-scoped key (7.4): a range and its start-verse single collapse
+      // independently instead of overwriting each other.
+      const key = bookmarkRangeKeyOf(bookmark);
+      // EC-40: the delete is pending for the verse key, not just this id — a
+      // rival row on the same key from a stale snapshot cannot re-mark it.
       if (deletedVerses.has(key)) continue;
       const prev = newestPerVerse.get(key);
       // EC-35: deterministic tie-break `(updatedAt, id)` — the collapse must
@@ -500,7 +589,7 @@ export class BookmarksStore {
       }
     }
     for (const pending of this.#pendingById.values()) {
-      newestPerVerse.set(verseKeyOf(pending.surah, pending.ayah), pending);
+      newestPerVerse.set(bookmarkRangeKeyOf(pending), pending);
     }
     this.#folders = [
       ...snapshot.folders.filter(

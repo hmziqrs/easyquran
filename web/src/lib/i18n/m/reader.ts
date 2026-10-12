@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 294 messages. Import this barrel, never
+// 297 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "#lib/paraglide/messages/reader_account.js";
@@ -13,6 +13,7 @@ export { reader_ayah_by_ayah } from "#lib/paraglide/messages/reader_ayah_by_ayah
 export { reader_ayahs } from "#lib/paraglide/messages/reader_ayahs.js";
 export { reader_blocked } from "#lib/paraglide/messages/reader_blocked.js";
 export { reader_bookmark } from "#lib/paraglide/messages/reader_bookmark.js";
+export { reader_bookmark_range } from "#lib/paraglide/messages/reader_bookmark_range.js";
 export { reader_bookmark_verse } from "#lib/paraglide/messages/reader_bookmark_verse.js";
 export { reader_bookmarks_ayah } from "#lib/paraglide/messages/reader_bookmarks_ayah.js";
 export { reader_bookmarks_cancel } from "#lib/paraglide/messages/reader_bookmarks_cancel.js";
@@ -231,6 +232,8 @@ export { reader_sessions_new_placeholder } from "#lib/paraglide/messages/reader_
 export { reader_sessions_restore } from "#lib/paraglide/messages/reader_sessions_restore.js";
 export { reader_sessions_sync_error } from "#lib/paraglide/messages/reader_sessions_sync_error.js";
 export { reader_share } from "#lib/paraglide/messages/reader_share.js";
+export { reader_share_failed } from "#lib/paraglide/messages/reader_share_failed.js";
+export { reader_share_unavailable } from "#lib/paraglide/messages/reader_share_unavailable.js";
 export { reader_share_verse } from "#lib/paraglide/messages/reader_share_verse.js";
 export { reader_sidebar_description } from "#lib/paraglide/messages/reader_sidebar_description.js";
 export { reader_sidebar_title } from "#lib/paraglide/messages/reader_sidebar_title.js";

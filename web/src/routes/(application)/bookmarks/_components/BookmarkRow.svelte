@@ -14,6 +14,9 @@
     readonly folderId: string | null;
     readonly surah: number;
     readonly ayah: number;
+    /** Range end (Feature 7.4): absent/null = single ayah. */
+    readonly endSurah?: number | null;
+    readonly endAyah?: number | null;
     /** ISO timestamp; "" (anonymous legacy rows) hides the saved-date line. */
     readonly updatedAt: string;
   }
@@ -48,7 +51,19 @@
     noteIcon?: boolean;
   } = $props();
 
-  const reference = $derived(`${surahName} ${bookmark.surah}:${bookmark.ayah}`);
+  /** Range suffix ("2:285–286"; cross-surah "285–3:1"); "" keeps singles unchanged. */
+  function rangeSuffix(): string {
+    const endAyah = bookmark.endAyah;
+    if (endAyah === undefined || endAyah === null || endAyah === bookmark.ayah) return "";
+    const endSurah = bookmark.endSurah;
+    if (endSurah === undefined || endSurah === null || endSurah === bookmark.surah) {
+      return `–${endAyah}`;
+    }
+    return `–${endSurah}:${endAyah}`;
+  }
+
+  const reference = $derived(`${surahName} ${bookmark.surah}:${bookmark.ayah}${rangeSuffix()}`);
+  const ayahLabel = $derived(`${copy.ayah(bookmark.ayah)}${rangeSuffix()}`);
 
   // Orphan folderId (folder deleted server-side, snapshot raced): fall back to
   // the root option so the select matches the "Unfiled" grouping instead of
@@ -94,12 +109,12 @@
         href={href}
         class="truncate text-[14px] font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >{surahName}
-        <span class="font-normal text-foreground-secondary">· {copy.ayah(bookmark.ayah)}</span></a
+        <span class="font-normal text-foreground-secondary">· {ayahLabel}</span></a
       >
     {:else}
       <span class="truncate text-[14px] font-medium text-foreground"
         >{surahName}
-        <span class="font-normal text-foreground-secondary">· {copy.ayah(bookmark.ayah)}</span></span
+        <span class="font-normal text-foreground-secondary">· {ayahLabel}</span></span
       >
     {/if}
     {#if folder}

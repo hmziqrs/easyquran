@@ -548,6 +548,51 @@ describe("BookmarksStore — server snapshots", () => {
     rig.store.applyServer({ folders: [], bookmarks: [newer, tieZ] });
     expect(rig.store.bookmarks.find((b) => b.surah === 2 && b.ayah === 255)?.id).toBe("aaa");
   });
+
+  it("toggleRange stores the range and never collapses with the single at its start (EC-51, Feature 7.4)", async () => {
+    const rig = makeRig([], true);
+    rig.store.toggleRange(2, 285, 2, 286);
+    await flush();
+
+    expect(rig.engine.enqueued[0]).toMatchObject({
+      kind: "bookmark.upsert",
+      surah: 2,
+      ayah: 285,
+      endSurah: 2,
+      endAyah: 286,
+    });
+    expect(rig.store.isRangeMarked(2, 285, 2, 286)).toBe(true);
+
+    // The per-verse mark at the range start stays off, and toggling it files a
+    // separate single row instead of deleting the range.
+    expect(rig.store.isBookmarked(2, 285)).toBe(false);
+    rig.store.toggle(2, 285);
+    await flush();
+    expect(rig.store.isBookmarked(2, 285)).toBe(true);
+    expect(rig.store.isRangeMarked(2, 285, 2, 286)).toBe(true);
+    expect(rig.engine.enqueued[1]).toMatchObject({ kind: "bookmark.upsert", surah: 2, ayah: 285 });
+
+    // A pending delete of the range hides only the range key from a snapshot.
+    const rangeId = rig.engine.enqueued[0]!.id;
+    rig.store.remove(rangeId);
+    rig.store.applyServer({
+      folders: [],
+      bookmarks: [
+        {
+          id: rangeId,
+          folderId: null,
+          surah: 2,
+          ayah: 285,
+          endSurah: 2,
+          endAyah: 286,
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+        },
+      ],
+    });
+    expect(rig.store.isRangeMarked(2, 285, 2, 286)).toBe(false);
+    expect(rig.store.isBookmarked(2, 285)).toBe(true);
+  });
 });
 
 describe("BookmarksStore — auth transitions and migration", () => {

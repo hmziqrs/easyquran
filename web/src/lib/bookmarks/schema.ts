@@ -37,6 +37,22 @@ export interface Bookmark {
   readonly updatedAt: string;
   /** Saved translation context (Feature 3.5): absent → consumers fall back to Arabic (EC-38). */
   readonly sourceId?: string | null;
+  /** Range end (Feature 7.4): absent/null = single ayah (§9.1 `end = start` sentinel). */
+  readonly endSurah?: number | null;
+  readonly endAyah?: number | null;
+}
+
+/** Mutable decode target for `decodeBookmark`: optional keys stay absent, never null. */
+interface DecodedBookmark {
+  id: string;
+  folderId: string | null;
+  surah: number;
+  ayah: number;
+  createdAt: string;
+  updatedAt: string;
+  sourceId?: string;
+  endSurah?: number;
+  endAyah?: number;
 }
 
 export type BookmarksMutation =
@@ -46,6 +62,9 @@ export type BookmarksMutation =
       readonly folderId: string | null;
       readonly surah: number;
       readonly ayah: number;
+      /** Range end (Feature 7.4): omitted/null = single ayah (§9.1 sentinel). */
+      readonly endSurah?: number | null;
+      readonly endAyah?: number | null;
       readonly updatedAt: string;
     }
   | { readonly kind: "bookmark.delete"; readonly id: string; readonly updatedAt: string }
@@ -112,6 +131,32 @@ export function parseVerseKey(key: string): { surah: number; ayah: number } | nu
   return { surah, ayah };
 }
 
+/**
+ * True when the row covers exactly one ayah: no range end, or the §9.1
+ * `end = start` sentinel. Per-verse marks match single rows only (EC-51).
+ */
+export function isSingleVerseBookmark(
+  bookmark: Pick<Bookmark, "surah" | "ayah" | "endSurah" | "endAyah">,
+): boolean {
+  return (
+    (bookmark.endSurah ?? bookmark.surah) === bookmark.surah &&
+    (bookmark.endAyah ?? bookmark.ayah) === bookmark.ayah
+  );
+}
+
+/**
+ * Collapse/pending-delete key: start verse plus range end, so a `2:285–286`
+ * range and a `2:285` single never overwrite each other (EC-51).
+ */
+export function bookmarkRangeKeyOf(
+  bookmark: Pick<Bookmark, "surah" | "ayah" | "endSurah" | "endAyah">,
+): string {
+  return `${verseKeyOf(bookmark.surah, bookmark.ayah)}-${verseKeyOf(
+    bookmark.endSurah ?? bookmark.surah,
+    bookmark.endAyah ?? bookmark.ayah,
+  )}`;
+}
+
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed field from the sync response; this decoder is its boundary parser.
 function decodeTimestamp(raw: unknown): string | undefined {
   const value = asString(raw);
@@ -174,10 +219,21 @@ export function decodeBookmark(raw: unknown): Bookmark | null {
   if (folderId === undefined) return null;
   // Wire `sourceId`: absent on servers without the column.
   const sourceId = asString(obj.sourceId);
-  if (sourceId !== undefined && sourceId.length > 0) {
-    return { id, folderId, surah, ayah, createdAt, updatedAt, sourceId };
+  // Wire range end (Feature 7.4): absent = single ayah. The server emits both
+  // keys together or neither; exactly one is a corrupt row → dropped.
+  const endSurah = asNumber(obj.endSurah, SURAH_MIN, SURAH_MAX);
+  const endAyah = asNumber(obj.endAyah, 1, AYAH_MAX);
+  if ((endSurah === undefined) !== (endAyah === undefined)) return null;
+  // Optional keys ride along only when present, matching the sourceId pattern:
+  // a plain single row keeps its legacy shape. Named contract: the Bookmark
+  // fields are readonly, so the decoder builds a mutable row and returns it.
+  const row: DecodedBookmark = { id, folderId, surah, ayah, createdAt, updatedAt };
+  if (sourceId !== undefined && sourceId.length > 0) row.sourceId = sourceId;
+  if (endSurah !== undefined && endAyah !== undefined) {
+    row.endSurah = endSurah;
+    row.endAyah = endAyah;
   }
-  return { id, folderId, surah, ayah, createdAt, updatedAt };
+  return row;
 }
 
 /**

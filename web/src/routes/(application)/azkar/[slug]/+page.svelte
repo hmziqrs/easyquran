@@ -1,5 +1,8 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import { Seo } from "#lib/components/index.js";
+  import { Icon } from "#lib/components/icon/index.js";
+  import { bookmarks } from "#lib/bookmarks/store.svelte.js";
   import {
     resumeCtxFor,
     snippetPath,
@@ -11,6 +14,7 @@
   import { readerHrefFor } from "#lib/i18n/reader.js";
   import { publicHref } from "#lib/i18n/public-href.js";
   import { reader } from "#lib/stores/reader.svelte.js";
+  import type { ShareVerse } from "#lib/stores/reader-share.svelte.js";
   import ReaderShell from "../../_reader/ReaderShell.svelte";
   import type { SnippetRefGroup } from "./+page.server";
 
@@ -43,6 +47,66 @@
   const title = $derived(localized(data.title));
   const description = $derived(localized(data.description));
   const canonicalPath = $derived(snippetPath(data.slug));
+
+  // Feature 7.5: files every snippet ref as its own range row (never singles,
+  // EC-51); anon hides it — the legacy local store has no ranges.
+  const rangeBookmarkable = $derived(bookmarks.authed && data.refs.length > 0);
+  const allRefsMarked = $derived(
+    data.refs.every((group) =>
+      bookmarks.isRangeMarked(group.surah, group.ayahStart, group.surah, group.ayahEnd),
+    ),
+  );
+
+  function onBookmarkRange(): void {
+    if (!rangeBookmarkable) return;
+    // All marked → this click removes every range; otherwise fill in the gaps.
+    for (const group of data.refs) {
+      const marked = bookmarks.isRangeMarked(
+        group.surah,
+        group.ayahStart,
+        group.surah,
+        group.ayahEnd,
+      );
+      if (allRefsMarked || !marked) {
+        bookmarks.toggleRange(group.surah, group.ayahStart, group.surah, group.ayahEnd);
+      }
+    }
+  }
+
+  // Share (FLOW-05 range variant): verse texts joined + canonical `?ayah=` URL.
+  const FEEDBACK_MS = 4000;
+  let shareNote = $state("");
+  let shareTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function flashShareNote(message: string): void {
+    shareNote = message;
+    if (shareTimer) clearTimeout(shareTimer);
+    shareTimer = setTimeout(() => (shareNote = ""), FEEDBACK_MS);
+  }
+
+  async function onShareRange(): Promise<void> {
+    const verses: ShareVerse[] = [];
+    for (const group of data.refs) {
+      for (const row of group.ayahs) verses.push({ key: row.key, text: row.text });
+    }
+    const first = verses[0];
+    const last = verses[verses.length - 1];
+    if (first === undefined || last === undefined) return;
+    const result = await reader.shareRange(first.key, last.key, verses);
+    if (result === "copied") {
+      flashShareNote(copy.verse.copied);
+      return;
+    }
+    if (result === "link-copied") flashShareNote(copy.verse.shareFailed);
+    else if (result === "failed") flashShareNote(copy.verse.shareUnavailable);
+  }
+
+  onDestroy(() => {
+    if (shareTimer) clearTimeout(shareTimer);
+  });
+
+  const actionButton =
+    "inline-flex h-8 items-center gap-1.5 rounded-lg border border-border-strong px-2.5 text-[12.5px] text-foreground-secondary transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring";
 </script>
 
 <Seo path={canonicalPath} title={title} description={description} includeTextVariants={false} />
@@ -59,6 +123,26 @@
     <header class="flex flex-col gap-2">
       <h2 class="text-xl font-semibold text-foreground">{title}</h2>
       <p class="text-[14px] leading-relaxed text-foreground-secondary">{description}</p>
+      <div class="mt-1 flex flex-wrap items-center gap-2">
+        {#if rangeBookmarkable}
+          <button
+            type="button"
+            class={actionButton}
+            aria-pressed={allRefsMarked}
+            onclick={onBookmarkRange}
+          >
+            <Icon name={allRefsMarked ? "bookmark-fill" : "bookmark"} size={14} />
+            {copy.verse.bookmarkRange}
+          </button>
+        {/if}
+        <button type="button" class={actionButton} onclick={onShareRange}>
+          <Icon name="share" size={14} />
+          {copy.verse.share}
+        </button>
+        {#if shareNote}
+          <span role="status" class="text-[12px] text-muted">{shareNote}</span>
+        {/if}
+      </div>
     </header>
 
     {#each data.refs as group (group.surah)}
