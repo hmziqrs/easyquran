@@ -2,6 +2,9 @@
 
 Status: **plan, not implemented.** Baseline `32bb4f07` (2026-10-13).
 
+Sequenced by: phase **U** in [`master-plan.md`](master-plan.md) — independent of the abuse
+phases; slots alongside any of them.
+
 Scope: UI/UX improvements for the chrome-less surfaces (no app header/footer), of which
 `/account` is the only true outlier. No behaviour, data, or route changes — presentation and
 copy only.

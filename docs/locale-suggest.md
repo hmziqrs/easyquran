@@ -1,8 +1,11 @@
 # Locale-suggest popup
 
-Status: **draft, not implemented.** Phase 1 is [`next-features.md`](next-features.md) Feature 10
-(that doc wins on conflict). Written for URL scheme A (unprefixed `en`, `/ar/` prefix, no
-`/app`).
+Status: **feature shipped; pending retirement in V.** Phase 1 is [`next-features.md`](next-features.md)
+Feature 10 (that doc wins on conflict). Written for URL scheme A (unprefixed `en`, `/ar/` prefix,
+no `/app`).
+
+Sequenced by: phase **V** in [`master-plan.md`](master-plan.md) — verify this spec against the
+shipped implementation, then retire the doc with the V batch.
 
 ## 1. Guarantee and non-negotiables
 

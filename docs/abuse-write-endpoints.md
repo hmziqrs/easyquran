@@ -2,6 +2,8 @@
 
 Status: **plan, not implemented.** Baseline `38f12b44` on `next-features` (2026-10-12).
 
+Sequenced by: phase **A1** in [`master-plan.md`](master-plan.md).
+
 Relations: [`abuse-prevention.md`](abuse-prevention.md) (master) is the authority on abuse,
 enforcement, device identity, and legal artifacts — this document **amends it, never competes**.
 It exists because that audit was measured at `53d3d421`, before the `next-features` branch landed

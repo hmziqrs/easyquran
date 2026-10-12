@@ -2,6 +2,11 @@
 
 Status: **draft plan, not implemented.** Baseline `53d3d421` (2026-10-12).
 
+Sequenced by: [`master-plan.md`](master-plan.md) — the write-endpoint slice is phase **A1**
+([`abuse-write-endpoints.md`](abuse-write-endpoints.md)); W0–W17 are registry phases **A2–A19** in
+§12 order. §12 stays the design-level dependency table; the master plan tracks execution status
+only.
+
 Evidence base: 59 adversarial audit reports in [`docs/research/abuse-prevention/`](research/abuse-prevention/) — 7 external research reports (`R2-*`) and 52 audit/verification reports (`A*`, `B*`, `C*`, `D*`, `E*`, `F*`, `G*`, `H*`). Their factual claims have been reconciled; where they still differ it is on design decisions, and later reports supersede earlier ones. This document is authoritative where a report differs; §16.1 lists claims that must not be repeated. Do not cite a report's number without checking §16.1.
 
 Relations: [`next-features.md`](next-features.md) wins on reader/sync/bookmark feature work; this document wins on abuse, enforcement, device identity, and the legal artifacts attached to them. [`quran-system.md`](quran-system.md) Part 4 is the ingress and rate-limit contract this plan amends. [`history.md`](history.md) is the record of landed work, security included.
