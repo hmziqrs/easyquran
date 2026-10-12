@@ -69,6 +69,8 @@
   }
 
   function legend(): string {
+    // SAFETY: paraglide is compiled for exactly the UI locales (en/ar), so
+    // getLocale() only ever returns a UiLocale at runtime.
     return reader_transliteration_legend(undefined, { locale: getLocale() as UiLocale });
   }
 </script>

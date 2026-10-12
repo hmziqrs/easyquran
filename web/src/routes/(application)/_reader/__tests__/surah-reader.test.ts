@@ -34,6 +34,7 @@ const {
     state: {},
     url: new URL("https://example.test/al-fatihah"),
     // ReadingAyah/VerseRow resolve the route translation (TRX-11) from params.
+    // SAFETY: {} is trivially a Record<string, string>; the assertion only names the double's type so readers can assign route params later.
     params: {} as Record<string, string>,
   },
   workerStub: {

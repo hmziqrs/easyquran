@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 vi.mock("$app/env", () => ({ browser: true }));
 vi.mock("$app/env/public", () => ({ PUBLIC_API_BASE_URL: "/api", PUBLIC_FCM_VAPID_KEY: "" }));
 
-const auth = vi.hoisted((): { status: string; user: { id: number } | null } => {
+// Named contract for the authState mock: the real authState is a class with
+// private fields, so the mock stands in structurally with just these members.
+type MockAuthState = { status: string; user: { id: number } | null };
+
+const auth = vi.hoisted((): MockAuthState => {
   const user: { id: number } | null = null;
   return { status: "anonymous", user };
 });

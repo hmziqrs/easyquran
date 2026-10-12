@@ -7,7 +7,11 @@ vi.mock("$app/env", () => ({
   },
 }));
 
-import { SEARCH_RECENTS_MAX, SearchRecentsStore } from "../search-recents.svelte";
+import {
+  SEARCH_RECENTS_MAX,
+  type SearchRecentEntry,
+  SearchRecentsStore,
+} from "../search-recents.svelte";
 
 const KEY = "easyquran.search.recent";
 
@@ -21,7 +25,9 @@ describe("SearchRecentsStore", () => {
   });
   afterEach(() => store.dispose());
 
-  const read = (): unknown => JSON.parse(window.localStorage.getItem(KEY) ?? "null");
+  // SAFETY: readJSON parses whatever is under the key; tests only ever write valid envelopes.
+  const read = (): { v: number; entries: SearchRecentEntry[]; paused: boolean } | null =>
+    JSON.parse(window.localStorage.getItem(KEY) ?? "null");
   const seed = (entries: { q: string; at: number }[]): void => {
     window.localStorage.setItem(KEY, JSON.stringify({ v: 1, entries, paused: false }));
   };

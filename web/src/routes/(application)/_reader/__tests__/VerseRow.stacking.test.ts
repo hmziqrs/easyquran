@@ -12,6 +12,8 @@ const { nav, readerStub, toolsCalls } = vi.hoisted(() => ({
   },
   // The dynamically imported verse tools land here as a bare function component
   // (Svelte 5 calls it with (anchor, props)), so the copy path is assertable.
+  // SAFETY: only the mocked VerseTools pushes here, always with the exact
+  // { text, vKey } props VerseRow passes; the empty literal just needs widening.
   toolsCalls: [] as { text: string; vKey: string }[],
 }));
 
@@ -19,7 +21,7 @@ vi.mock("$app/env", () => ({ browser: true }));
 vi.mock("$app/state", () => ({ page: nav }));
 vi.mock("#lib/stores/reader.svelte.js", () => ({ reader: readerStub }));
 vi.mock("../VerseTools.svelte", () => ({
-  default: (_anchor: unknown, props: { text: string; vKey: string }) => {
+  default: (_anchor: Node, props: { text: string; vKey: string }) => {
     toolsCalls.push(props);
   },
 }));

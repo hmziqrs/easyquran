@@ -55,7 +55,10 @@ const FOLDER_KIND_MESSAGES = {
   generic: reader_bookmarks_folder_kind_generic,
   daily: reader_bookmarks_folder_kind_daily,
   learning: reader_bookmarks_folder_kind_learning,
-} as const satisfies Record<BookmarkFolderKind, unknown>;
+} as const satisfies Record<
+  BookmarkFolderKind,
+  (inputs?: undefined, options?: { locale?: UiLocale }) => string
+>;
 
 export interface BookmarksCopy {
   readonly locale: UiLocale;

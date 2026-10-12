@@ -18,6 +18,6 @@ export function snippetGroups(): { kind: SnippetKind; snippets: Snippet[] }[] {
   return SNIPPET_KIND_ORDER.map((kind) => ({ kind, snippets: BY_KIND[kind] ?? [] }));
 }
 
-export const load = (): { groups: ReturnType<typeof snippetGroups> } => ({
+export const load = () => ({
   groups: snippetGroups(),
 });
