@@ -3,6 +3,7 @@ import { clamp } from "es-toolkit";
 import type { CanonicalQuranRow } from "../sql.ts";
 import { isEligibleLatinQuery, normalizeLatin, normalizeLatinWithMap } from "./normalize-latin.ts";
 import { DEFAULT_LIMIT, DEFAULT_OFFSET, MAX_LIMIT, MAX_OFFSET } from "./normalize.ts";
+import { rankTranslationUnits } from "./ranking.ts";
 import {
   SearchHitKind,
   type Highlight,
@@ -84,11 +85,14 @@ export function searchTranslationCorpus(
   if (!isEligibleLatinQuery(normalized)) return { total: 0, limit, offset, results: [] };
 
   const matching = units.filter((unit) => unit.norm.includes(normalized));
+  // Rank by relevance (term frequency, exact-phrase, early-verse bias) before
+  // paging, so every offset window slices the same deterministic order.
+  const ranked = rankTranslationUnits(matching, normalized, units.length);
   return {
     total: matching.length,
     limit,
     offset,
-    results: matching.slice(offset, offset + limit).map((unit) => ({
+    results: ranked.slice(offset, offset + limit).map((unit) => ({
       kind: SearchHitKind.Ayah,
       sourceId: opts.sourceId,
       ayah: {

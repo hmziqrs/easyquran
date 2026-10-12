@@ -58,11 +58,12 @@ describe("buildTranslationSearchCorpus", () => {
 describe("searchTranslationCorpus", () => {
   const units = buildTranslationSearchCorpus(CORPUS_ROWS);
 
-  it("matches case-folded substrings in globalIndex order", () => {
+  it("matches case-folded substrings in relevance order", () => {
     const { total, results } = searchTranslationCorpus(units, "MERCY", optsFor(CORPUS_ROWS));
     expect(total).toBe(3);
-    expect(results.map((hit) => hit.ayah.globalIndex)).toEqual([1, 2, 4]);
-    expect(results.map((hit) => hit.ayah.key)).toEqual(["1:1", "1:2", "1:4"]);
+    // The verse mentioning mercy twice outranks the earlier single mentions.
+    expect(results.map((hit) => hit.ayah.globalIndex)).toEqual([2, 1, 4]);
+    expect(results.map((hit) => hit.ayah.key)).toEqual(["1:2", "1:1", "1:4"]);
   });
 
   it("matches multi-word phrase queries as contiguous substrings", () => {
@@ -120,10 +121,10 @@ describe("searchTranslationCorpus", () => {
     expect(clampedOffset.results).toHaveLength(0);
   });
 
-  it("slices the mushaf-ordered matches at limit and offset", () => {
+  it("slices the ranked matches at limit and offset", () => {
     const page = searchTranslationCorpus(units, "mercy", { ...optsFor(CORPUS_ROWS), limit: 2 });
     expect(page.total).toBe(3);
-    expect(page.results.map((hit) => hit.ayah.globalIndex)).toEqual([1, 2]);
+    expect(page.results.map((hit) => hit.ayah.globalIndex)).toEqual([2, 1]);
 
     const next = searchTranslationCorpus(units, "mercy", {
       ...optsFor(CORPUS_ROWS),
@@ -136,6 +137,60 @@ describe("searchTranslationCorpus", () => {
   it("returns empty for ineligible queries", () => {
     expect(searchTranslationCorpus(units, "me", optsFor(CORPUS_ROWS)).total).toBe(0);
     expect(searchTranslationCorpus(units, "a".repeat(65), optsFor(CORPUS_ROWS)).total).toBe(0);
+  });
+});
+
+describe("translation hit ranking (fixture)", () => {
+  // Relevance fixture: mushaf order would put the single partial-word hit in
+  // 1:1 first; ranking must promote the later verse whose phrase repeats as
+  // whole words. Proves ranked order beats mushaf order (next-features 9.2).
+  const RANKED_ROWS: readonly CanonicalQuranRow[] = [
+    row(1, "Blessed is the mercyless guide."),
+    row(2, "A verse about patience and prayer."),
+    row(3, "Mercy upon mercy, said the merciful Lord."),
+  ];
+
+  it("ranks a later repeated whole-word phrase above an early partial-word hit", () => {
+    const rankedUnits = buildTranslationSearchCorpus(RANKED_ROWS);
+    const mushaf = rankedUnits
+      .filter((unit) => unit.norm.includes("mercy"))
+      .map((unit) => unit.globalIndex);
+    expect(mushaf).toEqual([1, 3]);
+
+    const { results } = searchTranslationCorpus(rankedUnits, "mercy", optsFor(RANKED_ROWS));
+    expect(results.map((hit) => hit.ayah.globalIndex)).toEqual([3, 1]);
+  });
+
+  it("lets the exact-phrase boost beat the early-verse bias at equal term frequency", () => {
+    // 1:1 is earlier but "mercy" only appears inside "mercyless"; 1:4 has the
+    // whole word. The early bias alone must not carry the partial hit.
+    const exactRows: readonly CanonicalQuranRow[] = [
+      row(1, "A mercyless storm passed by."),
+      row(2, "Nothing relevant here."),
+      row(3, "Still nothing relevant."),
+      row(4, "One quiet mention of mercy."),
+    ];
+    const { results } = searchTranslationCorpus(
+      buildTranslationSearchCorpus(exactRows),
+      "mercy",
+      optsFor(exactRows),
+    );
+    expect(results.map((hit) => hit.ayah.globalIndex)).toEqual([4, 1]);
+  });
+
+  it("keeps mushaf order for equal scores, with the early verse first", () => {
+    const tieRows: readonly CanonicalQuranRow[] = [
+      row(1, "One mention of mercy."),
+      row(2, "An unrelated verse."),
+      row(3, "Another unrelated verse."),
+      row(4, "A final verse with mercy."),
+    ];
+    const { results } = searchTranslationCorpus(
+      buildTranslationSearchCorpus(tieRows),
+      "mercy",
+      optsFor(tieRows),
+    );
+    expect(results.map((hit) => hit.ayah.globalIndex)).toEqual([1, 4]);
   });
 });
 

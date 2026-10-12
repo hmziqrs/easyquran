@@ -155,7 +155,10 @@ Worker protocol exposes `searchTranslation { sourceId, query, opts }`:
   artifact machinery.
 - Frozen `all` query reads 6,236 rows.
 - Worker builds one normalized in-memory corpus per source, deduplicating concurrent builds.
-- Search uses `String.includes`, returns mushaf order, and maps highlights to original text.
+- Search matches with `String.includes` and maps highlights to original text; before paging, a
+  client-side ranking pass (`ranking.ts`) orders hits by term frequency, an exact whole-word
+  phrase boost, and a small early-verse bias. Ties keep mushaf order, and matches stay
+  contiguous substrings — ranking never widens them.
 - Corpus cache is LRU-capped at three and removed whenever its translation artifact is
   forgotten/deleted.
 - Derived corpora are never persisted or uploaded.
@@ -182,8 +185,9 @@ The dedicated page persists its own translation selection (`easyquran.search.sel
 cross-tab): the picked ids survive reloads and restore the searched sources on the next visit.
 
 Dedicated `/app/search` supports multi-translation batch search, per-source sections,
-shareable query/source state, and load-more pagination. Reader drawer integration and richer
-relevance ranking remain separate product work.
+shareable query/source state, and load-more pagination over the ranked order. Reader drawer
+integration remains separate product work; relevance ranking shipped as the client-side
+scoring pass above.
 
 ### 5.1 Recent queries (local-only)
 
@@ -231,7 +235,8 @@ Search changes keep these contracts green:
 ## 8. Known limits
 
 - Arabic-script typo tolerance is not implemented.
-- Translation substring hits use mushaf order; relevance scoring remains limited.
+- Translation ranking is a lightweight scoring pass (term frequency, whole-word phrase boost,
+  early-verse bias), not full-text relevance; matches stay contiguous substrings.
 - Palette searches one resolved translation source at a time.
 - Cold translation palette search requires a later keystroke after background download.
 - RTL-script translation search and Turkish dotted/dotless-i handling need dedicated rules.
