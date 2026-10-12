@@ -15,6 +15,8 @@ import {
   reader_bookmarks_folder_kind_learning,
   reader_bookmarks_folder_progress,
   reader_bookmarks_folders_heading,
+  reader_bookmarks_filter_all,
+  reader_bookmarks_filter_label,
   reader_bookmarks_local_only,
   reader_bookmarks_loading,
   reader_bookmarks_move_label,
@@ -38,8 +40,13 @@ import {
   reader_bookmarks_saved,
   reader_bookmarks_select_label,
   reader_bookmarks_selected,
+  reader_bookmarks_save_error,
   reader_bookmarks_sign_in,
   reader_bookmarks_sign_in_note,
+  reader_bookmarks_sort_date,
+  reader_bookmarks_sort_folder,
+  reader_bookmarks_sort_label,
+  reader_bookmarks_sort_surah,
   reader_bookmarks_sync_error,
   reader_bookmarks_synced,
   reader_bookmarks_title,
@@ -89,6 +96,13 @@ export interface BookmarksCopy {
   readonly removeSelected: string;
   readonly clearSelection: string;
   readonly selectLabel: (reference: string) => string;
+  /** List controls (FLOW-08): sort mode + folder filter. */
+  readonly sortLabel: string;
+  readonly sortDate: string;
+  readonly sortFolder: string;
+  readonly sortSurah: string;
+  readonly filterLabel: string;
+  readonly filterAll: string;
   /** Saved-date line (BM-02); `when` is a locale-formatted relative day. */
   readonly saved: (when: string) => string;
   /** Daily-folder progress caption (Feature 2.3). */
@@ -106,6 +120,8 @@ export interface BookmarksCopy {
   readonly pending: (count: number) => string;
   readonly synced: string;
   readonly syncError: string;
+  /** Durable-enqueue failure (EC-27): the user's last change was not saved. */
+  readonly saveError: string;
   readonly localOnly: string;
   readonly loading: string;
 }
@@ -149,6 +165,12 @@ export function getBookmarksCopy(locale: UiLocale = getLocale() as UiLocale): Bo
     removeSelected: noArgs(reader_bookmarks_remove_selected),
     clearSelection: noArgs(reader_bookmarks_clear_selection),
     selectLabel: (reference) => reader_bookmarks_select_label({ reference }, options),
+    sortLabel: noArgs(reader_bookmarks_sort_label),
+    sortDate: noArgs(reader_bookmarks_sort_date),
+    sortFolder: noArgs(reader_bookmarks_sort_folder),
+    sortSurah: noArgs(reader_bookmarks_sort_surah),
+    filterLabel: noArgs(reader_bookmarks_filter_label),
+    filterAll: noArgs(reader_bookmarks_filter_all),
     saved: (when) => reader_bookmarks_saved({ when }, options),
     folderProgress: (done, total) => reader_bookmarks_folder_progress({ done, total }, options),
     noteLabel: noArgs(reader_bookmarks_note_label),
@@ -169,6 +191,7 @@ export function getBookmarksCopy(locale: UiLocale = getLocale() as UiLocale): Bo
         : reader_bookmarks_pending({ count }, options),
     synced: noArgs(reader_bookmarks_synced),
     syncError: noArgs(reader_bookmarks_sync_error),
+    saveError: noArgs(reader_bookmarks_save_error),
     localOnly: noArgs(reader_bookmarks_local_only),
     loading: noArgs(reader_bookmarks_loading),
   };

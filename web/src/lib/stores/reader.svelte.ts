@@ -61,6 +61,8 @@ export interface ReaderApi {
   setPosition(position: ReaderPositionState | null): void;
   isBookmarked(key: VerseKey): boolean;
   readonly bookmarkedKeys: readonly VerseKey[];
+  /** v5 save stamps (epoch ms) keyed like `bookmarkedKeys`; missing entries are legacy (EC-46). */
+  readonly bookmarkSavedAt: Readonly<Record<VerseKey, number>>;
   toggleBookmark(key: VerseKey): void;
   getNote(key: VerseKey): string;
   setNote(key: VerseKey, v: string): void;
@@ -175,6 +177,9 @@ export function createReader(): ReaderApi {
     isBookmarked: (key: VerseKey) => annotations.isBookmarked(key),
     get bookmarkedKeys(): readonly VerseKey[] {
       return annotations.bookmarkedKeys;
+    },
+    get bookmarkSavedAt(): Readonly<Record<VerseKey, number>> {
+      return annotations.bookmarkSavedAt;
     },
     toggleBookmark: (key: VerseKey) => annotations.toggleBookmark(key),
     getNote: (key: VerseKey) => annotations.getNote(key),

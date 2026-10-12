@@ -3,21 +3,23 @@
   import { loadQuranData, peekQuranData } from "#lib/data/quran-data-client.js";
   import type { QuranData } from "#lib/data/quran-data.js";
   import {
-    parseKey,
     surahAyahPathFor,
     surahRouteContext,
     surahPathFor,
     type SurahRouteContext,
   } from "#lib/data/quran.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { getBookmarksCopy } from "#lib/i18n/bookmarks-copy.js";
   import { bookmarksPageHref, readerHrefFor, yoursPageHref } from "#lib/i18n/reader.js";
   import { appLocale } from "#lib/i18n/app-locale.js";
   import { publicHref } from "#lib/i18n/public-href.js";
   import { Seo, Icon } from "#lib/components/index.js";
   import { Button } from "#lib/components/ui/button/index.js";
+  import { Skeleton } from "#lib/components/ui/skeleton/index.js";
   import { reader } from "#lib/stores/reader.svelte.js";
   import { bookmarks } from "#lib/bookmarks/store.svelte.js";
-  import { parseVerseKey } from "#lib/bookmarks/schema.js";
+  import { parseVerseKey, verseKeyOf } from "#lib/bookmarks/schema.js";
+  import BookmarkRow from "../bookmarks/_components/BookmarkRow.svelte";
   import { resumeToLastRead, resumeToVerse } from "#lib/reader/resume.js";
   import {
     RECENTS_COUNT_CHOICES,
@@ -54,6 +56,7 @@
     reader_sessions_label,
     reader_sessions_new_add,
     reader_sessions_new_placeholder,
+    reader_sessions_sync_error,
     reader_widget_daily_ayah_open,
     reader_widget_daily_ayah_title,
     reader_widget_daily_ayah_unavailable,
@@ -70,11 +73,20 @@
   // app route has no translation segments, so it always resolves the Arabic reader.
   const ARABIC_CTX: SurahRouteContext = surahRouteContext("uthmani");
 
+  // Saved-translation reopen (Feature 3.5): still in the catalogue → that translation, else Arabic (EC-38).
+  function ctxForSavedSource(sourceId: string | null | undefined): SurahRouteContext {
+    if (sourceId !== null && sourceId !== undefined && peekTranslationName(sourceId) !== null) {
+      return surahRouteContext(sourceId);
+    }
+    return ARABIC_CTX;
+  }
+
   // This URL is never locale-prefixed; the layout's published locale keeps copy
   // aligned with the nav/footer chrome (same seam /app/bookmarks crosses).
   const locale = appLocale();
   const copy = getReaderUiCopy(locale);
   const msgOptions = { locale };
+  const rowCopy = getBookmarksCopy(locale);
 
   // Widget chrome copy — paraglide fns take the locale explicitly.
   const h = {
@@ -90,6 +102,7 @@
     sessionsLabel: reader_sessions_label(undefined, msgOptions),
     sessionsNewPlaceholder: reader_sessions_new_placeholder(undefined, msgOptions),
     sessionsNewAdd: reader_sessions_new_add(undefined, msgOptions),
+    sessionsSyncError: reader_sessions_sync_error(undefined, msgOptions),
     notesTitle: reader_widget_notes_title(undefined, msgOptions),
     notesEmpty: reader_widget_notes_empty(undefined, msgOptions),
     mostReadTitle: reader_widget_most_read_title(undefined, msgOptions),
@@ -235,11 +248,14 @@
   let quranData = $state<QuranData | undefined>(peekQuranData());
 
   interface BookmarkPreviewRow {
+    /** Authed bookmark id, or the verse key on an anonymous row. */
     key: string;
     surah: number;
     ayah: number;
     name: string;
     href: string;
+    updatedAt: string;
+    hasNote: boolean;
   }
 
   const bookmarkCount = $derived(
@@ -254,18 +270,30 @@
       surah: number;
       ayah: number;
       at: string;
+      sourceId: string | null;
     }
     const coords: Coords[] = bookmarks.authed
       ? bookmarks.bookmarks.map((bookmark) => ({
-          key: `${bookmark.surah}:${bookmark.ayah}`,
+          key: bookmark.id,
           surah: bookmark.surah,
           ayah: bookmark.ayah,
           at: bookmark.updatedAt,
+          sourceId: bookmark.sourceId ?? null,
         }))
       : reader.bookmarkedKeys.flatMap((key) => {
           const parsed = parseVerseKey(key);
           if (!parsed) return [];
-          return [{ key, surah: parsed.surah, ayah: parsed.ayah, at: "" }];
+          // v5 stamp (EC-46): legacy rows without one sort last via "".
+          const stamp = reader.bookmarkSavedAt[key] ?? 0;
+          return [
+            {
+              key,
+              surah: parsed.surah,
+              ayah: parsed.ayah,
+              at: stamp > 0 ? new Date(stamp).toISOString() : "",
+              sourceId: null,
+            },
+          ];
         });
     const sorted = [...coords].sort((a, b) => b.at.localeCompare(a.at));
     return sorted.slice(0, 5).flatMap((entry) => {
@@ -277,7 +305,9 @@
           surah: entry.surah,
           ayah: entry.ayah,
           name: surah.name,
-          href: surahAyahPathFor(ARABIC_CTX, surah, entry.ayah),
+          href: surahAyahPathFor(ctxForSavedSource(entry.sourceId), surah, entry.ayah),
+          updatedAt: entry.at,
+          hasNote: reader.getNote(verseKeyOf(entry.surah, entry.ayah)).trim().length > 0,
         },
       ];
     });
@@ -302,9 +332,9 @@
     void resumeToVerse(num, n, sourceId, ARABIC_CTX);
   }
 
-  function openBookmark(row: BookmarkPreviewRow): void {
-    const { num, n } = parseKey(`${row.surah}:${row.ayah}`);
-    void resumeToVerse(num, n, undefined, ARABIC_CTX);
+  function removeBookmarkRow(row: BookmarkPreviewRow): void {
+    if (bookmarks.authed) bookmarks.remove(row.key);
+    else reader.toggleBookmark(verseKeyOf(row.surah, row.ayah));
   }
 
   function openNote(note: { surah: number; ayah: number }): void {
@@ -414,6 +444,11 @@
   {/if}
 
   {#if mounted}
+    <!-- EC-27 surface: the last durable-enqueue failure of the session sync
+         outbox, never a silent drop. Cleared by the next successful enqueue. -->
+    {#if sessions.enqueueError !== null}
+      <p role="status" class="mt-5 text-[13px] text-danger">{h.sessionsSyncError}</p>
+    {/if}
     <div class="mt-5 flex flex-wrap items-end gap-3">
       <label class="flex min-w-0 flex-1 flex-col gap-1 sm:max-w-[260px]">
         <span class="eyebrow">{h.sessionsLabel}</span>
@@ -484,7 +519,7 @@
       reader.progressFor(lastRead.num) ?? (total > 0 ? Math.min(1, lastRead.n / total) : 0)}
     <section
       aria-labelledby="yours-continue"
-      class="mt-5 overflow-hidden rounded-xl border border-border bg-surface"
+      class="mt-5 overflow-hidden rounded-md border border-border bg-surface"
     >
       <h2
         id="yours-continue"
@@ -527,7 +562,7 @@
       </div>
     </section>
   {:else if widget.visible && widget.id === "continue-reading"}
-    <div class="mt-5 flex items-center gap-3.5 rounded-xl border border-border bg-surface px-4 py-4 sm:px-5">
+    <div class="mt-5 flex items-center gap-3.5 rounded-md border border-border bg-surface px-4 py-4 sm:px-5">
       <span
         class="flex size-11 flex-none items-center justify-center rounded-sm text-[var(--hue-2-legible)]"
         style:background="var(--hue-2-soft)"
@@ -562,7 +597,7 @@
       {#if recents.length === 0}
         <p class="mt-2 text-[13px] text-muted">{h.recentsEmpty}</p>
       {:else}
-      <ul class="mt-2 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
+      <ul class="mt-2 divide-y divide-border overflow-hidden rounded-md border border-border bg-surface">
         {#each recents as recent (`${recent.num}:${recent.n}:${recent.sourceId ?? ""}`)}
           {@const href = surahHref(recent.num)}
           <li class="flex items-center gap-3 px-4 py-3">
@@ -599,7 +634,7 @@
         >
       </div>
       {#if bookmarkCount === 0}
-        <div class="mt-2 flex items-center gap-3.5 rounded-lg border border-border bg-surface px-4 py-4">
+        <div class="mt-2 flex items-center gap-3.5 rounded-md border border-border bg-surface px-4 py-4">
           <span
             class="flex size-11 flex-none items-center justify-center rounded-sm text-[var(--hue-2-legible)]"
             style:background="var(--hue-2-soft)"
@@ -610,24 +645,23 @@
           <p class="text-[14.5px] leading-relaxed text-foreground-secondary">{h.bookmarksEmpty}</p>
         </div>
       {:else if bookmarkRows.length > 0}
-        <ul class="mt-2 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
+        <ul class="mt-2 divide-y divide-border overflow-hidden rounded-md border border-border bg-surface">
           {#each bookmarkRows as row (row.key)}
-            <li>
-              <button
-                type="button"
-                class="flex w-full items-center gap-3 px-4 py-3 text-start transition-colors hover:bg-surface-hover"
-                onclick={() => openBookmark(row)}
-              >
-                <span class="truncate text-sm font-medium text-foreground"
-                  >{row.name}
-                  <!-- One verse format everywhere (BM-01): "Al-Baqarah · Ayah 1". -->
-                  <span class="font-normal text-muted"
-                    >· {reader_bookmarks_ayah({ ayah: row.ayah }, msgOptions)}</span
-                  ></span
-                >
-                <Icon name="bookmark" size={14} class="ms-auto flex-none text-muted" />
-              </button>
-            </li>
+            <!-- Shared row (BM-01): same component as /bookmarks. -->
+            <BookmarkRow
+              copy={rowCopy}
+              bookmark={{
+                id: row.key,
+                folderId: null,
+                surah: row.surah,
+                ayah: row.ayah,
+                updatedAt: row.updatedAt,
+              }}
+              surahName={row.name}
+              href={row.href}
+              noteIcon={row.hasNote}
+              onRemove={() => removeBookmarkRow(row)}
+            />
           {/each}
         </ul>
         <div class="mt-2">
@@ -639,6 +673,16 @@
             <span aria-hidden="true" class="ms-1">→</span>
           </a>
         </div>
+      {:else}
+        <!-- count>0 but rows empty: names resolve only once quranData is in. Skeleton
+             keeps the section from rendering no body mid-load (vanishing-sections fix). -->
+        <ul
+          class="mt-2 divide-y divide-border overflow-hidden rounded-md border border-border bg-surface"
+          aria-busy="true"
+        >
+          <li class="px-4 py-3"><Skeleton class="h-11 w-full" /></li>
+          <li class="px-4 py-3"><Skeleton class="h-11 w-full" /></li>
+        </ul>
       {/if}
     </section>
   {:else if widget.visible && widget.id === "notes"}
@@ -652,7 +696,7 @@
       {#if notesRows.length === 0}
         <p class="mt-2 text-[13px] text-muted">{h.notesEmpty}</p>
       {:else}
-        <ul class="mt-2 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
+        <ul class="mt-2 divide-y divide-border overflow-hidden rounded-md border border-border bg-surface">
           {#each notesRows as note (note.key)}
             <li>
               <button
@@ -686,7 +730,7 @@
       {#if !consent.readingAnalytics}
         <p class="mt-2 text-[13px] text-muted">{h.mostReadOff}</p>
       {:else if mostRead.status === "ready"}
-        <ul class="mt-2 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
+        <ul class="mt-2 divide-y divide-border overflow-hidden rounded-md border border-border bg-surface">
           {#each mostRead.top as entry (`${entry.surah}`)}
             {@const surah = quranData?.surahByNum(entry.surah)}
             {#if surah}
@@ -709,7 +753,7 @@
       </div>
       {#if dailyAyah}
         {@const surah = quranData?.surahByNum(dailyAyah.surah)}
-        <div class="mt-2 rounded-xl border border-border bg-surface px-4 py-4 sm:px-5">
+        <div class="mt-2 rounded-md border border-border bg-surface px-4 py-4 sm:px-5">
           <p class="text-sm font-medium text-foreground">
             {surah?.name ?? `Surah ${dailyAyah.surah}`}
             <span class="font-normal text-muted">· {dailyAyah.surah}:{dailyAyah.ayah}</span>

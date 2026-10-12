@@ -73,8 +73,9 @@
     >
   </div>
 
+  <!-- ACCT-04: the new-folder field spans the panel's full width, Add stays a pill. -->
   <form
-    class="mt-3 flex max-w-md items-center gap-2"
+    class="mt-3 flex items-center gap-2"
     onsubmit={(event) => {
       event.preventDefault();
       submitCreate();
@@ -86,7 +87,7 @@
       bind:value={newName}
       maxlength={100}
       placeholder={copy.newFolderPlaceholder}
-      class="h-9 rounded-lg border-border-strong bg-surface text-caption text-foreground"
+      class="h-9 flex-1 rounded-lg border-border-strong bg-surface text-caption text-foreground"
     />
     <button
       type="submit"
@@ -99,7 +100,7 @@
   </form>
 
   {#if folders.length > 0}
-    <ul class="mt-3 divide-y divide-border overflow-hidden rounded-xl border border-border-strong bg-surface">
+    <ul class="mt-3 divide-y divide-border overflow-hidden rounded-md border border-border-strong bg-surface">
       {#each folders as folder, index (folder.id)}
         <li class="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5">
           {#if renamingId === folder.id}

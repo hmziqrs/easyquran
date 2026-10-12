@@ -35,6 +35,8 @@ export interface Bookmark {
   readonly ayah: number;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /** Saved translation context (Feature 3.5): absent → consumers fall back to Arabic (EC-38). */
+  readonly sourceId?: string | null;
 }
 
 export type BookmarksMutation =
@@ -170,6 +172,11 @@ export function decodeBookmark(raw: unknown): Bookmark | null {
     folderId = value !== undefined && value.length > 0 ? value : undefined;
   }
   if (folderId === undefined) return null;
+  // Wire `sourceId`: absent on servers without the column.
+  const sourceId = asString(obj.sourceId);
+  if (sourceId !== undefined && sourceId.length > 0) {
+    return { id, folderId, surah, ayah, createdAt, updatedAt, sourceId };
+  }
   return { id, folderId, surah, ayah, createdAt, updatedAt };
 }
 

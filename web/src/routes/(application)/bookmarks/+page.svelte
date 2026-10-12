@@ -3,7 +3,12 @@
   import { SvelteSet } from "svelte/reactivity";
   import { loadQuranData, peekQuranData } from "#lib/data/quran-data-client.js";
   import type { QuranData } from "#lib/data/quran-data.js";
-  import { surahAyahPathFor, surahRouteContext } from "#lib/data/quran.js";
+  import {
+    surahAyahPathFor,
+    surahRouteContext,
+    type SurahRouteContext,
+  } from "#lib/data/quran.js";
+  import { peekTranslationName } from "#lib/quran/catalogue.js";
   import { authModal } from "#lib/auth/auth-modal.svelte.js";
   import { online } from "#lib/offline/online.svelte.js";
   import { reader } from "#lib/stores/reader.svelte.js";
@@ -22,6 +27,14 @@
   // Reader nav context for opening a bookmarked verse: a non-reader app page has
   // no translation segments to build, so it always resolves the Arabic reader.
   const ARABIC_CTX = surahRouteContext("uthmani");
+
+  // Saved-translation reopen (Feature 3.5): still in the catalogue → that translation, else Arabic (EC-38).
+  function ctxForSavedSource(sourceId: string | null | undefined): SurahRouteContext {
+    if (sourceId !== null && sourceId !== undefined && peekTranslationName(sourceId) !== null) {
+      return surahRouteContext(sourceId);
+    }
+    return ARABIC_CTX;
+  }
 
   // This URL is never locale-prefixed, so getLocale() would fall back to the
   // base locale even right after a client-side nav from /ar/**; the layout's
@@ -50,17 +63,44 @@
   // Store-side grouping: orphaned folderIds land under null, never hidden.
   const byFolder = $derived(bookmarks.bookmarksByFolder());
 
-  function rowsFor(folderId: string | null): readonly Bookmark[] {
-    return [...(byFolder.get(folderId) ?? [])].sort((a, b) =>
-      b.updatedAt.localeCompare(a.updatedAt),
-    );
+  // List controls (FLOW-08): sort by date / folder / surah, filter by folder.
+  type SortMode = "date" | "folder" | "surah";
+  let sortMode = $state<SortMode>("folder");
+  let folderFilter = $state<string>("all");
+
+  const filteredRows = $derived(
+    bookmarks.bookmarks.filter((bookmark) => {
+      if (folderFilter === "all") return true;
+      if (folderFilter === "unfiled") return bookmark.folderId === null;
+      return bookmark.folderId === folderFilter;
+    }),
+  );
+
+  function datedRows(folderId: string | null): readonly Bookmark[] {
+    return filteredRows
+      .filter((bookmark) => bookmark.folderId === folderId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
-  const groups = $derived.by<BookmarkGroup[]>(() => {
-    const unfiled: BookmarkGroup = { id: null, label: copy.unfiled, rows: rowsFor(null) };
-    const named = sortedFolders.map(
-      (folder): BookmarkGroup => ({ id: folder.id, label: folder.name, rows: rowsFor(folder.id) }),
+  const flatRows = $derived.by<readonly Bookmark[]>(() => {
+    if (sortMode === "folder") return [];
+    return [...filteredRows].sort(
+      sortMode === "date"
+        ? (a, b) => b.updatedAt.localeCompare(a.updatedAt)
+        : (a, b) => a.surah - b.surah || a.ayah - b.ayah,
     );
+  });
+
+  const groups = $derived.by<BookmarkGroup[]>(() => {
+    if (folderFilter !== "all") {
+      const id = folderFilter === "unfiled" ? null : folderFilter;
+      const label = id === null ? copy.unfiled : (bookmarks.folderById(id)?.name ?? copy.unfiled);
+      return [{ id, label, rows: datedRows(id) }];
+    }
+    const named = sortedFolders.map(
+      (folder): BookmarkGroup => ({ id: folder.id, label: folder.name, rows: datedRows(folder.id) }),
+    );
+    const unfiled: BookmarkGroup = { id: null, label: copy.unfiled, rows: datedRows(null) };
     // Unfiled first only when it carries rows; named folders always render so
     // their empty state stays visible.
     if (unfiled.rows.length === 0) return named;
@@ -92,6 +132,9 @@
     readonly ayah: number;
     readonly name: string;
     readonly href: string;
+    readonly updatedAt: string;
+    /** v5 save stamp (epoch ms); 0 = legacy row with no known time (EC-46). */
+    readonly savedAt: number;
   }
 
   const anonRows = $derived.by<AnonRow[]>(() => {
@@ -103,14 +146,19 @@
       if (coords === null) continue;
       const entry = data.surahByNum(coords.surah);
       if (!entry) continue;
+      const savedAt = reader.bookmarkSavedAt[key] ?? 0;
       out.push({
         key,
         surah: coords.surah,
         ayah: coords.ayah,
         name: entry.name,
         href: surahAyahPathFor(ARABIC_CTX, entry, coords.ayah),
+        updatedAt: savedAt > 0 ? new Date(savedAt).toISOString() : "",
+        savedAt,
       });
     }
+    // Newest first; legacy stamp-less rows sort last (EC-46).
+    out.sort((a, b) => b.savedAt - a.savedAt);
     return out;
   });
 
@@ -122,7 +170,7 @@
     if (!entry) return null;
     return {
       name: entry.name,
-      href: surahAyahPathFor(ARABIC_CTX, entry, bookmark.ayah),
+      href: surahAyahPathFor(ctxForSavedSource(bookmark.sourceId), entry, bookmark.ayah),
     };
   }
 
@@ -209,16 +257,16 @@
     }
   }
 
-  // Remove flow (BM-04): optimistic remove + 5-second undo, signed-in and
-  // offline alike; bulk removals undo as one batch.
-  let undoState = $state<{ bookmarks: readonly Bookmark[] } | { anonKey: string } | null>(null);
+  // Remove flow (BM-04): optimistic remove + 5s undo; rapid removes coalesce — all restore.
+  type UndoEntry = { bookmarks: readonly Bookmark[] } | { anonKey: string };
+  let undoEntries = $state<UndoEntry[]>([]);
   let undoTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function armUndo(next: { bookmarks: readonly Bookmark[] } | { anonKey: string }): void {
+  function armUndo(next: UndoEntry): void {
     clearTimeout(undoTimer);
-    undoState = next;
+    undoEntries = [...undoEntries, next];
     undoTimer = setTimeout(() => {
-      undoState = null;
+      undoEntries = [];
     }, 5000);
   }
 
@@ -233,14 +281,15 @@
   }
 
   function undoRemove(): void {
-    if (undoState === null) return;
-    if ("bookmarks" in undoState) {
-      for (const bookmark of undoState.bookmarks) bookmarks.restore(bookmark);
-    } else {
-      reader.toggleBookmark(undoState.anonKey);
+    for (const entry of undoEntries) {
+      if ("bookmarks" in entry) {
+        for (const bookmark of entry.bookmarks) bookmarks.restore(bookmark);
+      } else {
+        reader.toggleBookmark(entry.anonKey);
+      }
     }
     clearTimeout(undoTimer);
-    undoState = null;
+    undoEntries = [];
   }
 
   function openSignIn(): void {
@@ -292,13 +341,18 @@
         >{copy.title}</h1
       >
       {#if authed}
-        <SyncIndicator copy={copy} status={bookmarks.status} online={online.online} />
+        <SyncIndicator
+          copy={copy}
+          status={bookmarks.status}
+          online={online.online}
+          enqueueError={bookmarks.enqueueError}
+        />
       {:else}
         <span class="text-caption text-muted">{copy.localOnly}</span>
       {/if}
     </div>
 
-    {#if undoState !== null}
+    {#if undoEntries.length > 0}
       <div
         role="status"
         class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-strong bg-background-subtle px-4 py-2.5"
@@ -373,12 +427,72 @@
           </div>
         {/if}
 
-        {#if hasAnyBookmark}
+        {#snippet rowList(rows: readonly Bookmark[])}
+          <ul class="divide-y divide-border">
+            {#each rows as bookmark (bookmark.id)}
+              {@const meta = rowMeta(bookmark)}
+              {#if meta !== null}
+                <BookmarkRow
+                  {copy}
+                  {bookmark}
+                  surahName={meta.name}
+                  href={meta.href}
+                  folder={folderOf(bookmark)}
+                  folders={sortedFolders}
+                  onMove={(id, folderId) => bookmarks.moveToFolder(id, folderId)}
+                  onRemove={() => removeAuthed(bookmark)}
+                  onSelect={toggleSelect}
+                  selected={selected.has(bookmark.id)}
+                  noteIcon={hasNote(bookmark)}
+                />
+              {/if}
+            {/each}
+          </ul>
+        {/snippet}
+
+        <div class="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2">
+          <span class="flex items-center gap-1.5">
+            <label for="bookmarks-sort" class="text-caption text-muted">{copy.sortLabel}</label>
+            <select
+              id="bookmarks-sort"
+              value={sortMode}
+              class="h-8 rounded-lg border border-border-strong bg-surface px-2 text-[12.5px] text-foreground-secondary transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+              onchange={(event) => {
+                sortMode = (event.currentTarget as HTMLSelectElement).value as SortMode;
+              }}
+            >
+              <option value="date">{copy.sortDate}</option>
+              <option value="folder">{copy.sortFolder}</option>
+              <option value="surah">{copy.sortSurah}</option>
+            </select>
+          </span>
+          <span class="flex items-center gap-1.5">
+            <label for="bookmarks-folder-filter" class="text-caption text-muted"
+              >{copy.filterLabel}</label
+            >
+            <select
+              id="bookmarks-folder-filter"
+              value={folderFilter}
+              class="h-8 rounded-lg border border-border-strong bg-surface px-2 text-[12.5px] text-foreground-secondary transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+              onchange={(event) => {
+                folderFilter = (event.currentTarget as HTMLSelectElement).value;
+              }}
+            >
+              <option value="all">{copy.filterAll}</option>
+              <option value="unfiled">{copy.unfiled}</option>
+              {#each sortedFolders as folder (folder.id)}
+                <option value={folder.id}>{folder.name}</option>
+              {/each}
+            </select>
+          </span>
+        </div>
+
+        {#if sortMode === "folder"}
           <div class="mt-6 flex flex-col gap-6">
             {#each groups as group (group.id ?? "unfiled")}
               <section
                 aria-labelledby="bookmarks-group-{group.id ?? `unfiled`}"
-                class="overflow-hidden rounded-xl border border-border-strong bg-surface"
+                class="overflow-hidden rounded-md border border-border-strong bg-surface"
               >
                 <h2
                   id="bookmarks-group-{group.id ?? `unfiled`}"
@@ -389,29 +503,14 @@
                 {#if group.rows.length === 0}
                   <p class="px-4 py-3.5 text-caption text-muted sm:px-5">{copy.folderEmpty}</p>
                 {:else}
-                  <ul class="divide-y divide-border">
-                    {#each group.rows as bookmark (bookmark.id)}
-                      {@const meta = rowMeta(bookmark)}
-                      {#if meta !== null}
-                        <BookmarkRow
-                          {copy}
-                          {bookmark}
-                          surahName={meta.name}
-                          href={meta.href}
-                          folder={folderOf(bookmark)}
-                          folders={sortedFolders}
-                          onMove={(id, folderId) => bookmarks.moveToFolder(id, folderId)}
-                          onRemove={() => removeAuthed(bookmark)}
-                          onSelect={toggleSelect}
-                          selected={selected.has(bookmark.id)}
-                          noteIcon={hasNote(bookmark)}
-                        />
-                      {/if}
-                    {/each}
-                  </ul>
+                  {@render rowList(group.rows)}
                 {/if}
               </section>
             {/each}
+          </div>
+        {:else if flatRows.length > 0}
+          <div class="mt-6 overflow-hidden rounded-md border border-border-strong bg-surface">
+            {@render rowList(flatRows)}
           </div>
         {/if}
       {/if}
@@ -423,11 +522,11 @@
       {:else if anonRows.length === 0}
         {@render emptyState(copy.empty)}
       {:else}
-        <ul class="mt-6 divide-y divide-border overflow-hidden rounded-xl border border-border-strong bg-surface">
+        <ul class="mt-6 divide-y divide-border overflow-hidden rounded-md border border-border-strong bg-surface">
           {#each anonRows as row (row.key)}
             <BookmarkRow
               {copy}
-              bookmark={{ id: row.key, folderId: null, surah: row.surah, ayah: row.ayah, updatedAt: "" }}
+              bookmark={{ id: row.key, folderId: null, surah: row.surah, ayah: row.ayah, updatedAt: row.updatedAt }}
               surahName={row.name}
               href={row.href}
               onRemove={() => removeAnon(row)}

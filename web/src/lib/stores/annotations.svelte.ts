@@ -12,6 +12,10 @@ export function createAnnotations(core: ReaderCore, persistence: ReaderPersisten
     get bookmarkedKeys(): VerseKey[] {
       return Object.keys(core.s.bookmarks);
     },
+    /** v5 save stamps (epoch ms) beside `bookmarkedKeys`; missing entries are legacy (EC-46). */
+    get bookmarkSavedAt(): Readonly<Record<VerseKey, number>> {
+      return core.s.bookmarkSavedAt;
+    },
     toggleBookmark(key: VerseKey): void {
       if (core.s.bookmarks[key]) {
         delete core.s.bookmarks[key];

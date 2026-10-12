@@ -7,10 +7,13 @@
     copy,
     status,
     online: isOnline,
+    enqueueError = null,
   }: {
-    copy: Pick<BookmarksCopy, "synced" | "syncError" | "pending" | "offline">;
+    copy: Pick<BookmarksCopy, "synced" | "syncError" | "pending" | "offline" | "saveError">;
     status: SyncStatus;
     online: boolean;
+    /** Last durable-enqueue failure (EC-27); the next successful enqueue clears it. */
+    enqueueError?: string | null;
   } = $props();
 
   function label(): string {
@@ -30,9 +33,17 @@
   }
 </script>
 
-<!-- ACCT-05: caption size (13.5px) replaces the 12px grey — the sync line is
-     real status copy, not a footnote. -->
-<span role="status" class="inline-flex items-center gap-1.5 text-caption tabular-nums text-muted">
-  <span class={cn("inline-block size-1.5 rounded-pill", dotClass())} aria-hidden="true"></span>
-  {label()}
-</span>
+<div class="flex flex-col items-end gap-1">
+  <!-- ACCT-05: caption size (13.5px) replaces the 12px grey — the sync line is
+       real status copy, not a footnote. -->
+  <span role="status" class="inline-flex items-center gap-1.5 text-caption tabular-nums text-muted">
+    <span class={cn("inline-block size-1.5 rounded-pill", dotClass())} aria-hidden="true"></span>
+    {label()}
+  </span>
+  {#if enqueueError !== null}
+    <!-- EC-27: a failed durable write is never silent — the toggle the user just
+         made was not saved. Catalog copy stays visible; the raw storage error
+         rides along as the tooltip for diagnosis. -->
+    <p role="alert" class="text-caption text-danger" title={enqueueError}>{copy.saveError}</p>
+  {/if}
+</div>
