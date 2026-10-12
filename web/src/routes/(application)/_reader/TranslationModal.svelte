@@ -153,8 +153,11 @@
     locale: copy.locale,
   });
   let searchQuery = $state("");
-  // Selected language in the rail; null until the modal first opens.
-  let railLanguage = $state<string | null>(null);
+  // Selected rail language, held as its CODE; null until the modal first opens.
+  // Codes are the rail's identity because display names are not unique — the
+  // catalogue renders "Amazigh" for both ber and zgh — so name-keyed selection
+  // could never tell those tabs (or their panes) apart.
+  let railCode = $state<string | null>(null);
   // Mobile only: true once a language is tapped, showing its pane over the rail.
   let mobilePane = $state(false);
   // Author groups whose source variants are expanded. SvelteSet: a plain Set
@@ -165,7 +168,7 @@
   $effect(() => {
     if (!open) {
       searchQuery = "";
-      railLanguage = null;
+      railCode = null;
       mobilePane = false;
       expandedAuthors.clear();
     }
@@ -183,18 +186,17 @@
   // selected translation; with nothing selected, the reader's own top browser
   // language, then English, then the rail's first language.
   $effect(() => {
-    if (!open || railLanguage !== null) return;
+    if (!open || railCode !== null) return;
     const anchorId = readPick?.current ?? selectedIds[0] ?? null;
     const anchorEntry = anchorId !== null ? TRANSLATION_CATALOGUE_BY_ID.get(anchorId) : undefined;
-    railLanguage = anchorEntry?.language ?? defaultLanguage();
+    railCode = anchorEntry?.languageCode ?? defaultLanguage();
   });
 
   function defaultLanguage(): string | null {
     for (const code of priorityCodes) {
-      const group = languages.find((l) => l.code === code);
-      if (group) return group.language;
+      if (languages.some((l) => l.code === code)) return code;
     }
-    return languages[0]?.language ?? null;
+    return languages[0]?.code ?? null;
   }
 
   // Live-url first (stress S1): on a scrolled surah route page.url still
@@ -294,20 +296,24 @@
     buildGroups(searchActive ? matches : TRANSLATION_CATALOGUE).sort(compareRailGroups),
   );
 
-  const activeLanguage = $derived.by(() => {
-    if (railLanguage !== null && languages.some((l) => l.language === railLanguage)) {
-      return railLanguage;
+  // The active rail group, resolved by CODE (railCode, else the rail's head).
+  // Name matching would be ambiguous: ber and zgh both display "Amazigh", and
+  // a name match always lands on the first tab, leaving the other unreachable.
+  const activeGroup = $derived.by(() => {
+    if (railCode !== null) {
+      const group = languages.find((l) => l.code === railCode);
+      if (group) return group;
     }
-    return languages[0]?.language ?? null;
+    return languages[0];
   });
 
   // Keep the selected rail row in view: on open the auto-selected language can
   // sit far below the fold, and search filtering can shrink the rail around it.
   // "nearest" never scrolls when the row is already visible.
   $effect(() => {
-    if (!open || activeLanguage === null) return;
+    if (!open || activeGroup === undefined) return;
     const row = document.querySelector<HTMLElement>(
-      `[data-language-option="${CSS.escape(activeLanguage)}"]`,
+      `[data-language-option="${CSS.escape(activeGroup.language)}"]`,
     );
     // jsdom defines no scrollIntoView; presence-check so tests never call it.
     if (row !== null && "scrollIntoView" in row) {
@@ -344,8 +350,7 @@
   // never join the main list (TRX-01) — they render under the Commentary
   // section inside their own language's pane instead.
   const activeEntries = $derived.by(() => {
-    const group = languages.find((l) => l.language === activeLanguage);
-    const entries = group?.entries ?? [];
+    const entries = activeGroup?.entries ?? [];
     return entries
       .filter((t) => !isTafsirTranslation(t.id))
       .sort((a, b) => recencyRank(a.id) - recencyRank(b.id));
@@ -406,8 +411,8 @@
   // The Commentary section renders only inside the tafsir language's pane and
   // never in the reading picker (a tafsir is never the reading translation).
   const commentaryVisible = $derived.by(() => {
-    if (picking || searchActive || activeLanguage === null) return false;
-    return commentaryRows.some((t) => t.language === activeLanguage);
+    if (picking || searchActive || activeGroup === undefined) return false;
+    return commentaryRows.some((t) => t.language === activeGroup.language);
   });
 
   // The pane's count line covers every row it lists, Commentary included, so
@@ -514,8 +519,8 @@
     return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   }
 
-  function selectLanguage(language: string): void {
-    railLanguage = language;
+  function selectLanguage(code: string): void {
+    railCode = code;
     mobilePane = true;
   }
   function backToRail(): void {
@@ -532,13 +537,13 @@
     else if (event.key === "ArrowUp") next = (index - 1 + languages.length) % languages.length;
     else return;
     event.preventDefault();
-    const language = languages[next]?.language;
-    if (language === undefined) return;
-    railLanguage = language;
+    const group = languages[next];
+    if (group === undefined) return;
+    railCode = group.code;
     // All rail options are already in the DOM, so focus can move synchronously
     // without waiting for the selection state to re-render.
     document
-      .querySelector<HTMLElement>(`[data-language-option="${CSS.escape(language)}"]`)
+      .querySelector<HTMLElement>(`[data-language-option="${CSS.escape(group.language)}"]`)
       ?.focus();
   }
 </script>
@@ -967,8 +972,8 @@
             ? 'hidden'
             : 'flex'} row-start-2 min-h-0 flex-col gap-0.5 overflow-y-auto overscroll-contain border-border p-2 md:col-start-1 md:flex md:border-e"
         >
-          {#each languages as l, i (l.language)}
-            {@const active = l.language === activeLanguage}
+          {#each languages as l, i (l.code)}
+            {@const active = l.code === activeGroup?.code}
             {#if i > 0 && isSuggested(languages[i - 1]) && !isSuggested(l)}
               <div data-rail-divider class="mx-2.5 my-1.5 h-px flex-none bg-border" aria-hidden="true"></div>
             {/if}
@@ -979,7 +984,7 @@
               type="button"
               tabindex={active ? 0 : -1}
               aria-current={active ? "true" : undefined}
-              onclick={() => selectLanguage(l.language)}
+              onclick={() => selectLanguage(l.code)}
               onkeydown={(e) => onRailKeydown(e, i)}
               class="flex h-11 flex-none cursor-pointer touch-manipulation items-center gap-2.5 rounded-md px-2.5 text-start transition-colors md:h-9 {active
                 ? 'bg-surface-hover text-foreground'
@@ -1067,12 +1072,12 @@
                 {/each}
               </ul>
             {/if}
-          {:else if activeLanguage !== null}
+          {:else if activeGroup}
             <div
               class="sticky top-0 z-10 flex h-12 flex-none items-center gap-2 border-b border-border bg-popover px-4"
             >
               {@render paneBack()}
-              <h3 class="text-[15px] font-medium text-foreground">{activeLanguage}</h3>
+              <h3 class="text-[15px] font-medium text-foreground">{activeGroup.language}</h3>
               <span data-results-count class="text-[13px] text-muted-foreground">
                 {copy.translations.results(paneRowCount)}
               </span>

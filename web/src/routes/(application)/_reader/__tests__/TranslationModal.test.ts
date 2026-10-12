@@ -36,6 +36,18 @@ const h = vi.hoisted(() => {
       entry("en.wahiduddin", "English", "en", "ltr", "Wahiduddin Khan", "Wahiduddin Khan"),
       entry("ur.jalandhry", "Urdu", "ur", "rtl", "Jalandhry", "Maulana Jalal ad-Din"),
       entry("qul.ur.bayan", "Urdu", "ur", "rtl", "Bayan-ul-Quran", "Dr. Israr Ahmad"),
+      // Two CODES sharing one display name (the real catalogue's ber/zgh pair,
+      // both rendered "Amazigh"): the rail keys and selects by code, so this
+      // must never trip each_key_duplicate nor fuse the two panes.
+      entry("ber.mensur", "Amazigh", "ber", "ltr", "At Mensur", "Ramdane At Mansour"),
+      entry(
+        "qul.r236.zgh-ramdane",
+        "Amazigh",
+        "zgh",
+        "ltr",
+        "Ramdane At Mansour",
+        "Ramdane At Mansour",
+      ),
       entry("ms.basmeih", "Malay", "ms", "ltr", "Basmeih", "Abdullah Muhammad Basmeih"),
       entry("quranenc.fr.hamidullah", "French", "fr", "ltr", "Hamidullah", "Muhammad Hamidullah"),
       entry("tr.diyanet", "Turkish", "tr", "ltr", "Diyanet", "Diyanet Isleri"),
@@ -256,6 +268,8 @@ describe("TranslationModal — master-detail layout", () => {
     expect(railNames()).toEqual([
       "English",
       "Arabic",
+      "Amazigh",
+      "Amazigh",
       "French",
       "Indonesian",
       "Malay",
@@ -279,7 +293,26 @@ describe("TranslationModal — master-detail layout", () => {
     expect(dividers[0]?.previousElementSibling?.getAttribute("data-language-option")).toBe(
       "Arabic",
     );
-    expect(dividers[0]?.nextElementSibling?.getAttribute("data-language-option")).toBe("French");
+    expect(dividers[0]?.nextElementSibling?.getAttribute("data-language-option")).toBe("Amazigh");
+  });
+
+  it("keeps same-named languages distinct: two Amazigh tabs, each opening its own pane", async () => {
+    // Regression: the rail once keyed its rows by the display name, so the
+    // catalogue's ber/zgh pair (both rendered "Amazigh") tripped
+    // each_key_duplicate and crashed the mobile sheet into the 404 boundary.
+    // Keys and selection now ride the language code.
+    await open();
+    const amazighTabs = railOptions().filter(
+      (b) => b.querySelector("[data-language-name]")?.textContent === "Amazigh",
+    );
+    expect(amazighTabs).toHaveLength(2);
+    amazighTabs[1]?.click();
+    await settle();
+    expect(pane().querySelector("h3")?.textContent).toContain("Amazigh");
+    expect(paneRowIds()).toEqual(["qul.r236.zgh-ramdane"]);
+    amazighTabs[0]?.click();
+    await settle();
+    expect(paneRowIds()).toEqual(["ber.mensur"]);
   });
 
   it("ranks the preferred language, English, other browser languages, the country's, then Arabic", async () => {
@@ -300,6 +333,8 @@ describe("TranslationModal — master-detail layout", () => {
         "Urdu",
         "Malay",
         "Arabic",
+        "Amazigh",
+        "Amazigh",
         "French",
         "Indonesian",
         "Spanish",
@@ -456,7 +491,7 @@ describe("TranslationModal — master-detail layout", () => {
     clear?.click();
     await settle();
     expect(searchInput().value).toBe("");
-    expect(railOptions()).toHaveLength(8);
+    expect(railOptions()).toHaveLength(10);
   });
 
   it.each([
@@ -493,7 +528,7 @@ describe("TranslationModal — master-detail layout", () => {
     expect(railOptions()).toHaveLength(0);
     expect(document.querySelector('[role="status"]')?.textContent).toContain("No translations");
     await setSearch("");
-    expect(railOptions()).toHaveLength(8);
+    expect(railOptions()).toHaveLength(10);
     expect(paneRowIds().length).toBeGreaterThan(0);
   });
 
