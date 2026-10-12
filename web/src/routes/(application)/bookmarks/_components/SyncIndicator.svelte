@@ -30,7 +30,9 @@
   }
 </script>
 
-<span role="status" class="inline-flex items-center gap-1.5 text-[12px] tabular-nums text-muted">
+<!-- ACCT-05: caption size (13.5px) replaces the 12px grey — the sync line is
+     real status copy, not a footnote. -->
+<span role="status" class="inline-flex items-center gap-1.5 text-caption tabular-nums text-muted">
   <span class={cn("inline-block size-1.5 rounded-pill", dotClass())} aria-hidden="true"></span>
   {label()}
 </span>
