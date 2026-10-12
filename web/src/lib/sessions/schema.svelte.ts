@@ -19,6 +19,37 @@ export const SESSION_NAME_MAX = 100;
 export const SESSION_KINDS = ["daily", "weekly", "free", "shared"] as const;
 export type SessionKind = (typeof SESSION_KINDS)[number];
 
+/** Device-local calendar day as `YYYY-MM-DD` — same format as `todayLocal()` (engagement-state). */
+function localDayOf(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/** Device-local ISO week as `YYYY-Www` (Thursday-based, so boundary weeks belong to the year they mostly cover). */
+function localIsoWeekOf(d: Date): string {
+  const local = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const weekday = (local.getDay() + 6) % 7; // Monday = 0
+  const thursday = new Date(local.getFullYear(), local.getMonth(), local.getDate() - weekday + 3);
+  // UTC-normalized day math: no DST shift can nudge the week count at a boundary.
+  const days = Math.floor(
+    (Date.UTC(thursday.getFullYear(), thursday.getMonth(), thursday.getDate()) -
+      Date.UTC(thursday.getFullYear(), 0, 1)) /
+      86_400_000,
+  );
+  return `${thursday.getFullYear()}-W${String(Math.floor(days / 7) + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Derived bucket key for timed kinds (Feature 4.8, EC-36): daily → device-local
+ * day, weekly → device-local ISO week, else null. Derived per read, never stored.
+ */
+export function sessionBucketFor(kind: SessionKind, now: Date = new Date()): string | null {
+  if (kind === "daily") return localDayOf(now);
+  if (kind === "weekly") return localIsoWeekOf(now);
+  return null;
+}
+
 /**
  * Fixed id of the device-local default session seeded from the legacy reader
  * blob. Never uploaded: on login the merge review re-keys it onto the account

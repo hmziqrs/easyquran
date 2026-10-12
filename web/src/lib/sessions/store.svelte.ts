@@ -84,6 +84,11 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- err is a caught throw of unknown provenance; this formatter is the boundary that narrows it to a displayable message string.
+function errorMessage(err: unknown): string {
+  return err instanceof Error && err.message ? err.message : String(err);
+}
+
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- name is raw user input; this validator is its boundary check.
 function validSessionName(name: string): string | null {
   const trimmed = name.trim();
@@ -108,6 +113,8 @@ export class SessionsStore {
   #pendingStateSessions = new Set<string>();
   /** Last furthestAyah pushed per `${sessionId}:${surah}` — only growth is enqueued. */
   #pushedProgress = new Map<string, number>();
+  /** Last durable-enqueue failure (EC-27): surfaced for the sync line instead of silently dropping the mutation. */
+  #enqueueError = $state<string | null>(null);
 
   constructor(deps: SessionsStoreDeps = {}) {
     this.#engine = deps.engine ?? syncEngine;
@@ -115,15 +122,17 @@ export class SessionsStore {
     this.#state = deps.state ?? authState;
     this.#register = deps.register ?? registerDomain;
     this.#unregister = deps.unregister ?? unregisterDomain;
+    // Hydrate at construction (module-import time, before any render): first-touch
+    // hydration inside a getter throws state_unsafe_mutation when a $derived reads
+    // it (the /yours cold-load crash). SSR stays unhydrated and reads empty.
+    if (browser) this.#ensureHydrated();
   }
 
   get activeId(): string | null {
-    this.#ensureHydrated();
     return this.#envelope?.activeId ?? null;
   }
 
   get activeSession() {
-    this.#ensureHydrated();
     const envelope = this.#envelope;
     if (envelope === null) return null;
     return envelope.sessions.find((session) => session.id === envelope.activeId) ?? null;
@@ -131,8 +140,12 @@ export class SessionsStore {
 
   /** The owner's live (non-archived-first, EC-35-ordered) sessions. */
   get list(): readonly ReadingSession[] {
-    this.#ensureHydrated();
     return this.#envelope?.sessions ?? [];
+  }
+
+  /** Last durable-enqueue failure (EC-27), surfaced for the /yours sync line. */
+  get enqueueError(): string | null {
+    return this.#enqueueError;
   }
 
   /**
@@ -490,7 +503,6 @@ export class SessionsStore {
       const num = Number(surah);
       const key = `${sessionId}:${surah}`;
       if (this.#pushedProgress.get(key) === entry.furthestAyah) continue;
-      this.#pushedProgress.set(key, entry.furthestAyah);
       this.#enqueue(
         {
           kind: "progress.upsert",
@@ -500,6 +512,8 @@ export class SessionsStore {
           updatedAt,
         },
         sessionId,
+        // Record only after the enqueue is durable — a rejection must not suppress the re-push.
+        () => this.#pushedProgress.set(key, entry.furthestAyah),
       );
     }
   }
@@ -522,20 +536,27 @@ export class SessionsStore {
     );
   }
 
-  #enqueue(payload: SessionMutation, sessionId: string): void {
+  #enqueue(payload: SessionMutation, sessionId: string, onDurable?: () => void): void {
     const ownerId = this.#accountOwnerId();
     if (ownerId === null) return;
     if (payload.kind === "position.upsert" || payload.kind === "progress.upsert") {
       this.#pendingStateSessions.add(sessionId);
     }
-    void this.#engine.enqueue(sessionsDomainFor(ownerId), payload).catch(() => {
-      // EC-27 seam: the durable write failed — drop the overlay so the next
-      // snapshot applies and a later write re-enqueues; the reader mirror
-      // itself already holds the state (never lost).
-      if (payload.kind === "session.upsert") this.#pendingSessions.delete(payload.id);
-      else if (payload.kind === "session.delete") this.#pendingSessionDeletes.delete(payload.id);
-      else this.#pendingStateSessions.delete(payload.sessionId);
-    });
+    void this.#engine.enqueue(sessionsDomainFor(ownerId), payload).then(
+      () => {
+        this.#enqueueError = null;
+        onDurable?.();
+      },
+      // eslint-disable-next-line anti-slop/no-unknown-parameters -- rejection reason is any thrown value (opaque boundary); errorMessage() narrows it to a displayable string.
+      (err: unknown) => {
+        // EC-27: surface the failure; drop the overlay so the next snapshot applies
+        // and a later write re-enqueues (the reader mirror holds the state — never lost).
+        this.#enqueueError = errorMessage(err);
+        if (payload.kind === "session.upsert") this.#pendingSessions.delete(payload.id);
+        else if (payload.kind === "session.delete") this.#pendingSessionDeletes.delete(payload.id);
+        else this.#pendingStateSessions.delete(payload.sessionId);
+      },
+    );
   }
 
   #unregisterCurrent(): void {

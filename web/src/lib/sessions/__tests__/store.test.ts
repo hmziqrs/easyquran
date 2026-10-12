@@ -6,6 +6,7 @@ import {
   LOCAL_DEFAULT_SESSION_ID,
   accountDefaultSessionId,
   decodeSessionsEnvelope,
+  sessionBucketFor,
   type SessionMutation,
   type SessionSnapshot,
 } from "../schema.svelte";
@@ -279,5 +280,26 @@ describe("SessionsStore sync (§9.2/§9.5)", () => {
     // Durable account key is never destroyed (EC-14).
     expect(localStorage.getItem("easyquran.sessions.7")).not.toBeNull();
     expect(store.activeId).toBe(LOCAL_DEFAULT_SESSION_ID);
+  });
+});
+
+describe("session buckets (Feature 4.8, EC-36)", () => {
+  it("daily buckets follow the device-local day, weekly the device-local ISO week", () => {
+    const monday = new Date(2026, 9, 12, 15, 0); // 2026-10-12, a Monday
+    expect(sessionBucketFor("daily", monday)).toBe("2026-10-12");
+    expect(sessionBucketFor("weekly", monday)).toBe("2026-W42");
+    expect(sessionBucketFor("free", monday)).toBeNull();
+    expect(sessionBucketFor("shared", monday)).toBeNull();
+  });
+
+  it("a mid-week local midnight crossing rolls the day bucket but not the week bucket", () => {
+    const wednesdayNight = new Date(2026, 9, 14, 23, 59);
+    const thursdayMorning = new Date(2026, 9, 15, 0, 1);
+    expect(sessionBucketFor("daily", wednesdayNight)).not.toBe(
+      sessionBucketFor("daily", thursdayMorning),
+    );
+    expect(sessionBucketFor("weekly", wednesdayNight)).toBe(
+      sessionBucketFor("weekly", thursdayMorning),
+    );
   });
 });

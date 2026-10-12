@@ -23,6 +23,7 @@
   import { authState } from "#lib/auth/auth-state.svelte.js";
   import { installPurgeHook } from "#lib/auth/purge-hook.js";
   import { bookmarks } from "#lib/bookmarks/store.svelte.js";
+  import { sessions } from "#lib/sessions/store.svelte.js";
   import { localeSuggest } from "#lib/i18n/locale-suggest.svelte.js";
   import LocaleSuggest from "#lib/components/i18n/LocaleSuggest.svelte";
 
@@ -138,6 +139,10 @@
     const status = authState.status;
     const user = authState.user;
     untrack(() => bookmarks.onAuthChanged(status === "authenticated" && user !== null));
+    // Sessions mirror the bookmarks seam: a signed-in cold boot resolves auth
+    // through the probe (no transition fires when previous === null), so the
+    // store's per-owner domain registers here on every status/user change.
+    untrack(() => sessions.onAuthTransition());
     untrack(() => { void notifications.onAuthChanged(status, user?.id ?? null); });
   });
 
