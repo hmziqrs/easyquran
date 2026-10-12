@@ -8,6 +8,7 @@ import {
   registerDomain,
   unregisterDomain,
   syncEngine,
+  SyncPausedError,
   type RegisteredSyncDomain,
   type SyncDomain,
   type SyncMutation,
@@ -123,6 +124,14 @@ function isValidFolderName(name: string): boolean {
   return trimmed.length > 0 && trimmed.length <= FOLDER_NAME_MAX;
 }
 
+/**
+ * Paused-first-round backstop (round-2 false-empty fix): the engine treats a
+ * paused round as no-penalty and schedules nothing, so the store retries its
+ * own first pull a bounded number of times before the 30s periodic trigger.
+ */
+const FIRST_SYNC_RETRY_MS = 2_000;
+const FIRST_SYNC_RETRY_MAX = 3;
+
 export class BookmarksStore {
   readonly #engine: SyncEngineLike;
   readonly #auth: BookmarkAuthLike;
@@ -133,6 +142,13 @@ export class BookmarksStore {
 
   #folders = $state.raw<readonly BookmarkFolder[]>([]);
   #bookmarks = $state.raw<readonly Bookmark[]>([]);
+  /**
+   * Per-domain sync truth (round-2 false-empty fix): epoch ms of the last
+   * server state that actually landed for THIS account's domain, or null
+   * before the first successful round. The engine's `lastSyncAt` is global —
+   * any domain's success sets it — so the first-sync guard must not read it.
+   */
+  #syncedAt = $state<number | null>(null);
   #hydrated = false;
   #syncGeneration: number | null = null;
   #ownerId: number | null;
@@ -156,6 +172,9 @@ export class BookmarksStore {
   #mutationEntityIds = new Map<string, string>();
   /** §9.6 cross-tab drain listener (EC-33); null until hydrate() in a browser. */
   #drainChannel: BroadcastChannel | null = null;
+  /** Paused-first-round backstop timer (see FIRST_SYNC_RETRY_*); cleared on any account edge. */
+  #firstSyncRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  #firstSyncRetries = 0;
 
   constructor(deps: BookmarksStoreDeps) {
     this.#engine = deps.engine;
@@ -172,13 +191,20 @@ export class BookmarksStore {
   }
 
   get folders(): readonly BookmarkFolder[] {
-    if (!this.#viewIsCurrent()) return [];
-    return this.#folders;
+    // Read the reactive list even on the stale path: a page derived that first
+    // evaluated while the view was not current must still depend on #folders,
+    // or a later applyServer write never invalidates it (false-empty fix).
+    const view = this.#viewIsCurrent();
+    const all = this.#folders;
+    return view ? all : [];
   }
 
   get bookmarks(): readonly Bookmark[] {
-    if (!this.#viewIsCurrent()) return [];
-    return this.#bookmarks;
+    // Same read-through as `folders`: no early return that skips the reactive
+    // state, so deriveds always subscribe to applyServer writes.
+    const view = this.#viewIsCurrent();
+    const all = this.#bookmarks;
+    return view ? all : [];
   }
 
   get pending(): number {
@@ -189,6 +215,16 @@ export class BookmarksStore {
 
   get status(): SyncStatus {
     return { ...this.#engine.status, pending: this.pending };
+  }
+
+  /**
+   * Sync truth for THIS store's account domain (round-2): set only when a
+   * server snapshot actually landed on the live view, null before that. The
+   * first-sync guard and the SyncIndicator read this — never the engine-global
+   * `status.lastSyncAt`.
+   */
+  get syncedAt(): number | null {
+    return this.#syncedAt;
   }
 
   /**
@@ -223,11 +259,15 @@ export class BookmarksStore {
   }
 
   #effectiveRow(surah: number, ayah: number): Bookmark | undefined {
-    if (!this.#viewIsCurrent()) return undefined;
+    // Read-through like `bookmarks`: verse-mark readers must subscribe to
+    // applyServer writes even when this evaluation started pre-auth.
+    const view = this.#viewIsCurrent();
+    const rows = this.#bookmarks;
+    if (!view) return undefined;
     for (const pending of this.#pendingById.values()) {
       if (pending.surah === surah && pending.ayah === ayah) return pending;
     }
-    return this.#bookmarks.find((b) => b.surah === surah && b.ayah === ayah);
+    return rows.find((b) => b.surah === surah && b.ayah === ayah);
   }
 
   isBookmarked(surah: number, ayah: number): boolean {
@@ -591,9 +631,15 @@ export class BookmarksStore {
 
   #resetAccount(ownerId: number | null): void {
     if (this.#ownerId !== null) this.#unregister(bookmarksDomainFor(this.#ownerId));
+    if (this.#firstSyncRetryTimer !== null) {
+      clearTimeout(this.#firstSyncRetryTimer);
+      this.#firstSyncRetryTimer = null;
+    }
+    this.#firstSyncRetries = 0;
     this.#generation += 1;
     this.#ownerId = ownerId;
     this.#syncGeneration = null;
+    this.#syncedAt = null;
     this.#folders = [];
     this.#bookmarks = [];
     this.#pendingById.clear();
@@ -625,14 +671,48 @@ export class BookmarksStore {
     );
     const adapter: SyncDomain<BookmarksMutation, BookmarksSnapshot> = {
       name: domain.name,
-      sync: (mutations, signal) => domain.sync(mutations, signal),
+      sync: async (mutations, signal) => {
+        try {
+          return await domain.sync(mutations, signal);
+        } catch (err) {
+          // The engine skips paused rounds without a retry; if this was the
+          // account's first pull, the store schedules its own backstop so the
+          // view cannot sit never-synced until the next periodic trigger.
+          if (err instanceof SyncPausedError) this.#scheduleFirstSyncRetry(account);
+          throw err;
+        }
+      },
       applyServer: (state, drained) => {
-        if (this.#isCurrent(account)) this.applyServer(state, drained);
+        if (this.#isCurrent(account)) {
+          // Per-domain truth: only a snapshot that landed on the live view
+          // counts as this domain having synced.
+          this.#syncedAt = Date.now();
+          this.applyServer(state, drained);
+        }
       },
     };
     this.#register(adapter);
     this.#engine.start();
     await this.#engine.flush(account.domain);
+  }
+
+  /**
+   * Bounded backstop for a paused FIRST sync round (round-2): the engine drops
+   * paused rounds silently, so the store wakes itself up — only while the
+   * paused account is still the live view and no server state has landed.
+   * Account-mismatch pauses suspend the view first, so they never retry here.
+   */
+  #scheduleFirstSyncRetry(account: AccountGeneration): void {
+    if (this.#firstSyncRetryTimer !== null) return;
+    if (this.#syncedAt !== null) return;
+    if (!this.#isCurrent(account)) return;
+    if (this.#firstSyncRetries >= FIRST_SYNC_RETRY_MAX) return;
+    this.#firstSyncRetries += 1;
+    this.#firstSyncRetryTimer = setTimeout(() => {
+      this.#firstSyncRetryTimer = null;
+      if (!this.#isCurrent(account)) return;
+      void this.#engine.flush(account.domain).catch(() => undefined);
+    }, FIRST_SYNC_RETRY_MS);
   }
 
   #enqueue(

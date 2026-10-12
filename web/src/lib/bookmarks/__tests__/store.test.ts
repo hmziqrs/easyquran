@@ -35,6 +35,8 @@ interface FakeEngine {
   readonly flushed: Array<string | undefined>;
   readonly cleared: string[];
   readonly started: number;
+  /** Current SyncStatus snapshot — reassigned wholesale by respondWithStatus(). */
+  readonly status: SyncStatus;
   /** When true, the next enqueue() rejects (simulated durable-storage failure). */
   failNext: boolean;
   respondWithStatus(status: SyncStatus): void;
@@ -172,6 +174,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -953,5 +956,154 @@ describe("BookmarksStore — cross-tab drain retire (EC-33, §9.6)", () => {
     otherTab.postMessage("noise");
 
     expect(rig.engine.flushed.length).toBe(flushCalls);
+  });
+});
+
+/** A batch the bookmarks domain must refuse: mutations owned by another partition (domain.ts:49). */
+function foreignBatch(): SyncMutation<BookmarksMutation>[] {
+  return [
+    {
+      id: "foreign-m1",
+      domain: "bookmarks.user:9",
+      seq: 1,
+      payload: { kind: "folder.delete", id: "x", updatedAt: "2026-01-01T00:00:00Z" },
+      queuedAt: 0,
+    },
+  ];
+}
+
+describe("BookmarksStore — per-domain sync truth (round-2 false-empty fix)", () => {
+  it("syncedAt tracks this domain's landed snapshots, independent of the engine-global lastSyncAt", async () => {
+    const rig = makeRig([], true);
+    rig.store.hydrate();
+    await flush();
+    // Engine global: nothing landed anywhere; store domain truth agrees — not synced.
+    expect(rig.engine.status.lastSyncAt).toBeNull();
+    expect(rig.store.syncedAt).toBeNull();
+
+    rig.registered[0]!.applyServer(SNAP);
+    expect(rig.store.syncedAt).not.toBeNull();
+    expect(rig.store.bookmarks).toHaveLength(2);
+
+    // Logout resets the truth: the signed-out view has no sync to point at.
+    rig.setAuthed(false);
+    rig.store.onAuthChanged(false);
+    expect(rig.store.syncedAt).toBeNull();
+  });
+
+  it("a snapshot dropped for a stale view never counts as this domain having synced", async () => {
+    const rig = makeRig([], true);
+    rig.store.hydrate();
+    await flush();
+    rig.setAuthed(false);
+    rig.store.onAuthChanged(false);
+    // A round completing after the logout reset: dropped, and rightly not
+    // recorded as sync truth for the (now empty) view.
+    rig.registered[0]!.applyServer(SNAP);
+    expect(rig.store.syncedAt).toBeNull();
+    expect(rig.store.bookmarks).toEqual([]);
+  });
+
+  it("getters keep serving reactive rows once the view activates after a pre-auth read", async () => {
+    const rig = makeRig(); // anon cold boot
+    // Pre-fix, this read took the early-return path and never subscribed to
+    // the row state — the false-empty window.
+    expect(rig.store.bookmarks).toEqual([]);
+    rig.setAuthed(true);
+    rig.store.onAuthChanged(true);
+    await flush();
+    rig.registered[0]!.applyServer(SNAP);
+    expect(rig.store.bookmarks).toHaveLength(2);
+    expect(rig.store.folders).toHaveLength(1);
+    expect(rig.store.syncedAt).not.toBeNull();
+  });
+});
+
+describe("BookmarksStore — paused first round backstop (round-2)", () => {
+  it("a paused round schedules a retry while the account stays live", async () => {
+    vi.useFakeTimers();
+    try {
+      const rig = makeRig([], true);
+      rig.store.hydrate();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(rig.engine.flushed).toEqual(["bookmarks.user:7"]);
+
+      // The engine skips paused rounds without penalty and schedules nothing —
+      // the store's own backstop must fire instead.
+      await expect(rig.registered[0]!.sync(foreignBatch(), undefined)).rejects.toBeInstanceOf(
+        SyncPausedError,
+      );
+      expect(rig.engine.flushed).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(rig.engine.flushed).toHaveLength(2);
+      expect(rig.engine.flushed.at(-1)).toBe("bookmarks.user:7");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the backstop caps at three scheduled retries", async () => {
+    vi.useFakeTimers();
+    try {
+      const rig = makeRig([], true);
+      rig.store.hydrate();
+      await vi.advanceTimersByTimeAsync(0);
+
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        await expect(rig.registered[0]!.sync(foreignBatch(), undefined)).rejects.toBeInstanceOf(
+          SyncPausedError,
+        );
+        await vi.advanceTimersByTimeAsync(2_000);
+      }
+      // Three retries landed; the fourth pause scheduled nothing.
+      expect(rig.engine.flushed).toHaveLength(4);
+
+      await expect(rig.registered[0]!.sync(foreignBatch(), undefined)).rejects.toBeInstanceOf(
+        SyncPausedError,
+      );
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(rig.engine.flushed).toHaveLength(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a pause that suspended the view (account mismatch) schedules no retry", async () => {
+    vi.useFakeTimers();
+    try {
+      const engine = fakeEngine();
+      const registered: RegisteredSyncDomain[] = [];
+      const store = createBookmarksStore({
+        engine: engine.engine,
+        auth: {
+          async unsafeRequest() {
+            return {
+              ok: false,
+              status: 403,
+              data: null,
+              error: { message: "Bookmark sync account changed" },
+              rotated: false,
+            };
+          },
+        },
+        reader: fakeReader().reader,
+        state: { authenticated: true, user: { id: 7 } },
+        register: (domain) => registered.push(domain),
+        unregister: () => undefined,
+      });
+      store.hydrate();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(engine.flushed).toHaveLength(1);
+
+      // 403 mismatch → suspendAuth first, then the pause: not current, so the
+      // backstop must stay silent.
+      await expect(registered[0]!.sync([], undefined)).rejects.toBeInstanceOf(SyncPausedError);
+      expect(store.authed).toBe(false);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(engine.flushed).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 291 messages. Import this barrel, never
+// 293 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "#lib/paraglide/messages/reader_account.js";
@@ -21,6 +21,7 @@ export { reader_bookmarks_create_folder } from "#lib/paraglide/messages/reader_b
 export { reader_bookmarks_delete_folder } from "#lib/paraglide/messages/reader_bookmarks_delete_folder.js";
 export { reader_bookmarks_delete_folder_confirm } from "#lib/paraglide/messages/reader_bookmarks_delete_folder_confirm.js";
 export { reader_bookmarks_empty } from "#lib/paraglide/messages/reader_bookmarks_empty.js";
+export { reader_bookmarks_empty_page } from "#lib/paraglide/messages/reader_bookmarks_empty_page.js";
 export { reader_bookmarks_filter_all } from "#lib/paraglide/messages/reader_bookmarks_filter_all.js";
 export { reader_bookmarks_filter_label } from "#lib/paraglide/messages/reader_bookmarks_filter_label.js";
 export { reader_bookmarks_folder_empty } from "#lib/paraglide/messages/reader_bookmarks_folder_empty.js";
@@ -62,6 +63,7 @@ export { reader_bookmarks_sort_label } from "#lib/paraglide/messages/reader_book
 export { reader_bookmarks_sort_surah } from "#lib/paraglide/messages/reader_bookmarks_sort_surah.js";
 export { reader_bookmarks_sync_error } from "#lib/paraglide/messages/reader_bookmarks_sync_error.js";
 export { reader_bookmarks_synced } from "#lib/paraglide/messages/reader_bookmarks_synced.js";
+export { reader_bookmarks_syncing } from "#lib/paraglide/messages/reader_bookmarks_syncing.js";
 export { reader_bookmarks_title } from "#lib/paraglide/messages/reader_bookmarks_title.js";
 export { reader_bookmarks_uncategorized } from "#lib/paraglide/messages/reader_bookmarks_uncategorized.js";
 export { reader_bookmarks_undo } from "#lib/paraglide/messages/reader_bookmarks_undo.js";

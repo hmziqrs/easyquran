@@ -8,6 +8,7 @@ import {
   reader_bookmarks_delete_folder,
   reader_bookmarks_delete_folder_confirm,
   reader_bookmarks_empty,
+  reader_bookmarks_empty_page,
   reader_bookmarks_folder_empty,
   reader_bookmarks_folder_kind_daily,
   reader_bookmarks_folder_kind_generic,
@@ -49,6 +50,7 @@ import {
   reader_bookmarks_sort_surah,
   reader_bookmarks_sync_error,
   reader_bookmarks_synced,
+  reader_bookmarks_syncing,
   reader_bookmarks_title,
   reader_bookmarks_uncategorized,
   reader_bookmarks_undo,
@@ -71,6 +73,8 @@ export interface BookmarksCopy {
   readonly locale: UiLocale;
   readonly direction: UiDirection;
   readonly title: string;
+  /** Page-appropriate empty state for list pages (/bookmarks, /yours) — the reader panel keeps its verse-tip copy (`empty`). */
+  readonly emptyPage: string;
   readonly empty: string;
   readonly folderEmpty: string;
   readonly unfiled: string;
@@ -119,6 +123,8 @@ export interface BookmarksCopy {
   readonly offline: string;
   readonly pending: (count: number) => string;
   readonly synced: string;
+  /** In-flight pull or never-synced window — 'synced' only once server truth landed (ACCT-03). */
+  readonly syncing: string;
   readonly syncError: string;
   /** Durable-enqueue failure (EC-27): the user's last change was not saved. */
   readonly saveError: string;
@@ -142,6 +148,7 @@ export function getBookmarksCopy(locale: UiLocale = getLocale() as UiLocale): Bo
     locale,
     direction: uiDirection(locale),
     title: noArgs(reader_bookmarks_title),
+    emptyPage: noArgs(reader_bookmarks_empty_page),
     empty: noArgs(reader_bookmarks_empty),
     folderEmpty: noArgs(reader_bookmarks_folder_empty),
     unfiled: noArgs(reader_bookmarks_uncategorized),
@@ -190,6 +197,7 @@ export function getBookmarksCopy(locale: UiLocale = getLocale() as UiLocale): Bo
         ? noArgs(reader_bookmarks_pending_one)
         : reader_bookmarks_pending({ count }, options),
     synced: noArgs(reader_bookmarks_synced),
+    syncing: noArgs(reader_bookmarks_syncing),
     syncError: noArgs(reader_bookmarks_sync_error),
     saveError: noArgs(reader_bookmarks_save_error),
     localOnly: noArgs(reader_bookmarks_local_only),

@@ -10,6 +10,7 @@
   } from "#lib/data/quran.js";
   import { peekTranslationName } from "#lib/quran/catalogue.js";
   import { authModal } from "#lib/auth/auth-modal.svelte.js";
+  import { authState } from "#lib/auth/auth-state.svelte.js";
   import { online } from "#lib/offline/online.svelte.js";
   import { reader } from "#lib/stores/reader.svelte.js";
   import { bookmarks } from "#lib/bookmarks/store.svelte.js";
@@ -44,6 +45,11 @@
   let quranData = $state<QuranData | null>(peekQuranData() ?? null);
 
   const authed = $derived(bookmarks.authed);
+
+  // Signed-in cold load (round-2): while the probe is in flight the session is
+  // neither anon nor authed — render a neutral loading state, never the anon
+  // "Sign in (free)" view.
+  const authUnknown = $derived(authState.unknown);
 
   // Manual order first (NULL position = unpositioned, sorts last), then name
   // (Feature 2.3). FoldersPanel renders this order and reorders relative to it.
@@ -109,15 +115,16 @@
 
   const hasAnyBookmark = $derived(bookmarks.bookmarks.length > 0);
 
+  // Fully empty authed list: show the page empty state — and (round-2) still
+  // mount the folders panel so a fresh account can create its first folder.
+  const emptyList = $derived(!hasAnyBookmark && sortedFolders.length === 0);
+
   // Authed but no first snapshot yet: keep the skeleton up — even when the
   // round failed (offline first visit must not flash "No bookmarks"), and any
   // local optimistic row or folder means there is real content to render.
-  const waitingForFirstSync = $derived(
-    authed &&
-      bookmarks.status.lastSyncAt === null &&
-      !hasAnyBookmark &&
-      sortedFolders.length === 0,
-  );
+  // Round-2: keyed on THIS domain's syncedAt (store truth), never the engine
+  // global any-domain lastSyncAt.
+  const waitingForFirstSync = $derived(authed && bookmarks.syncedAt === null && emptyList);
   // Same skeleton for the blank window after sync while the quran catalog is
   // still loading (rows/folders exist but cannot render yet).
   const firstSyncPending = $derived(waitingForFirstSync || (authed && quranData === null));
@@ -340,11 +347,14 @@
       <h1 class="text-[28px] font-medium leading-tight tracking-[-0.02em] text-foreground"
         >{copy.title}</h1
       >
-      {#if authed}
+      {#if authUnknown}
+        <!-- Neutral: the auth probe is in flight; no sync truth and no anon note yet. -->
+      {:else if authed}
         <SyncIndicator
           copy={copy}
           status={bookmarks.status}
           online={online.online}
+          syncedAt={bookmarks.syncedAt}
           enqueueError={bookmarks.enqueueError}
         />
       {:else}
@@ -366,7 +376,13 @@
       </div>
     {/if}
 
-    {#if authed}
+    {#if authUnknown}
+      <!-- Round-2: signed-in cold load — neutral skeleton while the auth probe
+           is in flight, never the anon sign-in view. -->
+      <div class="mt-6 flex flex-col gap-3" role="status">
+        {@render loadingRows()}
+      </div>
+    {:else if authed}
       {#if firstSyncPending}
         <div class="mt-6 flex flex-col gap-3" role="status">
           {@render loadingRows()}
@@ -376,9 +392,10 @@
             <p class="max-w-[70ch] text-caption leading-relaxed text-muted">{copy.offline}</p>
           {/if}
         </div>
-      {:else if quranData !== null && !hasAnyBookmark && sortedFolders.length === 0}
-        {@render emptyState(copy.empty)}
       {:else if quranData !== null}
+        {#if emptyList}
+          {@render emptyState(copy.emptyPage)}
+        {/if}
         <FoldersPanel
           {copy}
           folders={sortedFolders}
@@ -450,42 +467,44 @@
           </ul>
         {/snippet}
 
-        <div class="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2">
-          <span class="flex items-center gap-1.5">
-            <label for="bookmarks-sort" class="text-caption text-muted">{copy.sortLabel}</label>
-            <select
-              id="bookmarks-sort"
-              value={sortMode}
-              class="h-8 rounded-lg border border-border-strong bg-surface px-2 text-[12.5px] text-foreground-secondary transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-              onchange={(event) => {
-                sortMode = (event.currentTarget as HTMLSelectElement).value as SortMode;
-              }}
-            >
-              <option value="date">{copy.sortDate}</option>
-              <option value="folder">{copy.sortFolder}</option>
-              <option value="surah">{copy.sortSurah}</option>
-            </select>
-          </span>
-          <span class="flex items-center gap-1.5">
-            <label for="bookmarks-folder-filter" class="text-caption text-muted"
-              >{copy.filterLabel}</label
-            >
-            <select
-              id="bookmarks-folder-filter"
-              value={folderFilter}
-              class="h-8 rounded-lg border border-border-strong bg-surface px-2 text-[12.5px] text-foreground-secondary transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-              onchange={(event) => {
-                folderFilter = (event.currentTarget as HTMLSelectElement).value;
-              }}
-            >
-              <option value="all">{copy.filterAll}</option>
-              <option value="unfiled">{copy.unfiled}</option>
-              {#each sortedFolders as folder (folder.id)}
-                <option value={folder.id}>{folder.name}</option>
-              {/each}
-            </select>
-          </span>
-        </div>
+        {#if !emptyList}
+          <div class="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2">
+            <span class="flex items-center gap-1.5">
+              <label for="bookmarks-sort" class="text-caption text-muted">{copy.sortLabel}</label>
+              <select
+                id="bookmarks-sort"
+                value={sortMode}
+                class="h-8 rounded-lg border border-border-strong bg-surface px-2 text-[12.5px] text-foreground-secondary transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                onchange={(event) => {
+                  sortMode = (event.currentTarget as HTMLSelectElement).value as SortMode;
+                }}
+              >
+                <option value="date">{copy.sortDate}</option>
+                <option value="folder">{copy.sortFolder}</option>
+                <option value="surah">{copy.sortSurah}</option>
+              </select>
+            </span>
+            <span class="flex items-center gap-1.5">
+              <label for="bookmarks-folder-filter" class="text-caption text-muted"
+                >{copy.filterLabel}</label
+              >
+              <select
+                id="bookmarks-folder-filter"
+                value={folderFilter}
+                class="h-8 rounded-lg border border-border-strong bg-surface px-2 text-[12.5px] text-foreground-secondary transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                onchange={(event) => {
+                  folderFilter = (event.currentTarget as HTMLSelectElement).value;
+                }}
+              >
+                <option value="all">{copy.filterAll}</option>
+                <option value="unfiled">{copy.unfiled}</option>
+                {#each sortedFolders as folder (folder.id)}
+                  <option value={folder.id}>{folder.name}</option>
+                {/each}
+              </select>
+            </span>
+          </div>
+        {/if}
 
         {#if sortMode === "folder"}
           <div class="mt-6 flex flex-col gap-6">
@@ -520,7 +539,7 @@
           {@render loadingRows()}
         </div>
       {:else if anonRows.length === 0}
-        {@render emptyState(copy.empty)}
+        {@render emptyState(copy.emptyPage)}
       {:else}
         <ul class="mt-6 divide-y divide-border overflow-hidden rounded-md border border-border-strong bg-surface">
           {#each anonRows as row (row.key)}

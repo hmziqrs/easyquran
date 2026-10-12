@@ -42,7 +42,7 @@
   import { sessions } from "#lib/sessions/store.svelte.js";
   import {
     reader_bookmarks_ayah,
-    reader_bookmarks_empty,
+    reader_bookmarks_empty_page,
     reader_home_done,
     reader_home_edit,
     reader_home_hide,
@@ -98,7 +98,7 @@
     hidden: reader_home_hidden(undefined, msgOptions),
     recentsEmpty: reader_widget_recents_empty(undefined, msgOptions),
     recentsCount: reader_widget_recents_count(undefined, msgOptions),
-    bookmarksEmpty: reader_bookmarks_empty(undefined, msgOptions),
+    bookmarksEmpty: reader_bookmarks_empty_page(undefined, msgOptions),
     sessionsLabel: reader_sessions_label(undefined, msgOptions),
     sessionsNewPlaceholder: reader_sessions_new_placeholder(undefined, msgOptions),
     sessionsNewAdd: reader_sessions_new_add(undefined, msgOptions),
