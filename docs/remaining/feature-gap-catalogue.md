@@ -138,10 +138,10 @@ Uthmani, Simple-clean, IndoPak, Tajweed) with a script picker in Settings → Re
 schema v4); Tajweed markup renders as colored runs.
 
 **Remaining:** 15/16-line Mushaf layout (see [`mushaf-rendering-research.md`](../research/mushaf-rendering-research.md));
-per-source font controls; production IndoPak font compatibility. An OFL derivative now covers
-all nine PUA codes and ordinary corpus characters, with a development specimen. E004 in 17:7
-still fails browser bidi/shaping; exact edition provenance and qualified review remain open.
-See [`indopak-font-compatibility.md`](../indopak-font-compatibility.md). Quran DB remains immutable.
+per-source font controls; production IndoPak (script is production-disabled; its v4 OFL font
+covers every corpus character and passes desktop/Android verification, but exact edition
+provenance and qualified review remain open). See [`indopak.md`](../indopak.md). Quran DB remains
+immutable.
 
 ### R09 — Pin and compare verses — Missing · P1
 
@@ -313,7 +313,7 @@ already promises export as fallback.
 
 **EasyQuran today:** localStorage only; no download/upload/recovery flow.
 
-- [`content.ts`](../../web/src/lib/data/content.ts)
+- `web/messages/*.json` (formerly `web/src/lib/data/content.ts`)
 - [`reader-persistence.svelte.ts`](../../web/src/lib/stores/reader-persistence.svelte.ts)
 
 **Remaining:** documented portable schema; JSON export; validated import/merge/replace preview;

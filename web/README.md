@@ -41,9 +41,8 @@ DBs and packaged OFL compatibility font. Version 4 (SIL Lateef base, Quran.com-s
 boxes) serves both IndoPak reader modes.
 `?audit=all` covers every private occurrence; `?audit=flow` checks optional-ayah marks with
 original neighboring verses. All specimen variants return 404 in production.
-Build/audit/browser commands and evidence: [font tooling](../scripts/fonts/indopak/README.md),
-[compatibility report](../docs/indopak-font-compatibility.md),
-[deep audit and unresolved source differences](../docs/indopak-deep-audit.md).
+Build/audit/browser commands and evidence: [font tooling](../scripts/fonts/indopak/README.md);
+status, verification and unresolved source differences: [`docs/indopak.md`](../docs/indopak.md).
 
 Development-only quran.com parity specimen: `/design/qurancom`, comparing mirrored quran.com
 script text and fonts against our provisioned DBs per verse (`?script=`, `?verses=`); 404 in
@@ -82,7 +81,7 @@ unaffected. These previews return 404 in production and are linked from `/design
 - shadcn names declared twice (`:root` + `@theme inline`); one half -> renders unstyled.
 - no FOUC: `app.html` inline script applies theme pre-paint.
 - Firebase config hardcoded `lib/firebase/index.ts` (public by design). Push native in SW, no gstatic `importScripts`.
-- Image CI (`.github/workflows/images.yml`): web check/lint/test and dependency audit gate image
-  publication. Rust checks and dependency audit gate API publication. Both images build on arm64;
+- Image CI (`.github/workflows/images.yml`): builds both images on arm64;
   master publication triggers Dokploy redeployment. PRs cannot publish images.
+  Check/lint/test and dependency audits remain local checks.
 - Sidebar lists virtualized (`@tanstack/svelte-virtual`); only visible rows render.

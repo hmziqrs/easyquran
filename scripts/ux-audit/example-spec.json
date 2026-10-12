@@ -1,0 +1,43 @@
+{
+  "base": "http://localhost:5391",
+  "out": ".cache/ux-audit",
+  "shots": [
+    {
+      "name": "reader/overview-desktop",
+      "url": "/al-baqarah",
+      "delay": 2000,
+      "annotate": [{ "sel": "main h1", "label": "1 · surah title" }]
+    },
+    {
+      "name": "reader/overview-phone",
+      "url": "/al-baqarah",
+      "w": 390,
+      "h": 844,
+      "delay": 2000
+    },
+    {
+      "name": "reader/translated-phone-dark",
+      "url": "/al-baqarah/t/en/sahih",
+      "w": 390,
+      "h": 844,
+      "mode": "dark",
+      "delay": 2000
+    },
+    {
+      "name": "axe/reader-dark",
+      "url": "/al-baqarah",
+      "mode": "dark",
+      "axe": true,
+      "noShot": true
+    },
+    { "name": "axe/surah-index-ar", "url": "/ar/surah", "axe": true, "noShot": true },
+    {
+      "name": "reader/compare",
+      "stack": true,
+      "compose": [
+        { "src": ".cache/ux-audit/reader/overview-desktop.webp", "caption": "Desktop" },
+        { "src": ".cache/ux-audit/reader/overview-phone.webp", "caption": "Phone" }
+      ]
+    }
+  ]
+}

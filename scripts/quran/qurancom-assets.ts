@@ -90,7 +90,7 @@ const KFGQPC_LICENSE: QurancomLicense = {
   name: "KFGQPC Uthmanic Script HAFS (UthmanicHafs1Ver18)",
   status: "restricted",
   notice:
-    "KFGQPC asset; repo policy treats KFGQPC as restricted (docs/indopak-v4-verification-plan.md R12). Written permission needed before production use.",
+    "KFGQPC asset; repo policy treats KFGQPC as restricted (docs/indopak.md, requirement R12). Written permission needed before production use.",
 };
 
 const QURANWBW_LICENSE: QurancomLicense = {

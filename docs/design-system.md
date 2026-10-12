@@ -2,7 +2,7 @@
 
 > **The pill / cobalt system** — version 2.0 · August 2026
 > This document describes what is **in the code now**, not aspirations.
-> Migration history and per-phase record: `docs/plan/README.md` (completed 2026-08-31).
+> Migration history: [`history.md`](history.md#design-system-migration-landed-2026-08-31) (completed 2026-08-31).
 
 ---
 
@@ -34,7 +34,7 @@ Section numbers in this document are **stable anchors cited from source code**
 (`web/src/**` comments and `web/src/routes/layout.css` section markers cite e.g.
 "§4", "§61"). Numbers with no section here are v1 sections retired by the migration;
 their content, where still relevant, lives in the nearest numbered section below or in
-`docs/plan/README.md` and git history. Do not renumber.
+`docs/history.md` and git history. Do not renumber.
 
 ---
 
@@ -43,8 +43,7 @@ their content, where still relevant, lives in the nearest numbered section below
 - v1.0 (this document's predecessor) specified "Sacred Editorial" and was implemented
   in an earlier run: token file `web/src/routes/layout.css`, primitives in
   `web/src/lib/components/ui/**`, palette contract tests.
-- The 2026 migration (specs formerly `docs/plan/00`–`08`, now merged into
-  `docs/plan/README.md`) moved that system to the pill/cobalt
+- The 2026 migration (summarized in `docs/history.md`) moved that system to the pill/cobalt
   direction defined by two boards in the untracked `design/` directory:
   `PillLightCobalt.dc.html` (light) and `white-on-colour-deep-cobalt.html` (dark).
 - Phase order (plan 08): visual harness → hue tokens inert → neutral ground →

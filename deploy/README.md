@@ -31,11 +31,6 @@ Dokploy` → step 3).
 All CI runners use Ubuntu 26.04. Before publishing, CI loads the API image and runs
 its runtime linker against `ruxlog` to verify compatibility with Debian trixie.
 
-Publication also requires warning-free web check/lint/test, Bun audit, Rust format,
-strict Clippy, complete workspace tests and dependency policy checks. Rust CI uses
-1.98.1; the audit policy keeps the unpatched RSA lockfile finding visible and blocks
-publication if that crate becomes reachable in the shipped arm64 feature graph.
-
 **Manual fallback: a dev machine** (Apple Silicon → arm64 Ubuntu server, so same arch, no
 qemu), for when CI can't ship it:
 
@@ -89,12 +84,14 @@ fails on pull.
   external proxy network. The canonical compose; used by the Dokploy flow. It
   lives at the root because Dokploy writes/sources the `.env` relative to the
   compose file.
-- `fetch-quran-db.sh` (`just quran-fetch [arabic|all]`) — the dev/CI provisioner: fills
-  gitignored `db/` from the public R2 base with read-only HTTPS GETs, no credentials, keys
-  taken from the baked maps. `arabic` is what the web build's prerender needs; `all` adds
-  every translation sqlite. Publishing uses the single tracked root publisher,
-  `scripts/quran/upload.ts`, through `just upload-sqlite`. In `all` mode the local runtime
-  catalogue is generated from the tracked map, never downloaded as mutable authority.
+- `fetch-quran-db.sh` (`just quran-fetch [arabic|catalogue|all]`) — the dev/CI provisioner:
+  fills gitignored `db/` from the public R2 base with read-only HTTPS GETs, no credentials,
+  keys taken from the baked maps. `arabic` is what the web build's prerender needs; `all`
+  adds every translation sqlite (what `cargo test` reads); `catalogue` is offline and writes
+  only the generated runtime catalogue (the web sha-guard test's input). Publishing uses the
+  single tracked root publisher, `scripts/quran/upload.ts`, through `just upload-sqlite`.
+  The local runtime catalogue is generated from the tracked map, never downloaded as mutable
+  authority.
 - `provision-quran.sh` — the server-side counterpart, baked into the api image and run by
   the compose `quran-init` one-shot service: fills the `quran_data` volume from the public
   R2 base. File list comes from the baked `web/src/lib/data/translations.json` manifest
