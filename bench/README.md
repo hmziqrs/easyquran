@@ -115,7 +115,7 @@ Each family is its own benchmark run with its own targets and its own report row
 | `text-endpoints`     | `/[slug].md`, `/[slug].txt`, `/llms.txt`, `/sitemap.xml` | crawler/LLM surface                                                 |
 
 Reader paths are scheme A — prefix-less, no `/app` marker (legacy shapes 308) — and one URL per
-surah (no surah-local page tails); see `docs/quran-system.md` Part 5. Targets that use legacy
+surah (no surah-local page tails); see `documentation/quran-system.md` Part 5. Targets that use legacy
 shapes would measure the redirect table, not the reader.
 
 `arabic-prerendered` + `immutable-assets` serve as the control: they share the runtime and HTTP

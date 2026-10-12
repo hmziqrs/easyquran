@@ -1,5 +1,5 @@
 /**
- * Shared Puppeteer plumbing for the visual harness (docs/history.md — design-system migration; phase specs in git history).
+ * Shared Puppeteer plumbing for the visual harness (documentation/history.md — design-system migration; phase specs in git history).
  *
  * Every launch uses a throwaway profile under the OS temp dir — never the developer's own
  * Chrome, never a shared session — so captures cannot inherit extensions, logged-in state,

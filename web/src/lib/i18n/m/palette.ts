@@ -3,7 +3,7 @@
 // Global search palette group headings. Lazy: ships only inside the lazy palette chunk.
 //
 // 11 messages. Import this barrel, never
-// #lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
+// #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { palette_group_actions } from "#lib/paraglide/messages/palette_group_actions.js";
 export { palette_group_app_pages } from "#lib/paraglide/messages/palette_group_app_pages.js";

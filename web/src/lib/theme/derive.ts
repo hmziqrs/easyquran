@@ -170,7 +170,7 @@ function toNeutral(seed: Rgb): Rgb {
 }
 
 // A custom background seed overrides the §4 semantic contract's background/surface/foreground half
-// (docs/design-system.md §4) plus the legacy --bg/--line/--fg ramp it replaced.
+// (documentation/design-system.md §4) plus the legacy --bg/--line/--fg ramp it replaced.
 function backgroundTokens(raw: Rgb) {
   const seed = toNeutral(raw);
   const light = isLight(seed);

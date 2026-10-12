@@ -20,7 +20,7 @@ export default defineConfig({
     sortImports: {},
     sortTailwindcss: {},
     // quran.com mirror payloads must stay byte-verbatim (id + byte-size identity;
-    // docs/qurancom-mirror.md). Formatting them breaks verify — never remove.
+    // documentation/qurancom-mirror.md). Formatting them breaks verify — never remove.
     ignorePatterns: ["static/qurancom/**"],
   },
   lint: {

@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
 /**
- * Machine guard for the §19 badge / §33 filter-chip contract (docs/design-system.md):
+ * Machine guard for the §19 badge / §33 filter-chip contract (documentation/design-system.md):
  * 24px pill, first-match tones on semantic tokens, active state never color-only
  * (aria-pressed on the interactive variant).
  */

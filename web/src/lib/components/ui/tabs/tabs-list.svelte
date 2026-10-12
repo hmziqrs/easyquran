@@ -8,7 +8,7 @@
 		...restProps
 	}: TabsPrimitive.ListProps = $props();
 
-	/* §38 (docs/design-system.md) + plan 03 geometry: tabs are content destinations rendered
+	/* §38 (documentation/design-system.md) + plan 03 geometry: tabs are content destinations rendered
 	   as a row of PILL triggers (controls are 999px) — no container chrome, no hairline. */
 	const listClass = "inline-flex items-center gap-2 text-foreground-secondary";
 </script>

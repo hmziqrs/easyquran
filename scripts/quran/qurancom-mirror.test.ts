@@ -14,7 +14,7 @@ import {
   QURANCOM_STATIC_PREFIX,
 } from "./qurancom-assets.ts";
 
-const DOCS_PATH = fileURLToPath(new URL("../../docs/qurancom-mirror.md", import.meta.url));
+const DOCS_PATH = fileURLToPath(new URL("../../documentation/qurancom-mirror.md", import.meta.url));
 const LICENSE_STATUSES = ["cleared", "restricted", "unknown"];
 
 test("mirror asset ids are unique", () => {
@@ -66,12 +66,15 @@ test("size assertions compare baked sizes and skip unrecorded entries", () => {
 test("register doc mentions every restricted asset id and every catalogue id", async () => {
   const doc = await readFile(DOCS_PATH, "utf8");
   for (const asset of QURANCOM_ASSETS) {
-    assert.ok(doc.includes(asset.id), `docs/qurancom-mirror.md missing ${asset.id}`);
+    assert.ok(doc.includes(asset.id), `documentation/qurancom-mirror.md missing ${asset.id}`);
   }
   const restricted = QURANCOM_ASSETS.filter((asset) => asset.license.status === "restricted");
   assert.ok(restricted.length > 0, "expected at least one restricted asset");
   for (const asset of restricted) {
-    assert.ok(doc.includes(asset.id), `docs/qurancom-mirror.md missing restricted ${asset.id}`);
+    assert.ok(
+      doc.includes(asset.id),
+      `documentation/qurancom-mirror.md missing restricted ${asset.id}`,
+    );
   }
 });
 

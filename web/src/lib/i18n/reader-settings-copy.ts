@@ -98,7 +98,7 @@ export type ReaderSettingsCopy = TweaksResolvedCopy & {
  * Reader appearance panel copy. Loaded on first panel open, never eagerly: it spans the
  * reader-settings, controls, settings (offline-pack + notification toggle copy) and reader
  * namespaces, and nothing renders until the user opens the panel.
- * See docs/quran-system.md (Part 2, Message chunking).
+ * See documentation/quran-system.md (Part 2, Message chunking).
  */
 export function getReaderSettingsCopy(locale: UiLocale): ReaderSettingsCopy {
   const options = { locale } as const;

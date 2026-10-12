@@ -27,7 +27,7 @@ import { deriveTokens, tokensToCss, type CustomSeeds } from "#lib/theme/derive.j
 const STORAGE_KEY = "easyquran.prefs";
 
 const CUSTOM_PROPS = [
-  // §4 semantic contract (docs/design-system.md) — custom seeds override these directly…
+  // §4 semantic contract (documentation/design-system.md) — custom seeds override these directly…
   "--background",
   "--background-subtle",
   "--surface",

@@ -1,7 +1,7 @@
 import { QuranScript, type QuranScript as QuranScriptValue } from "../../data/quran-types.ts";
 
 /**
- * Tajweed markup view (docs/quran-system.md — ayah text stays verbatim).
+ * Tajweed markup view (documentation/quran-system.md — ayah text stays verbatim).
  *
  * The tajweed mushaf DB carries inline rule segments in `text`, byte-for-byte:
  * `[h:1468[ٱ]` — `[` + single rule letter + optional `:<id>` + `[` + colored

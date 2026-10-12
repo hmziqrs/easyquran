@@ -618,7 +618,7 @@ async fn health_ready_endpoint() {
     );
     assert!(
         body.get("sourceDigests").is_none(),
-        "health must not expose source digests — manual audit only (docs/quran-system.md — Hard rules)"
+        "health must not expose source digests — manual audit only (documentation/quran-system.md — Hard rules)"
     );
     assert_eq!(headers.get(header::CACHE_CONTROL).unwrap(), "no-store");
 }
@@ -1270,7 +1270,7 @@ async fn scripts_endpoint_carries_no_sha256() {
         assert!(
             row.get("sha256").is_none(),
             "scripts artifact must not carry sha256 — a source's identity is its id, never a hash \
-             (docs/quran-system.md — Hard rules); got {row}"
+             (documentation/quran-system.md — Hard rules); got {row}"
         );
     }
 }
@@ -1686,7 +1686,7 @@ async fn sources_rows_never_carry_sha256() {
         assert!(
             row.get("sha256").is_none(),
             "sources row must not carry sha256 — a source's identity is its id, never a hash \
-             (docs/quran-system.md — Hard rules); got {row}"
+             (documentation/quran-system.md — Hard rules); got {row}"
         );
     }
 }

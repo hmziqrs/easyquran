@@ -189,7 +189,7 @@
 
   // Dynamic import on purpose: the reader appearance panel's copy spans several message
   // namespaces (reader-settings, controls, settings, reader) and nothing renders until the user
-  // opens the panel. See docs/quran-system.md (Part 2, Message chunking).
+  // opens the panel. See documentation/quran-system.md (Part 2, Message chunking).
   const loadReaderSettingsCopy = async () => {
     const { getReaderSettingsCopy } = await import("#lib/i18n/reader-settings-copy.js");
     return getReaderSettingsCopy(copy.locale);

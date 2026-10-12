@@ -47,7 +47,7 @@ export type ThemeMode = "dark" | "light";
 export type AccentId = "emerald" | "gold" | "azure" | "plum";
 export type SurfaceId = "ink" | "paper" | "slate" | "mocha" | "contrast";
 
-// ── Design-system palette + appearance model (docs/design-system.md §4, §25, §59) ──────────
+// ── Design-system palette + appearance model (documentation/design-system.md §4, §25, §59) ──────────
 // `palette` (sacred/ink/sepia/sapphire) and `mode` (light/dark/system) are separate settings.
 // The legacy theme/surface/accent prefs above stay exported because settings-document.ts and the
 // i18n copy resolvers still consume them; they are synced from the new fields, never the reverse.

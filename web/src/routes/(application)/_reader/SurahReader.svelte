@@ -150,7 +150,7 @@
   const sourceId = $derived(initial.normalization.sourceId);
   const routeContext = $derived(surahRouteContext(sourceId));
   const isTranslationSource = $derived(routeContext.kind !== "arabic");
-  // Arabic reads serve the persisted script preference (docs/quran-system.md):
+  // Arabic reads serve the persisted script preference (documentation/quran-system.md):
   // the SSG first paint is uthmani; hydration upgrades pages through the
   // worker/API ladder with the preferred variant corpus.
   const readSourceId = $derived(isTranslationSource ? sourceId : reader.arabicScript);

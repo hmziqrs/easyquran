@@ -2,7 +2,7 @@ import { browser } from "$app/env";
 
 import { asNumber, asObject, asString, readJSON, writeJSON } from "#lib/storage/index.js";
 
-/** Homepage widget layout (Feature 5). Local-only per §11.3: `easyquran.home`, never synced — per-device widgets need no sync policy (settings-system.md §7 gap stays moot). */
+/** Homepage widget layout (Feature 5). Local-only per §11.3: `easyquran.home`, never synced — per-device widgets need no sync policy (documentation/settings-system.md §7 gap stays moot). */
 
 const STORAGE_KEY = "easyquran.home";
 const SCHEMA_VERSION = 1;

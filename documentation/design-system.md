@@ -34,7 +34,7 @@ Section numbers in this document are **stable anchors cited from source code**
 (`web/src/**` comments and `web/src/routes/layout.css` section markers cite e.g.
 "§4", "§61"). Numbers with no section here are v1 sections retired by the migration;
 their content, where still relevant, lives in the nearest numbered section below or in
-`docs/history.md` and git history. Do not renumber.
+`documentation/history.md` and git history. Do not renumber.
 
 ---
 
@@ -43,7 +43,7 @@ their content, where still relevant, lives in the nearest numbered section below
 - v1.0 (this document's predecessor) specified "Sacred Editorial" and was implemented
   in an earlier run: token file `web/src/routes/layout.css`, primitives in
   `web/src/lib/components/ui/**`, palette contract tests.
-- The 2026 migration (summarized in `docs/history.md`) moved that system to the pill/cobalt
+- The 2026 migration (summarized in `documentation/history.md`) moved that system to the pill/cobalt
   direction defined by two boards in the untracked `design/` directory:
   `PillLightCobalt.dc.html` (light) and `white-on-colour-deep-cobalt.html` (dark).
 - Phase order (plan 08): visual harness → hue tokens inert → neutral ground →

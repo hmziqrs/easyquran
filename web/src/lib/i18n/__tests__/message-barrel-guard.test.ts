@@ -47,7 +47,7 @@ describe("message barrel boundaries", () => {
 
     expect(
       offenders.map((file) => relative(SRC, file)),
-      "import a namespace from #lib/i18n/m/* instead — see docs/quran-system.md (Part 2, Message chunking)",
+      "import a namespace from #lib/i18n/m/* instead — see documentation/quran-system.md (Part 2, Message chunking)",
     ).toEqual([]);
   });
 

@@ -90,7 +90,7 @@ const KFGQPC_LICENSE: QurancomLicense = {
   name: "KFGQPC Uthmanic Script HAFS (UthmanicHafs1Ver18)",
   status: "restricted",
   notice:
-    "KFGQPC asset; repo policy treats KFGQPC as restricted (docs/indopak.md, requirement R12). Written permission needed before production use.",
+    "KFGQPC asset; repo policy treats KFGQPC as restricted (documentation/indopak.md, requirement R12). Written permission needed before production use.",
 };
 
 const QURANWBW_LICENSE: QurancomLicense = {
@@ -165,7 +165,7 @@ export const QURANCOM_ASSETS = [
     KFGQPC_LICENSE,
   ),
 
-  // IndoPak Nastaleeq (QuranWBW) — restricted, see docs/qurancom-mirror.md.
+  // IndoPak Nastaleeq (QuranWBW) — restricted, see documentation/qurancom-mirror.md.
   fontAsset(
     "font-indopak-nastaleeq-waqf-lazim-v4.2.1-woff2",
     "quran/hafs/nastaleeq/indopak/indopak-nastaleeq-waqf-lazim-v4.2.1.woff2",

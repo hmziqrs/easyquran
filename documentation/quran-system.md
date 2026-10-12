@@ -273,7 +273,7 @@ unclaimed or multiply claimed keys fail generation.
   `Cache-Control: private, no-store`; public Quran routes keep their immutable/public policy.
 - Login, logout and account switch await service-worker acknowledgement while deleting page and
   data caches; OPFS Quran DBs and the offline pack remain. Offline sync queues are partitioned per
-  account (see [`next-features.md`](./next-features.md) §9.5).
+  account (see [`next-features.md`](../docs/next-features.md) §9.5).
 - Session audit rows bind to opaque tower session ids; rotation updates the binding before
   success, and binding failure destroys the rotated session. Logout revokes audit and live state.
 - One immutable `AllowedOrigins` value, parsed at boot, is shared by CORS and the origin guard.

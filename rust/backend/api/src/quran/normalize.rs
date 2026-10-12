@@ -40,7 +40,7 @@ fn is_combining_mark(ch: char) -> bool {
     // U+0653/U+0654, tatweel, superscript alef) so a bare query still matches Uthmani's
     // decomposed alef-madda. Standalone Quranic ornaments (U+06D6–U+06DC rub-el-hizb U+06DE,
     // small waw/yeh U+06E5/U+06E6, sajda U+06E9, signs U+06EA–U+06ED) are KEPT — they are
-    // searchable tokens (۞→199, ۩→15). See docs/quran-system.md (Normalization).
+    // searchable tokens (۞→199, ۩→15). See documentation/quran-system.md (Normalization).
     matches!(
         ch,
         '\u{064B}'

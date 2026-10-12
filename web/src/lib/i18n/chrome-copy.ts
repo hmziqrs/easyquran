@@ -57,7 +57,7 @@ import { bookmarksPageHref } from "#lib/i18n/reader.js";
 /**
  * Site chrome: the copy every marketing page renders. This is the localization floor — everything
  * else must live in a per-page namespace so a page never downloads copy it does not render.
- * See docs/quran-system.md (Part 2, Message chunking).
+ * See documentation/quran-system.md (Part 2, Message chunking).
  */
 export interface ChromeResolvedCopy {
   locale: MarketingLocale;

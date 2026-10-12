@@ -1,1 +1,14 @@
-vp staged
+#!/bin/sh
+# documentation/ is human-owned: refuse staged changes there unless the
+# owner explicitly commits with DOCS_OVERRIDE=1 (see AGENTS.md Hard rules).
+if [ -z "$DOCS_OVERRIDE" ]; then
+  staged=$(git diff --cached --name-only -- documentation/ 2>/dev/null)
+  if [ -n "$staged" ]; then
+    echo "pre-commit: documentation/ is human-owned and untouchable." >&2
+    echo "Refusing staged change to:" >&2
+    printf '%s\n' "$staged" | sed 's/^/  /' >&2
+    echo "Owner bypass: DOCS_OVERRIDE=1 git commit ..." >&2
+    exit 1
+  fi
+fi
+exec vp staged

@@ -749,7 +749,7 @@ function main() {
 
   const report = {
     phase: "B",
-    plan: "docs/indopak.md#verification",
+    plan: "documentation/indopak.md#verification",
     command: "node scripts/fonts/indopak/segmentation_audit.mjs",
     database_id: "quran-indopak",
     database_open_mode: "ro&immutable=1",

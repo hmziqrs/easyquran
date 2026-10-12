@@ -374,7 +374,7 @@ async function ensureArabicSource(sourceId: QuranSourceId): Promise<void> {
 // Boot may have demoted the preferred reader artifact to the fallback after a failed
 // download. Reads that still name the demoted id then serve the fallback seat instead
 // of erroring into the API ladder, which cannot serve that script either until the
-// rust Script::parse learns it (docs/quran-system.md Part 5). If a later on-demand
+// rust Script::parse learns it (documentation/quran-system.md Part 5). If a later on-demand
 // stage re-registers the preferred source, the seat mapping stops applying.
 function readerSeat(sourceId: QuranSourceId): QuranSourceId {
   if (

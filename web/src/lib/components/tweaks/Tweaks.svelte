@@ -29,7 +29,7 @@
      * Resolves the panel copy on first open. Deliberately a loader, not a value: the appearance
      * panel owns ~40 messages that nothing renders until the user asks for it, and eagerly
      * resolving them put every one of those strings in every page's bundle.
-     * See docs/quran-system.md (Part 2, Message chunking).
+     * See documentation/quran-system.md (Part 2, Message chunking).
      */
     loadCopy: () => Promise<TweaksResolvedCopy>;
     showReaderTools?: boolean;

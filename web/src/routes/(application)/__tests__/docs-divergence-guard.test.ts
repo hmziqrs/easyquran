@@ -6,7 +6,10 @@ import { describe, expect, it } from "vite-plus/test";
 function findRepoRoot(): string {
   let dir = process.cwd();
   for (let i = 0; i < 12; i += 1) {
-    if (existsSync(resolve(dir, "docs/quran-system.md")) && existsSync(resolve(dir, "AGENTS.MD"))) {
+    if (
+      existsSync(resolve(dir, "documentation/quran-system.md")) &&
+      existsSync(resolve(dir, "AGENTS.MD"))
+    ) {
       return dir;
     }
     dir = resolve(dir, "..");
@@ -15,7 +18,7 @@ function findRepoRoot(): string {
 }
 
 const ROOT = findRepoRoot();
-const QURAN_SYSTEM = readFileSync(resolve(ROOT, "docs/quran-system.md"), "utf8");
+const QURAN_SYSTEM = readFileSync(resolve(ROOT, "documentation/quran-system.md"), "utf8");
 const AGENTS = readFileSync(resolve(ROOT, "AGENTS.MD"), "utf8");
 
 const TRANSLATED_MARKER = /translated|\/app\/t\/|\/\[surah\]\/t\/|\/t\/\[lang\]/i;
@@ -93,21 +96,21 @@ function repoFileLinks(
 }
 
 describe("docs divergence guard (W9)", () => {
-  it("docs/quran-system.md never claims translated routes are SSG/prerendered", () => {
+  it("documentation/quran-system.md never claims translated routes are SSG/prerendered", () => {
     expect(
       translatedSsgClaims(QURAN_SYSTEM),
       "translated-as-SSG claim leaked into quran-system.md",
     ).toEqual([]);
   });
 
-  it("docs/quran-system.md never claims bare /app/** is prerendered (unscoped)", () => {
+  it("documentation/quran-system.md never claims bare /app/** is prerendered (unscoped)", () => {
     expect(
       bareAppPrerenderClaims(QURAN_SYSTEM),
       "unscoped /app/** prerender claim leaked into quran-system.md",
     ).toEqual([]);
   });
 
-  it("docs/quran-system.md never asserts an unsupported artifact-safety claim (W9 #7)", () => {
+  it("documentation/quran-system.md never asserts an unsupported artifact-safety claim (W9 #7)", () => {
     expect(
       artifactSafetyClaims(QURAN_SYSTEM),
       "unsupported artifact-safety claim (remote metadata selecting bytes / partial DB becoming active) leaked into quran-system.md",
@@ -124,8 +127,8 @@ describe("docs divergence guard (W9)", () => {
     }
   });
 
-  it("docs/quran-system.md markdown links to repo files resolve", () => {
-    const links = repoFileLinks(QURAN_SYSTEM, resolve(ROOT, "docs"));
+  it("documentation/quran-system.md markdown links to repo files resolve", () => {
+    const links = repoFileLinks(QURAN_SYSTEM, resolve(ROOT, "documentation"));
     for (const l of links) {
       expect(
         existsSync(l.path),

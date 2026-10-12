@@ -9,7 +9,7 @@
 # downloads artifacts from. No credentials, no S3 client, no aws CLI: read-only GETs over
 # HTTPS. Publishing still goes exclusively through `just upload-sqlite`.
 #
-# Keys come from the baked maps, which are the authority (docs/quran-system.md):
+# Keys come from the baked maps, which are the authority (documentation/quran-system.md):
 #   tanzil/arabic/<file>.sqlite          web/src/lib/quran/view/source-profiles.ts
 #   tanzil/quran-data.xml
 #   tanzil/translations/sqlite/<id>.sqlite   web/src/lib/data/translations.json (field 6)
@@ -61,7 +61,7 @@ get() {
 
 # get_optional <r2-key> <local-path> — same contract as get, but a missing object is a
 # warn+skip instead of a hard failure. Used for the annotated Uthmani artifact, whose R2
-# upload is still pending (docs/quran-system.md Part 5): provisioning must keep working
+# upload is still pending (documentation/quran-system.md Part 5): provisioning must keep working
 # on the plain sources until `just upload-sqlite` publishes it. Whatever DOES land on
 # disk is still gated by the caller's assert_sqlite/assert_size — a present but wrong
 # file never passes. Returns non-zero when the object was skipped.

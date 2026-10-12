@@ -74,4 +74,4 @@ A standalone HTML gallery (`9d9c2ae8`) compared "color cards"
 (solid accent cards, 18–20px corners) and "sharper outlines" (white cards, colored edges, 12px)
 for the homepage and reader, with Nunito vs Manrope. **Not adopted:** its weights above 600 and
 12–20px radii violate the design-system guards (§10/§13). Homepage/card work continues under v2
-constraints in [`next-features.md`](next-features.md) Feature 5.
+constraints in [`next-features.md`](../docs/next-features.md) Feature 5.

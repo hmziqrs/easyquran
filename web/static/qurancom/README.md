@@ -2,7 +2,7 @@
 
 Committed mirror of quran.com's script-level assets (script JSON + fonts), used as the audit
 reference for parity checks. Catalogue, licence register, scope, and production policy live in
-[`docs/qurancom-mirror.md`](../../../docs/qurancom-mirror.md).
+[`documentation/qurancom-mirror.md`](../../../documentation/qurancom-mirror.md).
 
 Refresh:
 

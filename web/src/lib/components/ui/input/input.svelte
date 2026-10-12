@@ -19,7 +19,7 @@
 		...restProps
 	}: Props = $props();
 
-	/* §37 (docs/design-system.md) + plan 03 geometry: 44px height, PILL radius (controls are
+	/* §37 (documentation/design-system.md) + plan 03 geometry: 44px height, PILL radius (controls are
 	   999px), surface background, border, focus = 2px --focus-ring outline with 2px offset
 	   (never removed without replacement). px-4 keeps clear of the pill curve.
 	   Semantic tokens only (§61) — works across all 4 palettes × light/dark. */

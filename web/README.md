@@ -1,6 +1,6 @@
 # EasyQuran — web
 
-SvelteKit 3 + Svelte 5 (runes). TS strict. Tailwind v4. shadcn-svelte. Firebase. Vite+ (`vp`). `adapter-bun`: Arabic reader routes stay prerendered; translation routes render on demand and use bounded 7-day disk-TTL HTML caching (see `docs/quran-system.md`). Build and serve both run on Bun — `bun run build` shells out to `bun run --bun vp build` (adapter-bun's `adapt()` calls `Bun.build`) and `bun start` is `bun server.ts`, so builds need bun ≥ 1.4 on PATH even from Node shells.
+SvelteKit 3 + Svelte 5 (runes). TS strict. Tailwind v4. shadcn-svelte. Firebase. Vite+ (`vp`). `adapter-bun`: Arabic reader routes stay prerendered; translation routes render on demand and use bounded 7-day disk-TTL HTML caching (see `documentation/quran-system.md`). Build and serve both run on Bun — `bun run build` shells out to `bun run --bun vp build` (adapter-bun's `adapt()` calls `Bun.build`) and `bun start` is `bun server.ts`, so builds need bun ≥ 1.4 on PATH even from Node shells.
 
 ## Run
 
@@ -42,12 +42,12 @@ boxes) serves both IndoPak reader modes.
 `?audit=all` covers every private occurrence; `?audit=flow` checks optional-ayah marks with
 original neighboring verses. All specimen variants return 404 in production.
 Build/audit/browser commands and evidence: [font tooling](../scripts/fonts/indopak/README.md);
-status, verification and unresolved source differences: [`docs/indopak.md`](../docs/indopak.md).
+status, verification and unresolved source differences: [`documentation/indopak.md`](../documentation/indopak.md).
 
 Development-only quran.com parity specimen: `/design/qurancom`, comparing mirrored quran.com
 script text and fonts against our provisioned DBs per verse (`?script=`, `?verses=`); 404 in
 production. Mirror verify/fetch: `bun run quran:mirror` (root); parity report: `bun run quran:audit`
-(root); lane and licence register: [quran.com reference mirror](../docs/qurancom-mirror.md).
+(root); lane and licence register: [quran.com reference mirror](../documentation/qurancom-mirror.md).
 
 Development-only homepage comparisons: `/design/home/cobalt`, `/design/home/mono`,
 `/design/home/slate`, and `/design/home/berry`. Each uses baked surah metadata, with

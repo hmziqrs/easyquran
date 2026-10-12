@@ -1,7 +1,7 @@
 # UX audit capture harness
 
 Screenshots, annotations, axe scans and DOM probes for a UX audit — the method is in
-[`docs/ux-audit-playbook.md`](../../docs/ux-audit-playbook.md). `shoot.mjs` drives headless Chrome
+[`documentation/ux-audit-playbook.md`](../../documentation/ux-audit-playbook.md). `shoot.mjs` drives headless Chrome
 through the Puppeteer copy already installed in `web/node_modules` — nothing extra to install.
 
 ## Run

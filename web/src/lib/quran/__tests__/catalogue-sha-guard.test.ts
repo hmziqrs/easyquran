@@ -7,7 +7,7 @@ function read(rel: string): string {
   return readFileSync(path.resolve(process.cwd(), rel), "utf8");
 }
 
-describe("sha256 regression guard (docs/quran-system.md — Hard rules)", () => {
+describe("sha256 regression guard (documentation/quran-system.md — Hard rules)", () => {
   it("published catalogues carry no sha256", () => {
     for (const rel of [
       "src/lib/data/translations.json",

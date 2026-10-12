@@ -165,7 +165,7 @@ import { getLocale } from "#lib/paraglide/runtime.js";
 
 export type { ReaderSettingsCopy };
 
-/** Palette + appearance option copy (docs/design-system.md §25/§59). */
+/** Palette + appearance option copy (documentation/design-system.md §25/§59). */
 export interface AppearancePanelCopy {
   readonly appearanceLabel: string;
   readonly paletteLabel: string;
@@ -337,7 +337,7 @@ export interface SettingsCopy {
 /**
  * Settings page copy. Loaded only by the settings route, never eagerly: the `settings` namespace
  * is a lazy chunk, and the appearance section reuses the reader-settings resolver so its messages
- * are not duplicated under new keys. See docs/quran-system.md (Part 2, Message chunking).
+ * are not duplicated under new keys. See documentation/quran-system.md (Part 2, Message chunking).
  */
 // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.
 export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): SettingsCopy {

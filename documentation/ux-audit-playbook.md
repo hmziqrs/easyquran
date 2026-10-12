@@ -2,7 +2,7 @@
 
 How to audit every reader-facing screen and write findings someone can fix and re-check. Run it
 after a big UI change lands (next: once the next-features UI merges). Capture tooling:
-[`scripts/ux-audit/`](../scripts/ux-audit/README.md).
+[`scripts/ux-audit/`](../../scripts/ux-audit/README.md).
 
 The one question for every screen: **would a first-time, non-technical reader — on a phone, maybe
 older, maybe Arabic-first, maybe unable to read Arabic — understand it at once?**

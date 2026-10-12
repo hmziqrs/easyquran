@@ -88,7 +88,7 @@ export interface SearchCopy {
 /**
  * Search page copy. Loaded only by the search route subtree, never eagerly: the
  * `search` namespace is a lazy chunk. Import from the search route and its tests
- * only — see docs/quran-system.md (Part 2, Message chunking).
+ * only — see documentation/quran-system.md (Part 2, Message chunking).
  */
 // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.
 export function getSearchCopy(locale: UiLocale = getLocale() as UiLocale): SearchCopy {

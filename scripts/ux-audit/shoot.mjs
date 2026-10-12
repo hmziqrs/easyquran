@@ -1,4 +1,4 @@
-// Screenshot + axe + probe harness for UX audits (docs/ux-audit-playbook.md; README.md in this folder).
+// Screenshot + axe + probe harness for UX audits (documentation/ux-audit-playbook.md; README.md in this folder).
 // usage (dev server running on :5391):  node scripts/ux-audit/shoot.mjs scripts/ux-audit/example-spec.json
 // spec: { base, out, shots: [{ name, url, w, h, mode, palette, dpr, full, prefs, reader, actions, annotate, probe, axe, clip, selector }] }
 import { createRequire } from "node:module";

@@ -136,7 +136,7 @@ export interface BookmarksCopy {
  * Bookmarks page copy. Keys live in the `reader` namespace (reader_bookmarks_*
  * prefix): the page mounts inside the reader app shell, which already downloads
  * that namespace, so no new download boundary is warranted. See
- * docs/quran-system.md (Part 2, Message chunking).
+ * documentation/quran-system.md (Part 2, Message chunking).
  */
 // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.
 export function getBookmarksCopy(locale: UiLocale = getLocale() as UiLocale): BookmarksCopy {

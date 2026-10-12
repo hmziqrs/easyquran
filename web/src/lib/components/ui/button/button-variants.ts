@@ -3,7 +3,7 @@ import { tv, type VariantProps } from "tailwind-variants";
 import { rampTwMergeConfig } from "#lib/utils.js";
 
 /**
- * §35 (docs/design-system.md) + plan 03 geometry/state matrix: primary/secondary/ghost
+ * §35 (documentation/design-system.md) + plan 03 geometry/state matrix: primary/secondary/ghost
  * roles, 44px min target on the default size, PILL radius (controls are 999px), primary
  * text pairs with `--primary-foreground` — never an assumed white. Hover = token hover
  * fill, active = translate-y-px, focus-visible = 2px --focus-ring outline at 2px offset,

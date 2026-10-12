@@ -6,7 +6,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { parseOklch } from "../../lib/theme/derive.ts";
 
 /**
- * Machine guard for the §4 semantic contract (docs/design-system.md): every one of the 8
+ * Machine guard for the §4 semantic contract (documentation/design-system.md): every one of the 8
  * `[data-palette="X"][data-mode="Y"]` blocks in layout.css must define the full token set,
  * and the retired `[data-theme]`/`[data-surface]`/`[data-accent]` selectors must stay gone.
  */

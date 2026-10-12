@@ -2,7 +2,7 @@
 
 Overview of the IndoPak script font and renderer. Machine-readable evidence is tracked under
 `scripts/fonts/indopak/` (`*-report.json`, `mapping.json`, `upstream.json`,
-`outputs.json`); build and audit commands are in its [README](../scripts/fonts/indopak/README.md).
+`outputs.json`); build and audit commands are in its [README](../../scripts/fonts/indopak/README.md).
 
 ## Status
 
@@ -20,7 +20,7 @@ Overview of the IndoPak script font and renderer. Machine-readable evidence is t
   `indopak-naveed-7d3c21e0`) is immutable; audits open it `mode=ro&immutable=1`. DOM text is the
   exact DB string — no normalization, no substitution, ever.
 - No Quran-data hashing in any automated path. Before/after preservation of the five Arabic DBs
-  was a manual observation ([`preservation-report.json`](../scripts/fonts/indopak/preservation-report.json)).
+  was a manual observation ([`preservation-report.json`](../../scripts/fonts/indopak/preservation-report.json)).
 - No restricted font asset (QuranWBW, PDMS, KFGQPC) enters the repo or build; reference fonts
   are inspected outside the repository only.
 
@@ -30,7 +30,7 @@ Overview of the IndoPak script font and renderer. Machine-readable evidence is t
 with 1,383 occurrences, 223 context classes. Source: Naveed Ahmad's `Quran-text` (importer trims
 whitespace); exact original download revision and printed edition were **not recovered**.
 
-**Font.** Built by [`build.py`](../scripts/fonts/indopak/build.py) from SIL Lateef 4.400
+**Font.** Built by [`build.py`](../../scripts/fonts/indopak/build.py) from SIL Lateef 4.400
 SemiBold (OFL; South Asian letterforms) — Quran.com's own face (AlQuran IndoPak by QuranWBW)
 forbids modification. The nine private codes map onto Lateef's genuine Quranic glyphs (E003
 subscript alef, E004 inverted damma, E01A zain, E01B sad, E01C qaf, E01E qif, E01F waqfa, E021
@@ -51,7 +51,7 @@ translated error with reload. IndoPak copy events serialize exact DOM ranges.
 
 Acceptance requirements and v4 outcome (evidence under the ignored local
 `.cache/indopak-v4/2026-10-06-run2/`; summary in
-[`v4-verification-report.json`](../scripts/fonts/indopak/v4-verification-report.json)):
+[`v4-verification-report.json`](../../scripts/fonts/indopak/v4-verification-report.json)):
 
 | #   | Requirement         | Outcome                                                                                          |
 | --- | ------------------- | ------------------------------------------------------------------------------------------------ |

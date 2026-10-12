@@ -1,7 +1,7 @@
 // Types and route helpers for the marketing surface. Deliberately message-free: every module that
 // only needs a type or a URL must be able to import this without pulling a single localized string.
 // Resolved copy lives in the per-namespace modules — chrome-copy.ts, appearance-copy.ts,
-// landing-copy.ts. See docs/quran-system.md (Part 2, Message chunking).
+// landing-copy.ts. See documentation/quran-system.md (Part 2, Message chunking).
 import type { NotificationsCopy } from "#lib/components/notifications/notifications-copy.js";
 import type { OfflinePackCopy } from "#lib/components/status/offline-pack-copy.js";
 import type { AccentId, SurfaceId, ThemeMode } from "#lib/config/site.js";

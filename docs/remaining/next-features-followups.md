@@ -29,14 +29,14 @@ the parked docs-followups salvage…") — diff that file against current master
 Paths removed by the 2026-10-12 docs cleanup, still cited by the doc:
 
 - `research/ux-audit` (folder deleted; live replacement = `scripts/ux-audit/` harness +
-  `docs/ux-audit-playbook.md`) — lines 9, 538, 556, 587, 1161, 1300, 1309, 1327, 1329, 1331,
+  `documentation/ux-audit-playbook.md`) — lines 9, 538, 556, 587, 1161, 1300, 1309, 1327, 1329, 1331,
   1337, 1351
 - `plan/09-locale-suggest.md` → live: `docs/locale-suggest.md` — lines 10, 613, 1310, 1339, 1349
-- `docs/research/translation-empty-verses.md` → live: `docs/quran-system.md` "Sources and
+- `docs/research/translation-empty-verses.md` → live: `documentation/quran-system.md` "Sources and
   metadata" (lists the same 4 blank verses) — lines 100, 1317
-- `navigation-audit.md` / `url-scheme-a.md` → live: `docs/history.md` (navigation audit + URL
+- `navigation-audit.md` / `url-scheme-a.md` → live: `documentation/history.md` (navigation audit + URL
   scheme A, both implemented; rubʿ routes retired) — lines 446, 1318, 1345
-- `reader-virtualization.md` → live: `docs/quran-system.md` "Reader rendering" — lines 1177, 1320
+- `reader-virtualization.md` → live: `documentation/quran-system.md` "Reader rendering" — lines 1177, 1320
 - `security-audit-2026-10-11.md` / `security-audit-rounds-2026-10-11.md`, `plan/README.md`,
   `plans/remove-primary-translation.md`, `design-enhancements/` — §13/§14 area, lines 1315–1348
 
@@ -47,7 +47,7 @@ Paths removed by the 2026-10-12 docs cleanup, still cited by the doc:
    (`web/messages/en.json` `legal_terms_service_body`, `legal_terms_third_party_body`,
    `faq_offline_answer`) and no audio player exists. The tafsir half of C03 is resolved — see
    `remaining/copy-corrections.md` C03.
-3. `docs/ux-audit-playbook.md:94` points future audit output at the deleted
+3. `documentation/ux-audit-playbook.md:94` points future audit output at the deleted
    `docs/research/ux-audit/` folder — decide the new output home.
 4. `remaining/feature-gap-catalogue.md` R11 note: update when §11.5 (range permalink grammar) is
    decided.

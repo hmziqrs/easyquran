@@ -1,7 +1,7 @@
 import { tv, type VariantProps } from "tailwind-variants";
 
 /**
- * §36/§51 (docs/design-system.md): one line icon family (Lucide), icon sizes 18/20/24,
+ * §36/§51 (documentation/design-system.md): one line icon family (Lucide), icon sizes 18/20/24,
  * stroke ~1.75, 44×44 target on the default size. Icon geometry is forced onto the
  * slotted SVG via CSS ([&_svg]) so consumers cannot drift from the family sizing, and
  * CSS `stroke-width` overrides Lucide's presentation attribute. Semantic tokens only (§61).

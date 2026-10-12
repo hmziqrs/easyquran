@@ -145,7 +145,7 @@
       {/if}
 
       {#if showRecents}
-        <!-- Local-only history: pause stops recording, clear wipes the device list; never synced (docs/search-system.md §5.1). -->
+        <!-- Local-only history: pause stops recording, clear wipes the device list; never synced (documentation/search-system.md §5.1). -->
         <section aria-label={copy.recentsHeading} class="flex flex-col gap-2">
           <div class="flex items-center justify-between gap-3">
             <h2 class="px-1 text-[12px] font-medium text-muted">{copy.recentsHeading}</h2>

@@ -3,7 +3,7 @@
 // About page.
 //
 // 14 messages. Import this barrel, never
-// #lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
+// #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { about_credit_built_by } from "#lib/paraglide/messages/about_credit_built_by.js";
 export { about_credit_project_by } from "#lib/paraglide/messages/about_credit_project_by.js";

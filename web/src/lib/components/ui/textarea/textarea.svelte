@@ -10,7 +10,7 @@
 		...restProps
 	}: WithoutChildren<WithElementRef<HTMLTextareaAttributes>> = $props();
 
-	/* §37 (docs/design-system.md) applied to the multiline variant of the input contract:
+	/* §37 (documentation/design-system.md) applied to the multiline variant of the input contract:
 	   surface background, border, focus = 2px --focus-ring outline + offset. Plan 03
 	   geometry: the textarea is a multiline TEXT BLOCK, not a pill control — a 999px radius
 	   on a min-h-16 field renders as a lozenge — so it takes the 10px block radius

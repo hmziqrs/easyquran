@@ -8,7 +8,7 @@
 		...restProps
 	}: TabsPrimitive.TriggerProps = $props();
 
-	/* §38/§51 (docs/design-system.md) + plan 03 geometry/state matrix: 44px PILL targets
+	/* §38/§51 (documentation/design-system.md) + plan 03 geometry/state matrix: 44px PILL targets
 	   (controls are 999px), active destination = primary fill (data-[state=active] from
 	   bits-ui), hover = --surface-hover on the inactive state, visible --focus-ring focus,
 	   and the active state is carried by fill + color (never color alone). */

@@ -480,7 +480,7 @@ async function withSourceFallback<T>(args: SourceFallbackArgs<T>): Promise<T> {
 // source (reader routes, verse cache refresh). Set from the persisted reader
 // preference; the boot default stays the pinned plan source, `uthmani-annotated`
 // (worker boot degrades that seat to plain Uthmani when the artifact is
-// unavailable — docs/quran-system.md Part 1).
+// unavailable — documentation/quran-system.md Part 1).
 let preferredArabicSource: QuranSourceId = DEFAULT_QURAN_SOURCE_PLAN.reader;
 
 function defaultArabicSource(): QuranSourceId {
