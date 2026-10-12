@@ -427,6 +427,8 @@ describe("stale-CSRF clear + single retry (EC-15)", () => {
     // SAFETY: fetch spy records (url, init); call 3 is the retried original with the fresh token.
     const [retryUrl, retryInit] = fetchMock.mock.calls[3] as [string, RequestInit];
     expect(retryUrl).toBe("https://eq.test/api/bookmark/v1/sync");
+    // SAFETY: unsafeRequest builds headers as a flat Record<string, string> (never Headers or
+    // a tuple array), so the recorded init.headers carries the csrf-token key directly.
     expect((retryInit.headers as Record<string, string>)["csrf-token"]).toBe("fresh-2");
   });
 

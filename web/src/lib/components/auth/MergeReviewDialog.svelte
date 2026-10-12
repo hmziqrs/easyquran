@@ -30,9 +30,9 @@
   import { mergeReview, type MergeBookmarkRow } from "./merge-review.svelte";
 
   // §9.8 copy pass: catalog-driven strings (en + ar) replacing the English-only COPY block.
-  // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale()
-  // only ever returns a UiLocale at runtime.
   const copy = $derived.by(() => {
+    // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale()
+    // only ever returns a UiLocale at runtime.
     const locale = { locale: getLocale() as UiLocale };
     return {
       title: auth_merge_title(undefined, locale),

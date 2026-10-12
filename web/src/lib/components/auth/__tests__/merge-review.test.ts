@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { Bookmark } from "#lib/bookmarks/schema.js";
+import type { Bookmark, BookmarksMutation } from "#lib/bookmarks/schema.js";
 import { legacyMigratedKey } from "#lib/bookmarks/store.svelte.js";
 import {
   LOCAL_DEFAULT_SESSION_ID,
@@ -44,19 +44,16 @@ function seedBlob(entries: Record<string, number | null>): void {
   );
 }
 
-/** Minimal bookmark-mutation shape the rig records — the review never reads payloads back. */
-type WireBookmarkMutation = { kind: string; [field: string]: unknown };
-
 interface Rig {
   readonly review: MergeReview;
-  readonly enqueued: Array<{ domain: string; payload: SessionMutation | WireBookmarkMutation }>;
+  readonly enqueued: Array<{ domain: string; payload: SessionMutation | BookmarksMutation }>;
   setUnowned(count: number): void;
   /** The enqueue after `successes` durable ones rejects (simulated storage failure). */
   failAfter(successes: number): void;
 }
 
 function makeRig(accountBookmarks: readonly Bookmark[] = []): Rig {
-  const enqueued: Array<{ domain: string; payload: SessionMutation | WireBookmarkMutation }> = [];
+  const enqueued: Array<{ domain: string; payload: SessionMutation | BookmarksMutation }> = [];
   let unowned = 0;
   let failAfterCount = -1;
   const engine = {
@@ -65,7 +62,9 @@ function makeRig(accountBookmarks: readonly Bookmark[] = []): Rig {
         failAfterCount = -1;
         throw new Error("idb full");
       }
-      enqueued.push({ domain, payload: payload as SessionMutation | WireBookmarkMutation });
+      // SAFETY: test rig — the review only enqueues payloads that satisfy SessionMutation or
+      // BookmarksMutation (one per call site), so the generic P is exactly the recorded union.
+      enqueued.push({ domain, payload: payload as SessionMutation | BookmarksMutation });
       // SAFETY: test double — full SyncMutation shape; the review never reads it back.
       return {
         id: `m${enqueued.length}`,

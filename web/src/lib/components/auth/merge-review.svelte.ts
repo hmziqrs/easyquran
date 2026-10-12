@@ -292,6 +292,7 @@ export class MergeReview {
       const coords = parseVerseKey(key);
       if (coords === null) continue;
       const ms = savedAt[key];
+      // SAFETY: parseVerseKey(key) returned non-null above, so key matches the VerseKey `s:a` shape.
       rows.push({
         key: key as VerseKey,
         surah: coords.surah,
