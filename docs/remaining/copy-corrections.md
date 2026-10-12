@@ -40,19 +40,23 @@ to delete your account and its data" — there is still no self-service deletion
 
 ## C03 — Recitation and tafsir placeholders in Terms
 
-[`content.ts`](../../web/src/lib/data/content.ts) describes optional recitation audio and implies
+The former `content.ts` copy (now `web/messages/*.json`: `legal_terms_service_body`,
+`legal_terms_third_party_body`) describes optional recitation audio and implies
 translations/tafsir are credited beside each source.
 
-Actual behavior: no production audio player exists. Translation catalogue includes source details,
-but tafsir UI renders an explicit sample string from
-[`quran.ts`](../../web/src/lib/data/quran.ts), not a credited tafsir source.
+Actual behavior (2026-10-12): the tafsir half is resolved — two credited Arabic tafsir sources
+ship (`ar.jalalayn`, `ar.muyassar` in `web/src/lib/data/translations.json`, offered as
+"Commentary (tafsir)"; the FAQ `faq_translations_answer` already advertises them), and the old
+sample string in [`quran.ts`](../../web/src/lib/data/quran.ts) (`tafsirFor`) is unreferenced dead
+code. The recitation half stands: no production audio player exists.
 
-**Before release:** retain these statements only if production recitation and credited tafsir ship.
-Otherwise scope the service description to available sources and features.
+**Before release:** drop or clearly defer the recitation-audio statements; the tafsir/credit
+statements are accurate as shipped.
 
 ## C04 — Offline-audio placeholder in FAQ
 
-[`content.ts`](../../web/src/lib/data/content.ts) answers the offline question with:
+The former `content.ts` copy (now `web/messages/*.json`, key `faq_offline_answer`) answers the
+offline question with:
 
 > Recitation audio needs a connection the first time you play it.
 

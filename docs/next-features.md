@@ -5,14 +5,20 @@ bookmark collections with context, reading sessions, homepage widgets, personal 
 snippets, author/source grouping, search recents/ranking, and locale suggest — plus a committed sync
 design for bookmarks + reading sessions (§9) and a testable edge-case catalogue (§10).
 
+**Status (2026-10-12)**: this batch shipped as PR #31 (merge `223a2f0e`, branch `next-features`) —
+Features 1–10, the §9 sync architecture (`m000012` bookmark context, `m000013` reading sessions,
+`m000014` user analytics, `reading_session_v1` + `user_analytics_v1`), and the §10 scenarios with
+their tests. The doc is now the design record + acceptance reference: "current state" sections are
+the pre-implementation baseline, not live code.
+
 **Authority**: this document is the latest direction. Where an older doc conflicts, this document
-wins — see §14 (Superseded directions). Pending work absorbed from `ux-audit`,
-`plan/09-locale-suggest.md`, `settings-system.md`, `search-system.md`, `copy-corrections.md`, the
+wins — see §14 (Superseded directions). Pending work absorbed from the 2026-09-29 UX audit,
+`locale-suggest.md`, `settings-system.md`, `search-system.md`, `copy-corrections.md`, the
 security audits, and research docs is mapped in §13.
 
-**Baseline**: "current state" claims and line numbers are measured at `5b0674b2` plus the
-uncommitted R2-08 account-isolation work in the working tree (audited 2026-10-11). Where R2-08
-already fixes a FIX scenario, the scenario says so and stays as a regression test.
+**Baseline**: "current state" claims and line numbers were measured 2026-10-11 at `5b0674b2` plus
+the R2-08 account-isolation work, since committed (`fbf5edcd`, `d1c47299`) but **not deployed**.
+Where R2-08 already fixes a FIX scenario, the scenario says so and stays as a regression test.
 
 ---
 
@@ -38,8 +44,8 @@ already fixes a FIX scenario, the scenario says so and stays as a regression tes
   (`web/src/lib/auth/auth-client.ts`). Firebase = GA4 + FCM only — no Firestore, no Firebase Auth.
 - Reader state today: one device-local blob `easyquran.reader` (schema v4) —
   `web/src/lib/stores/reader-core.svelte.ts:37-52`, decode `reader-persistence.svelte.ts:41-133`,
-  explicit-field write `:181-210`. Only bookmarks+folders sync. Migrations end at `m000010`; next is
-  `m000011`.
+  explicit-field write `:181-210`. Only bookmarks+folders sync. Migrations end at `m000014`
+  (`user_analytics`, this batch); next is `m000015`.
 - Gap IDs to align with: `docs/remaining/feature-gap-catalogue.md` — P01/P02/P03/P04/P05/P08, R04,
   R10, R11, D01, D06, D08.
 - **Never repurpose `translation_popularity`**
@@ -49,13 +55,11 @@ already fixes a FIX scenario, the scenario says so and stays as a regression tes
   FIX-marked scenarios are current-behavior bugs found in the audit and must be fixed as part of this
   batch.
 - **Security coordination**: the R2-08 account-isolation work (outbox partitioned by account,
-  `expectedUserId`, owner/generation guards) is in flight in the working tree. §9.5 adopts it as the
-  basis with one divergence: legacy unowned entries are **retained for review, never discarded**
-  (EC-48). R2-08 as written calls `#discardUnownedQueue()` from `BookmarksStore.hydrate()`
-  (`web/src/lib/bookmarks/store.svelte.ts`), which wipes those entries on the first boot of the new
-  build — so **swap the discard for retain-and-review inside R2-08 before it lands**, otherwise the
-  data EC-48 protects is gone before this batch starts. Everything else in R2-08 lands as is; this
-  design rebases on it, never around it.
+  `expectedUserId`, owner/generation guards) is committed (`fbf5edcd`, `d1c47299`) but not yet
+  deployed. §9.5 adopts it as the basis with one divergence, **landed with this batch**: legacy
+  unowned entries are **retained for review, never discarded** (EC-48 — `applyLegacyUnowned` +
+  `unownedPending` in `web/src/lib/bookmarks/store.svelte.ts`; the `#discardUnownedQueue()` call
+  R2-08 originally added is gone). Everything else in R2-08 shipped as is.
 
 ---
 
@@ -97,7 +101,7 @@ already fixes a FIX scenario, the scenario says so and stays as a regression tes
    concept was removed end to end in `502effc2`).
 7. Transliteration rendering (TRX-02): view-layer parse `<u>`/`<b>`; legend "underlined = stretch the
    vowel"; strip markup in copy.
-8. Empty translation verses (TRX-11 + `docs/research/translation-empty-verses.md`): show Arabic plus
+8. Empty translation verses (TRX-11; facts in `docs/quran-system.md` Sources and metadata): show Arabic plus
    "No translation for this verse in {translator}."; set `dir` from the declared direction, not
    `auto`. Four known upstream blanks: `fa.safavi` 80:39, `ku.asan` 108:3, `sq.mehdiu` 21:56 +
    77:14. DBs stay immutable — never "fix" the rows. EC-45.
@@ -144,8 +148,9 @@ empty verse + tafsir block), tafsir route 308 (`web/src/lib/server/reader-route.
    picks goal metadata). A folder `kind:"daily"` is a **set of verses** to study; it is unrelated to
    a reading session `kind:"daily"` (a position bucket, Feature 4) — copy must not conflate them.
 2. Backend: the folder columns `kind`, `position`, `deleted_at` already land in phase 2's bookmarks
-   migration (§9.1, `m000011`); this feature only wires them in `bookmark_folder/slice.rs` +
-   validator (`bookmark_v1/validator.rs`, mutation cap 200 stays). `target_ayahs_per_day` gets its
+   migration (§9.1, shipped as `m000012`); this feature only wires them in
+   `src/db/sea_models/bookmark_folder/actions.rs` + validator (`bookmark_v1/validator.rs`,
+   mutation cap 200 stays). `target_ayahs_per_day` gets its
    own migration (next free number) only if §11.7 adopts it. Folder delete is a tombstone (§9.3):
    the delete action must **still detach children explicitly** — the schema's
    `ON DELETE SET NULL` FK never fires on a tombstone `UPDATE` — and `resolve_folder_id` must treat
@@ -203,7 +208,7 @@ toast/undo primitive; a Rust migration only for `target_ayahs_per_day` (§11.7).
    unique indexes, so never bare NULL in the key. The range end is part of the key so a range
    bookmark (2:285–286) and a single-ayah bookmark (2:285) coexist instead of verse-collapsing into
    each other (EC-51). `sourceId` is context metadata, not a key part (row-level LWW, §9.3).
-3. Migration `m000011`: add the columns, backfill `end_surah = surah, end_ayah = ayah`, drop
+3. Migration `m000012`: add the columns, backfill `end_surah = surah, end_ayah = ayah`, drop
    `idx_bookmarks_user_verse` and create the new partial unique index (§9.1). No dedupe pass —
    m000008 already guarantees one row per verse, and adding `session_id = ''` + `end = start`
    keeps that unique. Update wire slices, `bookmark_v1/validator.rs`, client `schema.ts` decoders
@@ -226,7 +231,7 @@ cannot resurrect (EC-02); range and single-ayah bookmarks on the same verse coex
 path unchanged; saved translation missing from catalogue falls back to Arabic (EC-38).
 
 **Touch**: `schema.ts`, `store.svelte.ts`, `domain.ts`, `VerseTools.svelte`, `BookmarkRow.svelte`,
-`bookmarks/+page.svelte`, `yours/+page.svelte`, Rust `migration/src/m000011_*.rs` + `bookmark_v1` +
+`bookmarks/+page.svelte`, `yours/+page.svelte`, Rust `migration/src/m000012_*.rs` + `bookmark_v1` +
 `db/sea_models/bookmark/*` (`upsert_lww`/`delete_lww` rewritten for tombstones + the new key), tests
 `rust/backend/api/tests/bookmarks_v1.rs`.
 
@@ -306,9 +311,8 @@ on the previous build never wipes sessions (EC-54); anon fully functional; gates
 **Touch**: `reader-core.svelte.ts`, `reader-persistence.svelte.ts`, `reader-session.svelte.ts`,
 `annotations.svelte.ts` (notes key), `settings-document.ts` (`translationFamily`),
 `engagement-state.ts` (export `todayLocal`), `resume.ts`, `RangeReader.svelte`, `translation-nav.ts`,
-`/yours`, palette sources, `purge-hook.ts`; new `web/src/lib/sessions/{schema,store,domain}.svelte.ts`
-
-- Rust `reading_session_v1` module + migration `m000012`.
+`/yours`, palette sources, `purge-hook.ts`; new `web/src/lib/sessions/{schema,store,domain}.svelte.ts`;
+Rust `reading_session_v1` module + migration `m000013`.
 
 ---
 
@@ -335,8 +339,9 @@ on the previous build never wipes sessions (EC-54); anon fully functional; gates
 
 **Build**
 
-1. Widget registry: `web/src/lib/home/widgets.ts` —
-   `{id, title, component, defaultSpan, settingsSchema}`. V1 widgets: `continue-reading`, `bookmarks`,
+1. Widget registry — shipped as `web/src/lib/home/layout.svelte.ts` (`HOME_WIDGET_SPECS`) instead
+   of the planned `widgets.ts`: `{id, title, component, defaultSpan, settingsSchema}`. V1 widgets:
+   `continue-reading`, `bookmarks`,
    `notes` (BM-03), `recents`, `most-read` (consumes Feature 6 when ready), `daily-ayah` (backend
    `/quran/random` already deterministic date-seeded — D07).
 2. Layout model persisted under new key `easyquran.home` (v1):
@@ -389,7 +394,7 @@ primitives under `web/src/lib/components/card/*`.
 1. New module `rust/backend/api/src/modules/user_analytics_v1/` (copy `device_v1`/`bookmark_v1`
    shape): `auth_guard::verified` as the module's own `route_layer` (as in `bookmark_v1/mod.rs`),
    nested in `router.rs` with a rate limit (~100/60 like bookmarks). Register in `modules/mod.rs`.
-2. Migration (app SQLite only — Quran DBs untouched; next free number after `m000012`):
+2. Migration (app SQLite only — Quran DBs untouched; shipped as `m000014`):
    `reading_events(id, user_id, surah, ayah, source_id NULL, kind, seconds NULL, local_day, created_at)`
    with index `(user_id, created_at)`, and/or rollup
    `reading_daily(user_id, local_day, surah, ayahs_read, seconds)`. `local_day` is the
@@ -443,8 +448,8 @@ scrubbed or consent default flipped.
   (`quran_v1/controller.rs:1258-1329`) and `GET /quran/ayahs?keys=2:285,2:286` or
   `fromGlobal/toGlobal` (`:466-546`); web stitches spans via `range-fetch.ts` (300-ayah chunks, cap
   2).
-- Route-grammar constraints (from `navigation-audit.md` + `url-scheme-a.md`, both implemented; stale
-  `rub` rows there are superseded, §14):
+- Route-grammar constraints (navigation audit + URL scheme A, both implemented; summary in
+  `docs/history.md`; rubʿ routes are retired):
   - `parseReaderPath` is **path-only** — no query or fragment enters the parser. Range permalinks must
     be additive query/fragment, never a new path shape.
   - `?v={surah}:{ayah}` is the scroll-position mirror and stays `{s}:{a}` — do not overload it for
@@ -583,8 +588,7 @@ allow-list of the 7 exact-dup pairs listed above, keyed by the same normalizatio
 3. Palette polish: cold-source search should not require a second keystroke (warm the resolved
    source); localized group labels. ⌘K "go to verse" (FLOW-06) looks shipped — the palette builds
    verse hrefs with `surahAyahPathFor` (`web/src/lib/search/palette/quran-nav.ts:45`) and
-   `VerseRow`/`ReadingAyah` apply `revealed-ayah` from the hash; confirm in QA and tick it off in the
-   ux-audit checklist.
+   `VerseRow`/`ReadingAyah` apply `revealed-ayah` from the hash; confirm in QA.
 4. One translation picker (FLOW-03): the search page's own `TranslationPicker`/`TranslationRow`
    (`web/src/routes/(application)/search/_components/`; flat, alphabetical, tick-then-Download
    two-step, indistinguishable duplicate rows) is replaced by the reader's picker grammar
@@ -610,7 +614,7 @@ picker) reuses Feature 8's grouping.
 
 ## Feature 10 — Locale suggest (Phase 1, absorbed)
 
-**Source**: `docs/plan/09-locale-suggest.md` (draft, not implemented) — adopted as-is for Phase 1,
+**Source**: `docs/locale-suggest.md` — adopted as-is for Phase 1,
 with the Phase 2 conflict resolved below.
 
 **Build**
@@ -647,15 +651,15 @@ root layout mount, messages, tests per plan §8.
 
 **Decision**: both sync. Bookmarks (extended: session/translation/range context, tombstones) and
 reading sessions (sessions, positions, per-surah progress). The existing engine/outbox/registry are
-reused as-is; one backend module per domain; migrations `m000011`+.
+reused as-is; one backend module per domain; migrations `m000012`+.
 
 ### 9.1 Data model (backend, app SQLite only — Quran DBs untouched)
 
-Migrations: `m000011` = bookmarks + bookmark_folders changes; `m000012` = the three reading-session
+Migrations: `m000012` = bookmarks + bookmark_folders changes; `m000013` = the three reading-session
 tables. Feature 6 and the optional `target_ayahs_per_day` column take the next free numbers when they
 land.
 
-**`bookmarks` (extend m000007, in `m000011`):**
+**`bookmarks` (extend m000007, in `m000012`):**
 
 - add `session_id TEXT NOT NULL DEFAULT ''`, `source_id TEXT NULL`,
   `end_surah INTEGER NOT NULL DEFAULT 0` + `end_ayah INTEGER NOT NULL DEFAULT 0` (backfilled to
@@ -672,12 +676,12 @@ land.
   a newer delete of that verse is the verse's latest state; the collapse step (3b) turns older live
   rivals into tombstones instead of `DELETE`, so their ids stay protected.
 
-**`bookmark_folders` (in `m000011`):** add `kind TEXT NOT NULL DEFAULT 'generic'`,
+**`bookmark_folders` (in `m000012`):** add `kind TEXT NOT NULL DEFAULT 'generic'`,
 `position INTEGER NULL`, `deleted_at TEXT NULL`; delete = tombstone that still detaches children
 explicitly (the `ON DELETE SET NULL` FK never fires on an `UPDATE`); `resolve_folder_id` and
 `list_for_user` filter `deleted_at IS NULL`.
 
-**`reading_sessions`** (new, `m000012`): `id TEXT, user_id, name, kind TEXT,
+**`reading_sessions`** (new, `m000013`): `id TEXT, user_id, name, kind TEXT,
 translation_id TEXT NULL, created_at, updated_at, archived_at TEXT NULL, deleted_at TEXT NULL,
 PRIMARY KEY(user_id, id)`.
 
@@ -758,7 +762,8 @@ query user-scoped.
 
 ### 9.4 Merge on login — non-silent, reviewable
 
-Replaces today's silent `#migrateLegacy` (`bookmarks/store.svelte.ts`, `:438` in the R2-08 tree).
+Replaces the old silent `#migrateLegacy` (retired with this batch; the non-silent replacement
+shipped as `web/src/lib/components/auth/merge-review.svelte.ts`).
 
 - **Detection** after auth status → authenticated: mergeable local data exists if (a) legacy blob
   bookmarks non-empty AND marker absent, (b) the `local` owner's sessions (Feature 4.2) are
@@ -778,17 +783,17 @@ Replaces today's silent `#migrateLegacy` (`bookmarks/store.svelte.ts`, `:438` in
   "Keep your bookmarks and reading sessions safe and on all your devices" — notes stay local).
   - Legacy anonymous bookmarks have no timestamp (boolean map). Use `bookmarkSavedAt` when present
     (Feature 4.3), else the epoch `1970-01-01T00:00:00.000000Z`, so an account copy of the same
-    verse always wins while new verses are still added (EC-10). Today's `#migrateLegacy` stamps
-    `nowIso()`, so the device always wins — FIX.
+    verse always wins while new verses are still added (EC-10). The old `#migrateLegacy` stamped
+    `nowIso()`, so the device always won — fixed by the merge review.
   - The `local` default session (`LOCAL_DEFAULT_SESSION_ID`) is re-keyed to the account default
     session id UUIDv5(namespace, user id) before upload; positions LWW, progress MAX (EC-22).
     Other local sessions upload under their own UUIDs.
 - **Not now**: nothing enqueued; marker `eq.merge.deferred.{userId}` in **sessionStorage**, so the
   prompt returns in the next browser session but not on every reload. **Don't ask again** sets
   `eq.merge.reviewed.{userId}` in localStorage. Markers are per-account.
-- Failure handling: markers are written only after enqueues resolve (EC-11). The R2-08 working tree
-  already does this for the legacy bookmark migration (`#migratedKeys.add` after a successful
-  enqueue, marker after the loop); the merge dialog keeps that rule for every item kind.
+- Failure handling: markers are written only after enqueues resolve (EC-11). The R2-08 code
+  already did this for the legacy bookmark migration (marker only after the enqueue loop); the
+  shipped merge review keeps that rule for every item kind.
 - Legacy blob is never deleted (current behavior kept); the legacy boolean path migrates only through
   this review.
 
@@ -853,7 +858,8 @@ Replaces today's silent `#migrateLegacy` (`bookmarks/store.svelte.ts`, `:438` in
 
 ### 9.7 Audit fixes this design must land (each has an EC scenario)
 
-**Already fixed by R2-08 in the working tree** — land as regression tests, no new code:
+**Already fixed by R2-08 (`fbf5edcd`/`d1c47299`)** — regression tests shipped with this batch
+(`web/src/lib/bookmarks/__tests__/account-isolation.test.ts`, `engine.test.ts` EC-44):
 
 - Per-user gating: `applyServer`/enqueue callbacks now gate on owner + generation (`#isCurrent`), not
   a boolean `authed` (EC-17, sync half; the notes half is still open below).
@@ -864,10 +870,10 @@ Replaces today's silent `#migrateLegacy` (`bookmarks/store.svelte.ts`, `:438` in
 - Engine with no registered domains makes no network calls (`unregister` → no targets); its
   window listeners and intervals still run — tearing those down is the remaining EC-30 work.
 
-**Still open — this batch fixes:**
+**Still open — this batch fixes** (landed with PR #31 unless noted):
 
-- Legacy unowned outbox entries: R2-08 discards them on hydrate; swap for retain-and-review before
-  R2-08 lands (EC-48, §0).
+- Legacy unowned outbox entries: ~~R2-08 discards them on hydrate~~ resolved — retain-and-review
+  shipped (`applyLegacyUnowned`, EC-48 tests in `account-isolation.test.ts`).
 - No tombstones (`delete_lww` hard-deletes) (FIX, EC-02); tombstone model above.
 - Pending-delete matching is id-scoped, not key-scoped — a same-key rival from a stale snapshot
   re-marks the verse (FIX, EC-40).
@@ -906,7 +912,7 @@ Replaces today's silent `#migrateLegacy` (`bookmarks/store.svelte.ts`, `:438` in
 ## 10. Edge-case catalogue — testable scenarios
 
 Format: **EC-nn · title** — Given / When / Then + resolution. FIX = current-behavior bug this batch
-fixes. FIXED BY R2-08 = already fixed in the working tree; the scenario still lands as a regression
+fixes. FIXED BY R2-08 = already fixed in committed R2-08 code; the scenario still lands as a regression
 test. Test targets: Rust integration (`rust/backend/api/tests/*.rs`), web unit
 (`web/src/lib/**/__tests__/*.test.ts`), manual QA.
 
@@ -965,13 +971,13 @@ re-prompted. Local data stays intact either way. Test: `store.test.ts`.
 Given legacy blob bookmarks exist (no timestamp) and the account already has the same verse. When
 merge review runs. Then the legacy item carries `bookmarkSavedAt` or the epoch timestamp, the review
 labels the conflict ("account wins"), merge skips it (LWW), new verses are still added, and the
-legacy blob remains untouched. Today `#migrateLegacy` stamps `nowIso()`, so the device always wins.
+legacy blob remains untouched. The old `#migrateLegacy` stamped `nowIso()`, so the device always won.
 Test: `store.test.ts`.
 
 **EC-11 · Merge network failure (FIXED BY R2-08 for the legacy migration)**
 Given merge enqueues fail midway (network). When the user retries later. Then no marker was written,
-no item was silently dropped (mark only after enqueues resolve), retry presents the same items. The
-working tree already does this in `#migrateLegacy`; the merge dialog must keep it for every kind.
+no item was silently dropped (mark only after enqueues resolve), retry presents the same items. Committed
+R2-08 code already did this for the legacy migration; the shipped merge review keeps it for every kind.
 Test: `store.test.ts`.
 
 **EC-12 · Login as a different account with another user's quarantine**
@@ -1155,7 +1161,7 @@ preserved and the UI keeps showing the actionable error. Test: `engine.test.ts`.
 
 **EC-44 · Coalesced flush with domain filter (FIXED BY R2-08)**
 Given `flush("a")` in flight and `flush("b")` called. When the drain loops. Then both domains drain —
-the working tree widens a mismatched coalesced filter to all domains. Keep the regression test
+committed R2-08 code widens a mismatched coalesced filter to all domains. Keep the regression test
 before the sessions/analytics domains land. Test: `engine.test.ts`.
 
 ### I. Absorbed edge cases (from ux-audit / research)
@@ -1174,14 +1180,15 @@ saved anon bookmarks carry real timestamps. Test: `reader-persistence.test.ts` +
 
 **EC-47 · Reading-mode bookmark capture (accepted)**
 Given the user reads in reading mode (no verse actions instantiated by design,
-`reader-virtualization.md`). When they want to bookmark. Then capture stays verse-mode-only —
+`quran-system.md` Reader rendering). When they want to bookmark. Then capture stays verse-mode-only —
 documented accepted behavior, no invisible dead control. Test: manual QA.
 
 **EC-48 · Legacy unowned outbox entries (FIX: R2-08 divergence)**
 Given outbox entries in the pre-partition `bookmarks` domain (no owner). When the new build boots and
 the next login runs. Then the entries are still there (no discard on hydrate), nothing is flushed or
 auto-attributed, and the merge review lists them once; the user applies them to the signed-in account
-or discards them. R2-08 discards on hydrate; this doc wins, and the swap lands inside R2-08.
+or discards them. R2-08 as written discarded on hydrate; this doc won — the swap shipped as
+`applyLegacyUnowned` (tests in `account-isolation.test.ts`).
 Test: `store.test.ts` + `outbox.test.ts`.
 
 **EC-49 · Locale suggest dismissal (Feature 10)**
@@ -1258,21 +1265,23 @@ test double — the suite has none today).
 13. ~~Notes sync~~ **Decided 2026-10-11 (default; revisit if wanted)**: notes stay local — no
     `bookmarks.note` column, notes keyed per owner on device. Matches the ACCT-09/C01 copy promise
     ("bookmarks + sessions sync; notes local") and keeps private reflections off the server.
-14. ~~R2-08 legacy discard~~ **Decided 2026-10-11 (default; revisit if wanted)**: swap the discard
-    for retain-and-review inside R2-08 before it lands (§0, §9.5, EC-48).
+14. ~~R2-08 legacy discard~~ **Decided 2026-10-11; done** — retain-and-review shipped with this
+    batch (`applyLegacyUnowned`, §0, §9.5, EC-48).
 
 ## 12. Suggested sequencing
 
-0. **R2-08 lands** with the discard → retain-and-review swap (§0, EC-48) and the regression tests
-   for what it already fixes (EC-11, 14, 17 sync half, 44, 30 network half).
+0. ~~**Before the next web deploy**: swap R2-08's discard for retain-and-review (§0, EC-48) and
+   land the regression tests for what it already fixes (EC-11, 14, 17 sync half, 44, 30 network
+   half).~~ **Done** — `applyLegacyUnowned` shipped; regression tests in
+   `account-isolation.test.ts` / `engine.test.ts`.
 1. **Feature 1 + 8** — translation UX, no schema risk (absorbed TRX items incl. TRX-01 + EC-45,
    EC-50).
-2. **Feature 3 + 4 + §9.1–9.3** — `m000011` (bookmark context, range key, tombstones, folder columns)
-   - `m000012` (reading-session tables), `reading_session_v1` backend, local sessions under
-     `easyquran.sessions.{owner}`, reader blob v5 (translationFamily, `bookmarkSavedAt`), notes per
-     owner, range readers call `markRead` (EC-42). The client sessions domain registers in step 3 —
-     uploading local sessions needs the merge review. (Keep the existing bookmarks migration until
-     step 3 lands.)
+2. **Feature 3 + 4 + §9.1–9.3** — `m000012` (bookmark context, range key, tombstones, folder columns)
+   and `m000013` (reading-session tables), `reading_session_v1` backend, local sessions under
+   `easyquran.sessions.{owner}`, reader blob v5 (translationFamily, `bookmarkSavedAt`), notes per
+   owner, range readers call `markRead` (EC-42). The client sessions domain registers in step 3 —
+   uploading local sessions needs the merge review. (Keep the existing bookmarks migration until
+   step 3 lands.)
 3. **§9.4–9.8 + §10 FIX items** — merge review (non-silent), sessions domain registration, cross-tab
    auth + overlay retire, copy pass (C01/C02/C06/C07/C08 + merge/session copy), and every open FIX
    scenario (EC-02, 10, 15, 17 notes half, 25–29, 30 listener half, 35, 40, 43, 55).
@@ -1295,32 +1304,31 @@ lands its EC scenarios as tests (Rust integration + web unit) in the same commit
 
 ## 13. Absorbed work map
 
-| Source                                                                                             | Items                                                                                                          | Absorbed into                                                                                      |
-| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `research/ux-audit`                                                                                | BM-01, BM-02, BM-03, BM-04, BM-05                                                                              | Features 2, 3, 5, §9.8                                                                             |
-|                                                                                                    | ACCT-01, ACCT-03, ACCT-04, ACCT-05, ACCT-09                                                                    | §9.5, §9.8, Features 2, 3                                                                          |
-|                                                                                                    | HOME-01, HOME-02, HOME-04                                                                                      | Feature 5                                                                                          |
-|                                                                                                    | TRX-01, TRX-02, TRX-04, TRX-05, TRX-06, TRX-07, TRX-08, TRX-10, TRX-11, TRX-12, TRX-13, TRX-14, TRX-15, TRX-16 | Features 1, 4, 8, EC-45, EC-50                                                                     |
-|                                                                                                    | TRX-03, TRX-09                                                                                                 | Superseded (§14)                                                                                   |
-|                                                                                                    | FLOW-03, FLOW-05, FLOW-07, FLOW-08                                                                             | Features 9, 7, 4, 2                                                                                |
-|                                                                                                    | FLOW-06                                                                                                        | Looks shipped — verify (Feature 9.3)                                                               |
-|                                                                                                    | SCR-05, SET-04                                                                                                 | Feature 6                                                                                          |
-|                                                                                                    | Guardrails: catalogue duplicate `(language, translator)` test; round-trip persistence test                     | Feature 8 acceptance, §10                                                                          |
-|                                                                                                    | ACCT-07, ACCT-08, HOME-03, FLOW-01, FLOW-02, FLOW-04                                                           | **Not absorbed** — stay in the ux-audit checklist (EC-19 touches only mid-session ban copy)        |
-| `plan/09-locale-suggest.md`                                                                        | Phase 1 (all)                                                                                                  | Feature 10                                                                                         |
-|                                                                                                    | Phase 2 + open q2 (catalogue flag)                                                                             | Superseded (§14)                                                                                   |
-| `settings-system.md`                                                                               | §4 translationFamily persistence; §7 prefs-sync gap                                                            | Feature 4.3, §11.3                                                                                 |
-| `search-system.md`                                                                                 | recent queries, relevance ranking, drawer integration, §8 known limits; selection-persistence doc-sync gap     | Feature 9                                                                                          |
-| `remaining/copy-corrections.md`                                                                    | C01, C02, C06, C07, C08                                                                                        | §9.8 copy pass                                                                                     |
-| `security-audit-2026-10-11.md`                                                                     | deploy validation, recent-auth, Argon2 semaphore, CI gates                                                     | **Not product features** — tracked in the audit; only auth-lifecycle items referenced (§9.5, §9.7) |
-| `security-audit-rounds-2026-10-11.md`                                                              | R2-08 account isolation (adopted + retain-not-discard divergence), R2-04 absolute age                          | §0, §9.2, §9.5, §9.7, EC-48                                                                        |
-| `research/translation-empty-verses.md`                                                             | 4 blank verses + display decision                                                                              | Feature 1.8, EC-45                                                                                 |
-| `research/navigation-audit.md` + `url-scheme-a.md`                                                 | path-only parser, `?v=` scope, fragment single-ayah, reserved segments, nav-guard regex                        | Feature 7 constraints                                                                              |
-| `design-system.md`                                                                                 | §6/§13/§14/§34/§61 constraints; Card/MetricCard unused + hue cap                                               | Feature 5                                                                                          |
-| `reader-virtualization.md`                                                                         | reading mode has no verse actions                                                                              | EC-47                                                                                              |
-| `plan/README.md`                                                                                   | 10 owner items (Section.svelte delete, CI workflow, dead tokens, accents)                                      | **Not absorbed** — separate small backlog                                                          |
-| `plans/remove-primary-translation.md`                                                              | done (`502effc2`)                                                                                              | Archive; "never primary wording" noted in Feature 1.6                                              |
-| `research/mushaf-rendering-research.md`, `indopak-*`, `qurancom-mirror.md`, `design-enhancements/` | orthogonal projects/proposals                                                                                  | **Not absorbed** — separate tracks                                                                 |
+| Source                                                                                                   | Items                                                                                                                                             | Absorbed into                                              |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| UX audit (2026-09-29)                                                                                    | BM-01, BM-02, BM-03, BM-04, BM-05                                                                                                                 | Features 2, 3, 5, §9.8                                     |
+|                                                                                                          | ACCT-01, ACCT-03, ACCT-04, ACCT-05, ACCT-09                                                                                                       | §9.5, §9.8, Features 2, 3                                  |
+|                                                                                                          | HOME-01, HOME-02, HOME-04                                                                                                                         | Feature 5                                                  |
+|                                                                                                          | TRX-01, TRX-02, TRX-04, TRX-05, TRX-06, TRX-07, TRX-08, TRX-10, TRX-11, TRX-12, TRX-13, TRX-14, TRX-15, TRX-16                                    | Features 1, 4, 8, EC-45, EC-50                             |
+|                                                                                                          | TRX-03, TRX-09                                                                                                                                    | Superseded (§14)                                           |
+|                                                                                                          | FLOW-03, FLOW-05, FLOW-07, FLOW-08                                                                                                                | Features 9, 7, 4, 2                                        |
+|                                                                                                          | FLOW-06                                                                                                                                           | Looks shipped — verify (Feature 9.3)                       |
+|                                                                                                          | SCR-05, SET-04                                                                                                                                    | Feature 6                                                  |
+|                                                                                                          | Guardrails: catalogue duplicate `(language, translator)` test; round-trip persistence test                                                        | Feature 8 acceptance, §10                                  |
+|                                                                                                          | ACCT-07, ACCT-08, HOME-03, FLOW-01, FLOW-02, FLOW-04                                                                                              | **Not absorbed**                                           |
+| `locale-suggest.md`                                                                                      | Phase 1 (all)                                                                                                                                     | Feature 10                                                 |
+|                                                                                                          | Phase 2 + open q2 (catalogue flag)                                                                                                                | Superseded (§14)                                           |
+| `settings-system.md`                                                                                     | §4 translationFamily persistence; §7 prefs-sync gap                                                                                               | Feature 4.3, §11.3                                         |
+| `search-system.md`                                                                                       | recent queries, relevance ranking, drawer integration, §8 known limits; selection-persistence doc-sync gap                                        | Feature 9                                                  |
+| `remaining/copy-corrections.md`                                                                          | C01, C02, C06, C07, C08                                                                                                                           | §9.8 copy pass                                             |
+| 2026-10-11 security work                                                                                 | deploy validation, recent-auth, Argon2 semaphore, CI gates; R2-08 account isolation (adopted + retain-not-discard divergence), R2-04 absolute age | §0, §9.2, §9.5, §9.7, EC-48                                |
+| `quran-system.md` (Sources)                                                                              | 4 blank verses + display decision                                                                                                                 | Feature 1.8, EC-45                                         |
+| `history.md` (navigation + URL scheme A)                                                                 | path-only parser, `?v=` scope, fragment single-ayah, reserved segments, nav-guard regex                                                           | Feature 7 constraints                                      |
+| `design-system.md`                                                                                       | §6/§13/§14/§34/§61 constraints; Card/MetricCard unused + hue cap                                                                                  | Feature 5                                                  |
+| `quran-system.md` (Reader rendering)                                                                     | reading mode has no verse actions                                                                                                                 | EC-47                                                      |
+| `history.md` (design-system migration)                                                                   | open owner items (Section.svelte delete, dead tokens, accent utilities, sepia, nits)                                                              | **Not absorbed** — separate small backlog, listed there    |
+| `history.md` (primary translation removal)                                                               | done (`502effc2`); residual: translated range routes lack the Arabic companion                                                                    | Not absorbed; "never primary" wording noted in Feature 1.6 |
+| `research/mushaf-rendering-research.md`, `indopak.md`, `qurancom-mirror.md`, design study (`history.md`) | orthogonal projects/proposals                                                                                                                     | **Not absorbed** — separate tracks                         |
 
 ## 14. Superseded directions (this doc wins)
 
@@ -1331,21 +1339,18 @@ lands its EC scenarios as tests (Rust integration + web unit) in the same commit
 3. **ux-audit ACCT-01** (copy bookmarks into the local store on sign-out) → superseded by §9.5
    quarantine + sign-out notice.
 4. **security rounds R2-08 "discard legacy unowned entries"** → superseded by §9.5/EC-48: retain and
-   surface for user review, never discard and never auto-attribute; the swap lands inside R2-08
-   before it ships. The rest of R2-08 (partition, `expectedUserId`, owner/generation guards) is
+   surface for user review, never discard and never auto-attribute; the swap shipped as
+   `applyLegacyUnowned`. The rest of R2-08 (partition, `expectedUserId`, owner/generation guards) is
    adopted.
 5. **ux-audit HOME-01** (continue card above the marketing hero) → superseded by Feature 5: widgets on
    `/yours`, marketing stays static; HOME-04's first-run choice lands on `/yours`.
-6. **`plan/09-locale-suggest.md` Phase 2 + open q2** (catalogue `recommended` flag) → superseded by
+6. **`locale-suggest.md` Phase 2 + its curated-pick question** (catalogue `recommended` flag) → superseded by
    Feature 8 derive-only. Phase 1 adopted as-is.
 7. **`copy-corrections.md` C01 prescribed fix** ("scope the promise to bookmarks") → superseded by the
    new scope: bookmarks + sessions sync; notes stay local. Copy pass in §9.8.
-8. **`design-enhancements/`** (card/outline studies) → not adopted; its specifics (font weights >600,
+8. **The design enhancement study** (`history.md`; card/outline studies) → not adopted; its specifics (font weights >600,
    radii 12–20 px) violate current design-system guards.
-9. **`navigation-audit.md` D6 / `url-scheme-a.md` §1–2 rub rows** (`/rub/N` live) → stale; rub routes
-   were retired (`5d54ca6b`), 308 to the quarter's first ayah. Code wins.
 
-Doc status after absorption: `plans/remove-primary-translation.md` archive (done); `plan/README.md`
-keep (separate backlog); `plan/09-locale-suggest.md` keep (Feature 10 is its implementation contract);
-`feature-gap-catalogue.md` keep (parity register; R11 note to update when §11.5 is decided);
-`ux-audit` keep (checklist; absorbed items are cross-referenced here).
+Doc status (2026-10-12 cleanup): completed plans and audits are compacted into `history.md`,
+`indopak.md`; `locale-suggest.md` is Feature 10's implementation contract;
+`feature-gap-catalogue.md` stays the parity register (R11 note to update when §11.5 is decided). Index: `docs/README.md`.
