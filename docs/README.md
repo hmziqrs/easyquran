@@ -15,6 +15,7 @@ Repo-wide hard rules live in [`AGENTS.MD`](../AGENTS.MD).
 | [`next-features.md`](next-features.md)                                         | Feature batch + sync design — **shipped (PR #31)**; frozen as verification baseline   |
 | [`abuse-prevention.md`](abuse-prevention.md)                                   | Draft abuse-prevention and enforcement plan; evidence in `research/abuse-prevention/` |
 | [`abuse-write-endpoints.md`](abuse-write-endpoints.md)                         | Implementation slice: rate limits for the new write endpoints                         |
+| [`account-ux.md`](account-ux.md)                                               | Implementation slice: slim chrome + primitives + localization for /account            |
 | [`locale-suggest.md`](locale-suggest.md)                                       | Feature 10 spec (feature shipped; doc pending retirement with the verification pass)  |
 | [`remaining/next-features-followups.md`](remaining/next-features-followups.md) | Post-PR-#31 verification ledger; keeps next-features.md pristine                      |
 | [`remaining/feature-gap-catalogue.md`](remaining/feature-gap-catalogue.md)     | Parity register against quran.com                                                     |
