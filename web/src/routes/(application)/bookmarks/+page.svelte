@@ -119,12 +119,26 @@
   // mount the folders panel so a fresh account can create its first folder.
   const emptyList = $derived(!hasAnyBookmark && sortedFolders.length === 0);
 
-  // Authed but no first snapshot yet: keep the skeleton up — even when the
-  // round failed (offline first visit must not flash "No bookmarks"), and any
+  // Offline cold load (offline-skeleton fix): with no network the first sync
+  // can never complete this page lifetime, so the skeleton must not wait on
+  // syncedAt alone — it also releases on the offline state or this deadline,
+  // and the snapshot replaces the empty view once a later sync lands it.
+  const FIRST_SYNC_SKELETON_MAX_MS = 10_000;
+  let firstSyncWindowElapsed = $state(false);
+
+  // Authed but no first snapshot yet: keep the skeleton up only while a
+  // snapshot can still land (online, inside the bounded window) — an offline
+  // first visit must not spin forever on "Loading your bookmarks", and any
   // local optimistic row or folder means there is real content to render.
   // Round-2: keyed on THIS domain's syncedAt (store truth), never the engine
   // global any-domain lastSyncAt.
-  const waitingForFirstSync = $derived(authed && bookmarks.syncedAt === null && emptyList);
+  const waitingForFirstSync = $derived(
+    authed &&
+      bookmarks.syncedAt === null &&
+      emptyList &&
+      online.online &&
+      !firstSyncWindowElapsed,
+  );
   // Same skeleton for the blank window after sync while the quran catalog is
   // still loading (rows/folders exist but cannot render yet).
   const firstSyncPending = $derived(waitingForFirstSync || (authed && quranData === null));
@@ -312,7 +326,15 @@
         () => undefined,
       );
     }
-    return () => clearTimeout(undoTimer);
+    // First-sync deadline (offline-skeleton fix): even an online round that
+    // never lands releases the skeleton once the bounded window has passed.
+    const skeletonTimer = setTimeout(() => {
+      firstSyncWindowElapsed = true;
+    }, FIRST_SYNC_SKELETON_MAX_MS);
+    return () => {
+      clearTimeout(undoTimer);
+      clearTimeout(skeletonTimer);
+    };
   });
 </script>
 
@@ -386,13 +408,15 @@
       {#if firstSyncPending}
         <div class="mt-6 flex flex-col gap-3" role="status">
           {@render loadingRows()}
-          <!-- Offline note only; an online sync failure surfaces solely in the
-               header SyncIndicator, never duplicated inline. -->
-          {#if waitingForFirstSync && !online.online}
-            <p class="max-w-[70ch] text-caption leading-relaxed text-muted">{copy.offline}</p>
-          {/if}
         </div>
       {:else if quranData !== null}
+        {#if !online.online && bookmarks.syncedAt === null}
+          <!-- Offline cold load (offline-skeleton fix): the skeleton resolved
+               to this view without a snapshot, so the blank list carries the
+               reason. An online sync failure surfaces solely in the header
+               SyncIndicator, never duplicated inline. -->
+          <p class="mt-4 max-w-[70ch] text-caption leading-relaxed text-muted">{copy.offline}</p>
+        {/if}
         {#if emptyList}
           {@render emptyState(copy.emptyPage)}
         {/if}
