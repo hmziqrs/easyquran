@@ -7,7 +7,7 @@ against a known state with no edits mixed in. Every pending correction, verified
 item lives HERE instead; apply to `next-features.md` only after a proper verification round, in one
 deliberate pass.
 
-Sequencing: that pass is phase **V** in [`master-plan.md`](../master-plan.md) — QA FLOW-06, apply
+Sequenced by: that pass is phase **V** in [`master-plan.md`](../master-plan.md) — QA FLOW-06, apply
 this ledger in one pass, then retire `next-features.md`, `locale-suggest.md`, and this ledger
 together.
 

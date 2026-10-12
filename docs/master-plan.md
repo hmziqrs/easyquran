@@ -45,8 +45,8 @@ the queue reaches it.
 | **R**   | Pre-release copy pass                                         | ready   | — (sequenced last; no hard deps)             | C03 (Terms recitation wording), C04 (FAQ offline answer), C08 (marketing landing + reader label truth sweep) resolved in the ledger                                                                                                                                                                                                                  | C03 + C04 wording, then the C08 sweep                                                       | [`remaining/copy-corrections.md`](remaining/copy-corrections.md)                                                                         |
 
 **Gated, not sequenced.** W18 (device token) and W19 (optional component fingerprinting) sit
-behind **Gate B** ([`abuse-prevention.md`](abuse-prevention.md) §6.6: ≥90 days of W3 data plus a
-named evasion case) and get registry phases only if the gate fires.
+behind **Gate B** ([`abuse-prevention.md`](abuse-prevention.md) §6.6: ≥90 days or ≥1,000 signups
+of W3 data plus a named evasion case) and get registry phases only if the gate fires.
 
 ## Rules
 

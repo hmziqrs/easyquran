@@ -4,7 +4,7 @@ EasyQuran is under active development. Entries below are expected placeholders o
 copy—not defects in a released product. Keep this standalone ledger for the pre-release content pass,
 when wording should be aligned with the features selected for launch.
 
-Sequencing: this ledger is worked by phase **R** in [`master-plan.md`](../master-plan.md) — the
+Sequenced by: this ledger is worked by phase **R** in [`master-plan.md`](../master-plan.md) — the
 pre-release copy pass. Currently open: C03, C04, C08.
 
 > **Updated 2026-10-12 (§9.8 copy pass):** copy now lives in `web/messages/*.json` (the old
@@ -68,7 +68,7 @@ That describes an offline audio cache that does not exist.
 **Before release:** make this match the final audio/offline policy. If audio remains deferred, limit
 the answer to shipped offline reading behavior.
 
-## C05 — Recitation preview placeholder on landing — RESOLVED 2026-10-12
+## C05 — Recitation preview placeholder on landing — RESOLVED 2026-10-13
 
 [`(marketing)/+page.svelte`](<../../web/src/routes/(marketing)/+page.svelte>) said search, bookmarks,
 and recitation “are there when you need them,” then said the full player is “only a preview.” No

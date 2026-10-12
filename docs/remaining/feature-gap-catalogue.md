@@ -4,7 +4,7 @@ This standalone catalogue records what Quran.com exposes, what EasyQuran current
 remains. “Parity” means workflow coverage, not visual imitation. Development-only placeholder copy
 does not count as a shipped feature or a product defect.
 
-Sequencing: the next parity batch is phase **P** in [`master-plan.md`](../master-plan.md), scoped
+Sequenced by: the next parity batch is phase **P** in [`master-plan.md`](../master-plan.md), scoped
 from the P0 rows (R01–R05, P01).
 
 ## Reader, recitation, and study
