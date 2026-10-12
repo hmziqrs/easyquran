@@ -11,6 +11,9 @@ mod m000008_bookmark_verse_unique;
 mod m000009_lowercase_emails;
 mod m000010_passkey_credentials;
 mod m000011_device_token_ownership;
+mod m000012_bookmark_context;
+mod m000013_reading_sessions;
+mod m000014_user_analytics;
 
 pub struct Migrator;
 
@@ -53,6 +56,22 @@ impl MigratorTrait for Migrator {
             // writes and the identities COUNT(*) failed on every real DB.
             Box::new(m000010_passkey_credentials::Migration),
             Box::new(m000011_device_token_ownership::Migration),
+            // m000012 ships the phase-2 bookmark context (next-features §9.1):
+            // session/translation/range columns + tombstones on bookmarks,
+            // kind/position/deleted_at on bookmark_folders, and the scoped
+            // partial unique index replacing m000008's flat verse unique.
+            Box::new(m000012_bookmark_context::Migration),
+            // m000013 ships the reading-session sync tables (next-features
+            // §9.1): reading_sessions (+tombstones), reading_session_positions
+            // (one continue-reading anchor per session), and
+            // reading_session_progress (per-surah furthest ayah). All keyed
+            // (user_id, …) so client-minted ids can never cross accounts.
+            Box::new(m000013_reading_sessions::Migration),
+            // m000014 ships the first-party reading-analytics tables
+            // (next-features Feature 6): append-only reading_events plus the
+            // reading_daily rollup that survives the raw-event retention
+            // purge. Client-supplied local_day; never server-derived.
+            Box::new(m000014_user_analytics::Migration),
         ]
     }
 }

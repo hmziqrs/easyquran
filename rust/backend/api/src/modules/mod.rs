@@ -33,5 +33,7 @@ pub mod facebook_auth_v1;
 pub mod github_auth_v1;
 pub mod notification_v1;
 pub mod passkey_v1;
+pub mod reading_session_v1;
+pub mod user_analytics_v1;
 
 pub mod quran_v1;
