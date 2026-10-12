@@ -35,6 +35,23 @@ function words(value: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Spelling aliases (TRX-04): romanizations the catalogue's names use
+ * interchangeably. A token equal to one side matches a field word equal to the
+ * other — "sahih" finds "Saheeh", "pickthal" finds "Pickthall" — closing gaps
+ * edit distance 1 cannot (sahih → saheeh is distance 2).
+ */
+const SPELLING_ALIASES: ReadonlyArray<readonly [string, string]> = [
+  ["sahih", "saheeh"],
+  ["pickthall", "pickthal"],
+];
+
+function isAliasOf(token: string, word: string): boolean {
+  return SPELLING_ALIASES.some(
+    ([a, b]) => (token === a && word === b) || (token === b && word === a),
+  );
+}
+
 /** Classic two-row Levenshtein distance; inputs here are short single words. */
 function editDistance(a: string, b: string): number {
   if (Math.abs(a.length - b.length) > 1) return 2;
@@ -52,6 +69,7 @@ function editDistance(a: string, b: string): number {
 
 function tokenHitsWord(token: string, word: string): boolean {
   if (word.includes(token)) return true;
+  if (isAliasOf(token, word)) return true;
   if (token.length < 4) return false;
   return editDistance(token, word) <= 1;
 }

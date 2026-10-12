@@ -60,7 +60,18 @@ const h = vi.hoisted(() => {
   };
 });
 
-vi.mock("$app/env", () => ({ browser: true }));
+// `dev` rides along for config/site.ts (in via the storage-report graph).
+vi.mock("$app/env", () => ({ browser: true, dev: false }));
+// The modal's offline line (TRX-16) reads the storage report, whose graph
+// reaches $app/env/public; the kit dev-client there needs this stub in jsdom
+// (same shape as translation-picker.test.ts).
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+  PUBLIC_TURNSTILE_SITE_KEY: undefined,
+}));
 vi.mock("$app/state", () => ({ page: h.nav }));
 vi.mock("$app/navigation", () => ({ replaceState: h.replaceState }));
 vi.mock("#lib/stores/reader.svelte.js", () => ({ reader: h.readerStub }));

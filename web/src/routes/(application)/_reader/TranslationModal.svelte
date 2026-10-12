@@ -24,9 +24,16 @@
   import { isTafsirTranslation } from "#lib/quran/text-marks.js";
   import type { TranslationProvenance } from "#lib/quran/catalogue.js";
   import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
+  import { storageReport } from "#lib/stores/storage-report.svelte.js";
   import { translationRecents } from "#lib/stores/translation-recents.svelte.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
-  import { reader_translations_commentary, reader_translations_recent } from "#lib/i18n/m/reader.js";
+  import {
+    reader_tooltip_offline,
+    reader_tooltip_offline_downloaded,
+    reader_tooltip_offline_needs_internet,
+    reader_translations_commentary,
+    reader_translations_recent,
+  } from "#lib/i18n/m/reader.js";
   import { readerHrefFor } from "#lib/i18n/reader.js";
   import { publicHref } from "#lib/i18n/public-href.js";
   import { Icon } from "#lib/components/icon/index.js";
@@ -116,10 +123,21 @@
   // catalogue, shown under their own heading inside their language's pane.
   const commentaryRows = $derived(TRANSLATION_CATALOGUE.filter((t) => isTafsirTranslation(t.id)));
 
+  // Every explicit selection records the MRU head and the author's last-used
+  // variant (Feature 1.4), which survives the MRU's 20-entry cap.
+  function recordUse(id: string): void {
+    const entry = TRANSLATION_CATALOGUE_BY_ID.get(id);
+    translationRecents.record(
+      id,
+      Date.now(),
+      entry === undefined ? undefined : translationAuthorKey(entry),
+    );
+  }
+
   function pick(id: string): void {
     // An explicit picker choice is a use; record before the pick flows so
     // orderings derived from the MRU (Reading's chips) see the new head at once.
-    translationRecents.record(id);
+    recordUse(id);
     readPick?.onPick(id);
     open = false;
   }
@@ -128,6 +146,12 @@
   // Locale changes navigate (full reload), so resolving once matches getReaderUiCopy's lifecycle.
   const recentLabel = reader_translations_recent(undefined, { locale: copy.locale });
   const commentaryLabel = reader_translations_commentary(undefined, { locale: copy.locale });
+  // TRX-16 hover-card availability line, resolved the same one-shot way.
+  const offlineLabel = reader_tooltip_offline(undefined, { locale: copy.locale });
+  const downloadedLabel = reader_tooltip_offline_downloaded(undefined, { locale: copy.locale });
+  const needsInternetLabel = reader_tooltip_offline_needs_internet(undefined, {
+    locale: copy.locale,
+  });
   let searchQuery = $state("");
   // Selected language in the rail; null until the modal first opens.
   let railLanguage = $state<string | null>(null);
@@ -216,17 +240,20 @@
   const languageCollator = new Intl.Collator("en", { sensitivity: "base" });
 
   function buildGroups(rows: readonly TranslationCatalogueEntry[]): LanguageGroup[] {
+    // One rail tab per language CODE: the catalogue carries two display-name
+    // variants for some codes (az, dv, ug, …), and grouping by the raw
+    // language string split those into two tabs. The first entry's display
+    // name labels the merged tab.
     const map = new Map<string, TranslationCatalogueEntry[]>();
     for (const t of rows) {
-      const arr = map.get(t.language);
+      const arr = map.get(t.languageCode);
       if (arr) arr.push(t);
-      else map.set(t.language, [t]);
+      else map.set(t.languageCode, [t]);
     }
     return [...map.entries()]
-      .map(([language, entries]) => {
-        const code = entries[0]?.languageCode ?? "";
+      .map(([code, entries]) => {
         return {
-          language,
+          language: entries[0]?.language ?? "",
           code,
           flag: flagFor(code).flag,
           autonym: nativeNameFor(code),
@@ -338,6 +365,7 @@
     return selectedIds.includes(id);
   }
   function compareRepresentatives(
+    key: string,
     a: TranslationCatalogueEntry,
     b: TranslationCatalogueEntry,
   ): number {
@@ -345,6 +373,12 @@
     if (selectedDelta !== 0) return selectedDelta;
     const recencyDelta = recencyRank(a.id) - recencyRank(b.id);
     if (recencyDelta !== 0) return recencyDelta;
+    // Feature 1.4: the author's last-used variant outlives MRU eviction.
+    const remembered = translationRecents.authorVariant(key);
+    if (remembered !== undefined) {
+      if (a.id === remembered) return -1;
+      if (b.id === remembered) return 1;
+    }
     return translationProvenanceRank(a.id) - translationProvenanceRank(b.id);
   }
   function orderAuthorGroup(
@@ -356,7 +390,7 @@
     if (tail.length === 0) return { key, representative: head, rest: [] };
     let best = 0;
     for (let i = 1; i < variants.length; i += 1) {
-      if (compareRepresentatives(variants[i]!, variants[best]!) < 0) best = i;
+      if (compareRepresentatives(key, variants[i]!, variants[best]!) < 0) best = i;
     }
     return {
       key,
@@ -393,13 +427,14 @@
     return rows;
   });
 
-  // Rail dot: languages holding a selected text (or Reading's flowing text).
+  // Rail dot: languages (by code, matching the rail's grouping) holding a
+  // selected text (or Reading's flowing text).
   const languagesInUse = $derived.by(() => {
     const ids = picking ? [readPick?.current] : selectedIds;
     const inUse = new Set<string>();
     for (const id of ids) {
       const entry = id ? TRANSLATION_CATALOGUE_BY_ID.get(id) : undefined;
-      if (entry) inUse.add(entry.language);
+      if (entry) inUse.add(entry.languageCode);
     }
     return inUse;
   });
@@ -407,6 +442,14 @@
   // Mobile: the pane replaces the rail once a language is chosen; searching
   // always shows the pane (the rail is filtered anyway). md+ shows both.
   const paneVisible = $derived(mobilePane || searchActive);
+
+  // TRX-16: the hover card's offline line derives from the verse-cache state
+  // (the storage report's artifacts). Hydrated lazily on first open, so the
+  // reader page never queries artifacts until the picker is opened.
+  const cachedIds = $derived(new Set(storageReport.artifacts.map((artifact) => artifact.id)));
+  $effect(() => {
+    if (open) storageReport.hydrate();
+  });
 
   // Selection changes only touch the stacked store + the ?more= URL param; the
   // reader layout's effects keep worker pinning in sync from there. The URL is
@@ -419,7 +462,7 @@
     const wasSelected = selectedIds.includes(id);
     stackedTranslations.toggle(id);
     // Stacking a translation is an explicit choice; unstacking one is not.
-    if (!wasSelected) translationRecents.record(id);
+    if (!wasSelected) recordUse(id);
     syncUrl();
   }
   function reorder(id: string, delta: -1 | 1): void {
@@ -677,7 +720,7 @@
 
       <TooltipProvider delayDuration={400}>
       <div
-        class="grid min-h-0 flex-1 overflow-hidden border-t border-border md:grid-cols-[232px_minmax(0,1fr)]"
+        class="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden border-t border-border md:grid-cols-[232px_minmax(0,1fr)]"
       >
         {#snippet translationRow(
           t: TranslationCatalogueEntry,
@@ -877,9 +920,14 @@
                 </div>
                 <div class="flex w-full gap-2">
                   <dt class="w-[4.5rem] flex-none text-background/60">
-                    {copy.translations.tooltipSize}
+                    {offlineLabel}
                   </dt>
-                  <dd class="min-w-0 flex-1">{formatSize(t.sizeBytes)}</dd>
+                  <!-- TRX-16: availability reads from the verse cache, not the
+                       byte size — one-line description stays deferred (no
+                       catalogue field to derive it from). -->
+                  <dd class="min-w-0 flex-1">{cachedIds.has(t.id)
+                      ? downloadedLabel
+                      : needsInternetLabel}</dd>
                 </div>
                 <div class="flex w-full gap-2">
                   <dt class="w-[4.5rem] flex-none text-background/60">
@@ -892,12 +940,32 @@
           </Tooltip>
         {/snippet}
 
+        {#if !searchActive && recentRows.length > 0}
+          <!-- Pinned above the rail/pane boundary (global on every viewport —
+               phones see it at first open, before any language is tapped): the
+               reader's most recently used translations across languages; a
+               rail's own recents are also boosted to its head below. An
+               untouched reader (no recorded use) sees no group and no reorder. -->
+          <section
+            data-recent-group
+            class="row-start-1 flex-none border-b border-border px-2 pb-1 md:col-span-2"
+          >
+            <h4 class="px-2 pb-1 pt-2.5 text-xs font-medium text-muted-foreground">
+              {recentLabel}
+            </h4>
+            <ul class="flex flex-col gap-0.5">
+              {#each recentRows as t (t.id)}
+                {@render translationRow(t, true, "recent")}
+              {/each}
+            </ul>
+          </section>
+        {/if}
         <nav
           data-language-rail
           aria-label={copy.translations.languagesLabel}
           class="{paneVisible
             ? 'hidden'
-            : 'flex'} min-h-0 flex-col gap-0.5 overflow-y-auto overscroll-contain border-border p-2 md:flex md:border-e"
+            : 'flex'} row-start-2 min-h-0 flex-col gap-0.5 overflow-y-auto overscroll-contain border-border p-2 md:col-start-1 md:flex md:border-e"
         >
           {#each languages as l, i (l.language)}
             {@const active = l.language === activeLanguage}
@@ -934,7 +1002,7 @@
                   >
                 {/if}
               </span>
-              {#if languagesInUse.has(l.language)}
+              {#if languagesInUse.has(l.code)}
                 <span
                   data-language-in-use
                   class="size-1.5 flex-none rounded-full bg-primary"
@@ -952,7 +1020,7 @@
           data-language-pane
           class="{paneVisible
             ? 'flex'
-            : 'hidden'} min-h-0 flex-1 touch-manipulation flex-col overflow-x-hidden overflow-y-auto overscroll-contain md:flex"
+            : 'hidden'} row-start-2 min-h-0 flex-1 touch-manipulation flex-col overflow-x-hidden overflow-y-auto overscroll-contain md:col-start-2 md:flex"
         >
           {#snippet paneBack()}
             <button
@@ -1009,22 +1077,6 @@
                 {copy.translations.results(paneRowCount)}
               </span>
             </div>
-            {#if recentRows.length > 0}
-              <!-- Pinned above every rail: the reader's most recently used
-                   translations across languages; a rail's own recents are also
-                   boosted to its head below. An untouched reader (no recorded
-                   use) sees no group and no reorder at all. -->
-              <section data-recent-group class="flex-none border-b border-border px-2 pb-1">
-                <h4 class="px-2 pb-1 pt-2.5 text-xs font-medium text-muted-foreground">
-                  {recentLabel}
-                </h4>
-                <ul class="flex flex-col gap-0.5">
-                  {#each recentRows as t (t.id)}
-                    {@render translationRow(t, true, "recent")}
-                  {/each}
-                </ul>
-              </section>
-            {/if}
             <ul class="flex flex-col gap-0.5 p-2">
               {#each activeGroups as g (g.key)}
                 {#if g.rest.length > 0}

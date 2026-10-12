@@ -42,6 +42,9 @@ const {
     whenReady: vi.fn(),
     readRange: vi.fn(),
     onStatus: vi.fn().mockReturnValue(() => {}),
+    // TranslationModal hydrates the storage report (TRX-16 offline line); the
+    // stub must answer the artifact listing or refresh() rejects unhandled.
+    listArtifacts: vi.fn().mockResolvedValue([]),
   },
   loadQuranDataStub: vi.fn(),
   // SAFETY: the double mirrors the real store contract; beforeEach reassigns status to arbitrary status strings and error to string | null, and both seed values are members of those unions.

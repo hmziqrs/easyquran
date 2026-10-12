@@ -66,6 +66,17 @@ describe("translationTokenMatches", () => {
     const ar = { ...fields, language: "Arabic", languageCode: "ar", autonym: "العربية" };
     expect(translationTokenMatches("العَرَبِيَّة", ar)).toBe(true);
   });
+
+  it("matches spelling aliases both ways: sahih finds Saheeh, pickthal finds Pickthall (TRX-04)", () => {
+    const saheeh = { ...fields, name: "Saheeh International", translator: null };
+    expect(translationTokenMatches("sahih", saheeh)).toBe(true);
+    expect(translationMatchesQuery("sahih international", saheeh)).toBe(true);
+    const pickthall = { ...fields, name: "Pickthall", translator: "Marmaduke Pickthall" };
+    expect(translationTokenMatches("pickthal", pickthall)).toBe(true);
+    // the catalogue's spelling also matches the query's alias spelling
+    const sahihNamed = { ...fields, name: "Sahih International", translator: null };
+    expect(translationTokenMatches("saheeh", sahihNamed)).toBe(true);
+  });
 });
 
 describe("translationMatchesQuery", () => {

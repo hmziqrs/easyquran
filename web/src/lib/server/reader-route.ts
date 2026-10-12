@@ -291,14 +291,20 @@ export function rubRedirectTarget(pathname: string): SurahLocalRedirectTarget | 
 }
 
 export interface TafsirRedirectTarget {
-  /** Bare canonical Arabic reader path (surah root or range route). */
+  /** Bare canonical Arabic reader path (surah root, range route, or snippet detail). */
   readonly path: string;
   /** Tafsir catalogue id the caller appends to the ?more= stack. */
   readonly moreId: string;
+  /** Surah-local-page twin only: D1 anchor at the spread's first ayah, applied when the
+   * request carries no fragment of its own. */
+  readonly fragment?: string;
 }
 
 const TRANSLATED_SURAH = /^\/([^/]+)\/t\/([^/]+)\/([^/]+)$/u;
 const TRANSLATED_RANGE = /^\/t\/([^/]+)\/([^/]+)\/(page|juz|hizb)\/([1-9][0-9]*)$/u;
+const TRANSLATED_SNIPPET = /^\/t\/([^/]+)\/([^/]+)\/azkar\/([^/]+)$/u;
+// TRANSLATED_SURAH_LOCAL_PAGE lives with the other D1 regexes above (used by both
+// surahLocalRedirectTarget and the tafsir surah-local twin below).
 
 function tafsirSourceId(lang: string, translator: string): string | null {
   if (!CONTENT_LANGUAGE_SEGMENT.test(lang) || !TRANSLATOR_SEGMENT.test(translator)) return null;
@@ -307,12 +313,15 @@ function tafsirSourceId(lang: string, translator: string): string | null {
 }
 
 /**
- * Redirect target for a tafsir reader URL (TRX-01, EC-50): `/{surah}/t/ar/muyassar`
- * and `/t/ar/{muyassar|jalalayn}/{page|juz|hizb}/{n}` land on the Arabic reader
- * with the tafsir stacked (`?more=`). Pure, like the other redirect builders —
- * the hooks branch owns the /ar prefix, the query merge, and the fragment.
- * Non-tafsir translations, unknown slugs/sources, and bad bounds yield null
- * (caller falls through to the parse 404).
+ * Redirect target for a tafsir reader URL (TRX-01, EC-50): `/{surah}/t/ar/muyassar`,
+ * `/t/ar/{muyassar|jalalayn}/{page|juz|hizb}/{n}`, the retired surah-local page twin
+ * `/{surah}/t/ar/{tafsir}/page/{n}`, and the translated snippet twin
+ * `/t/ar/{tafsir}/azkar/{slug}` land on the Arabic reader (or snippet) with the
+ * tafsir stacked (`?more=`). Pure, like the other redirect builders — the hooks
+ * branch owns the /ar prefix and the query merge; an inbound fragment wins over
+ * the surah-local twin's anchor. Non-tafsir
+ * translations, unknown slugs/sources, and bad bounds yield null (caller falls
+ * through to the parse 404).
  */
 export function tafsirRedirectTarget(pathname: string): TafsirRedirectTarget | null {
   const range = TRANSLATED_RANGE.exec(pathname);
@@ -322,6 +331,26 @@ export function tafsirRedirectTarget(pathname: string): TafsirRedirectTarget | n
     const index = positiveInteger(range[4]!);
     if (!moreId || !kind || index === null || !rangeIndexInRange(kind, index)) return null;
     return { path: `/${range[3]}/${range[4]}`, moreId };
+  }
+  const localPage = TRANSLATED_SURAH_LOCAL_PAGE.exec(pathname);
+  if (localPage) {
+    const moreId = tafsirSourceId(localPage[2]!, localPage[3]!);
+    const surah = moreId ? QURAN_DATA.surahBySlug(localPage[1]!) : undefined;
+    if (!moreId || !surah) return null;
+    // Same D1 collapse as surahLocalRedirectTarget: local page 1 is the bare
+    // root; any other spread anchors at its first ayah.
+    const pageNumber = Number(localPage[4]!);
+    if (pageNumber === 1) return { path: `/${surah.slug}`, moreId };
+    const spread = QURAN_DATA.surahLocalPage(surah.num, pageNumber);
+    if (!spread) return null;
+    return { path: `/${surah.slug}`, moreId, fragment: `#ayah-${surah.num}-${spread.startAyah}` };
+  }
+  const snippet = TRANSLATED_SNIPPET.exec(pathname);
+  if (snippet) {
+    const moreId = tafsirSourceId(snippet[1]!, snippet[2]!);
+    const arabic = moreId ? snippetRoute(snippet[3]!) : null;
+    if (!moreId || !arabic) return null;
+    return { path: `/azkar/${arabic.slug}`, moreId };
   }
   const surah = TRANSLATED_SURAH.exec(pathname);
   if (surah) {

@@ -21,7 +21,7 @@
     reader_transliteration_legend,
   } from "#lib/i18n/m/reader.js";
   import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
-  import type { StackedTranslation } from "#lib/data/quran-types.js";
+  import type { StackedTranslation, TranslationDirection } from "#lib/data/quran-types.js";
   import AyahOrnament from "./AyahOrnament.svelte";
   import IndoPakAyah from "./IndoPakAyah.svelte";
 
@@ -31,6 +31,8 @@
     vKey,
     isTranslation,
     translationLang,
+    translationDirection,
+    translationName,
     pending = false,
     arabicPending = false,
     leadId,
@@ -51,6 +53,10 @@
     isTranslation?: boolean;
     /** Language of a translation flowed in Reading on a route of another source. */
     translationLang?: string;
+    /** Declared direction of the flowed translation (off-route); route params still win. */
+    translationDirection?: TranslationDirection;
+    /** Catalogue name of the flowed translation (empty-verse credit off-route). */
+    translationName?: string;
     /** Reading flows a stacked translation whose text has not arrived yet. */
     pending?: boolean;
     /** A translation route's Arabic has not arrived yet (Ayah-by-Ayah keeps a line for it). */
@@ -129,8 +135,9 @@
     return TRANSLATION_BY_ID.get(translationIdFromSegments(lang, translator));
   });
 
-  /** Declared direction for the flowed translation line; `auto` only off-route. */
-  const flowDirection = $derived(routeTranslationEntry?.direction ?? "auto");
+  /** Declared direction for the flowed translation line; `auto` only when neither
+   * the route nor the flowed source declares one. */
+  const flowDirection = $derived(routeTranslationEntry?.direction ?? translationDirection ?? "auto");
 
   const mainEmpty = $derived(translationActive && !pending && text.trim() === "");
   const mainTranslit = $derived(
@@ -148,9 +155,10 @@
     );
   }
 
-  /** Name shown for an empty verse: the route's catalogue name, else its language. */
+  /** Name shown for an empty verse: the route's catalogue name, the flowed
+   * source's name, else its language. */
   function mainEmptyWho(): string {
-    return routeTranslationEntry?.name ?? translationLang ?? page.params.lang ?? "";
+    return routeTranslationEntry?.name ?? translationName ?? translationLang ?? page.params.lang ?? "";
   }
 
   function laneEmpty(t: StackedTranslation): boolean {

@@ -333,7 +333,9 @@ function tafsirRouteRedirect(event: RequestEvent): Response | null {
   if (!ids.includes(target.moreId)) ids.push(target.moreId);
   params.set(READER_MORE_PARAM, ids.join(","));
   const inboundHash = building ? "" : event.url.hash;
-  const location = `${base.prefix}${target.path}?${params.toString()}${inboundHash}`;
+  // The surah-local-page twin carries the D1 spread anchor; an inbound fragment wins.
+  const fragment = inboundHash || (target.fragment ?? "");
+  const location = `${base.prefix}${target.path}?${params.toString()}${fragment}`;
   return new Response(null, {
     status: 308,
     headers: { location, "cache-control": "public, max-age=86400" },

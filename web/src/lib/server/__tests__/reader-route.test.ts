@@ -98,6 +98,35 @@ describe("prefix-less reader semantic route parser", () => {
     expect(parseReaderPath("/2")).toBeNull();
   });
 
+  it("parses the curated snippet shapes: Arabic detail and its translated twin", () => {
+    expect(parseReaderPath("/azkar/ayat-al-kursi")).toEqual({
+      type: "snippet",
+      slug: "ayat-al-kursi",
+    });
+    expect(parseReaderPath("/t/en/sahih/azkar/ayat-al-kursi")).toMatchObject({
+      type: "translated-snippet",
+      sourceId: "en.sahih",
+      contentLanguage: "en",
+      contentDirection: "ltr",
+      slug: "ayat-al-kursi",
+    });
+    // Unknown slugs and tafsir sources never parse (tafsir 308s instead).
+    expect(parseReaderPath("/azkar/not-a-snippet")).toBeNull();
+    expect(parseReaderPath("/t/en/sahih/azkar/not-a-snippet")).toBeNull();
+    expect(parseReaderPath("/t/ar/muyassar/azkar/ayat-al-kursi")).toBeNull();
+    // The resolved route ids validate through the same parser.
+    expect(
+      parseReaderRoute("/(application)/azkar/[slug]", { slug: "ayat-al-kursi" }),
+    ).toMatchObject({ type: "snippet", slug: "ayat-al-kursi" });
+    expect(
+      parseReaderRoute("/(application)/t/[lang]/[translator]/azkar/[slug]", {
+        lang: "en",
+        translator: "sahih",
+        slug: "ayat-al-kursi",
+      }),
+    ).toMatchObject({ type: "translated-snippet", sourceId: "en.sahih" });
+  });
+
   it("validates resolved route IDs and parameters through the same parser", () => {
     expect(
       parseReaderRoute("/(application)/[surah]/t/[lang]/[translator]", {
@@ -274,12 +303,43 @@ describe("tafsirRedirectTarget (tafsir routes 308 to the Arabic reader, tafsir s
     });
   });
 
+  it("lands a tafsir translated snippet on the Arabic snippet with the tafsir stacked", () => {
+    expect(tafsirRedirectTarget("/t/ar/muyassar/azkar/ayat-al-kursi")).toEqual({
+      path: "/azkar/ayat-al-kursi",
+      moreId: "ar.muyassar",
+    });
+    expect(tafsirRedirectTarget("/t/ar/jalalayn/azkar/baqarah-last-two")).toEqual({
+      path: "/azkar/baqarah-last-two",
+      moreId: "ar.jalalayn",
+    });
+  });
+
+  it("308s the retired tafsir surah-local page onto the Arabic root with the D1 spread anchor", () => {
+    const spread = QURAN_DATA.surahLocalPage(2, 2);
+    if (!spread) throw new Error("missing al-baqarah local page 2");
+    expect(tafsirRedirectTarget("/al-baqarah/t/ar/muyassar/page/2")).toEqual({
+      path: "/al-baqarah",
+      moreId: "ar.muyassar",
+      fragment: `#ayah-2-${spread.startAyah}`,
+    });
+    // Local page 1 collapses to the bare root with no fragment, like the D1 twin.
+    expect(tafsirRedirectTarget("/al-fatihah/t/ar/jalalayn/page/1")).toEqual({
+      path: "/al-fatihah",
+      moreId: "ar.jalalayn",
+    });
+  });
+
   it("returns null for plain translations, unknown sources/slugs, and bad bounds", () => {
     expect(tafsirRedirectTarget("/al-fatihah/t/en/sahih")).toBeNull();
     expect(tafsirRedirectTarget("/t/en/sahih/juz/1")).toBeNull();
     expect(tafsirRedirectTarget("/not-a-surah/t/ar/muyassar")).toBeNull();
     expect(tafsirRedirectTarget("/t/ar/muyassar/juz/31")).toBeNull();
     expect(tafsirRedirectTarget("/juz/1")).toBeNull();
+    // Snippet and surah-local-page twins refuse the same inputs.
+    expect(tafsirRedirectTarget("/t/en/sahih/azkar/ayat-al-kursi")).toBeNull();
+    expect(tafsirRedirectTarget("/t/ar/muyassar/azkar/not-a-snippet")).toBeNull();
+    expect(tafsirRedirectTarget("/al-fatihah/t/en/sahih/page/2")).toBeNull();
+    expect(tafsirRedirectTarget("/al-baqarah/t/ar/muyassar/page/99")).toBeNull();
   });
 
   it("parseReaderPath refuses tafsir sources outright (never rendered in the verse position)", () => {

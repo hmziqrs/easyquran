@@ -81,6 +81,21 @@ describe("TranslationRecentsStore", () => {
     fresh.dispose();
   });
 
+  it("keeps the per-author last-used variant after the MRU evicts it (Feature 1.4)", () => {
+    const author = "en saheeh international";
+    store.record("en.sahih", 1000, author);
+    store.record("qul.r20.en-sahih-international", 2000, author);
+    // flood the MRU past the cap: the author's entries fall off the tail
+    for (let i = 0; i < TRANSLATION_RECENTS_MAX; i += 1) store.record(`t.${i}`, 3000 + i);
+    expect(store.rankOf("en.sahih")).toBe(-1);
+    expect(store.rankOf("qul.r20.en-sahih-international")).toBe(-1);
+    expect(store.authorVariant(author)).toBe("qul.r20.en-sahih-international");
+    // persisted: a fresh instance reads the variant memory back
+    const fresh = new TranslationRecentsStore();
+    expect(fresh.authorVariant(author)).toBe("qul.r20.en-sahih-international");
+    fresh.dispose();
+  });
+
   it("a future schema resets to empty instead of guessing", () => {
     window.localStorage.setItem(KEY, JSON.stringify({ v: 2, entries: [{ id: "en.sahih" }] }));
     const fresh = new TranslationRecentsStore();

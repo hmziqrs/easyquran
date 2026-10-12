@@ -54,9 +54,11 @@ const RESERVED_SURAH_SEGMENTS = new Set([
   "health",
   "design",
 ]);
-/** Single-segment reader indexes (/juz, /surah, /pages). /yours and /bookmarks are
- * personal app routes — never localized, never in this set. */
-const READER_INDEX_SEGMENTS = new Set(["juz", "surah", "pages"]);
+/** Single-segment reader indexes (/juz, /surah, /pages, /azkar — the curated snippet
+ * index reroutes to its `/ar` twin exactly like the other indexes, hooks.ts pattern
+ * `^/azkar(?:/{slug})?$`). /yours and /bookmarks are personal app routes — never
+ * localized, never in this set. */
+const READER_INDEX_SEGMENTS = new Set(["juz", "surah", "pages", "azkar"]);
 
 function hasUnsafeUrlCharacter(value: string): boolean {
   for (const character of value) {

@@ -58,7 +58,12 @@
   import TranslationModal from "./TranslationModal.svelte";
   import { registerTypographyWrapper } from "./typography-change";
   import { createArabicCompanion } from "./arabic-companion.svelte";
-  import type { Ayah, QuranScript, StackedTranslation } from "#lib/data/quran-types.js";
+  import type {
+    Ayah,
+    QuranScript,
+    StackedTranslation,
+    TranslationDirection,
+  } from "#lib/data/quran-types.js";
   import { loadArabicFont } from "#lib/fonts/arabic-fonts.js";
   import { arabicHrefFor, liveReaderPosition } from "./translation-nav";
   import { positionLabel } from "./position-label";
@@ -382,6 +387,11 @@
   const flowName = $derived(
     flowId === null ? null : (TRANSLATION_CATALOGUE_BY_ID.get(flowId)?.name ?? null),
   );
+  // Off-route flow (TRX-11): the flowed source's declared direction and name travel
+  // with the rows — the components cannot recover them from the URL.
+  const flowDirection = $derived(
+    flowId === null ? undefined : (TRANSLATION_CATALOGUE_BY_ID.get(flowId)?.direction ?? undefined),
+  );
   // Reading can flow any catalogue translation. A stacked one is already fetched with the
   // stack; anything else gets its own one-id fetcher, so it never shows up as a stacked lane.
   const readingFetchIds = $derived(
@@ -419,6 +429,10 @@
     readonly text: string;
     readonly isTranslation: boolean | undefined;
     readonly translationLang: string | undefined;
+    /** Declared direction of the flowed translation (off-route reading flow only). */
+    readonly translationDirection?: TranslationDirection;
+    /** Catalogue display name of the flowed translation (off-route reading flow only). */
+    readonly translationName?: string;
     readonly pending: boolean;
     readonly arabicPending: boolean;
     readonly script: QuranScript;
@@ -454,6 +468,8 @@
         text: flowed ?? "",
         isTranslation: true,
         translationLang: flowLanguage,
+        translationDirection: flowDirection,
+        translationName: flowName ?? undefined,
         pending: flowed === null,
         arabicPending: false,
         script: pageData.normalization.script,
@@ -1039,6 +1055,8 @@
       text={view.text}
       isTranslation={view.isTranslation}
       translationLang={view.translationLang}
+      translationDirection={view.translationDirection}
+      translationName={view.translationName}
       pending={view.pending}
       arabicPending={view.arabicPending}
       leadId={view.lead?.sourceId}
@@ -1075,7 +1093,7 @@
       <div class="reading-flow" dir={flowRtl ? "rtl" : undefined}>
         {#each entry.pageData.ayahs as ayah (ayah.key)}
           {@const view = rowView(ayah, entry.pageData)}
-          <ReadingAyah text={view.text} n={ayah.ayah} vKey={ayah.key} isTranslation={view.isTranslation ?? showsTranslation} translationLang={view.translationLang ?? routeEntry?.languageCode} pending={view.pending} script={view.script} />
+          <ReadingAyah text={view.text} n={ayah.ayah} vKey={ayah.key} isTranslation={view.isTranslation ?? showsTranslation} translationLang={view.translationLang ?? routeEntry?.languageCode} translationDirection={view.translationDirection} translationName={view.translationName} pending={view.pending} script={view.script} />
         {/each}
       </div>
     </section>

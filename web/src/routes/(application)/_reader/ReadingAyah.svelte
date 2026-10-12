@@ -1,6 +1,10 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { QuranScript, type QuranScript as QuranScriptValue } from "#lib/data/quran-types.js";
+  import {
+    QuranScript,
+    type QuranScript as QuranScriptValue,
+    type TranslationDirection,
+  } from "#lib/data/quran-types.js";
   import { parseTajweedSegments, tajweedRuleColor } from "#lib/quran/view/tajweed.js";
   import { parseTransliterationSegments } from "#lib/quran/text-marks.js";
   import { translationIdFromSegments } from "#lib/data/quran.js";
@@ -20,6 +24,8 @@
     vKey,
     isTranslation = false,
     translationLang,
+    translationDirection,
+    translationName,
     pending = false,
     script = QuranScript.Uthmani,
   }: {
@@ -28,6 +34,10 @@
     vKey: string;
     isTranslation?: boolean;
     translationLang?: string;
+    /** Declared direction of a translation flowed off-route; route params still win. */
+    translationDirection?: TranslationDirection;
+    /** Catalogue name of the flowed translation (empty-verse credit off-route). */
+    translationName?: string;
     pending?: boolean;
     script?: QuranScriptValue;
   } = $props();
@@ -37,14 +47,15 @@
 
   // TRX-11: the translation line's direction is the route translation's
   // declared direction (catalogue), never a dir="auto" guess; off-route
-  // reading flow (no /t/** segments) keeps auto.
+  // reading flow (no /t/** segments) takes the flowed source's declared
+  // direction instead of guessing auto.
   const routeDirection = $derived.by(() => {
     const lang = page.params.lang;
     const translator = page.params.translator;
     if (lang === undefined || translator === undefined) return undefined;
     return TRANSLATION_BY_ID.get(translationIdFromSegments(lang, translator))?.direction;
   });
-  const translationDir = $derived(routeDirection ?? "auto");
+  const translationDir = $derived(routeDirection ?? translationDirection ?? "auto");
 
   const empty = $derived(isTranslation && !pending && text.trim() === "");
   const translit = $derived(
@@ -63,7 +74,7 @@
     // SAFETY: paraglide is compiled for exactly the UI locales (en/ar), so
     // getLocale() only ever returns a UiLocale at runtime.
     return reader_translation_empty_verse(
-      { translator: name ?? translationLang ?? lang ?? "" },
+      { translator: name ?? translationName ?? translationLang ?? lang ?? "" },
       { locale: getLocale() as UiLocale },
     );
   }

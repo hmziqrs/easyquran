@@ -17,6 +17,7 @@ import type {
 import { OpenerKind, OpenerPackaging, QuranScript } from "#lib/data/quran-types.js";
 import { translationIdFromSegments } from "#lib/data/quran.js";
 import { TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
+import { isTafsirTranslation } from "#lib/quran/text-marks.js";
 import {
   FetchHttpError,
   FetchTimeoutError,
@@ -112,7 +113,10 @@ async function fetchTranslationRange(
 }
 
 function requireTranslationSource(sourceId: string, lang: string, translator: string): void {
-  if (!TRANSLATION_CATALOGUE_BY_ID.has(sourceId)) {
+  // Tafsir works are commentary, never reading translations (TRX-01, EC-50):
+  // the parser refuses them and hooks.server 308s their URLs; this gate is the
+  // backstop for any load path that reaches a page directly.
+  if (!TRANSLATION_CATALOGUE_BY_ID.has(sourceId) || isTafsirTranslation(sourceId)) {
     throw error(404, `Unknown translation: ${lang}.${translator}`);
   }
 }

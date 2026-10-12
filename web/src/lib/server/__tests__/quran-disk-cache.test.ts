@@ -28,6 +28,12 @@ describe("Quran translated-page disk cache", () => {
     );
   });
 
+  it("keys the translated snippet detail by the azkar kind and slug (§11.6)", () => {
+    expect(diskCacheKey("en.sahih", "azkar", "ayat-al-kursi")).toBe(
+      `build-${appBuildId}__en.sahih__azkar__ayat-al-kursi`,
+    );
+  });
+
   it("records a cold miss, writes HTML atomically, then serves a warm hit", async () => {
     const cache = new QuranDiskCache({
       directory: await temporaryDirectory(),
