@@ -1,10 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { VerseKey } from "#lib/data/quran.js";
-import type { RegisteredSyncDomain, SyncMutation, SyncStatus } from "#lib/sync/index.js";
+import {
+  SyncPausedError,
+  type RegisteredSyncDomain,
+  type SyncMutation,
+  type SyncStatus,
+} from "#lib/sync/index.js";
 
 import type { BookmarksMutation, BookmarksSnapshot } from "../schema";
 import { createBookmarksStore, type SyncEngineLike } from "../store.svelte";
+import { SYNC_PAGE_NONCE } from "#lib/sync/engine.svelte.js";
 
 vi.mock("$app/env", () => ({ browser: true }));
 vi.mock("$app/env/public", () => ({
@@ -24,6 +30,8 @@ async function flush(): Promise<void> {
 interface FakeEngine {
   readonly engine: SyncEngineLike;
   readonly enqueued: BookmarksMutation[];
+  /** Outbox mutation ids in enqueue order — what the §9.6 drain broadcast carries. */
+  readonly mutationIds: string[];
   readonly flushed: Array<string | undefined>;
   readonly cleared: string[];
   readonly started: number;
@@ -34,6 +42,7 @@ interface FakeEngine {
 
 function fakeEngine(): FakeEngine {
   const enqueued: BookmarksMutation[] = [];
+  const mutationIds: string[] = [];
   const flushed: Array<string | undefined> = [];
   const cleared: string[] = [];
   const handle: FakeEngine & { started: number; status: SyncStatus } = {
@@ -41,6 +50,7 @@ function fakeEngine(): FakeEngine {
     failNext: false,
     status: { phase: "idle", pending: 0, lastSyncAt: null, lastError: null },
     enqueued,
+    mutationIds,
     flushed,
     cleared,
     respondWithStatus(status: SyncStatus) {
@@ -54,11 +64,16 @@ function fakeEngine(): FakeEngine {
         }
         // SAFETY: test double — the only producer is BookmarksStore.#enqueue, whose payloads are BookmarksMutation by construction.
         enqueued.push(payload as BookmarksMutation);
+        const id = `m${enqueued.length}`;
+        mutationIds.push(id);
         // SAFETY: test double — a minimal SyncMutation shape; the store never reads the returned mutation.
-        return { id: `m${enqueued.length}`, seq: enqueued.length } as SyncMutation<P>;
+        return { id, seq: enqueued.length } as SyncMutation<P>;
       },
       async clear(domain?: string) {
         if (domain !== undefined) cleared.push(domain);
+      },
+      async reassignDomain() {
+        return 0;
       },
       pendingFor() {
         return handle.status.pending;
@@ -165,6 +180,8 @@ const SNAP: BookmarksSnapshot = {
     {
       id: "f1",
       name: "Tafsir",
+      kind: "generic",
+      position: null,
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-01-01T00:00:00Z",
     },
@@ -273,6 +290,21 @@ describe("BookmarksStore — authed toggles", () => {
     expect(rig.store.bookmarks).toHaveLength(2);
   });
 
+  it("a rejected enqueue surfaces the failure instead of silently dropping it (EC-27)", async () => {
+    const rig = makeRig([], true);
+    rig.engine.failNext = true;
+    rig.store.toggle(1, 1);
+    await flush();
+
+    expect(rig.store.enqueueError).toBe("idb full");
+
+    // The next durable write clears the surfaced error.
+    rig.store.toggle(1, 1);
+    await flush();
+    expect(rig.store.enqueueError).toBeNull();
+    expect(rig.store.isBookmarked(1, 1)).toBe(true);
+  });
+
   it("a double-fire before the optimistic apply cancels the same entity instead of minting a second upsert", async () => {
     const rig = makeRig([], true);
     rig.store.toggle(1, 1);
@@ -303,6 +335,24 @@ describe("BookmarksStore — authed toggles", () => {
     await flush();
     expect(rig.store.isBookmarked(1, 1)).toBe(false);
     expect(rig.store.bookmarks).toHaveLength(0);
+  });
+
+  it("restore() re-upserts the removed row with a fresher timestamp (BM-04 undo)", async () => {
+    const rig = makeRig([], true);
+    rig.store.applyServer(SNAP);
+    const before = rig.store.bookmarks.find((b) => b.id === "b1");
+    if (!before) throw new Error("b1 missing");
+
+    rig.store.remove("b1");
+    await flush();
+    expect(rig.store.isBookmarked(2, 255)).toBe(false);
+
+    rig.store.restore({ ...before, updatedAt: before.updatedAt });
+    await flush();
+    expect(rig.store.isBookmarked(2, 255)).toBe(true);
+    const undo = rig.engine.enqueued[1]!;
+    expect(undo).toMatchObject({ kind: "bookmark.upsert", id: "b1", surah: 2, ayah: 255 });
+    expect(undo.updatedAt > before.updatedAt).toBe(true);
   });
 
   it("remove() on a durable-but-unapplied pending row enqueues the compensating delete and retires the overlay", async () => {
@@ -342,6 +392,29 @@ describe("BookmarksStore — folders and moves", () => {
     expect(folder?.name).toBe("Tafsir");
     expect(rig.store.folders).toHaveLength(1);
     expect(rig.engine.enqueued[0]).toMatchObject({ kind: "folder.upsert", name: "Tafsir" });
+  });
+
+  it("createFolder carries the study-set kind; updateFolder re-labels kind and position LWW", async () => {
+    const rig = makeRig([], true);
+    const folder = rig.store.createFolder("Daily", "daily");
+    await flush();
+    expect(folder?.kind).toBe("daily");
+    expect(rig.engine.enqueued[0]).toMatchObject({
+      kind: "folder.upsert",
+      folderKind: "daily",
+      position: null,
+    });
+
+    rig.store.updateFolder(folder!.id, { kind: "learning", position: 2 });
+    await flush();
+    expect(rig.store.folderById(folder!.id)).toMatchObject({ kind: "learning", position: 2 });
+    // The whole row re-upserts: untouched fields ride along, never reset.
+    expect(rig.engine.enqueued[1]).toMatchObject({
+      kind: "folder.upsert",
+      name: "Daily",
+      folderKind: "learning",
+      position: 2,
+    });
   });
 
   it("rejects empty/over-long folder names", () => {
@@ -427,10 +500,55 @@ describe("BookmarksStore — server snapshots", () => {
     expect(rig.store.bookmarks.find((b) => b.surah === 2 && b.ayah === 255)?.id).toBe("b3");
     expect(rig.store.folderById("f1")?.name).toBe("Tafsir");
   });
+
+  it("a pending delete matches by verse key: a stale rival row cannot re-mark the verse (EC-40)", async () => {
+    const rig = makeRig([], true);
+    rig.store.applyServer(SNAP); // b1 lives on 2:255
+    rig.store.remove("b1"); // delete in flight for verse 2:255
+    await flush();
+
+    // Stale snapshot carries a different-id rival row for the same verse.
+    const rival = {
+      id: "rival",
+      folderId: null,
+      surah: 2,
+      ayah: 255,
+      createdAt: "2026-01-04T00:00:00Z",
+      updatedAt: "2026-01-04T00:00:00Z",
+    };
+    rig.store.applyServer({ folders: [], bookmarks: [SNAP.bookmarks[1]!, rival] });
+
+    expect(rig.store.isBookmarked(2, 255)).toBe(false);
+    expect(rig.store.isBookmarked(112, 1)).toBe(true);
+  });
+
+  it("collapses equal-timestamp rows deterministically by id, regardless of snapshot order (EC-35)", () => {
+    const rig = makeRig([], true);
+    const tieA = {
+      id: "aaa",
+      folderId: null,
+      surah: 2,
+      ayah: 255,
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-05T00:00:00Z",
+    };
+    const tieZ = { ...tieA, id: "zzz" };
+
+    rig.store.applyServer({ folders: [], bookmarks: [tieZ, tieA] });
+    expect(rig.store.bookmarks.find((b) => b.surah === 2 && b.ayah === 255)?.id).toBe("zzz");
+
+    rig.store.applyServer({ folders: [], bookmarks: [tieA, tieZ] });
+    expect(rig.store.bookmarks.find((b) => b.surah === 2 && b.ayah === 255)?.id).toBe("zzz");
+
+    // A strictly newer row still beats the greater id.
+    const newer = { ...tieA, updatedAt: "2026-01-06T00:00:00Z" };
+    rig.store.applyServer({ folders: [], bookmarks: [newer, tieZ] });
+    expect(rig.store.bookmarks.find((b) => b.surah === 2 && b.ayah === 255)?.id).toBe("aaa");
+  });
 });
 
 describe("BookmarksStore — auth transitions and migration", () => {
-  it("hydrate with a session registers the domain, migrates legacy keys and flushes", async () => {
+  it("hydrate with a session registers the domain and flushes without migrating legacy keys (EC-08)", async () => {
     const rig = makeRig(["2:255", "112:1"], true);
     rig.store.hydrate();
     await flush();
@@ -439,11 +557,11 @@ describe("BookmarksStore — auth transitions and migration", () => {
     expect(rig.registered[0]!.name).toBe("bookmarks.user:7");
     expect(rig.engine.started).toBe(1);
     expect(rig.engine.flushed).toEqual(["bookmarks.user:7"]);
-    expect(rig.engine.enqueued).toEqual([
-      expect.objectContaining({ kind: "bookmark.upsert", surah: 2, ayah: 255 }),
-      expect.objectContaining({ kind: "bookmark.upsert", surah: 112, ayah: 1 }),
-    ]);
-    // Migration never deletes legacy data.
+    // §9.4: the merge review owns the legacy upload — nothing is enqueued
+    // before an explicit choice, and no marker is written by the store.
+    expect(rig.engine.enqueued).toEqual([]);
+    expect(localStorage.getItem(MARKER_KEY)).toBeNull();
+    // Device data stays intact either way.
     expect(rig.reader.reader.bookmarkedKeys).toEqual(["2:255", "112:1"]);
   });
 
@@ -463,20 +581,11 @@ describe("BookmarksStore — auth transitions and migration", () => {
     expect(rig.store.bookmarks).toHaveLength(2);
   });
 
-  it("writes the durable per-account marker only after the migration enqueues resolve", async () => {
-    const rig = makeRig(["2:255"], true);
-    rig.store.hydrate();
-    expect(localStorage.getItem(MARKER_KEY)).toBeNull(); // not yet: enqueues unresolved
-
-    await flush();
-    expect(localStorage.getItem(MARKER_KEY)).toBe("1");
-  });
-
-  it("a fresh store instance (reload) over the same localStorage skips migration", async () => {
+  it("a fresh store instance (reload) over the same localStorage never migrates silently", async () => {
     const first = makeRig(["2:255", "112:1"], true);
     first.store.hydrate();
     await flush();
-    expect(first.engine.enqueued).toHaveLength(2);
+    expect(first.engine.enqueued).toHaveLength(0);
 
     const second = makeRig(["2:255", "112:1"], true);
     second.store.hydrate();
@@ -484,14 +593,17 @@ describe("BookmarksStore — auth transitions and migration", () => {
 
     expect(second.engine.enqueued).toEqual([]);
     expect(second.engine.flushed).toEqual(["bookmarks.user:7"]);
+    expect(localStorage.getItem(MARKER_KEY)).toBeNull();
   });
 
-  it("cold-load unknown status discards only the unowned queue", async () => {
+  it("cold-load unknown status retains the unowned queue for review (EC-48)", async () => {
     const rig = makeRig(["2:255"], false);
     rig.store.hydrate(); // anon boot: no-op
     rig.store.onAuthChanged(false);
 
-    expect(rig.engine.cleared).toEqual(["bookmarks"]);
+    // Pre-partition entries are never discarded on hydrate or logout — only an
+    // explicit merge-review choice removes them (EC-48).
+    expect(rig.engine.cleared).toEqual([]);
     expect(rig.engine.enqueued).toEqual([]);
 
     // The probe resolves authed afterwards: sync starts normally.
@@ -500,18 +612,18 @@ describe("BookmarksStore — auth transitions and migration", () => {
     await flush();
 
     expect(rig.engine.flushed).toEqual(["bookmarks.user:7"]);
-    expect(rig.engine.enqueued).toHaveLength(1); // legacy migration ran
+    expect(rig.engine.enqueued).toHaveLength(0); // legacy keys migrate only via the merge review
 
     rig.setAuthed(false);
     rig.store.onAuthChanged(false);
-    expect(rig.engine.cleared).toEqual(["bookmarks"]);
+    expect(rig.engine.cleared).toEqual([]);
   });
 
-  it("logout preserves the owner partition, resets the view; re-login skips the marked account", async () => {
+  it("logout preserves the owner partition, resets the view; re-login never migrates silently", async () => {
     const rig = makeRig(["2:255"], true);
     rig.store.hydrate();
     await flush();
-    expect(rig.engine.enqueued).toHaveLength(1);
+    expect(rig.engine.enqueued).toHaveLength(0);
 
     rig.store.applyServer(SNAP);
     rig.store.toggle(112, 1); // optimistic row + queued delete
@@ -520,16 +632,18 @@ describe("BookmarksStore — auth transitions and migration", () => {
 
     expect(rig.store.bookmarks).toEqual([]);
     expect(rig.store.folders).toEqual([]);
-    expect(rig.engine.cleared).toEqual(["bookmarks"]);
+    // Logout wipes the view, never any queue partition (EC-14/EC-48).
+    expect(rig.engine.cleared).toEqual([]);
 
-    // Re-login as the same account: the durable marker gates re-migration.
+    // Re-login as the same account: the legacy upload stays the merge review's
+    // explicit choice — nothing new is enqueued, no marker appears.
     rig.reader.setKeys(["2:255", "3:26"]);
     rig.setAuthed(true);
     rig.store.onAuthChanged(true);
     await flush();
 
-    expect(rig.engine.enqueued).toHaveLength(2); // only the pre-logout toggle
-    expect(localStorage.getItem(MARKER_KEY)).toBe("1");
+    expect(rig.engine.enqueued).toHaveLength(1); // only the pre-logout toggle
+    expect(localStorage.getItem(MARKER_KEY)).toBeNull();
   });
 
   it("a snapshot from a round mid-flight at logout never repopulates the view", async () => {
@@ -546,20 +660,6 @@ describe("BookmarksStore — auth transitions and migration", () => {
 
     expect(rig.store.bookmarks).toEqual([]);
     expect(rig.store.folders).toEqual([]);
-  });
-
-  it("migrates again for a different account id", async () => {
-    const first = makeRig(["2:255"], true, 7);
-    first.store.hydrate();
-    await flush();
-    expect(localStorage.getItem(MARKER_KEY)).toBe("1");
-
-    const second = makeRig(["2:255"], true, 9);
-    second.store.hydrate();
-    await flush();
-
-    expect(second.engine.enqueued).toHaveLength(1);
-    expect(localStorage.getItem("eq.bookmarks.legacy-migrated.9")).toBe("1");
   });
 });
 
@@ -715,5 +815,142 @@ describe("BookmarksStore — view grouping", () => {
     expect(groups.get("f1")!.map((b) => b.id)).toEqual(["b1"]);
     // Exact-match helper stays untouched for existing consumers.
     expect(rig.store.bookmarksIn("ghost")).toHaveLength(1);
+  });
+});
+
+describe("BookmarksStore — session loss on cookie-account mismatch (EC-15/16)", () => {
+  it("a 403 account-changed rejection suspends the view and hands the loss to the auth seam", async () => {
+    const engine = fakeEngine();
+    const registered: RegisteredSyncDomain[] = [];
+    const notifySessionLost = vi.fn();
+    const store = createBookmarksStore({
+      engine: engine.engine,
+      auth: {
+        async unsafeRequest() {
+          return {
+            ok: false,
+            status: 403,
+            data: null,
+            error: { message: "Bookmark sync account changed" },
+            rotated: false,
+          };
+        },
+      },
+      reader: fakeReader().reader,
+      state: { authenticated: true, user: { id: 7 }, notifySessionLost },
+      register: (domain) => registered.push(domain),
+      unregister: () => undefined,
+    });
+    store.hydrate();
+    await flush();
+    store.applyServer(SNAP);
+    expect(store.bookmarks).toHaveLength(2);
+
+    await expect(registered[0]!.sync([], undefined)).rejects.toBeInstanceOf(SyncPausedError);
+    expect(notifySessionLost).toHaveBeenCalledTimes(1);
+    // Suspend hides the account view; the outbox partition is left in place.
+    expect(store.authed).toBe(false);
+    expect(store.bookmarks).toHaveLength(0);
+    expect(engine.cleared).toEqual([]);
+  });
+});
+
+describe("BookmarksStore — cross-tab drain retire (EC-33, §9.6)", () => {
+  class MockSyncChannel {
+    static instances: MockSyncChannel[] = [];
+    onmessage: ((event: { data: unknown }) => void) | null = null;
+
+    constructor() {
+      MockSyncChannel.instances.push(this);
+    }
+    postMessage(data: unknown): void {
+      // BroadcastChannel semantics: every *other* instance hears the message.
+      for (const other of MockSyncChannel.instances) {
+        if (other === this || other.onmessage === null) continue;
+        other.onmessage({ data });
+      }
+    }
+    close(): void {}
+  }
+
+  beforeEach(() => {
+    MockSyncChannel.instances = [];
+    vi.stubGlobal("BroadcastChannel", MockSyncChannel);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("retires overlays another tab drained and pulls that domain", async () => {
+    const rig = makeRig([], true);
+    rig.store.hydrate(); // installs the drain listener
+    rig.store.applyServer(SNAP);
+    rig.store.toggle(3, 9);
+    await flush();
+    expect(rig.store.isBookmarked(3, 9)).toBe(true);
+
+    const flushCalls = rig.engine.flushed.length;
+    const drainedMutationId = rig.engine.mutationIds[0]!;
+    const otherTab = new MockSyncChannel();
+    otherTab.postMessage({ domain: "bookmarks.user:7", ids: [drainedMutationId] });
+
+    // The drained partition gets a pull so the server rows replace the overlays.
+    expect(rig.engine.flushed.length).toBe(flushCalls + 1);
+    expect(rig.engine.flushed.at(-1)).toBe("bookmarks.user:7");
+    // The retired overlay no longer survives a snapshot apply: the verse's only
+    // local trace was the optimistic row the other tab already drained.
+    rig.store.applyServer(SNAP);
+    expect(rig.store.isBookmarked(3, 9)).toBe(false);
+    expect(rig.store.bookmarks).toHaveLength(2);
+  });
+
+  it("ignores this page's own drain notices — the store retires those overlays itself in applyServer", async () => {
+    const rig = makeRig([], true);
+    rig.store.hydrate();
+    rig.store.applyServer(SNAP);
+    rig.store.toggle(3, 9);
+    await flush();
+
+    const flushCalls = rig.engine.flushed.length;
+    const drainedMutationId = rig.engine.mutationIds[0]!;
+    const echo = new MockSyncChannel();
+    echo.postMessage({
+      domain: "bookmarks.user:7",
+      ids: [drainedMutationId],
+      page: SYNC_PAGE_NONCE,
+    });
+
+    expect(rig.engine.flushed.length).toBe(flushCalls); // no self-echo pull
+    rig.store.applyServer(SNAP);
+    expect(rig.store.isBookmarked(3, 9)).toBe(true); // same-page retire is applyServer's job
+  });
+
+  it("ignores drain notices for another account's partition (EC-12/EC-17)", async () => {
+    const rig = makeRig([], true);
+    rig.store.hydrate();
+    rig.store.applyServer(SNAP);
+    rig.store.toggle(3, 9);
+    await flush();
+
+    const flushCalls = rig.engine.flushed.length;
+    const drainedMutationId = rig.engine.mutationIds[0]!;
+    const otherTab = new MockSyncChannel();
+    otherTab.postMessage({ domain: "bookmarks.user:8", ids: [drainedMutationId] });
+
+    expect(rig.engine.flushed.length).toBe(flushCalls); // no pull for a foreign partition
+    rig.store.applyServer(SNAP);
+    expect(rig.store.isBookmarked(3, 9)).toBe(true); // this tab's overlay stands
+  });
+
+  it("ignores malformed payloads", async () => {
+    const rig = makeRig([], true);
+    rig.store.hydrate();
+    const flushCalls = rig.engine.flushed.length;
+    const otherTab = new MockSyncChannel();
+    otherTab.postMessage({ domain: "bookmarks.user:7", ids: [42] });
+    otherTab.postMessage("noise");
+
+    expect(rig.engine.flushed.length).toBe(flushCalls);
   });
 });

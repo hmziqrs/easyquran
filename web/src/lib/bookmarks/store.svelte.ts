@@ -1,10 +1,8 @@
 import { browser } from "$app/env";
 
 import { authClient } from "#lib/auth/auth-client.js";
-import type { SessionProbeResult } from "#lib/auth/auth-client.js";
 import { authState } from "#lib/auth/auth-state.svelte.js";
 import type { VerseKey } from "#lib/data/quran.js";
-import { readRaw, writeRaw } from "#lib/storage/safe-storage.js";
 import { reader } from "#lib/stores/reader.svelte.js";
 import {
   registerDomain,
@@ -15,6 +13,11 @@ import {
   type SyncMutation,
   type SyncStatus,
 } from "#lib/sync/index.js";
+import {
+  SYNC_DRAIN_CHANNEL,
+  SYNC_PAGE_NONCE,
+  type SyncDrainMessage,
+} from "#lib/sync/engine.svelte.js";
 
 import {
   BOOKMARKS_DOMAIN,
@@ -29,6 +32,7 @@ import {
   verseKeyOf,
   type Bookmark,
   type BookmarkFolder,
+  type BookmarkFolderKind,
   type BookmarksMutation,
   type BookmarksSnapshot,
 } from "./schema";
@@ -37,9 +41,11 @@ import {
 export interface SyncEngineLike {
   enqueue<P>(domain: string, payload: P): Promise<SyncMutation<P>>;
   clear(domain: string): Promise<void>;
+  reassignDomain(from: string, to: string): Promise<number>;
   pendingFor(domain: string): number;
   flush(domain?: string): Promise<void>;
   start(): () => void;
+  hydrate?(): Promise<void>;
   readonly pending: number;
   readonly status: SyncStatus;
 }
@@ -56,8 +62,8 @@ export interface ReaderLike {
 export interface BookmarksAuthStateLike {
   readonly authenticated: boolean;
   readonly user: { readonly id: number } | null;
-  setUnknown?(): void;
-  probe?(): Promise<SessionProbeResult>;
+  /** Session-loss seam (EC-15/16/19): probe confirms; anonymous ⇒ terminate transition + banner. */
+  notifySessionLost?(): void;
 }
 
 export interface BookmarksStoreDeps {
@@ -69,7 +75,11 @@ export interface BookmarksStoreDeps {
   readonly unregister?: (name: string) => void;
 }
 
-function legacyMigratedKey(userId: string): string {
+/**
+ * Per-account marker written once the merge review (§9.4) has uploaded this
+ * account's legacy blob bookmarks — gates merge-review detection condition (a).
+ */
+export function legacyMigratedKey(userId: string): string {
   return `eq.bookmarks.legacy-migrated.${userId}`;
 }
 
@@ -81,6 +91,27 @@ interface AccountGeneration {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- err is a caught throw of unknown provenance; this formatter is the boundary that narrows it to a displayable message string.
+function errorMessage(err: unknown): string {
+  return err instanceof Error && err.message ? err.message : String(err);
+}
+
+/** Narrow an untrusted cross-tab payload (§9.6): a drain notice is `{domain, ids[]}` and nothing else. */
+function decodeDrainMessage(data: unknown): SyncDrainMessage | null {
+  if (typeof data !== "object" || data === null) return null;
+  if (!("domain" in data) || !("ids" in data)) return null;
+  // SAFETY: property existence is checked above; this narrows the fields for validation only.
+  const { domain, ids, page } = data as { domain: unknown; ids: unknown; page?: unknown };
+  if (typeof domain !== "string" || !Array.isArray(ids)) return null;
+  // Same-page notices (this page's own engine published) are not cross-tab
+  // retire triggers — the store retires its own overlays via applyServer.
+  if (page === SYNC_PAGE_NONCE) return null;
+  for (const id of ids) {
+    if (typeof id !== "string") return null;
+  }
+  return { domain, ids };
 }
 
 function isValidFolderName(name: string): boolean {
@@ -103,12 +134,24 @@ export class BookmarksStore {
   #ownerId: number | null;
   #generation = 0;
   #suspended = $state(false);
-  #legacyDiscard: Promise<void> | null = null;
-  #migratedKeys = new Set<string>();
+  #enqueueError = $state<string | null>(null);
   #pendingById = new Map<string, Bookmark>();
-  #pendingDeletes = new Set<string>();
+  /**
+   * In-flight `bookmark.delete` overlays: entity id → verse key. Key-scoped so
+   * a stale same-verse rival row cannot re-mark a pending delete (EC-40);
+   * widens to `(session, surah, ayah, end…)` when bookmark context lands (§9.1).
+   */
+  #pendingDeletes = new Map<string, string>();
   #pendingFoldersById = new Map<string, BookmarkFolder>();
   #pendingFolderDeletes = new Set<string>();
+  /**
+   * Outbox mutation id → payload entity id. The §9.6 drain broadcast carries
+   * mutation ids only (never user content), while the overlay maps are keyed by
+   * entity id — this is the join between them.
+   */
+  #mutationEntityIds = new Map<string, string>();
+  /** §9.6 cross-tab drain listener (EC-33); null until hydrate() in a browser. */
+  #drainChannel: BroadcastChannel | null = null;
 
   constructor(deps: BookmarksStoreDeps) {
     this.#engine = deps.engine;
@@ -142,6 +185,14 @@ export class BookmarksStore {
 
   get status(): SyncStatus {
     return { ...this.#engine.status, pending: this.pending };
+  }
+
+  /**
+   * Last durable-enqueue failure (EC-27): surfaced for the indicator/toast
+   * instead of silently dropping the mutation the user just acted on.
+   */
+  get enqueueError(): string | null {
+    return this.#enqueueError;
   }
 
   folderById(id: string): BookmarkFolder | undefined {
@@ -238,10 +289,36 @@ export class BookmarksStore {
   remove(bookmarkId: string): void {
     if (this.#captureAccount() === null) return;
     const durable = this.#bookmarks.find((b) => b.id === bookmarkId);
-    if (durable === undefined && !this.#pendingById.has(bookmarkId)) return;
-    this.#enqueue({ kind: "bookmark.delete", id: bookmarkId, updatedAt: nowIso() }, () => {
-      this.#bookmarks = this.#bookmarks.filter((b) => b.id !== bookmarkId);
-    });
+    const row = durable ?? this.#pendingById.get(bookmarkId);
+    if (row === undefined) return;
+    this.#enqueue(
+      { kind: "bookmark.delete", id: bookmarkId, updatedAt: nowIso() },
+      () => {
+        this.#bookmarks = this.#bookmarks.filter((b) => b.id !== bookmarkId);
+      },
+      { deletedVerseKey: verseKeyOf(row.surah, row.ayah) },
+    );
+  }
+
+  /** Undo for a just-removed row (BM-04): same entity, fresh timestamp — wins LWW over the pending delete and clears the tombstone (§9.3). */
+  restore(bookmark: Bookmark): void {
+    if (this.#captureAccount() === null) return;
+    const restored: Bookmark = { ...bookmark, updatedAt: nowIso() };
+    this.#enqueue(
+      {
+        kind: "bookmark.upsert",
+        id: restored.id,
+        folderId: restored.folderId,
+        surah: restored.surah,
+        ayah: restored.ayah,
+        updatedAt: restored.updatedAt,
+      },
+      () => {
+        if (this.#bookmarks.some((b) => b.id === restored.id)) return;
+        this.#bookmarks = [...this.#bookmarks, restored];
+      },
+      { bookmark: restored },
+    );
   }
 
   moveToFolder(bookmarkId: string, folderId: string | null): void {
@@ -266,16 +343,25 @@ export class BookmarksStore {
     );
   }
 
-  createFolder(name: string): BookmarkFolder | null {
+  createFolder(name: string, kind: BookmarkFolderKind = "generic"): BookmarkFolder | null {
     if (this.#captureAccount() === null || !isValidFolderName(name)) return null;
     const folder: BookmarkFolder = {
       id: newBookmarkEntityId(),
       name: name.trim(),
+      kind,
+      position: null,
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
     this.#enqueue(
-      { kind: "folder.upsert", id: folder.id, name: folder.name, updatedAt: folder.updatedAt },
+      {
+        kind: "folder.upsert",
+        id: folder.id,
+        name: folder.name,
+        folderKind: folder.kind,
+        position: null,
+        updatedAt: folder.updatedAt,
+      },
       () => {
         if (this.#folders.some((existing) => existing.id === folder.id)) return;
         this.#folders = [...this.#folders, folder];
@@ -286,16 +372,39 @@ export class BookmarksStore {
   }
 
   renameFolder(id: string, name: string): void {
-    if (this.#captureAccount() === null || !isValidFolderName(name)) return;
+    if (!isValidFolderName(name)) return;
+    this.updateFolder(id, { name: name.trim() });
+  }
+
+  /** Partial folder update (name / kind / position): the whole row re-upserts, so untouched fields ride along (§9.3 row-level LWW). */
+  updateFolder(
+    id: string,
+    patch: { name?: string; kind?: BookmarkFolderKind; position?: number | null },
+  ): void {
+    if (this.#captureAccount() === null) return;
+    if (patch.name !== undefined && !isValidFolderName(patch.name)) return;
     const existing = this.#folders.find((folder) => folder.id === id);
     if (!existing) return;
-    const renamed: BookmarkFolder = { ...existing, name: name.trim(), updatedAt: nowIso() };
+    const updated: BookmarkFolder = {
+      ...existing,
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
+      ...(patch.position !== undefined ? { position: patch.position } : {}),
+      updatedAt: nowIso(),
+    };
     this.#enqueue(
-      { kind: "folder.upsert", id, name: renamed.name, updatedAt: renamed.updatedAt },
-      () => {
-        this.#folders = this.#folders.map((folder) => (folder.id === id ? renamed : folder));
+      {
+        kind: "folder.upsert",
+        id,
+        name: updated.name,
+        folderKind: updated.kind,
+        position: updated.position,
+        updatedAt: updated.updatedAt,
       },
-      { folder: renamed },
+      () => {
+        this.#folders = this.#folders.map((folder) => (folder.id === id ? updated : folder));
+      },
+      { folder: updated },
     );
   }
 
@@ -321,15 +430,28 @@ export class BookmarksStore {
         this.#pendingDeletes.delete(mutation.payload.id);
         this.#pendingFoldersById.delete(mutation.payload.id);
         this.#pendingFolderDeletes.delete(mutation.payload.id);
+        this.#mutationEntityIds.delete(mutation.id);
       }
     }
+    const deletedVerses = new Set(this.#pendingDeletes.values());
     const newestPerVerse = new Map<string, Bookmark>();
     for (const bookmark of snapshot.bookmarks) {
       if (this.#pendingDeletes.has(bookmark.id)) continue;
       const key = verseKeyOf(bookmark.surah, bookmark.ayah);
+      // EC-40: the delete is pending for the verse, not just this id — a rival
+      // row for the same verse from a stale snapshot cannot re-mark it either.
+      if (deletedVerses.has(key)) continue;
       const prev = newestPerVerse.get(key);
-      if (prev === undefined || bookmark.updatedAt >= prev.updatedAt)
+      // EC-35: deterministic tie-break `(updatedAt, id)` — the collapse must
+      // not depend on snapshot iteration order, so repeated syncs converge
+      // identically on every device.
+      if (
+        prev === undefined ||
+        bookmark.updatedAt > prev.updatedAt ||
+        (bookmark.updatedAt === prev.updatedAt && bookmark.id > prev.id)
+      ) {
         newestPerVerse.set(key, bookmark);
+      }
     }
     for (const pending of this.#pendingById.values()) {
       newestPerVerse.set(verseKeyOf(pending.surah, pending.ayah), pending);
@@ -347,7 +469,10 @@ export class BookmarksStore {
   hydrate(): void {
     if (!browser || this.#hydrated) return;
     this.#hydrated = true;
-    void this.#discardUnownedQueue().catch(() => undefined);
+    this.#installDrainListener();
+    // Load durable pending counts — including any retained pre-partition
+    // entries (EC-48) — before the first auth edge renders a view.
+    void this.#engine.hydrate?.();
     this.onAuthChanged(this.#state.authenticated);
   }
 
@@ -365,6 +490,72 @@ export class BookmarksStore {
   suspendAuth(): void {
     this.#suspended = true;
     this.#resetAccount(null);
+  }
+
+  /**
+   * Retained pre-partition entries (EC-48, §9.5): mutations still queued in
+   * the legacy unowned `bookmarks` domain. Never discarded on hydrate, never
+   * auto-attributed — the merge review surfaces them once for an explicit
+   * apply-or-discard choice.
+   */
+  unownedPending(): number {
+    return this.#engine.pendingFor(BOOKMARKS_DOMAIN);
+  }
+
+  /** Merge-review action: attribute the retained unowned mutations to `ownerId` (the user's explicit choice), then flush its partition. Resolves the moved count. */
+  async applyLegacyUnowned(ownerId: number): Promise<number> {
+    if (this.#suspended || this.#currentOwnerId() !== ownerId) return 0;
+    const domain = bookmarksDomainFor(ownerId);
+    const moved = await this.#engine.reassignDomain(BOOKMARKS_DOMAIN, domain);
+    if (moved > 0 && !this.#suspended && this.#currentOwnerId() === ownerId) {
+      await this.#engine.flush(domain);
+    }
+    return moved;
+  }
+
+  /** Merge-review action: discard the retained unowned mutations (explicit choice). */
+  async discardLegacyUnowned(): Promise<void> {
+    await this.#engine.clear(BOOKMARKS_DOMAIN);
+  }
+
+  /**
+   * §9.6/EC-33: subscribe to other tabs' drain notices. App-lifetime wiring —
+   * the app singleton never closes; tests construct isolated stores.
+   */
+  #installDrainListener(): void {
+    if (this.#drainChannel !== null || typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(SYNC_DRAIN_CHANNEL);
+    channel.onmessage = (event: MessageEvent<unknown>): void => {
+      const message = decodeDrainMessage(event.data);
+      if (message === null) return;
+      this.#onRemoteDrain(message);
+    };
+    this.#drainChannel = channel;
+  }
+
+  /**
+   * Another tab drained these ids from the shared outbox: this tab's optimistic
+   * overlays for them are stale (their mutations are gone and the server holds
+   * the rows). Retire the overlays, refresh the durable pending counts, and
+   * pull so the snapshot rows replace them without flicker. A partition that is
+   * not the signed-in account's is ignored (EC-12/EC-17: never rendered, never
+   * flushed for another owner).
+   */
+  #onRemoteDrain(message: SyncDrainMessage): void {
+    const ownerId = this.#currentOwnerId();
+    if (ownerId === null || this.#suspended) return;
+    if (message.domain !== bookmarksDomainFor(ownerId)) return;
+    for (const id of message.ids) {
+      const entityId = this.#mutationEntityIds.get(id);
+      this.#mutationEntityIds.delete(id);
+      if (entityId === undefined) continue;
+      this.#pendingById.delete(entityId);
+      this.#pendingDeletes.delete(entityId);
+      this.#pendingFoldersById.delete(entityId);
+      this.#pendingFolderDeletes.delete(entityId);
+    }
+    void this.#engine.hydrate?.();
+    void this.#engine.flush(message.domain).catch(() => undefined);
   }
 
   #currentOwnerId(): number | null {
@@ -399,30 +590,19 @@ export class BookmarksStore {
     this.#syncGeneration = null;
     this.#folders = [];
     this.#bookmarks = [];
-    this.#migratedKeys.clear();
     this.#pendingById.clear();
     this.#pendingDeletes.clear();
     this.#pendingFoldersById.clear();
     this.#pendingFolderDeletes.clear();
-  }
-
-  #discardUnownedQueue(): Promise<void> {
-    if (this.#legacyDiscard !== null) return this.#legacyDiscard;
-    const discard = this.#engine.clear(BOOKMARKS_DOMAIN);
-    this.#legacyDiscard = discard;
-    void discard.catch(() => {
-      if (this.#legacyDiscard === discard) this.#legacyDiscard = null;
-    });
-    return discard;
+    this.#mutationEntityIds.clear();
   }
 
   async #beginSync(account: AccountGeneration): Promise<void> {
     if (this.#syncGeneration === account.generation) return;
     this.#syncGeneration = account.generation;
-    await this.#discardUnownedQueue();
     if (!this.#isCurrent(account)) return;
-    await this.#migrateLegacy(account);
-    if (!this.#isCurrent(account)) return;
+    // No silent legacy upload anymore (§9.4): local data reaches the account
+    // only through the merge review's explicit choice (EC-08).
     const domain = createBookmarksDomain(
       this.#auth,
       this.#state,
@@ -431,8 +611,10 @@ export class BookmarksStore {
       () => {
         if (!this.#isCurrent(account)) return;
         this.suspendAuth();
-        this.#state.setUnknown?.();
-        void this.#state.probe?.();
+        // EC-15/16: cookie account changed mid-flight — hand the loss to the
+        // auth-state seam (probe confirms; anonymous ⇒ terminate transition +
+        // expiry banner). The account's outbox partition is left quarantined.
+        this.#state.notifySessionLost?.();
       },
     );
     const adapter: SyncDomain<BookmarksMutation, BookmarksSnapshot> = {
@@ -447,42 +629,16 @@ export class BookmarksStore {
     await this.#engine.flush(account.domain);
   }
 
-  async #migrateLegacy(account: AccountGeneration): Promise<void> {
-    const markerKey = legacyMigratedKey(String(account.ownerId));
-    if (readRaw("local", markerKey) === "1") return;
-    this.#reader.hydrate?.();
-    for (const key of this.#reader.bookmarkedKeys) {
-      if (!this.#isCurrent(account)) return;
-      if (this.#migratedKeys.has(key)) continue;
-      const coords = parseVerseKey(key);
-      if (coords === null) continue;
-      try {
-        await this.#engine.enqueue(account.domain, {
-          kind: "bookmark.upsert",
-          id: newBookmarkEntityId(),
-          folderId: null,
-          surah: coords.surah,
-          ayah: coords.ayah,
-          updatedAt: nowIso(),
-        } satisfies BookmarksMutation);
-      } catch {
-        return;
-      }
-      if (!this.#isCurrent(account)) return;
-      this.#migratedKeys.add(key);
-    }
-    if (this.#isCurrent(account)) writeRaw("local", markerKey, "1");
-  }
-
   #enqueue(
     payload: BookmarksMutation,
     apply: () => void,
-    overlay?: { bookmark?: Bookmark; folder?: BookmarkFolder },
+    overlay?: { bookmark?: Bookmark; folder?: BookmarkFolder; deletedVerseKey?: string },
   ): void {
     const account = this.#captureAccount();
     if (account === null) return;
     if (payload.kind === "bookmark.delete") {
-      this.#pendingDeletes.add(payload.id);
+      // "" never matches a verse key, so an unset key degrades to id-scoped only.
+      this.#pendingDeletes.set(payload.id, overlay?.deletedVerseKey ?? "");
       this.#pendingById.delete(payload.id);
     } else if (payload.kind === "folder.delete") {
       this.#pendingFolderDeletes.add(payload.id);
@@ -494,11 +650,16 @@ export class BookmarksStore {
       this.#pendingFolderDeletes.delete(payload.id);
     }
     void this.#engine.enqueue(account.domain, payload).then(
-      () => {
-        if (this.#isCurrent(account)) apply();
-      },
-      () => {
+      (mutation) => {
         if (!this.#isCurrent(account)) return;
+        this.#mutationEntityIds.set(mutation.id, payload.id);
+        this.#enqueueError = null;
+        apply();
+      },
+      (err: unknown) => {
+        if (!this.#isCurrent(account)) return;
+        // EC-27: a failed durable write is surfaced, never silently dropped.
+        this.#enqueueError = errorMessage(err);
         this.#pendingById.delete(payload.id);
         this.#pendingDeletes.delete(payload.id);
         this.#pendingFoldersById.delete(payload.id);
