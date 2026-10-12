@@ -458,6 +458,10 @@ const PRODUCT_ROUTE_IDS: ReadonlySet<string> = new Set([
   "/(application)/settings",
   "/(application)/bookmarks",
   "/(application)/yours",
+  // Curated snippet pages (Feature 7.2) — localized editorial twins, not
+  // reader routes; parseReaderRoute has no descriptor for them.
+  "/(application)/azkar",
+  "/(application)/azkar/[slug]",
 ]);
 
 export const handle: Handle = async ({ event, resolve }) => {

@@ -63,6 +63,12 @@
     if (pathname === "/search" || pathname === "/settings") {
       return locale === "en" ? pathname : `/ar${pathname}`;
     }
+    if (pathname.startsWith("/azkar")) {
+      // Curated snippet pages (Feature 7.2): localized editorial twins, never
+      // routed through readerHrefFor.
+      const bare = pathname.slice(1);
+      return locale === "en" ? `/${bare}` : `/ar${bare}`;
+    }
     return readerHrefFor(locale, canonicalReaderHref);
   }
   const currentReaderHref = $derived(chromeLocaleHrefFor(copy.locale, barePathname));

@@ -21,7 +21,7 @@ const READER_ROUTE_PATTERNS = [
   new RegExp("^/(?:juz|surah|pages)$", "u"),
   new RegExp(`^/${SURAH_SEGMENT}$`, "u"),
   new RegExp(`^/${RANGE_SEGMENT}/${NUMBER}$`, "u"),
-  new RegExp(`^/azkar/${SNIPPET_SEGMENT}$`, "u"),
+  new RegExp(`^/azkar(?:/${SNIPPET_SEGMENT})?$`, "u"),
   new RegExp(`^/${SURAH_SEGMENT}/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}$`, "u"),
   new RegExp(
     `^/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/azkar/${SNIPPET_SEGMENT}$`,

@@ -8,7 +8,7 @@
     type SnippetText,
   } from "#lib/data/snippets.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
-  import { readerHrefFor } from "#lib/i18n/reader.js";
+  import { localizeHref } from "#lib/paraglide/runtime.js";
   import { publicHref } from "#lib/i18n/public-href.js";
   import { reader } from "#lib/stores/reader.svelte.js";
   import ReaderShell from "../_reader/ReaderShell.svelte";
@@ -26,7 +26,10 @@
   }
 
   function detailHref(slug: string): string {
-    return publicHref(readerHrefFor(copy.locale, snippetPathFor(ctx, slug)));
+    // Snippet detail paths are public editorial routes, not reader hrefs —
+    // localize them directly; localizeHref keeps root-absolute inputs absolute.
+    const localized = localizeHref(snippetPathFor(ctx, slug));
+    return publicHref(`/${localized.slice(1)}`);
   }
 
   const title = $derived(localized(SNIPPET_INDEX_TITLE));
