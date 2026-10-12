@@ -4,6 +4,11 @@ const trackMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 vi.mock("#lib/firebase/analytics.js", () => ({ track: trackMock }));
 vi.mock("$app/env", () => ({ browser: true }));
 
+// Every test re-imports the full module graph (svelte runtime included) through
+// freshHarness(); under a parallel full-suite run that cold import alone can
+// exceed the 5s default. Headroom here is file-scoped only.
+vi.setConfig({ testTimeout: 15_000 });
+
 // Each test re-imports the whole graph (svelte runtime included, so the component
 // and mount() share one runtime): the component binds the localeSuggest singleton,
 // and the shown-latch can only be reset by re-instantiating the world.
