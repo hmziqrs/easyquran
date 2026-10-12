@@ -4,45 +4,39 @@ EasyQuran is under active development. Entries below are expected placeholders o
 copy—not defects in a released product. Keep this standalone ledger for the pre-release content pass,
 when wording should be aligned with the features selected for launch.
 
-> **Partially stale (2026-10-11):** `web/src/lib/data/content.ts` no longer exists (copy lives in
-> `web/messages/*.json`), so its file links below are dead. C01's prescribed fix is superseded by
-> `docs/next-features.md` §9.8 (scope: bookmarks + reading sessions sync; notes stay local). C05 is
-> resolved (landing bands retired). C02/C03/C04/C06/C08 remain actionable; C07 describes the old
-> "cloud sync on the way" copy — bookmark sync shipped.
+> **Updated 2026-10-12 (§9.8 copy pass):** copy now lives in `web/messages/*.json` (the old
+> `content.ts` links below are dead). Resolved this pass: **C01** (auth copy scoped to bookmarks +
+> reading sessions; notes stay local), **C02** (privacy/terms sync + deletion claims trimmed to the
+> real scope — notes never sync, deletion is by request, no native apps), **C06** (FAQ/about rollout
+> copy now states 378 sources / 105 languages + two Arabic tafsir sources as shipped), **C07** (FAQ
+> backup answer now describes the shipped account sync + offline queue), and the merge-review dialog
+> strings moved from a hardcoded English block into `web/messages/auth/*.json` (`auth_merge_*`).
+> C05 is resolved (landing bands retired). The §9.8 sync-UI copy landed with it: the sign-in
+> note on `/bookmarks` now carries the full BM-05 promise ("Your bookmarks are saved on this device.
+> Sign in (free) to keep them safe and see them on your other devices."), and the two §9.5 one-liners
+> shipped as `auth_session_expired_banner` ("Session expired — sign in to resume sync") and
+> `auth_sign_out_unsynced_note` ("Your unsynced changes are kept on this device for your next
+> sign-in"), rendered by `SyncNotices.svelte` behind `AuthModalShell`. ACCT-05 (caption-size sync
+> status + offline note above the list) and the ACCT-09 merge toast wording are in via the
+> `SyncIndicator`/`auth_merge_result` work. **Still open:** C03 (Terms recitation/tafsir wording),
+> C04 (FAQ offline-audio answer), and the C08 sweep of the marketing landing page and reader
+> empty/loading labels.
 
-## C01 — Auth sync placeholder
+## C01 — Auth sync placeholder — RESOLVED 2026-10-12
 
-Current sign-in copy says:
+The sign-in, registration and auth-dialog copy in `web/messages/auth/{en,ar}.json`
+(`auth_sign_in_subheading`, `auth_register_subheading`, `auth_dialog_description`) and
+`settings_account_signed_out_note` now promise exactly the shipped scope: bookmarks + reading
+sessions sync with a free account; notes stay on the device.
 
-> Sign in to sync your bookmarks and reading progress.
+## C02 — Privacy sync and deletion placeholders — RESOLVED 2026-10-12
 
-Current registration copy says:
-
-> A free account syncs your bookmarks, notes and reading place across devices.
-
-Sources:
-
-- [`web/messages/auth/en.json`](../../web/messages/auth/en.json) (`auth_sign_in_subheading`,
-  `auth_register_subheading`)
-
-Actual behavior: bookmark sync is real since 2026-08-27 (`POST /bookmark/v1/sync`), so the bookmarks
-claims are accurate. Notes and reading place/progress remain device-local only.
-
-**Before release:** scope sign-in/registration copy to the final sync scope — bookmarks + reading
-sessions sync, notes and position stay local (`docs/next-features.md` §9.8).
-
-## C02 — Privacy sync and deletion placeholders
-
-[`content.ts`](../../web/src/lib/data/content.ts) says:
-
-- bookmarks, notes, and deeds link to accounts and sync across devices/native apps;
-- users can delete account and data at any time;
-- local data leaves device if sync is enabled.
-
-Actual behavior: bookmarks sync for signed-in users (2026-08-27); notes, deeds, and native apps do
-not exist; account page has no self-service deletion flow.
-
-**Before release:** trim the synced list to bookmarks and document which data is server-side.
+The privacy (`legal_privacy_summary`, `legal_privacy_accounts_body`, `legal_privacy_device_body`,
+`legal_privacy_choices_body`) and terms (`legal_terms_content_body`) strings in
+`web/messages/{en,ar}.json` now match reality: bookmarks, folders and reading sessions sync when
+signed in; notes never leave the device; no deeds, no native apps. The deletion claim is now "ask us
+to delete your account and its data" — there is still no self-service deletion flow in the web app
+(`user_v1` exposes only an admin delete), so the stronger wording must wait for that flow.
 
 ## C03 — Recitation and tafsir placeholders in Terms
 
@@ -76,30 +70,20 @@ working preview was found in production reader code; design variants are not pro
 **Before release:** connect this statement to a working preview/player, or describe recitation as
 planned.
 
-## C06 — Full-Quran and translation rollout placeholders
+## C06 — Full-Quran and translation rollout placeholders — RESOLVED 2026-10-12
 
-Stale text says:
+The stale "curated selection / coming / on the way" strings in `web/messages/{en,ar}.json`
+(`faq_next_answer`, `faq_translations_question`/`_answer`, `faq_account_answer`,
+`about_feature_tools`) now state what shipped: all 114 surahs, 378 translation sources in 105
+languages (counts rechecked against the baked catalogue on 2026-10-12), and two Arabic tafsir
+sources offered as commentary. Hadith, the audio player and the deeds feature stay listed as future
+work only.
 
-- the reader holds a curated selection and all 114 chapters are coming;
-- the product is Arabic-only;
-- selected translations are on the way;
-- “Hadith, tafsir & translations” are one roadmap item.
+## C07 — Bookmark backup placeholder — RESOLVED 2026-10-12
 
-Sources:
-
-- [`(marketing)/+page.svelte`](<../../web/src/routes/(marketing)/+page.svelte>)
-- [`about/+page.svelte`](<../../web/src/routes/(marketing)/about/+page.svelte>)
-- [`content.ts`](../../web/src/lib/data/content.ts)
-
-Actual behavior: all 114 surahs and 378 translation sources across 105 languages are shipped. Real
-tafsir and Hadith remain absent.
-
-**Before release:** advertise current breadth accurately; keep Hadith/real tafsir as future work.
-
-## C07 — Bookmark backup placeholder
-
-FAQ correctly says bookmarks live in browser and cloud sync/export are coming. Use it as the current
-development-state description when reviewing the other placeholders.
+`faq_backup_answer` in `web/messages/{en,ar}.json` now describes the shipped behaviour: bookmarks
+live in the browser while signed out, sync to the account and other devices once signed in, and
+offline changes are kept on the device until the next online sync (§9.5 quarantine).
 
 ## C08 — Pre-release content review
 
@@ -115,14 +99,21 @@ For every capability, use exactly one of: **available now**, **beta/preview with
 point**, or **planned**. Design mocks, backend-only primitives, enums, and legal aspirations do not
 count as available product features.
 
+Progress 2026-10-12: About, FAQ, Privacy, Terms, the auth modal/register strings, the
+merge-review dialog, and the sync surfaces (bookmark sign-in note, session-expired banner,
+sign-out unsynced notice — §9.8) now pass the truth test (C01/C02/C06/C07 + `auth_merge_*`).
+Not yet swept: the marketing landing page (C03/C04/C05 territory), reader empty/loading/settings
+labels, and any future store/PWA descriptions.
+
 ## Suggested corrected capability statement
 
-Until new work ships, a defensible short description is:
+A defensible short description, matching what shipped as of 2026-10-12:
 
 > Read the complete Quran in Uthmani Arabic or one of three other mushaf scripts, and choose from
 > 378 translation sources in 105 languages. Search Arabic and translated text, save bookmarks
-> (synced with an account) and notes in this browser, resume where you left off, and keep selected
-> reading data available offline. Other reading data does not yet sync across devices.
+> (synced with a free account, together with your reading sessions) and notes in this browser,
+> resume where you left off, and keep selected reading data available offline. Notes stay on this
+> device.
 
 Recheck counts against the baked catalogue when editing user-facing copy; do not derive or hash
 Quran bytes at runtime.

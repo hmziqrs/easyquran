@@ -2,7 +2,7 @@
 //
 // Auth modal + /login /register routes. Lazy: ships only inside the lazy auth chunk + auth routes.
 //
-// 67 messages. Import this barrel, never
+// 90 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { auth_captcha_error } from "#lib/paraglide/messages/auth_captcha_error.js";
@@ -56,6 +56,27 @@ export { auth_field_password } from "#lib/paraglide/messages/auth_field_password
 export { auth_forgot_password_prompt } from "#lib/paraglide/messages/auth_forgot_password_prompt.js";
 export { auth_have_account_prompt } from "#lib/paraglide/messages/auth_have_account_prompt.js";
 export { auth_hide_password_aria } from "#lib/paraglide/messages/auth_hide_password_aria.js";
+export { auth_merge_apply_unowned } from "#lib/paraglide/messages/auth_merge_apply_unowned.js";
+export { auth_merge_back } from "#lib/paraglide/messages/auth_merge_back.js";
+export { auth_merge_description } from "#lib/paraglide/messages/auth_merge_description.js";
+export { auth_merge_discard_unowned } from "#lib/paraglide/messages/auth_merge_discard_unowned.js";
+export { auth_merge_done } from "#lib/paraglide/messages/auth_merge_done.js";
+export { auth_merge_error } from "#lib/paraglide/messages/auth_merge_error.js";
+export { auth_merge_merge } from "#lib/paraglide/messages/auth_merge_merge.js";
+export { auth_merge_never_ask } from "#lib/paraglide/messages/auth_merge_never_ask.js";
+export { auth_merge_not_now } from "#lib/paraglide/messages/auth_merge_not_now.js";
+export { auth_merge_outcome_account_wins } from "#lib/paraglide/messages/auth_merge_outcome_account_wins.js";
+export { auth_merge_outcome_device_wins } from "#lib/paraglide/messages/auth_merge_outcome_device_wins.js";
+export { auth_merge_outcome_new } from "#lib/paraglide/messages/auth_merge_outcome_new.js";
+export { auth_merge_result } from "#lib/paraglide/messages/auth_merge_result.js";
+export { auth_merge_result_only } from "#lib/paraglide/messages/auth_merge_result_only.js";
+export { auth_merge_review } from "#lib/paraglide/messages/auth_merge_review.js";
+export { auth_merge_session_row } from "#lib/paraglide/messages/auth_merge_session_row.js";
+export { auth_merge_session_state_row } from "#lib/paraglide/messages/auth_merge_session_state_row.js";
+export { auth_merge_sessions } from "#lib/paraglide/messages/auth_merge_sessions.js";
+export { auth_merge_summary } from "#lib/paraglide/messages/auth_merge_summary.js";
+export { auth_merge_title } from "#lib/paraglide/messages/auth_merge_title.js";
+export { auth_merge_unowned } from "#lib/paraglide/messages/auth_merge_unowned.js";
 export { auth_more_sign_in_options_aria } from "#lib/paraglide/messages/auth_more_sign_in_options_aria.js";
 export { auth_no_account_prompt } from "#lib/paraglide/messages/auth_no_account_prompt.js";
 export { auth_oauth_error } from "#lib/paraglide/messages/auth_oauth_error.js";
@@ -66,9 +87,11 @@ export { auth_please_wait } from "#lib/paraglide/messages/auth_please_wait.js";
 export { auth_register_heading } from "#lib/paraglide/messages/auth_register_heading.js";
 export { auth_register_subheading } from "#lib/paraglide/messages/auth_register_subheading.js";
 export { auth_reset_password_link } from "#lib/paraglide/messages/auth_reset_password_link.js";
+export { auth_session_expired_banner } from "#lib/paraglide/messages/auth_session_expired_banner.js";
 export { auth_show_password_aria } from "#lib/paraglide/messages/auth_show_password_aria.js";
 export { auth_sign_in } from "#lib/paraglide/messages/auth_sign_in.js";
 export { auth_sign_in_subheading } from "#lib/paraglide/messages/auth_sign_in_subheading.js";
+export { auth_sign_out_unsynced_note } from "#lib/paraglide/messages/auth_sign_out_unsynced_note.js";
 export { auth_totp_heading } from "#lib/paraglide/messages/auth_totp_heading.js";
 export { auth_totp_subheading } from "#lib/paraglide/messages/auth_totp_subheading.js";
 export { auth_use_different_account } from "#lib/paraglide/messages/auth_use_different_account.js";
