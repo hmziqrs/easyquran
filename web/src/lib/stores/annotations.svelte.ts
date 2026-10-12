@@ -13,15 +13,26 @@ export function createAnnotations(core: ReaderCore, persistence: ReaderPersisten
       return Object.keys(core.s.bookmarks);
     },
     toggleBookmark(key: VerseKey): void {
-      if (core.s.bookmarks[key]) delete core.s.bookmarks[key];
-      else core.s.bookmarks[key] = true;
+      if (core.s.bookmarks[key]) {
+        delete core.s.bookmarks[key];
+        delete core.s.bookmarkSavedAt[key];
+      } else {
+        core.s.bookmarks[key] = true;
+        // v5: anonymous bookmarks carry save timestamps; entries without one are
+        // legacy (v≤4) and sort last downstream (EC-46).
+        core.s.bookmarkSavedAt[key] = Date.now();
+      }
       persistence.writeNow();
     },
 
     getNote(key: VerseKey): string {
+      // Owner sync first (post-auth account vs `local`): reads must never surface
+      // a previous owner's notes after a login/logout transition (EC-17).
+      persistence.syncNotesOwner();
       return core.s.notes[key] ?? "";
     },
     setNote(key: VerseKey, v: string): void {
+      persistence.syncNotesOwner();
       core.s.notes[key] = v;
       persistence.scheduleNoteWrite();
     },

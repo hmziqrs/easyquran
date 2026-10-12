@@ -13,11 +13,46 @@ vi.mock("$app/env/public", () => ({
   PUBLIC_FCM_VAPID_KEY: undefined,
 }));
 
+import type { AuthStatus } from "#lib/auth/auth-state.svelte.js";
+
+import { createAnnotations } from "../annotations.svelte";
 import { createReaderCore, type Persisted, READER_SCHEMA_VERSION } from "../reader-core.svelte";
-import { createReaderPersistence, decodeReader } from "../reader-persistence.svelte";
+import {
+  createReaderPersistence,
+  decodeNotes,
+  decodeReader,
+  type NotesOwnerSource,
+} from "../reader-persistence.svelte";
 import { createReader } from "../reader.svelte";
 
 const KEY = "easyquran.reader";
+const NOTES_KEY_LOCAL = "easyquran.notes.local";
+
+interface FakeAuthState {
+  status: AuthStatus;
+  user: { id: number } | null;
+}
+
+/** Mutable auth stand-in: persistence resolves the notes owner from it. */
+function fakeAuth(initial: AuthStatus = "anonymous") {
+  const source: FakeAuthState = {
+    status: initial,
+    user: null,
+  };
+  const stub: NotesOwnerSource = {
+    get status() {
+      return source.status;
+    },
+    get user() {
+      return source.user;
+    },
+  };
+  return { source, stub };
+}
+
+function readNotes(owner: string = "local"): { v: number; notes: Record<string, string> } | null {
+  return JSON.parse(window.localStorage.getItem(`easyquran.notes.${owner}`) ?? "null");
+}
 
 describe("decodeReader", () => {
   it("preserves a fully valid blob", () => {
@@ -148,6 +183,29 @@ describe("decodeReader", () => {
     expect(decodeReader({ arabicScript: "coptic" }).arabicScript).toBeUndefined();
   });
 
+  it("decodes the v5 additive fields (translationFamily, bookmarkSavedAt) with allowlists", () => {
+    expect(decodeReader({ translationFamily: "serif" }).translationFamily).toBe("serif");
+    expect(decodeReader({ translationFamily: "mono" }).translationFamily).toBeUndefined();
+    // v4 blobs predate both fields: decode stays silent, defaults apply downstream.
+    expect(decodeReader({ v: 4 }).translationFamily).toBeUndefined();
+    expect(decodeReader({ v: 4 }).bookmarkSavedAt).toBeUndefined();
+    expect(
+      decodeReader({
+        bookmarkSavedAt: { "2:255": 1718000000000, "3:9": 1.5, "4:1": -1, "5:1": "x" },
+      }).bookmarkSavedAt,
+    ).toEqual({ "2:255": 1718000000000 });
+    expect(decodeReader({ bookmarkSavedAt: "nope" }).bookmarkSavedAt).toBeUndefined();
+  });
+
+  it("decodeNotes accepts the v1 envelope and rejects everything else", () => {
+    expect(decodeNotes({ v: 1, notes: { "1:1": "hi" } })).toEqual({ v: 1, notes: { "1:1": "hi" } });
+    expect(decodeNotes({ v: 2, notes: {} })).toBeUndefined();
+    expect(decodeNotes({ notes: { "1:1": "hi" } })).toBeUndefined();
+    expect(decodeNotes("nope")).toBeUndefined();
+    expect(decodeNotes(null)).toBeUndefined();
+    expect(decodeNotes({ v: 1, notes: 5 })?.notes).toEqual({});
+  });
+
   it("decodes v3 translationSize only inside the 13-28 bounds", () => {
     expect(decodeReader({ v: 3, translationSize: 13 }).translationSize).toBe(13);
     expect(decodeReader({ v: 3, translationSize: 28 }).translationSize).toBe(28);
@@ -238,84 +296,126 @@ describe("createReaderPersistence scheduling", () => {
     expect(blob.progress["1"].furthestAyah).toBe(5);
   });
 
-  it("round-trips v3 typography through writeBlob and re-decode", () => {
+  it("round-trips v5 translationFamily and bookmarkSavedAt through writeBlob and re-decode", () => {
     const core = createReaderCore();
     const persistence = createReaderPersistence(core);
     persistence.hydrate();
     core.s.arabicFont = "scheherazade-new";
     core.s.translationSize = 21;
     core.s.translationFamily = "serif";
+    core.s.bookmarkSavedAt = { "2:255": 1718000000000 };
     persistence.writeNow();
     // SAFETY: blob was just written by writeNow() from core.s, whose serialized shape is Persisted.
     const stored = JSON.parse(window.localStorage.getItem(KEY) ?? "null") as Persisted;
     expect(stored.arabicFont).toBe("scheherazade-new");
     expect(stored.translationSize).toBe(21);
-    expect(stored).not.toHaveProperty("translationFamily");
+    expect(stored.translationFamily).toBe("serif");
+    expect(stored.bookmarkSavedAt).toEqual({ "2:255": 1718000000000 });
+    // v5: notes never live in the blob — only under easyquran.notes.{owner}.
+    expect(stored).not.toHaveProperty("notes");
     const decoded = decodeReader(stored);
     expect(decoded.arabicFont).toBe("scheherazade-new");
     expect(decoded.translationSize).toBe(21);
+    expect(decoded.translationFamily).toBe("serif");
+    expect(decoded.bookmarkSavedAt).toEqual({ "2:255": 1718000000000 });
 
     const next = createReaderCore();
     const nextPersistence = createReaderPersistence(next);
     nextPersistence.hydrate();
     expect(next.s.arabicFont).toBe("scheherazade-new");
     expect(next.s.translationSize).toBe(21);
-    expect(next.s.translationFamily).toBe("sans");
+    expect(next.s.translationFamily).toBe("serif");
+    expect(next.s.bookmarkSavedAt).toEqual({ "2:255": 1718000000000 });
     nextPersistence.dispose();
     persistence.dispose();
   });
 
-  it("writeBlob keeps v3 defaults for untouched typography fields", () => {
+  it("writeBlob keeps v4 defaults for untouched typography fields", () => {
     const core = createReaderCore();
     const persistence = createReaderPersistence(core);
     persistence.hydrate();
     persistence.writeNow();
     expect(read()).toMatchObject({
-      v: 4,
+      v: 5,
       arabicFont: "kfgqpc-hafs",
       // Untouched blob carries the v4 default script (annotated Uthmani).
       arabicScript: "uthmani-annotated",
       translationSize: 17,
+      translationFamily: "sans",
+      bookmarkSavedAt: {},
     });
     persistence.dispose();
   });
 
-  it("scheduleNoteWrite() only writes after the trailing debounce", () => {
+  it("toggleBookmark stamps bookmarkSavedAt on save and clears it on remove (EC-46)", () => {
+    const r = createReader();
+    r.hydrate();
+    r.toggleBookmark("2:255");
+    const saved = JSON.parse(window.localStorage.getItem(KEY) ?? "{}");
+    expect(saved.bookmarks["2:255"]).toBe(true);
+    expect(saved.bookmarkSavedAt["2:255"]).toEqual(expect.any(Number));
+    r.toggleBookmark("2:255");
+    const removed = JSON.parse(window.localStorage.getItem(KEY) ?? "{}");
+    expect(removed.bookmarks["2:255"]).toBeUndefined();
+    expect(removed.bookmarkSavedAt["2:255"]).toBeUndefined();
+  });
+
+  it("hydrates a v4 blob without fabricating save times: legacy entries carry none (EC-46)", () => {
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({ v: 4, bookmarks: { "2:255": true, "1:1": true } }),
+    );
     const core = createReaderCore();
     const persistence = createReaderPersistence(core);
+    persistence.hydrate();
+    expect(core.s.bookmarks).toEqual({ "2:255": true, "1:1": true });
+    expect(core.s.bookmarkSavedAt).toEqual({});
+    persistence.dispose();
+  });
+
+  it("scheduleNoteWrite() only writes the notes key after the trailing debounce", () => {
+    const { stub } = fakeAuth();
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core, stub);
     persistence.hydrate();
     core.s.notes["1:1"] = "first";
     persistence.scheduleNoteWrite();
     vi.advanceTimersByTime(399);
-    expect(read()).toBeNull();
+    expect(window.localStorage.getItem(NOTES_KEY_LOCAL)).toBeNull();
     vi.advanceTimersByTime(1);
-    expect(read()).toMatchObject({ notes: { "1:1": "first" } });
+    expect(readNotes()).toEqual({ v: 1, notes: { "1:1": "first" } });
     persistence.dispose();
   });
 
-  it("writeNow() cancels a pending debounced write (no redundant later write)", () => {
+  it("writeNow() flushes a pending note write instead of dropping it (own key, no blob write)", () => {
+    const { stub } = fakeAuth();
     const core = createReaderCore();
-    const persistence = createReaderPersistence(core);
+    const persistence = createReaderPersistence(core, stub);
     persistence.hydrate();
     core.s.notes["2:2"] = "a";
     persistence.scheduleNoteWrite();
     core.s.bookmarks["3:3"] = true;
     persistence.writeNow();
-    expect(read()).toMatchObject({ bookmarks: { "3:3": true }, notes: { "2:2": "a" } });
-    const stampAfter = window.localStorage.getItem(KEY);
+    expect(read()).toMatchObject({ bookmarks: { "3:3": true } });
+    expect(read()).not.toHaveProperty("notes");
+    expect(readNotes()).toEqual({ v: 1, notes: { "2:2": "a" } });
+    const blobAfter = window.localStorage.getItem(KEY);
+    const notesAfter = window.localStorage.getItem(NOTES_KEY_LOCAL);
     vi.advanceTimersByTime(1000);
-    expect(window.localStorage.getItem(KEY)).toBe(stampAfter);
+    expect(window.localStorage.getItem(KEY)).toBe(blobAfter);
+    expect(window.localStorage.getItem(NOTES_KEY_LOCAL)).toBe(notesAfter);
     persistence.dispose();
   });
 
-  it("flushNoteWrite() writes immediately", () => {
+  it("flushNoteWrite() writes the notes key immediately", () => {
+    const { stub } = fakeAuth();
     const core = createReaderCore();
-    const persistence = createReaderPersistence(core);
+    const persistence = createReaderPersistence(core, stub);
     persistence.hydrate();
     core.s.notes["4:4"] = "x";
     persistence.scheduleNoteWrite();
     persistence.flushNoteWrite();
-    expect(read()).toMatchObject({ notes: { "4:4": "x" } });
+    expect(readNotes()).toEqual({ v: 1, notes: { "4:4": "x" } });
     persistence.dispose();
   });
 
@@ -355,8 +455,9 @@ describe("createReaderPersistence hydration race", () => {
         lastRead: { num: 2, n: 255 },
       }),
     );
+    const { stub } = fakeAuth();
     const core = createReaderCore();
-    const persistence = createReaderPersistence(core);
+    const persistence = createReaderPersistence(core, stub);
     core.s.current = 5;
     persistence.writeNow();
     expect(read()).toMatchObject({
@@ -373,8 +474,12 @@ describe("createReaderPersistence hydration race", () => {
     expect(read()).toMatchObject({
       current: 5,
       bookmarks: { "2:255": true },
-      notes: { "2:255": "kursi" },
+      lastRead: { num: 2, n: 255 },
     });
+    // v5: the rewritten blob drops the notes field; the legacy data was seeded
+    // into the per-owner notes key instead.
+    expect(read()).not.toHaveProperty("notes");
+    expect(readNotes()).toEqual({ v: 1, notes: { "2:255": "kursi" } });
     persistence.dispose();
   });
 
@@ -430,6 +535,141 @@ describe("createReaderPersistence cross-tab re-apply", () => {
     window.dispatchEvent(new StorageEvent("storage", { key: "easyquran.prefs" }));
     expect(core.s.arabicFont).toBe("kfgqpc-hafs");
     expect(core.s.translationSize).toBe(17);
+    persistence.dispose();
+  });
+
+  it("survives a previous-build tab rewriting the blob v4-shaped (EC-54)", () => {
+    const { stub } = fakeAuth();
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core, stub);
+    persistence.hydrate();
+    core.s.bookmarkSavedAt = { "2:255": 1718000000000 };
+    core.s.translationFamily = "serif";
+    persistence.writeNow();
+    // A tab still running the v4 build rewrites the blob with the v4 shape:
+    // no bookmarkSavedAt/translationFamily, notes back inside the blob.
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({ v: 4, bookmarks: { "2:255": true }, notes: { "2:255": "kursi" } }),
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key: KEY }));
+    // Absent v5 fields decode as undefined and applyPersisted skips them, so the
+    // in-memory state survives the stale write. The disk copy is the accepted
+    // EC-54 loss: those entries re-hydrate as legacy (no known save time).
+    expect(core.s.bookmarkSavedAt).toEqual({ "2:255": 1718000000000 });
+    expect(core.s.translationFamily).toBe("serif");
+    // Legacy blob notes are migration input only — never re-applied to memory (EC-17).
+    expect(core.s.notes).toEqual({});
+    persistence.dispose();
+  });
+});
+
+describe("createReaderPersistence per-owner notes (v5, EC-17)", () => {
+  beforeEach(() => {
+    flag.value = true;
+    vi.useFakeTimers();
+    window.localStorage.clear();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("seeds the owner's key from legacy blob notes exactly once (marker blocks re-seed)", () => {
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({ v: 4, bookmarks: { "2:255": true }, notes: { "2:255": "kursi" } }),
+    );
+    const { stub } = fakeAuth();
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core, stub);
+    persistence.hydrate();
+    expect(core.s.notes).toEqual({ "2:255": "kursi" });
+    expect(readNotes()).toEqual({ v: 1, notes: { "2:255": "kursi" } });
+
+    // The user clears their notes; the never-deleted legacy blob must not re-seed.
+    window.localStorage.setItem(NOTES_KEY_LOCAL, JSON.stringify({ v: 1, notes: {} }));
+    const second = createReaderCore();
+    const secondPersistence = createReaderPersistence(second, stub);
+    secondPersistence.hydrate();
+    expect(second.s.notes).toEqual({});
+    secondPersistence.dispose();
+    persistence.dispose();
+  });
+
+  it("defers the first notes load while auth is unresolved", () => {
+    const { source, stub } = fakeAuth("unknown");
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core, stub);
+    persistence.hydrate();
+    expect(core.s.notes).toEqual({});
+    expect(window.localStorage.getItem(NOTES_KEY_LOCAL)).toBeNull();
+    // Resolving to anonymous loads the (empty) local owner state.
+    source.status = "anonymous";
+    persistence.syncNotesOwner();
+    expect(core.s.notes).toEqual({});
+    persistence.dispose();
+  });
+
+  it("parks each owner's notes on its own key; swaps never merge across owners (EC-17)", () => {
+    const { source, stub } = fakeAuth();
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core, stub);
+    const annotations = createAnnotations(core, persistence);
+    persistence.hydrate();
+
+    annotations.setNote("1:1", "anon note");
+    persistence.writeNow();
+    expect(readNotes()).toEqual({ v: 1, notes: { "1:1": "anon note" } });
+
+    // Sign in as user 7: local notes stay parked on the local key, the account
+    // key loads (empty), and nothing from `local` leaks into it.
+    source.status = "authenticated";
+    source.user = { id: 7 };
+    persistence.syncNotesOwner();
+    expect(core.s.notes).toEqual({});
+    annotations.setNote("2:2", "account note");
+    persistence.writeNow();
+    expect(readNotes("7")).toEqual({ v: 1, notes: { "2:2": "account note" } });
+    expect(readNotes()).toEqual({ v: 1, notes: { "1:1": "anon note" } });
+
+    // Sign out: account notes hidden, local notes return unchanged.
+    source.status = "anonymous";
+    source.user = null;
+    persistence.syncNotesOwner();
+    expect(core.s.notes).toEqual({ "1:1": "anon note" });
+    persistence.dispose();
+  });
+
+  it("getNote() surfaces the current owner's notes after a transition (read path, EC-17)", () => {
+    window.localStorage.setItem(
+      "easyquran.notes.7",
+      JSON.stringify({ v: 1, notes: { "3:3": "account" } }),
+    );
+    window.localStorage.setItem(
+      NOTES_KEY_LOCAL,
+      JSON.stringify({ v: 1, notes: { "3:3": "local" } }),
+    );
+    const { source, stub } = fakeAuth();
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core, stub);
+    const annotations = createAnnotations(core, persistence);
+    persistence.hydrate();
+    expect(annotations.getNote("3:3")).toBe("local");
+    source.status = "authenticated";
+    source.user = { id: 7 };
+    expect(annotations.getNote("3:3")).toBe("account");
+    persistence.dispose();
+  });
+
+  it("re-applies notes from a foreign-tab storage event on the active owner key", () => {
+    const { stub } = fakeAuth();
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core, stub);
+    persistence.hydrate();
+    window.localStorage.setItem(
+      NOTES_KEY_LOCAL,
+      JSON.stringify({ v: 1, notes: { "9:9": "tab2" } }),
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key: NOTES_KEY_LOCAL }));
+    expect(core.s.notes).toEqual({ "9:9": "tab2" });
     persistence.dispose();
   });
 });
