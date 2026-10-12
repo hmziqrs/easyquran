@@ -35,6 +35,7 @@ const REJECT = new Set([
   "surah",
   "pages",
   "yours",
+  "azkar",
   // bounded product pages
   "search",
   "settings",

@@ -2,7 +2,7 @@
 //
 // Dedicated /app/search page: query input, translation picker, merged results, download management. Lazy: downloaded whole when the search route loads.
 //
-// 34 messages. Import this barrel, never
+// 38 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { search_arabic_only_note } from "#lib/paraglide/messages/search_arabic_only_note.js";
@@ -31,6 +31,10 @@ export { search_nav_sajda_recommended } from "#lib/paraglide/messages/search_nav
 export { search_no_results } from "#lib/paraglide/messages/search_no_results.js";
 export { search_pick_prompt } from "#lib/paraglide/messages/search_pick_prompt.js";
 export { search_placeholder } from "#lib/paraglide/messages/search_placeholder.js";
+export { search_recents_clear } from "#lib/paraglide/messages/search_recents_clear.js";
+export { search_recents_heading } from "#lib/paraglide/messages/search_recents_heading.js";
+export { search_recents_pause } from "#lib/paraglide/messages/search_recents_pause.js";
+export { search_recents_resume } from "#lib/paraglide/messages/search_recents_resume.js";
 export { search_results_label } from "#lib/paraglide/messages/search_results_label.js";
 export { search_retry } from "#lib/paraglide/messages/search_retry.js";
 export { search_rtl_disabled } from "#lib/paraglide/messages/search_rtl_disabled.js";

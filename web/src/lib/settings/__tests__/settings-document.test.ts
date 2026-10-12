@@ -99,6 +99,9 @@ function fakeReader(): FakeReader {
     setArabicScript(next) {
       arabicScript = next;
     },
+    setTranslationFamily(next) {
+      family = next;
+    },
     bigger() {
       calls.push("bigger");
       fontSize = Math.min(ARABIC_FONT_MAX, fontSize + ARABIC_FONT_STEP);
@@ -142,8 +145,9 @@ describe("decodeSettingsDoc", () => {
         arabicFont: "scheherazade-new",
         arabicScript: "indopak",
         translationSize: 15,
+        translationFamily: "serif",
       },
-      privacy: { analytics: false, performance: true, advertising: true },
+      privacy: { analytics: false, performance: true, advertising: true, readingAnalytics: false },
     };
     expect(decodeSettingsDoc(doc)).toEqual(doc);
   });
@@ -159,8 +163,9 @@ describe("decodeSettingsDoc", () => {
         // Default mushaf = fully annotated Uthmani (F4); Tanzil stays selectable.
         arabicScript: "uthmani-annotated",
         translationSize: 17,
+        translationFamily: "sans",
       },
-      privacy: { analytics: true, performance: true, advertising: false },
+      privacy: { analytics: true, performance: true, advertising: false, readingAnalytics: false },
     });
     const out = decodeSettingsDoc({
       v: 1,
@@ -171,7 +176,13 @@ describe("decodeSettingsDoc", () => {
         custom: { bg: "red" },
         instantResume: 1,
       },
-      reading: { fontSize: 999, mode: "scrolled", arabicFont: "times", translationSize: 2 },
+      reading: {
+        fontSize: 999,
+        mode: "scrolled",
+        arabicFont: "times",
+        translationSize: 2,
+        translationFamily: "mono",
+      },
       privacy: { analytics: "yes", performance: null, advertising: "no" },
     });
     expect(out?.appearance).toEqual({ ...DEFAULTS, instantResume: false, custom: {} });
@@ -181,8 +192,14 @@ describe("decodeSettingsDoc", () => {
       arabicFont: "kfgqpc-hafs",
       arabicScript: "uthmani-annotated",
       translationSize: 17,
+      translationFamily: "sans",
     });
-    expect(out?.privacy).toEqual({ analytics: true, performance: true, advertising: false });
+    expect(out?.privacy).toEqual({
+      analytics: true,
+      performance: true,
+      advertising: false,
+      readingAnalytics: false,
+    });
   });
 
   it("keeps unknown top-level fields alive in reserved", () => {
@@ -217,6 +234,7 @@ describe("toSettingsDoc / applySettingsDoc", () => {
     sourceReader.setArabicFont("scheherazade-new");
     sourceReader.shrinkTranslation();
     sourceReader.shrinkTranslation();
+    sourceReader.setTranslationFamily("serif");
 
     const doc = toSettingsDoc({
       prefs: sourcePrefs,
@@ -238,8 +256,9 @@ describe("toSettingsDoc / applySettingsDoc", () => {
         arabicFont: "scheherazade-new",
         arabicScript: "uthmani-annotated",
         translationSize: 15,
+        translationFamily: "serif",
       },
-      privacy: { analytics: false, performance: true, advertising: true },
+      privacy: { analytics: false, performance: true, advertising: true, readingAnalytics: false },
     });
 
     const targetPrefs = fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} });
@@ -268,8 +287,14 @@ describe("toSettingsDoc / applySettingsDoc", () => {
           arabicFont: "noto-naskh-arabic",
           arabicScript: "uthmani",
           translationSize: 19,
+          translationFamily: "serif",
         },
-        privacy: { analytics: true, performance: true, advertising: false },
+        privacy: {
+          analytics: true,
+          performance: true,
+          advertising: false,
+          readingAnalytics: false,
+        },
       },
       {
         prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }),
@@ -279,6 +304,7 @@ describe("toSettingsDoc / applySettingsDoc", () => {
     );
     expect(store.mode).toBe("reading");
     expect(store.arabicFont).toBe("noto-naskh-arabic");
+    expect(store.translationFamily).toBe("serif");
     expect(store.arabicSizePx).toBe("36px");
     expect(store.translationSizePx).toBe("19px");
     expect(store.calls()).toEqual(["bigger", "grow", "grow"]);
@@ -297,8 +323,14 @@ describe("toSettingsDoc / applySettingsDoc", () => {
           arabicFont: "noto-naskh-arabic",
           arabicScript: "uthmani",
           translationSize: 19,
+          translationFamily: "serif",
         },
-        privacy: { analytics: true, performance: true, advertising: false },
+        privacy: {
+          analytics: true,
+          performance: true,
+          advertising: false,
+          readingAnalytics: false,
+        },
       },
       {
         prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }),
@@ -307,7 +339,13 @@ describe("toSettingsDoc / applySettingsDoc", () => {
       },
     );
     expect(presentation.apply).toHaveBeenCalledTimes(1);
-    expect(presentation.apply).toHaveBeenCalledWith("reading", 36, "noto-naskh-arabic", 19, "sans");
+    expect(presentation.apply).toHaveBeenCalledWith(
+      "reading",
+      36,
+      "noto-naskh-arabic",
+      19,
+      "serif",
+    );
   });
 
   it("terminates bounded when a stepped font size cannot land exactly on target", () => {
@@ -322,8 +360,14 @@ describe("toSettingsDoc / applySettingsDoc", () => {
           arabicFont: "amiri",
           arabicScript: "uthmani",
           translationSize: 17,
+          translationFamily: "sans",
         },
-        privacy: { analytics: true, performance: true, advertising: false },
+        privacy: {
+          analytics: true,
+          performance: true,
+          advertising: false,
+          readingAnalytics: false,
+        },
       },
       {
         prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }),
@@ -356,8 +400,14 @@ describe("toSettingsDoc / applySettingsDoc", () => {
           arabicFont: "amiri",
           arabicScript: "tajweed",
           translationSize: 22,
+          translationFamily: "sans",
         },
-        privacy: { analytics: true, performance: true, advertising: false },
+        privacy: {
+          analytics: true,
+          performance: true,
+          advertising: false,
+          readingAnalytics: false,
+        },
       },
       {
         prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }),

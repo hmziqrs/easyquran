@@ -22,8 +22,9 @@ const RANGE_SEGMENT_KINDS = new Set(["page", "juz", "hizb"]);
  * surah slug. This is what keeps /t, /page, /juz, /yours, … from being
  * swallowed by the dynamic [surah] route at the site root. */
 const RESERVED_SURAH_SEGMENTS = new Set([
-  // reader range kinds, the translation marker, and reader-owned indexes ("rub" stays
-  // reserved: retired rub' URLs 308 to their ayah and must never parse as a surah slug)
+  // reader range kinds, the translation marker, reader-owned indexes, and the
+  // curated snippet index ("rub" stays reserved: retired rub' URLs 308 to their
+  // ayah and must never parse as a surah slug)
   "juz",
   "page",
   "hizb",
@@ -32,6 +33,7 @@ const RESERVED_SURAH_SEGMENTS = new Set([
   "surah",
   "pages",
   "yours",
+  "azkar",
   // bounded product pages
   "search",
   "settings",
@@ -52,9 +54,11 @@ const RESERVED_SURAH_SEGMENTS = new Set([
   "health",
   "design",
 ]);
-/** Single-segment reader indexes (/juz, /surah, /pages). /yours and /bookmarks are
- * personal app routes — never localized, never in this set. */
-const READER_INDEX_SEGMENTS = new Set(["juz", "surah", "pages"]);
+/** Single-segment reader indexes (/juz, /surah, /pages, /azkar — the curated snippet
+ * index reroutes to its `/ar` twin exactly like the other indexes, hooks.ts pattern
+ * `^/azkar(?:/{slug})?$`). /yours and /bookmarks are personal app routes — never
+ * localized, never in this set. */
+const READER_INDEX_SEGMENTS = new Set(["juz", "surah", "pages", "azkar"]);
 
 function hasUnsafeUrlCharacter(value: string): boolean {
   for (const character of value) {
@@ -128,6 +132,14 @@ function isRangeSegmentKind(value: string): boolean {
   return RANGE_SEGMENT_KINDS.has(value);
 }
 
+/** Locale-suggest eligibility (plan 09 §3 row 5, scheme A): does this unprefixed
+ * pathname live in the reader routing space that has localized `/ar` twins via
+ * the hooks.ts reroute? Grammar twin of the READER_ROUTE_PATTERNS copies minus
+ * the `.md`/`.txt` content exports. */
+export function isReaderSurfacePath(pathname: string): boolean {
+  return isReaderPathname(pathname);
+}
+
 function isReaderPathname(pathname: string): boolean {
   if (!pathname.startsWith("/") || pathname === "/") return false;
 
@@ -138,7 +150,12 @@ function isReaderPathname(pathname: string): boolean {
     case 1:
       return READER_INDEX_SEGMENTS.has(segments[0]!) || isSurahSegment(segments[0]!);
     case 2:
-      return isRangeSegmentKind(segments[0]!) && isPositiveIntegerSegment(segments[1]!);
+      // range routes (`/page/N`) and the curated snippet detail (`/azkar/{slug}`,
+      // kebab slug like a surah segment — Feature 7).
+      return (
+        (isRangeSegmentKind(segments[0]!) && isPositiveIntegerSegment(segments[1]!)) ||
+        (segments[0] === "azkar" && isSurahSegment(segments[1]!))
+      );
     case 4:
       return (
         isSurahSegment(segments[0]!) &&
@@ -147,6 +164,15 @@ function isReaderPathname(pathname: string): boolean {
         isTranslatorSegment(segments[3]!)
       );
     case 5:
+      if (segments[3] === "azkar") {
+        // translated snippet detail (§11.6): `/t/{lang}/{translator}/azkar/{slug}`
+        return (
+          segments[0] === "t" &&
+          isContentLanguageSegment(segments[1]!) &&
+          isTranslatorSegment(segments[2]!) &&
+          isSurahSegment(segments[4]!)
+        );
+      }
       return (
         segments[0] === "t" &&
         isContentLanguageSegment(segments[1]!) &&

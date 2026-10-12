@@ -8,7 +8,11 @@ export interface ParsedQuery {
   keyword: string | null;
   /** `text` with the leading word token removed, trimmed. */
   afterKeyword: string;
-  /** Numbers from a trailing `2:255` / `2 255` / `255` reference, in order. */
+  /**
+   * Numbers from a trailing `2:255` / `2 255` / `255` reference, in order. A
+   * range suffix adds its end — `2:255-286` yields 3 numbers, `2:255-2:286`
+   * yields 4 (see `rangeNumbers`).
+   */
   numbers: readonly number[];
   /** `text` normalized for Arabic matching (see `#lib/quran/search/normalize.js`). */
   arabic: string;
@@ -24,7 +28,15 @@ const LEADING_WORD = /^([\p{L}][\p{L}'’-]*)/u;
  * exactly like `2:255`.
  */
 const DIGIT = "0-9٠-٩۰-۹";
-const TRAILING_REF = new RegExp(`([${DIGIT}]{1,4})(?:\\s*[:.\\-\\s]\\s*([${DIGIT}]{1,4}))?\\s*$`);
+// Trailing `S:A` ref (separator `:`, `.`, `-` or space) with an optional range
+// suffix: `-286` borrows the start surah (`2:255-286`), `-2:286` names the end
+// surah (`2:255-2:286`). A lone `-` separator stays a separator, so `2-255`
+// still parses as surah 2, ayah 255 — only a dash after a complete ref reads
+// as a range.
+const TRAILING_REF = new RegExp(
+  `([${DIGIT}]{1,4})(?:\\s*[:.\\-\\s]\\s*([${DIGIT}]{1,4}))?` +
+    `(?:\\s*-\\s*([${DIGIT}]{1,4})(?:\\s*:\\s*([${DIGIT}]{1,4}))?)?\\s*$`,
+);
 const BARE_NUMBER = new RegExp(`^[${DIGIT}]{1,4}$`);
 
 /** Folds Arabic-Indic and Persian digits onto ASCII so `Number()` can read them. */
@@ -51,8 +63,9 @@ export function parseQuery(raw: string): ParsedQuery {
   const ref = TRAILING_REF.exec(text);
   const numbers: number[] = [];
   if (ref) {
-    numbers.push(Number(foldDigits(ref[1]!)));
-    if (ref[2] !== undefined) numbers.push(Number(foldDigits(ref[2])));
+    for (const group of ref.slice(1)) {
+      if (group !== undefined) numbers.push(Number(foldDigits(group)));
+    }
   }
 
   return {
@@ -99,6 +112,29 @@ export function referenceNumbers(
   const [primary, secondary] = parsed.numbers;
   if (primary === undefined) return null;
   return secondary === undefined ? { primary } : { primary, secondary };
+}
+
+/** An ayah range's endpoints, when the trailing ref carries a range suffix. */
+export interface AyahRange {
+  readonly startSurah: number;
+  readonly startAyah: number;
+  readonly endSurah: number;
+  readonly endAyah: number;
+}
+
+/**
+ * The range behind `2:255-286` (end borrows the start surah) or
+ * `2:255-2:286` (end names its surah), or `null` when the query has no range
+ * suffix. Bounds are the caller's to check — this layer only reports shapes.
+ */
+export function rangeNumbers(parsed: ParsedQuery): AyahRange | null {
+  const [startSurah, startAyah, end, endSecond] = parsed.numbers;
+  if (startSurah === undefined || startAyah === undefined || end === undefined) return null;
+  // 3 numbers: the lone end is an ayah in the start surah. 4: surah + ayah.
+  if (endSecond === undefined) {
+    return { startSurah, startAyah, endSurah: startSurah, endAyah: end };
+  }
+  return { startSurah, startAyah, endSurah: end, endAyah: endSecond };
 }
 
 /** True when the whole query is just a number — ambiguous between domains. */

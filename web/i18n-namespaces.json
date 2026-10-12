@@ -132,6 +132,11 @@
       "id": "search",
       "description": "Dedicated /app/search page: query input, translation picker, merged results, download management. Lazy: downloaded whole when the search route loads.",
       "prefixes": ["search"]
+    },
+    {
+      "id": "palette",
+      "description": "Global search palette group headings. Lazy: ships only inside the lazy palette chunk.",
+      "prefixes": ["palette"]
     }
   ]
 }

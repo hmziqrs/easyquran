@@ -8,6 +8,7 @@ vi.mock("$app/env/public", () => ({
 }));
 
 import type { AuthClient, AuthRequestResult, UserProfile } from "#lib/auth/auth-client.js";
+import { PASSKEY_UNAVAILABLE } from "#lib/auth/auth-copy.js";
 import { createPasskeyFlow } from "#lib/auth/passkey-flow.svelte.js";
 
 const PROFILE: UserProfile = {
@@ -463,7 +464,9 @@ describe("PasskeyFlow unsupported environment", () => {
     const res = await flow.login();
     expect(res).toBe(false);
     expect(flow.cancelled).toBe(false);
-    expect(flow.genericError).toBeTruthy();
+    // WebAuthn missing entirely is a capability failure — the copy must not
+    // send the user off to debug their connection.
+    expect(flow.genericError).toBe(PASSKEY_UNAVAILABLE);
   });
 
   it("register with no credentials API -> generic error", async () => {
@@ -471,6 +474,47 @@ describe("PasskeyFlow unsupported environment", () => {
     const flow = createPasskeyFlow({ client, state: mockState(), credentials: undefined });
     const res = await flow.register();
     expect(res).toBe(false);
+    expect(flow.genericError).toBe(PASSKEY_UNAVAILABLE);
+  });
+});
+
+describe("PasskeyFlow WebAuthn-unavailable error mapping", () => {
+  it("NotSupportedError from credentials.get -> passkeys-unavailable copy, not network error", async () => {
+    const client = mockClient();
+    client.unsafeRequest.mockResolvedValueOnce(ok(fakeLoginBegin()));
+    const creds = fakeCredentialsGet(() =>
+      Promise.reject(new DOMException("WebAuthn not supported", "NotSupportedError")),
+    );
+    const flow = createPasskeyFlow({ client, state: mockState(), credentials: creds });
+    const res = await flow.login();
+    expect(res).toBe(false);
+    expect(flow.cancelled).toBe(false);
+    expect(flow.genericError).toBe(PASSKEY_UNAVAILABLE);
+  });
+
+  it("SecurityError from credentials.create -> passkeys-unavailable copy", async () => {
+    const client = mockClient();
+    client.unsafeRequest.mockResolvedValueOnce(ok(fakeRegisterBegin()));
+    const creds = fakeCredentialsCreate(() =>
+      Promise.reject(new DOMException("blocked by permissions policy", "SecurityError")),
+    );
+    const flow = createPasskeyFlow({ client, state: mockState(), credentials: creds });
+    const res = await flow.register();
+    expect(res).toBe(false);
+    expect(flow.cancelled).toBe(false);
+    expect(flow.genericError).toBe(PASSKEY_UNAVAILABLE);
+  });
+
+  it("unrelated errors from credentials.get still surface the network copy", async () => {
+    const client = mockClient();
+    client.unsafeRequest.mockResolvedValueOnce(ok(fakeLoginBegin()));
+    const creds = fakeCredentialsGet(() =>
+      Promise.reject(new DOMException("InvalidStateError", "InvalidStateError")),
+    );
+    const flow = createPasskeyFlow({ client, state: mockState(), credentials: creds });
+    const res = await flow.login();
+    expect(res).toBe(false);
+    expect(flow.genericError).not.toBe(PASSKEY_UNAVAILABLE);
     expect(flow.genericError).toBeTruthy();
   });
 });

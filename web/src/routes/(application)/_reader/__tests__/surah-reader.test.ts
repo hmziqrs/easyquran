@@ -30,12 +30,21 @@ const {
   headerProps,
   rowProps,
 } = vi.hoisted(() => ({
-  nav: { state: {}, url: new URL("https://example.test/al-fatihah") },
+  nav: {
+    state: {},
+    url: new URL("https://example.test/al-fatihah"),
+    // ReadingAyah/VerseRow resolve the route translation (TRX-11) from params.
+    // SAFETY: {} is trivially a Record<string, string>; the assertion only names the double's type so readers can assign route params later.
+    params: {} as Record<string, string>,
+  },
   workerStub: {
     ready: true,
     whenReady: vi.fn(),
     readRange: vi.fn(),
     onStatus: vi.fn().mockReturnValue(() => {}),
+    // TranslationModal hydrates the storage report (TRX-16 offline line); the
+    // stub must answer the artifact listing or refresh() rejects unhandled.
+    listArtifacts: vi.fn().mockResolvedValue([]),
   },
   loadQuranDataStub: vi.fn(),
   // SAFETY: the double mirrors the real store contract; beforeEach reassigns status to arbitrary status strings and error to string | null, and both seed values are members of those unions.

@@ -2,6 +2,7 @@ import { SvelteMap } from "svelte/reactivity";
 
 import {
   DEFAULT_ARABIC_FONT,
+  TRANSLATION_FAMILIES,
   type ArabicFontId,
   type TranslationFamily,
 } from "#lib/config/reader-fonts.js";
@@ -42,8 +43,19 @@ export interface Persisted {
   /** Mushaf script variant for Arabic reading (source id of the Arabic corpus). */
   arabicScript: QuranSourceId;
   translationSize: number;
+  /** Translation typeface family (TRX-10). v5 persists it; earlier blobs default to "sans". */
+  translationFamily: TranslationFamily;
   mode: ReaderMode;
   bookmarks: Record<VerseKey, boolean>;
+  /**
+   * Anonymous bookmark save timestamps (epoch ms), keyed like `bookmarks`.
+   * Entries absent here (legacy v≤4 bookmarks) carry no known time and sort last (EC-46).
+   */
+  bookmarkSavedAt: Record<VerseKey, number>;
+  /**
+   * Legacy v≤4 field — migration input only. v5 stopped writing it: notes live under
+   * the per-owner key `easyquran.notes.{owner}` (EC-17), never inside the blob.
+   */
   notes: Record<VerseKey, string>;
   lastRead: { num: number; n: number; sourceId?: string } | null;
   lastReadAnchor: LastReadAnchor | null;
@@ -52,7 +64,6 @@ export interface Persisted {
 }
 
 export interface ReaderState extends Persisted {
-  translationFamily: TranslationFamily;
   query: string;
   browse: BrowseMode;
   openNote: VerseKey | null;
@@ -62,10 +73,16 @@ export interface ReaderState extends Persisted {
 }
 
 // v4 adds `arabicScript` (Uthmani/Simple-clean/IndoPak/Tajweed mushaf variant).
-// Decode reads supported fields only, so v3 blobs hydrate with the default script.
-export const READER_SCHEMA_VERSION = 4;
+// v5 adds `translationFamily` (persisted; was session-only) and `bookmarkSavedAt`
+// (anonymous bookmark timestamps), and moves notes out to `easyquran.notes.{owner}`.
+// Decode reads supported fields only, so v3/v4 blobs hydrate with the defaults.
+export const READER_SCHEMA_VERSION = 5;
 
 export const ARABIC_SCRIPT_VALUES: readonly QuranSourceId[] = QURAN_SOURCE_IDS;
+
+export const TRANSLATION_FAMILY_VALUES: readonly TranslationFamily[] = TRANSLATION_FAMILIES.map(
+  (f) => f.id,
+);
 
 export const ARABIC_FONT_MIN = 22;
 export const ARABIC_FONT_MAX = 56;
@@ -91,6 +108,7 @@ export const READER_DEFAULTS: ReaderState = {
   translationFamily: "sans",
   mode: "verse",
   bookmarks: {},
+  bookmarkSavedAt: {},
   notes: {},
   lastRead: null,
   lastReadAnchor: null,

@@ -6,6 +6,7 @@
   import { createOAuthFlows } from "#lib/auth/flows.svelte.js";
   import { createPasskeyFlow } from "#lib/auth/passkey-flow.svelte.js";
   import type { OAuthFlow, OAuthProvider } from "#lib/auth/oauth-flow.svelte.js";
+  import { currentAppReturnPath } from "#lib/auth/return-target.js";
   import OAuthIcon from "./OAuthIcon.svelte";
   import { getAuthCopy } from "#lib/i18n/auth-copy.js";
 
@@ -38,11 +39,14 @@
   );
 
   async function begin(provider: OAuthProvider): Promise<void> {
+    // Carry the page we're on through the OAuth round-trip; null on auth
+    // surfaces keeps a ?returnTo target the login page already stored.
+    const target = currentAppReturnPath() ?? undefined;
     if (provider !== "google") {
-      await oauth[provider].begin();
+      await oauth[provider].begin(target);
       return;
     }
-    const outcome = await oauth.google.beginPopup();
+    const outcome = await oauth.google.beginPopup(target);
     if (outcome === "completed") {
       authModal.close();
       await goto(`/auth/${provider}/success`);
@@ -52,7 +56,7 @@
     // a no-op rather than a fallback navigation.
     if (outcome === "in_flight") return;
     // Popup blocked, cancelled, failed, or timed out → classic full-page redirect fallback.
-    await oauth.google.begin();
+    await oauth.google.begin(target);
   }
 
   async function passkeyLogin(): Promise<void> {

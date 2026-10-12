@@ -26,7 +26,7 @@ on-disk mirror matches the catalogue by id + byte size.
   requires its licence to clear first (see Restricted and clearance).
 - No production code path references the mirror (the dev-only `/design/qurancom` specimen
   reads it). The raw files do sit in the static bundle (see Purpose); remove or exclude them
-  from the build if a stricter posture is wanted later. R12 (`docs/indopak-v4-verification-plan.md`:
+  from the build if a stricter posture is wanted later. R12 (`docs/indopak.md`:
   no restricted font asset in repo or build) is explicitly amended for this lane by campaign
   decision — committed audit references, production-disabled — while the build/app side keeps
   the Uthmani-only production policy. `uthmanic-hafs-v22.ttf` was already shipped pre-campaign
@@ -115,7 +115,7 @@ stays disabled.
   Contact for written notice: quranwbw@gmail.com.
 
 - KFGQPC Uthmanic Script HAFS — `font-uthmanic-hafs-woff2`, `font-uthmanic-hafs-ttf`.
-  Repo policy treats KFGQPC assets as restricted (`docs/indopak-v4-verification-plan.md` R12);
+  Repo policy treats KFGQPC assets as restricted (`docs/indopak.md` R12);
   written permission is needed before any production use.
 - Branch note: `indopak-nastaleeq-hanafi-v4.2.2` (Hanafi variant) is a known restricted asset
   living on the unpushed `indopak` branch. It is not in this catalogue because it is not on

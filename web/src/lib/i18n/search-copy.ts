@@ -27,6 +27,10 @@ import {
   search_no_results,
   search_pick_prompt,
   search_placeholder,
+  search_recents_clear,
+  search_recents_heading,
+  search_recents_pause,
+  search_recents_resume,
   search_results_label,
   search_retry,
   search_section_nav,
@@ -75,6 +79,10 @@ export interface SearchCopy {
   readonly errorSection: string;
   readonly retry: string;
   readonly pickPrompt: string;
+  readonly recentsHeading: string;
+  readonly recentsPause: string;
+  readonly recentsResume: string;
+  readonly recentsClear: string;
 }
 
 /**
@@ -125,5 +133,9 @@ export function getSearchCopy(locale: UiLocale = getLocale() as UiLocale): Searc
     errorSection: noArgs(search_error_section),
     retry: noArgs(search_retry),
     pickPrompt: noArgs(search_pick_prompt),
+    recentsHeading: noArgs(search_recents_heading),
+    recentsPause: noArgs(search_recents_pause),
+    recentsResume: noArgs(search_recents_resume),
+    recentsClear: noArgs(search_recents_clear),
   };
 }

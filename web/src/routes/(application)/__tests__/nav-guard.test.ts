@@ -5,11 +5,13 @@ import {
   hizbPathFor,
   juzPathFor,
   routeContextFromParams,
+  snippetPathFor,
   surahAyahPathFor,
   surahPathFor,
   surahRouteContext,
   translationIdFromSegments,
 } from "#lib/data/quran.js";
+import { readerHrefFor } from "#lib/i18n/reader.js";
 
 const ARABIC_ONLY_HELPERS = /\bsurahPath\b|\bsurahLocalPagePath\b|\bsurahAyahPath\b/;
 const NAV_SIGNAL = /(?:\bhref\s*=|\bgoto\s*\(|\bresolve\s*\()/;
@@ -30,8 +32,10 @@ const NAV_SIGNAL = /(?:\bhref\s*=|\bgoto\s*\(|\bresolve\s*\()/;
  *     segments inside a navigation literal.
  */
 const HAND_BUILT_APP_LITERAL = /\/app(?!lication)(?!\/\$\{string\})/u;
+// "azkar" joins the reserved segments (Feature 7): snippet paths come from
+// snippetPathFor, never a hand-built `/azkar/...` literal.
 const HAND_BUILT_RESERVED_SEGMENT =
-  /(?:^|["'`+\s(])\/(?:page|juz|hizb|rub|t)\/(?!page\/)(?![a-z0-9-]*\/t\/)/u;
+  /(?:^|["'`+\s(])\/(?:page|juz|hizb|rub|t|azkar)\/(?!page\/)(?![a-z0-9-]*\/t\/)/u;
 
 /**
  * Everything that can produce reader navigation: route components, shared
@@ -54,6 +58,20 @@ const components = {
   }) as Record<string, string>),
   // SAFETY: same glob invariant — raw eager default imports are string module sources
   ...(import.meta.glob("../../../lib/search/**/*.ts", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>),
+  // Feature 5 (widgets) + Feature 4 (sessions) build reader hrefs outside the
+  // roots above — #lib/home and #lib/sessions join the guarded set.
+  // SAFETY: same glob invariant — raw eager default imports are string module sources
+  ...(import.meta.glob("../../../lib/home/**/*.{svelte,ts}", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  }) as Record<string, string>),
+  // SAFETY: same glob invariant — raw eager default imports are string module sources
+  ...(import.meta.glob("../../../lib/sessions/**/*.{svelte,ts}", {
     query: "?raw",
     import: "default",
     eager: true,
@@ -134,6 +152,7 @@ describe("route components never hand-build navigation path literals", () => {
     expect(HAND_BUILT_RESERVED_SEGMENT.test("goto(`/juz/${n}`)")).toBe(true);
     expect(HAND_BUILT_RESERVED_SEGMENT.test("goto(`/t/en/sahih/juz/${n}`)")).toBe(true);
     expect(HAND_BUILT_RESERVED_SEGMENT.test('resolve("/hizb/44")')).toBe(true);
+    expect(HAND_BUILT_RESERVED_SEGMENT.test("goto(`/azkar/${slug}`)")).toBe(true);
   });
 
   it("the reserved-segment guard ignores product pages and builder outputs", () => {
@@ -202,6 +221,25 @@ describe("translated range-route fixtures preserve active source context across 
   it("hizb navigation keeps /t/<lang>/<translator> via hizbPathFor", () => {
     expect(hizbPathFor(ctx, 60)).toBe("/t/ms/basmeih/hizb/60");
     expect(hizbPathFor(ARABIC, 1)).toBe("/hizb/1");
+  });
+
+  it("snippet navigation keeps /t/<lang>/<translator> via snippetPathFor", () => {
+    const slug = "ayat-al-kursi";
+    expect(snippetPathFor(ARABIC, slug)).toBe("/azkar/ayat-al-kursi");
+    expect(snippetPathFor(ctx, slug)).toBe("/t/ms/basmeih/azkar/ayat-al-kursi");
+    expect(snippetPathFor(ctx, slug).includes("/t/ms/basmeih/")).toBe(true);
+    expect(snippetPathFor(ctx, slug)).not.toBe(snippetPathFor(ARABIC, slug));
+  });
+
+  it("snippet paths pass the canonical reader-href gate in both locales", () => {
+    // isReaderPathname must accept both snippet shapes, or readerHrefFor throws
+    // and the /ar reroute (hooks.ts) never fires for them.
+    expect(readerHrefFor("en", snippetPathFor(ARABIC, "ayat-al-kursi"))).toBe(
+      "/azkar/ayat-al-kursi",
+    );
+    expect(readerHrefFor("ar", snippetPathFor(ctx, "ayat-al-kursi"))).toBe(
+      "/ar/t/ms/basmeih/azkar/ayat-al-kursi",
+    );
   });
 
   it("translationIdFromSegments round-trips the active source id used by the reader", () => {

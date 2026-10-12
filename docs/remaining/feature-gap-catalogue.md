@@ -138,10 +138,10 @@ Uthmani, Simple-clean, IndoPak, Tajweed) with a script picker in Settings → Re
 schema v4); Tajweed markup renders as colored runs.
 
 **Remaining:** 15/16-line Mushaf layout (see [`mushaf-rendering-research.md`](../research/mushaf-rendering-research.md));
-per-source font controls; production IndoPak font compatibility. An OFL derivative now covers
-all nine PUA codes and ordinary corpus characters, with a development specimen. E004 in 17:7
-still fails browser bidi/shaping; exact edition provenance and qualified review remain open.
-See [`indopak-font-compatibility.md`](../indopak-font-compatibility.md). Quran DB remains immutable.
+per-source font controls; production IndoPak (script is production-disabled; its v4 OFL font
+covers every corpus character and passes desktop/Android verification, but exact edition
+provenance and qualified review remain open). See [`indopak.md`](../indopak.md). Quran DB remains
+immutable.
 
 ### R09 — Pin and compare verses — Missing · P1
 
@@ -313,7 +313,7 @@ already promises export as fallback.
 
 **EasyQuran today:** localStorage only; no download/upload/recovery flow.
 
-- [`content.ts`](../../web/src/lib/data/content.ts)
+- `web/messages/*.json` (formerly `web/src/lib/data/content.ts`)
 - [`reader-persistence.svelte.ts`](../../web/src/lib/stores/reader-persistence.svelte.ts)
 
 **Remaining:** documented portable schema; JSON export; validated import/merge/replace preview;
@@ -501,15 +501,21 @@ reconnect and metadata.
 
 ## Localization, shareability, and ecosystem
 
-### L01 — UI localization and document semantics — Missing · P1
+### L01 — UI localization and document semantics — Partial · P1
 
 **Quran.com:** 20 visible interface languages and a language selector.
 
 - [Quran.com](https://quran.com/)
 
 **EasyQuran:** UI chrome is localized in `en`/`ar` and shipped — Paraglide v2, `/` + `/ar/`
-marketing routes, `/en/app/**` + `/ar/app/**` reader URLs, locale switcher, RTL base, localized
-SEO/hreflang/sitemap ([`docs/quran-system.md`](../quran-system.md) Part 2).
+marketing routes, scheme-A reader URLs (unprefixed `en` canonicals at the site root, `/ar/**`
+twins via the hooks reroute — no `/app` marker), locale switcher, RTL base, localized
+SEO/hreflang/sitemap ([`docs/quran-system.md`](../quran-system.md) Part 2). The locale-suggest
+popup shipped too (next-features Feature 10): one-time `ar`/`en` suggestion from
+`navigator.languages` on home/reader/app-chrome surfaces, accept = full-reload link, permanent
+per-locale dismissal in `easyquran.localeSuggest`
+([`LocaleSuggest.svelte`](../../web/src/lib/components/i18n/LocaleSuggest.svelte),
+[`docs/plan/09-locale-suggest.md`](../plan/09-locale-suggest.md)).
 
 **Remaining:** fluent Arabic review for the localized (but unpublished) `about`/`faq`/`contact`/`privacy`/`terms`
 pages; RTL polish (physical utilities, reader arrows); localized `.md`/`.txt` representations; more

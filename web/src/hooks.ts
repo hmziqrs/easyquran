@@ -10,6 +10,8 @@ const CONTENT_LANGUAGE_SEGMENT = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
 const TRANSLATOR_SEGMENT = "[a-z0-9]+(?:[._-][a-z0-9]+)*";
 const NUMBER = "[1-9][0-9]*";
 const RANGE_SEGMENT = "(?:page|juz|hizb)";
+// Curated snippet slugs share the surah-slug kebab grammar (Feature 7).
+const SNIPPET_SEGMENT = SURAH_SEGMENT;
 // Scheme A: reader routes live at the site root (no `/app` marker). The
 // bounded app pages join the same mechanism (Q1 default): /ar/search,
 // /ar/settings, /ar/bookmarks and /ar/yours reroute onto their unprefixed
@@ -19,7 +21,12 @@ const READER_ROUTE_PATTERNS = [
   new RegExp("^/(?:juz|surah|pages)$", "u"),
   new RegExp(`^/${SURAH_SEGMENT}$`, "u"),
   new RegExp(`^/${RANGE_SEGMENT}/${NUMBER}$`, "u"),
+  new RegExp(`^/azkar(?:/${SNIPPET_SEGMENT})?$`, "u"),
   new RegExp(`^/${SURAH_SEGMENT}/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}$`, "u"),
+  new RegExp(
+    `^/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/azkar/${SNIPPET_SEGMENT}$`,
+    "u",
+  ),
   new RegExp(
     `^/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/${RANGE_SEGMENT}/${NUMBER}$`,
     "u",

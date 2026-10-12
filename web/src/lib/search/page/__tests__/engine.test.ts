@@ -20,6 +20,7 @@ const h = vi.hoisted(() => {
     quranSearch: vi.fn(),
     searchTranslation: vi.fn(),
     loadQuranData: vi.fn(),
+    recentsRecord: vi.fn(),
   };
 });
 
@@ -53,6 +54,9 @@ vi.mock("#lib/stores/search-selection.svelte.js", () => ({
       return h.state.selectionIds;
     },
   },
+}));
+vi.mock("#lib/stores/search-recents.svelte.js", () => ({
+  searchRecents: { record: h.recentsRecord },
 }));
 
 import { createSearchEngine, type SearchEngine } from "../engine.svelte";
@@ -176,6 +180,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   h.state.artifacts = [];
   h.state.selectionIds = [];
+  h.recentsRecord.mockReset();
   h.quranSearch.mockReset();
   h.searchTranslation.mockReset();
   h.loadQuranData.mockReset().mockResolvedValue(fakeQuranData());
@@ -192,6 +197,17 @@ afterEach(() => {
 });
 
 describe("createSearchEngine", () => {
+  it("records committed queries at or above MIN_QUERY_LEN into local recents", async () => {
+    engine.run("mercy");
+    await commit();
+    expect(h.recentsRecord).toHaveBeenCalledWith("mercy");
+
+    h.recentsRecord.mockClear();
+    engine.run("ab");
+    await commit();
+    expect(h.recentsRecord).not.toHaveBeenCalled();
+  });
+
   it("clears sections and idles on a too-short query", async () => {
     seedCached([LTR]);
     h.state.selectionIds = [LTR];

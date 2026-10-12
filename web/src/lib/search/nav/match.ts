@@ -13,8 +13,10 @@ import {
   hasKeyword,
   isBareNumber,
   parseQuery,
+  rangeNumbers,
   referenceNumbers,
   residualText,
+  type AyahRange,
   type ParsedQuery,
 } from "./parse";
 import type { NavMatch } from "./types";
@@ -26,6 +28,17 @@ function pushAyah(out: NavMatch[], data: QuranData, surah: number, ayah: number)
   const entry = data.surahByNum(surah);
   if (!entry || ayah < 1 || ayah > entry.ayahCount) return;
   out.push({ id: `ayah:${surah}:${ayah}`, score: 1, target: { kind: "ayah", surah, ayah } });
+}
+
+/**
+ * A range ref (`2:255-286`) resolves to its first verse, but only when both
+ * endpoints sit inside their surah's ayah count — a bad end drops the range,
+ * never silently truncating it.
+ */
+function pushAyahRange(out: NavMatch[], data: QuranData, range: AyahRange): void {
+  const end = data.surahByNum(range.endSurah);
+  if (!end || range.endAyah < 1 || range.endAyah > end.ayahCount) return;
+  pushAyah(out, data, range.startSurah, range.startAyah);
 }
 
 function pushSurah(out: NavMatch[], data: QuranData, surah: number, score: number): void {
@@ -119,7 +132,8 @@ function rankAndCap(matches: readonly NavMatch[], limit: number): NavMatch[] {
 
 /**
  * Structured-coordinate matcher shared by the palette and the /app/search
- * page: ayah refs (`2:255`, Arabic-Indic digits included), keyword-guarded
+ * page: ayah refs (`2:255`, ranges `2:255-286` / `2:255-2:286`,
+ * Arabic-Indic digits included), keyword-guarded
  * juz/page/surah/sajda targets, juz nicknames, bare-number surah/juz/page
  * ambiguity and the revelation-place facet. Out-of-range coordinates emit
  * nothing; a keyword that owns the query (juz/page/sajda) consumes its number
@@ -129,6 +143,7 @@ export function matchNav(data: QuranData, rawQuery: string, limit = 12): NavMatc
   const parsed = parseQuery(rawQuery);
   if (parsed.isEmpty) return [];
   const ref = referenceNumbers(parsed);
+  const range = rangeNumbers(parsed);
   const out: NavMatch[] = [];
 
   if (hasKeyword(parsed, SAJDA_ALIASES)) {
@@ -151,8 +166,14 @@ export function matchNav(data: QuranData, rawQuery: string, limit = 12): NavMatc
   }
 
   if (hasKeyword(parsed, SURAH_ALIASES)) {
-    if (ref?.secondary !== undefined) pushAyah(out, data, ref.primary, ref.secondary);
+    if (range) pushAyahRange(out, data, range);
+    else if (ref?.secondary !== undefined) pushAyah(out, data, ref.primary, ref.secondary);
     else if (ref?.primary !== undefined) pushSurah(out, data, ref.primary, 1);
+    return rankAndCap(out, limit);
+  }
+
+  if (range) {
+    pushAyahRange(out, data, range);
     return rankAndCap(out, limit);
   }
 

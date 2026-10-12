@@ -37,6 +37,12 @@
 
   let visible = $state(false);
   let type = $derived(visible ? "text" : "password");
+  // Field-scoped name: both register fields render this toggle, so the bare
+  // "Show password" is ambiguous between Password and Confirm password. The
+  // toggle controls exactly its own field's input (same id).
+  const toggleAria = $derived(
+    `${visible ? copy.hidePasswordAria : copy.showPasswordAria} — ${label}`,
+  );
 </script>
 
 <AuthField
@@ -59,7 +65,8 @@
   {#snippet trailing()}
     <button
       type="button"
-      aria-label={visible ? copy.hidePasswordAria : copy.showPasswordAria}
+      aria-label={toggleAria}
+      aria-controls={id}
       class="inline-flex h-8 w-8 items-center justify-center rounded-pill text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       onclick={() => (visible = !visible)}
     >

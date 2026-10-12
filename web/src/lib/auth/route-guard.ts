@@ -8,10 +8,13 @@ export function guestOnlyRedirect(
   pathname: string,
   status: AuthStatus,
   user: UserProfile | null,
-): "/surah" | "/verify-email" | null {
+): `/${string}` | null {
   if (status !== "authenticated") return null;
   if (!GUEST_ONLY_PATHS.has(pathname)) return null;
-  return postAuthPath(user);
+  // SAFETY: postAuthPath only ever returns root-relative app paths
+  // ("/verify-email", "/surah"); it is typed `string` for its goto() callers.
+  // Narrow here so publicHref() accepts the result.
+  return postAuthPath(user) as `/${string}`;
 }
 
 export function protectedRouteRedirect(status: AuthStatus): "/login" | null {

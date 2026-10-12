@@ -20,6 +20,7 @@ import type { AyahCoordinateValidator } from "#lib/quran/wire.js";
 import { quranWorker } from "#lib/quran/worker-client.js";
 import { isNavCandidate, matchNav, splitPlaceToken } from "#lib/search/nav/match.js";
 import type { NavMatch } from "#lib/search/nav/types.js";
+import { searchRecents } from "#lib/stores/search-recents.svelte.js";
 import { searchSelection } from "#lib/stores/search-selection.svelte.js";
 import { storageReport } from "#lib/stores/storage-report.svelte.js";
 
@@ -131,6 +132,8 @@ class Engine implements SearchEngine {
     const query = rawQuery.trim();
     const seq = ++this.#seq;
     this.committedQuery = query;
+    // Executed searches land in local recents; the store owns pause/cap/dedupe.
+    if (query.length >= MIN_QUERY_LEN) searchRecents.record(query);
     this.surahSuggestions = [];
     this.navSuggestions = [];
     if (query.length < MIN_QUERY_LEN) {

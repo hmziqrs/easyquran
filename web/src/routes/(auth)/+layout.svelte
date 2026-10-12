@@ -107,12 +107,14 @@
       >
         أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ
       </blockquote>
-      <figcaption class="flex items-center gap-3 text-sm text-primary-foreground/70">
+      <!-- Solid on-primary text: /70 measured 3.64:1 (light) / 3.90:1 (dark) on bg-primary,
+           below the 4.5:1 floor for this 13px copy; solid primary-foreground is 5.77/6.27:1. -->
+      <figcaption class="flex items-center gap-3 text-sm text-primary-foreground">
         <span aria-hidden="true" class="h-px w-8 bg-primary-foreground/40"></span>
         <span lang="ar" dir="rtl">سورة الرعد · ١٣:٢٨</span>
       </figcaption>
     </figure>
-    <p class="relative max-w-[38ch] text-sm leading-relaxed text-primary-foreground/70">
+    <p class="relative max-w-[38ch] text-sm leading-relaxed text-primary-foreground">
       {copy.dialogDescription}
     </p>
   </aside>

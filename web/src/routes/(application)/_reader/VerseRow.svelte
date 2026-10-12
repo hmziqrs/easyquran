@@ -5,8 +5,23 @@
   import { reader } from "#lib/stores/reader.svelte.js";
   import { QuranScript, type QuranScript as QuranScriptValue } from "#lib/data/quran-types.js";
   import { parseTajweedSegments, tajweedRuleColor } from "#lib/quran/view/tajweed.js";
+  import {
+    isTafsirTranslation,
+    parseTransliterationSegments,
+    stripTransliterationMarkup,
+    type TransliterationSegment,
+  } from "#lib/quran/text-marks.js";
+  import type { UiLocale } from "#lib/i18n/locales.js";
+  import { translationIdFromSegments } from "#lib/data/quran.js";
+  import { TRANSLATION_BY_ID } from "#lib/data/translations.js";
+  import { getLocale } from "#lib/paraglide/runtime.js";
+  import {
+    reader_commentary_label,
+    reader_translation_empty_verse,
+    reader_transliteration_legend,
+  } from "#lib/i18n/m/reader.js";
   import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
-  import type { StackedTranslation } from "#lib/data/quran-types.js";
+  import type { StackedTranslation, TranslationDirection } from "#lib/data/quran-types.js";
   import AyahOrnament from "./AyahOrnament.svelte";
   import IndoPakAyah from "./IndoPakAyah.svelte";
 
@@ -16,6 +31,8 @@
     vKey,
     isTranslation,
     translationLang,
+    translationDirection,
+    translationName,
     pending = false,
     arabicPending = false,
     leadId,
@@ -36,6 +53,10 @@
     isTranslation?: boolean;
     /** Language of a translation flowed in Reading on a route of another source. */
     translationLang?: string;
+    /** Declared direction of the flowed translation (off-route); route params still win. */
+    translationDirection?: TranslationDirection;
+    /** Catalogue name of the flowed translation (empty-verse credit off-route). */
+    translationName?: string;
     /** Reading flows a stacked translation whose text has not arrived yet. */
     pending?: boolean;
     /** A translation route's Arabic has not arrived yet (Ayah-by-Ayah keeps a line for it). */
@@ -105,6 +126,67 @@
     return `${who} (${work})`;
   }
 
+  // The route's own translation entry, when the reader sits on /t/** segments
+  // (TRX-11): direction and name come from the catalogue, never guessed.
+  const routeTranslationEntry = $derived.by(() => {
+    const lang = page.params.lang;
+    const translator = page.params.translator;
+    if (lang === undefined || translator === undefined) return undefined;
+    return TRANSLATION_BY_ID.get(translationIdFromSegments(lang, translator));
+  });
+
+  /** Declared direction for the flowed translation line; `auto` only when neither
+   * the route nor the flowed source declares one. */
+  const flowDirection = $derived(routeTranslationEntry?.direction ?? translationDirection ?? "auto");
+
+  const mainEmpty = $derived(translationActive && !pending && text.trim() === "");
+  const mainTranslit = $derived(
+    translationActive && !pending && !mainEmpty && text.includes("<")
+      ? parseTransliterationSegments(text)
+      : null,
+  );
+
+  function verseEmptyNote(who: string): string {
+    // SAFETY: paraglide is compiled for exactly the UI locales (en/ar), so
+    // getLocale() only ever returns a UiLocale at runtime.
+    return reader_translation_empty_verse(
+      { translator: who },
+      { locale: getLocale() as UiLocale },
+    );
+  }
+
+  /** Name shown for an empty verse: the route's catalogue name, the flowed
+   * source's name, else its language. */
+  function mainEmptyWho(): string {
+    return routeTranslationEntry?.name ?? translationName ?? translationLang ?? page.params.lang ?? "";
+  }
+
+  function laneEmpty(t: StackedTranslation): boolean {
+    return t.text.trim() === "";
+  }
+
+  function laneTranslit(t: StackedTranslation): readonly TransliterationSegment[] | null {
+    if (laneEmpty(t) || !t.text.includes("<")) return null;
+    return parseTransliterationSegments(t.text);
+  }
+
+  // Legend shows once per row, only when a rendered line carries transliteration marks.
+  const showsTranslitLegend = $derived(
+    mainTranslit !== null || extraRows.some((row) => row.kind === "text" && row.t.text.includes("<")),
+  );
+
+  function commentaryWord(): string {
+    // SAFETY: paraglide is compiled for exactly the UI locales (en/ar), so
+    // getLocale() only ever returns a UiLocale at runtime.
+    return reader_commentary_label(undefined, { locale: getLocale() as UiLocale });
+  }
+
+  function translitLegend(): string {
+    // SAFETY: paraglide is compiled for exactly the UI locales (en/ar), so
+    // getLocale() only ever returns a UiLocale at runtime.
+    return reader_transliteration_legend(undefined, { locale: getLocale() as UiLocale });
+  }
+
   onMount(() => {
     void import("./VerseTools.svelte")
       .then((module) => {
@@ -130,12 +212,24 @@
     : ''}"
 >
   {#if translationActive}
+    <!-- TRX-11: dir comes from the translation's declared direction (catalogue),
+         never dir="auto" — an empty verse in an RTL translation otherwise flips
+         its marker to the wrong side. -->
     <span
       lang={translationLang ?? page.params.lang}
-      dir="auto"
+      dir={flowDirection}
       class="verse-text verse-text--translation leading-[1.85] text-translation-foreground"
     >
-      {#if pending}<span class="flow-pending" aria-hidden="true"></span>{:else}{text}{/if}<span
+      {#if pending}<span class="flow-pending" aria-hidden="true"></span>
+      {:else if mainEmpty}
+        <span class="verse-missing">{verseEmptyNote(mainEmptyWho())}</span>
+      {:else if mainTranslit}
+        {#each mainTranslit as segment, index (index)}
+          {#if segment.underline}<u class="translit-long">{segment.text}</u>
+          {:else if segment.strong}<b class="translit-assimilated">{segment.text}</b>
+          {:else}{segment.text}{/if}
+        {/each}
+      {:else}{text}{/if}<span
         class="ayah-marker translation-marker"
         data-verse-anchor={vKey}>{n}</span
       >
@@ -177,23 +271,42 @@
         {:else if row.kind === "error"}
           <span class="verse-extra verse-extra--error">{stackedErrorLabel}</span>
         {:else}
+          {@const tafsir = isTafsirTranslation(row.t.sourceId)}
+          {@const translit = laneTranslit(row.t)}
+          <!-- dir is the lane's declared direction (TRX-11), never auto. Tafsir
+               lanes render as commentary (TRX-01): a distinct muted block whose
+               credit line carries the word "commentary" in the UI font. -->
           <span
             class="verse-extra"
-            dir={row.t.direction === "rtl" ? "rtl" : "auto"}
+            class:verse-extra--tafsir={tafsir}
+            dir={row.t.direction}
             lang={row.t.languageCode}
           >
-            {row.t.text}
+            {#if laneEmpty(row.t)}
+              <span class="verse-missing">{verseEmptyNote(row.t.name ?? row.t.language)}</span>
+            {:else if translit}
+              {#each translit as segment, index (index)}
+                {#if segment.underline}<u class="translit-long">{segment.text}</u>
+                {:else if segment.strong}<b class="translit-assimilated">{segment.text}</b>
+                {:else}{segment.text}{/if}
+              {/each}
+            {:else}{row.t.text}{/if}
             <!-- The credit takes the lane's direction (the dash leads on the lane's own side);
                  the bdi keeps a Latin name readable inside an Urdu lane. -->
-            <span class="verse-extra-credit" dir={row.t.direction}>— <bdi>{laneCredit(row.t)}</bdi></span>
+            <span class="verse-extra-credit" dir={row.t.direction}>— <bdi>{laneCredit(row.t)}{#if tafsir} ({commentaryWord()}){/if}</bdi></span>
           </span>
         {/if}
       {/each}
     </div>
   {/if}
 
+  {#if showsTranslitLegend}
+    <!-- TRX-02: the underline marks only make sense with the legend. -->
+    <p class="translit-legend">{translitLegend()}</p>
+  {/if}
+
   {#if Tools}
-    <Tools {text} {vKey} />
+    <Tools text={stripTransliterationMarkup(text)} {vKey} />
   {/if}
 </li>
 
@@ -301,6 +414,45 @@
   .verse-extra--error {
     color: var(--muted);
     font-size: 0.95rem;
+  }
+
+  /* Commentary (tafsir) lane (TRX-01): visually distinct from translation
+     lanes — a soft surface with a neutral edge instead of the accent edge — so
+     it never reads as a second translation. The Arabic text keeps the Naskh
+     face from .verse-extra:dir(rtl); the credit line (UI font) carries the
+     word "commentary". */
+  .verse-extra--tafsir {
+    background: var(--background-subtle);
+    border-inline-start: 2px solid var(--foreground-secondary);
+  }
+
+  /* Empty translation verse (TRX-11): the placeholder reads as an editorial
+     note, not as verse text. */
+  .verse-missing {
+    color: var(--muted);
+    display: inline-block;
+    font-family: "Onest Variable", "Onest", "Noto Naskh Arabic", system-ui, sans-serif;
+    font-size: 0.9em;
+    font-style: italic;
+    padding-block: 0.25rem;
+  }
+
+  .translit-legend {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 6px;
+  }
+
+  .translit-long {
+    /* Long vowel: stretch it (legend explains the underline). */
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+
+  .translit-assimilated {
+    /* Silent/assimilated letter (TRX-02). */
+    font-weight: 600;
   }
 
   .verse-lane-skeleton {

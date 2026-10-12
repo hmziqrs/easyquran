@@ -7,6 +7,7 @@ import type { PaletteGroup } from "./types";
  */
 export const PaletteGroups = {
   JumpTo: { id: "jump-to", label: "Jump to", order: 10 },
+  RecentQueries: { id: "recent-queries", label: "Recent searches", order: 15 },
   QuranText: { id: "quran-text", label: "Quran text", order: 20 },
   TranslationText: { id: "translation-text", label: "Translation", order: 25 },
   Surahs: { id: "surahs", label: "Surahs", order: 30 },

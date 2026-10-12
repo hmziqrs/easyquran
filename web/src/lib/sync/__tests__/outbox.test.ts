@@ -5,7 +5,9 @@ import {
   createOutbox,
   idbQueueStorage,
   memoryQueueStorage,
+  resilientQueueStorage,
   type Outbox,
+  type QueueStorage,
   type SyncMutationDraft,
 } from "#lib/sync/outbox.js";
 import type { SyncMutation } from "#lib/sync/types.js";
@@ -141,6 +143,42 @@ describe("Outbox (memory backend)", () => {
     await outbox.enqueue("bookmarks", "x");
     expect(await outbox.count("bookmarks")).toBe(1);
   });
+
+  it("deadLetter moves a mutation out of the live queue, payload preserved (EC-29)", async () => {
+    const outbox = createOutbox(memoryQueueStorage());
+    const [first] = await seed(outbox, "bookmarks", 2);
+
+    await outbox.deadLetter("bookmarks", first!);
+
+    expect((await outbox.take("bookmarks", 10)).map((m) => m.payload)).toEqual(["p1"]);
+  });
+
+  it("engages the memory fallback when the durable backend fails at runtime (EC-25)", async () => {
+    const fail = async (): Promise<never> => {
+      throw new Error("idb blocked");
+    };
+    const broken: QueueStorage = {
+      kind: "idb",
+      read: fail,
+      readAll: fail,
+      write: fail,
+      erase: fail,
+      clear: fail,
+      deadWrite: fail,
+    };
+    const outbox = createOutbox(resilientQueueStorage(broken));
+
+    // The retried enqueue succeeds in memory instead of rejecting forever.
+    const mutation = await outbox.enqueue("bookmarks", "x");
+    expect(mutation.payload).toBe("x");
+    expect(outbox.degraded).toBe(true);
+    expect(outbox.storage.kind).toBe("memory");
+    expect((await outbox.take("bookmarks", 10)).map((m) => m.payload)).toEqual(["x"]);
+
+    // The engine surfaces the degradation so UI can warn about reload loss.
+    const engine = createSyncEngine({ outbox, online: () => true });
+    expect(engine.status.degraded).toBe(true);
+  });
 });
 
 // --- Minimal indexedDB fake: exactly the IDBFactory subset the outbox uses
@@ -199,6 +237,8 @@ interface FakeDB {
 interface FakeOpenRequest {
   result: FakeDB;
   error: DOMException | null;
+  /** Version-change transaction the prod upgrade handler inspects stores through. */
+  transaction: { objectStore(name: string): FakeStore };
   onsuccess: ((ev: FakeOpenRequest) => void) | null;
   onerror: ((ev: FakeOpenRequest) => void) | null;
   onupgradeneeded: ((ev: FakeOpenRequest) => void) | null;
@@ -328,15 +368,22 @@ function installFakeIndexedDB(): Map<string, FakeDB> {
   }
 
   const idb = {
-    open(name: string, version: number): FakeOpenRequest {
-      const existing = dbByName.get(name);
+    open(dbName: string, version: number): FakeOpenRequest {
+      const existing = dbByName.get(dbName);
       const upgrade = existing === undefined || version > existing.version;
       const db = existing ?? makeDB(version);
       if (upgrade) db.version = version;
-      if (existing === undefined) dbByName.set(name, db);
+      if (existing === undefined) dbByName.set(dbName, db);
       const req: FakeOpenRequest = {
         result: db,
         error: null,
+        transaction: {
+          objectStore(name) {
+            const store = db.stores.get(name);
+            if (!store) throw new Error(`fake idb: no store "${name}"`);
+            return store;
+          },
+        },
         onsuccess: null,
         onerror: null,
         onupgradeneeded: null,
@@ -372,18 +419,39 @@ describe("Outbox (idb backend)", () => {
     delete globals.IDBKeyRange;
   });
 
-  it("creates the store with autoincrement keys and a by_domain index at v2", async () => {
+  it("creates the outbox and dead stores with autoincrement keys and by_domain indexes at v3", async () => {
     const outbox = createOutbox(idbQueueStorage());
     await outbox.enqueue("bookmarks", "x");
 
     const db = dbs.get("easyquran-sync");
     expect(db).toBeDefined();
-    expect(db!.version).toBe(2);
+    expect(db!.version).toBe(3);
     const store = db!.stores.get("outbox")!;
     expect(store.autoIncrement).toBe(true);
     expect(store.indexNames).toContain("by_domain");
+    expect(db!.stores.get("dead")!.autoIncrement).toBe(true);
   });
 
+  it("upgrades v2 -> v3 without dropping queued rows and adds the dead store (EC-55)", async () => {
+    // SAFETY: test seam — the installed fake is widened to its open() subset so a shipped-v2 database can be hand-built before the v3 open.
+    const fakeIdbUnknown = (globalThis as { indexedDB: unknown }).indexedDB;
+    // SAFETY: same test seam — the unknown global is narrowed back to the fake's open() subset.
+    const fakeIdb = fakeIdbUnknown as {
+      open(dbName: string, version: number): FakeOpenRequest;
+    };
+    const old = fakeIdb.open("easyquran-sync", 2).result;
+    const store = old.createObjectStore("outbox", { autoIncrement: true });
+    store.createIndex("by_domain", "domain");
+    store.data.set(1, { id: "old-1", domain: "bookmarks", payload: "kept", queuedAt: 1 });
+
+    const outbox = createOutbox(idbQueueStorage());
+
+    expect((await outbox.take("bookmarks", 10)).map((m) => m.payload)).toEqual(["kept"]);
+    expect(old.version).toBe(3);
+    expect(old.stores.has("dead")).toBe(true);
+    await outbox.enqueue("bookmarks", "new");
+    expect(await outbox.count("bookmarks")).toBe(2);
+  });
   it("stores FIFO by insertion, isolates domains, and keeps keys unique across instances", async () => {
     const tabA = createOutbox(idbQueueStorage());
     const tabB = createOutbox(idbQueueStorage());
@@ -433,6 +501,23 @@ describe("Outbox (idb backend)", () => {
     expect(db.txLog).toEqual(["readwrite"]);
     expect(await outbox.count("bookmarks")).toBe(0);
     expect(await outbox.count("notes")).toBe(1);
+  });
+
+  it("purges corrupt rows on read instead of skipping them forever (EC-26)", async () => {
+    const outbox = createOutbox(idbQueueStorage());
+    await outbox.enqueue("bookmarks", "x");
+    await outbox.enqueue("bookmarks", "y");
+    const db = dbs.get("easyquran-sync")!;
+    // A row the decoder must reject: domain present (so the index matches it)
+    // but no id/queuedAt — e.g. a partially written record.
+    // SAFETY: test seam — this row is intentionally malformed (missing id/payload/queuedAt) to prove the read path purges undecodable rows (EC-26).
+    db.stores.get("outbox")!.data.set(99, { domain: "bookmarks" } as SyncMutationDraft);
+
+    const rows = await outbox.take("bookmarks", 10);
+
+    expect(rows.map((m) => m.payload)).toEqual(["x", "y"]);
+    expect(db.stores.get("outbox")!.data.has(99)).toBe(false);
+    expect(await outbox.count("bookmarks")).toBe(2);
   });
 
   it("a durable enqueue survives a reload: a fresh engine over the same storage pushes it", async () => {

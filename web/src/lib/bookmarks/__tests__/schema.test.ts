@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   AYAH_MAX,
   FOLDER_NAME_MAX,
+  bookmarkRangeKeyOf,
   decodeBookmark,
   decodeBookmarkFolder,
   decodeBookmarksEnvelope,
+  isSingleVerseBookmark,
   newBookmarkEntityId,
   parseVerseKey,
   verseKeyOf,
@@ -15,7 +17,9 @@ import {
 type Wire = string | number | boolean | null;
 
 function folderWire(
-  overrides: Partial<Record<"id" | "name" | "createdAt" | "updatedAt", Wire>> = {},
+  overrides: Partial<
+    Record<"id" | "name" | "kind" | "position" | "createdAt" | "updatedAt", Wire>
+  > = {},
 ) {
   return {
     id: "f1",
@@ -28,7 +32,10 @@ function folderWire(
 
 function bookmarkWire(
   overrides: Partial<
-    Record<"id" | "folderId" | "surah" | "ayah" | "createdAt" | "updatedAt", Wire>
+    Record<
+      "id" | "folderId" | "surah" | "ayah" | "endSurah" | "endAyah" | "createdAt" | "updatedAt",
+      Wire
+    >
   > = {},
 ) {
   return {
@@ -63,13 +70,25 @@ describe("verseKeyOf / parseVerseKey", () => {
 });
 
 describe("decodeBookmarkFolder", () => {
-  it("decodes a valid row", () => {
+  it("decodes a valid row, defaulting kind/position when absent", () => {
     expect(decodeBookmarkFolder(folderWire())).toEqual({
       id: "f1",
       name: "Ramadan",
+      kind: "generic",
+      position: null,
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-01-02T00:00:00Z",
     });
+  });
+
+  it("decodes study-set kind and manual position", () => {
+    const folder = decodeBookmarkFolder(folderWire({ kind: "daily", position: 3 }));
+    expect(folder?.kind).toBe("daily");
+    expect(folder?.position).toBe(3);
+  });
+
+  it("rejects an unknown folder kind", () => {
+    expect(decodeBookmarkFolder(folderWire({ kind: "weekly" }))).toBeNull();
   });
 
   it("rejects malformed rows", () => {
@@ -106,6 +125,30 @@ describe("decodeBookmark", () => {
     expect(decodeBookmark(bookmarkWire({ folderId: "" }))).toBeNull();
     expect(decodeBookmark(bookmarkWire({ id: "" }))).toBeNull();
     expect(decodeBookmark(bookmarkWire({ updatedAt: null }))).toBeNull();
+  });
+
+  it("decodes the range end only when the server emits both keys (Feature 7.4, §9.1)", () => {
+    // Single rows keep the legacy shape (no end keys), covered above.
+    const range = decodeBookmark(bookmarkWire({ id: "b2", ayah: 285, endSurah: 2, endAyah: 286 }));
+    expect(range).toMatchObject({ surah: 2, ayah: 285, endSurah: 2, endAyah: 286 });
+    // Exactly one end key = corrupt row → dropped, not half-decoded.
+    expect(decodeBookmark(bookmarkWire({ endSurah: 2 }))).toBeNull();
+    expect(decodeBookmark(bookmarkWire({ endAyah: 286 }))).toBeNull();
+    expect(decodeBookmark(bookmarkWire({ endSurah: 115, endAyah: 1 }))).toBeNull();
+  });
+
+  it("keys rows by start verse plus range end and singles them out (EC-51)", () => {
+    const single = { surah: 2, ayah: 285, endSurah: null, endAyah: null };
+    const range = { surah: 2, ayah: 285, endSurah: 2, endAyah: 286 };
+    expect(isSingleVerseBookmark(single)).toBe(true);
+    expect(isSingleVerseBookmark(range)).toBe(false);
+    // Absent ends behave like null (pre-range clients never sent the keys).
+    expect(
+      isSingleVerseBookmark({ surah: 2, ayah: 285, endSurah: undefined, endAyah: undefined }),
+    ).toBe(true);
+    // Distinct keys: a range and its start verse never collapse into each other.
+    expect(bookmarkRangeKeyOf(single)).toBe("2:285-2:285");
+    expect(bookmarkRangeKeyOf(range)).toBe("2:285-2:286");
   });
 });
 

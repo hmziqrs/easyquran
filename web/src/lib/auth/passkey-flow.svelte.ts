@@ -13,6 +13,7 @@ import type { AuthErrorEnvelope } from "#lib/auth/auth-client.js";
 import {
   GENERIC_TRY_AGAIN,
   NETWORK_ERROR,
+  PASSKEY_UNAVAILABLE,
   VERIFY_EMAIL_NEXT,
   classifyAuthError,
   isVerifiedOnlyError,
@@ -118,6 +119,18 @@ function isUserCancellation(cause: unknown): boolean {
   return false;
 }
 
+/**
+ * The browser itself cannot do WebAuthn (NotSupportedError — no platform
+ * authenticator support, e.g. headless or hardening-stripped builds) or refuses
+ * it outright (SecurityError — permissions policy / embedded-frame block).
+ * That is a client-capability failure, not a network one; surfacing
+ * NETWORK_ERROR here sent users to check their connection for nothing.
+ */
+function isWebAuthnUnavailable(cause: unknown): boolean {
+  if (!(cause instanceof DOMException)) return false;
+  return cause.name === "NotSupportedError" || cause.name === "SecurityError";
+}
+
 function toPasskeyInfo(view: CredentialView): PasskeyInfo {
   const deviceType = view.device_type;
   return {
@@ -199,7 +212,7 @@ export class PasskeyFlow {
   async login(): Promise<boolean> {
     if (this.pending) return false;
     if (!this.#credentials) {
-      this.genericError = GENERIC_TRY_AGAIN;
+      this.genericError = PASSKEY_UNAVAILABLE;
       return false;
     }
     this.pending = true;
@@ -237,6 +250,10 @@ export class PasskeyFlow {
       } catch (e) {
         if (isUserCancellation(e)) {
           this.cancelled = true;
+          return false;
+        }
+        if (isWebAuthnUnavailable(e)) {
+          this.genericError = PASSKEY_UNAVAILABLE;
           return false;
         }
         throw e;
@@ -295,7 +312,7 @@ export class PasskeyFlow {
   async register(label?: string): Promise<boolean> {
     if (this.pending) return false;
     if (!this.#credentials) {
-      this.genericError = GENERIC_TRY_AGAIN;
+      this.genericError = PASSKEY_UNAVAILABLE;
       return false;
     }
     this.pending = true;
@@ -339,6 +356,10 @@ export class PasskeyFlow {
       } catch (e) {
         if (isUserCancellation(e)) {
           this.cancelled = true;
+          return false;
+        }
+        if (isWebAuthnUnavailable(e)) {
+          this.genericError = PASSKEY_UNAVAILABLE;
           return false;
         }
         throw e;

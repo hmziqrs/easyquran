@@ -2,11 +2,8 @@
 
 Version 4 is integrated into both IndoPak reader modes. Default Uthmani stays unchanged.
 It is built on SIL Lateef SemiBold (OFL, South Asian letterforms) to match Quran.com's IndoPak
-look; see [Quran.com study](../../../docs/indopak-qurancom-rendering-study.md). Versions 2–3
-(Noto Naskh base) stay packaged for cached clients.
-See [font/data evidence](../../../docs/indopak-font-compatibility.md) and
-[Quran.com comparison](../../../docs/indopak-qurancom-comparison.md),
-[deep audit/source discrepancies](../../../docs/indopak-deep-audit.md).
+look. Versions 2–3 (Noto Naskh base) stay packaged for cached clients. Status, verification,
+Quran.com comparison and source discrepancies: [`docs/indopak.md`](../../../docs/indopak.md).
 
 Run from repository root with Python 3.9+, Node 24+, and bun dependencies:
 
@@ -162,8 +159,8 @@ Exit 1 on any assertion failure.
 
 The development specimen accepts `?keys=19:17,91:14,97:5,56:23` to include regression
 verses without private codes. Use the summary's `context_coverage.phase_c_capture_keys`
-and `phase_c_review_keys` for the browser capture set. Current verification status and
-evidence paths: [v4 results](../../../docs/indopak-v4-results.md).
+and `phase_c_review_keys` for the browser capture set. Current verification status:
+[`docs/indopak.md`](../../../docs/indopak.md#verification).
 
 `?audit=corpus&offset=0&limit=256` pages through all 6,236 immutable verses.
 `corpus-browser-check.mjs` checks exact text and end geometry for all verses in 32

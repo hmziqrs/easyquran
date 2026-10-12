@@ -20,6 +20,7 @@
   import { isScriptEnabled } from "#lib/quran/script-availability.js";
   import { parseTajweedSegments, tajweedRuleColor } from "#lib/quran/view/tajweed.js";
   import { reader, type ReaderMode } from "#lib/stores/reader.svelte.js";
+  import { prefs } from "#lib/stores/prefs.svelte.js";
   import { cn } from "#lib/utils.js";
   import type { SettingsCopy } from "#lib/i18n/settings-copy.js";
 
@@ -157,6 +158,16 @@
 
   const stepperButton =
     "flex h-9 w-10 items-center justify-center rounded-pill border border-border-strong text-caption text-foreground-secondary transition-colors hover:border-border hover:text-foreground disabled:pointer-events-none disabled:opacity-40";
+
+  // Same toggle idiom as the privacy section (aria-pressed pill, on/off copy).
+  const resumeToggle = "rounded-pill border px-3.5 py-2.5 text-caption transition-colors duration-150";
+  const resumeToggleOn = "border-primary bg-primary-soft text-foreground";
+  const resumeToggleOff =
+    "border-border-strong text-foreground-secondary hover:border-border hover:text-foreground";
+
+  function toggleInstantResume(): void {
+    prefs.setInstantResume(!prefs.instantResume);
+  }
 </script>
 
 <div id={id} tabindex="-1" class="scroll-mt-24">
@@ -313,6 +324,26 @@
             onclick={() => reader.growTranslation()}>+</button
           >
         </div>
+      </div>
+
+      <!-- Feature 5.9 (HOME-01 second pass): the dormant prefs.instantResume pref gets its UI here. -->
+      <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
+        <div class="min-w-0">
+          <span class="text-[14.5px] font-medium text-foreground">{copy.resume}</span>
+          <p class="mt-0.5 text-caption leading-snug text-muted">{copy.resumeNote}</p>
+        </div>
+        <button
+          type="button"
+          aria-pressed={prefs.instantResume}
+          onclick={toggleInstantResume}
+          class={cn(
+            resumeToggle,
+            "shrink-0",
+            prefs.instantResume ? resumeToggleOn : resumeToggleOff,
+          )}
+        >
+          {prefs.instantResume ? copy.on : copy.off}
+        </button>
       </div>
     </div>
   </div>

@@ -18,6 +18,8 @@ export interface ReadPick {
 /**
  * The picker's one-tap chips: the route's own translation (a /t/ URL promises that text),
  * then the reader's recent Reading picks, then their stacked translations — deduped.
+ * `recent` arrives already ordered by the translation-recents MRU (see
+ * ReadingTextStore.recent); stacked ids keep the reader's own arrangement.
  */
 export function readingQuickPicks(
   routeTranslationId: string | null,

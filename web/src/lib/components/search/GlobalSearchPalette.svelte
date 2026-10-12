@@ -6,13 +6,29 @@
   import { uiDirection, type UiLocale } from "#lib/i18n/locales.js";
   import { getLocale } from "#lib/paraglide/runtime.js";
   import { authState } from "#lib/auth/auth-state.svelte.js";
+  import {
+    palette_group_actions,
+    palette_group_app_pages,
+    palette_group_jump_to,
+    palette_group_quran_text,
+    palette_group_ranges,
+    palette_group_recent_queries,
+    palette_group_sajdas,
+    palette_group_settings,
+    palette_group_site,
+    palette_group_surahs,
+    palette_group_translation_text,
+  } from "#lib/i18n/m/palette.js";
   import { commandPalette } from "#lib/stores/command-palette.svelte.js";
   import { reader } from "#lib/stores/reader.svelte.js";
+  import { storageReport } from "#lib/stores/storage-report.svelte.js";
   import {
     createPaletteEngine,
     registerBuiltinPaletteSources,
     resolveHref,
+    PaletteGroups,
     type PaletteEntry,
+    type PaletteGroup,
   } from "#lib/search/palette/index.js";
   import * as Cmd from "#lib/components/ui/command/index.js";
   import { Icon } from "#lib/components/icon/index.js";
@@ -40,6 +56,9 @@
     // idempotent, so hydrating here covers marketing pages too.
     reader.hydrate();
     authState.hydrate();
+    // The engine retriggers a cold translation source once its download lands
+    // (see engine.svelte.ts); that signal is the artifact list refreshed here.
+    storageReport.hydrate();
   });
 
   afterNavigate(() => commandPalette.hide());
@@ -75,6 +94,31 @@
     selected = ids[0] ?? "";
   });
 
+  // Group headings come from the message pipeline; a registered group without
+  // a message (a future hadith/tafsir domain) falls back to its own label.
+  const options = { locale } as const;
+  const noArgs = (
+    message: (inputs?: undefined, options?: { locale?: UiLocale }) => string,
+  ): string => message(undefined, options);
+  const GROUP_HEADINGS = {
+    [PaletteGroups.JumpTo.id]: noArgs(palette_group_jump_to),
+    [PaletteGroups.RecentQueries.id]: noArgs(palette_group_recent_queries),
+    [PaletteGroups.QuranText.id]: noArgs(palette_group_quran_text),
+    [PaletteGroups.TranslationText.id]: noArgs(palette_group_translation_text),
+    [PaletteGroups.Surahs.id]: noArgs(palette_group_surahs),
+    [PaletteGroups.Ranges.id]: noArgs(palette_group_ranges),
+    [PaletteGroups.Sajdas.id]: noArgs(palette_group_sajdas),
+    [PaletteGroups.Settings.id]: noArgs(palette_group_settings),
+    [PaletteGroups.AppPages.id]: noArgs(palette_group_app_pages),
+    [PaletteGroups.Site.id]: noArgs(palette_group_site),
+    [PaletteGroups.Actions.id]: noArgs(palette_group_actions),
+  } satisfies Record<string, string>;
+  // SAFETY: PaletteGroup.id is a plain string, but every registered id comes
+  // from the same PaletteGroups registry these keys are computed from, so the
+  // keyof assertion is exact; an unregistered group falls back to its own label.
+  const headingFor = (group: PaletteGroup): string =>
+    GROUP_HEADINGS[group.id as keyof typeof GROUP_HEADINGS] ?? group.label;
+
   const query = $derived(commandPalette.query.trim());
   const showEmpty = $derived(
     engine.ready && !engine.searching && query.length > 0 && engine.entries.length === 0,
@@ -88,7 +132,9 @@
    */
   function activate(entry: PaletteEntry): void {
     entry.run?.();
-    if (!entry.href) commandPalette.hide();
+    // keepOpen entries (a recent query filling the input) stay open; hiding
+    // here would wipe the fill, since hide() also clears the query.
+    if (!entry.href && !entry.keepOpen) commandPalette.hide();
   }
 </script>
 
@@ -129,7 +175,7 @@
     {/if}
 
     {#each engine.sections as section (section.group.id)}
-      <Cmd.Group heading={section.group.label} value={section.group.id}>
+      <Cmd.Group heading={headingFor(section.group)} value={section.group.id}>
         {#each section.entries as entry (entry.id)}
           {#snippet body()}
             <!-- 8px-radius square icon holder (plan 06 palette geometry). -->

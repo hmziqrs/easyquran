@@ -168,11 +168,13 @@ export class AuthClient {
     method: string,
     path: string,
     opts: RequestOpts = {},
+    allowCsrfRetry = true,
   ): Promise<AuthRequestResult<T>> {
     const headers: RequestHeaders = {
       accept: "application/json",
       ...opts.headers,
     };
+    const sentCsrf = method !== "GET" && method !== "HEAD" && this.#csrfToken !== null;
     if (method !== "GET" && method !== "HEAD" && this.#csrfToken) {
       headers[CSRF_HEADER] = this.#csrfToken;
     }
@@ -212,7 +214,16 @@ export class AuthClient {
     const raw = await readBody<T>(res);
     const ok = res.ok;
     if (!ok) {
-      return { ok: false, status, data: null, error: decodeErrorEnvelope(raw), rotated };
+      const error = decodeErrorEnvelope(raw);
+      // Stale-CSRF wedge (EC-15): the CSRF guard answers 401 AUTH_009. When the
+      // request carried our in-memory token, drop it, fetch a fresh one, and
+      // retry exactly once — a token staled by a session rotation elsewhere
+      // must not wedge every subsequent unsafe call.
+      if (allowCsrfRetry && sentCsrf && status === 401 && error?.type === "AUTH_009") {
+        const retried = await this.#retryAfterCsrfRefresh<T>(method, path, opts);
+        if (retried !== null) return retried;
+      }
+      return { ok: false, status, data: null, error, rotated };
     }
     const data = raw;
     if (rotated && !this.#refreshing) {
@@ -228,8 +239,29 @@ export class AuthClient {
     return { ok: true, status, data, error: null, rotated };
   }
 
+  /** One bounded retry after a stale-token CSRF rejection; null = keep the original failure. */
+  async #retryAfterCsrfRefresh<T>(
+    method: string,
+    path: string,
+    opts: RequestOpts,
+  ): Promise<AuthRequestResult<T> | null> {
+    this.clearCsrf();
+    try {
+      this.#csrfToken = await this.fetchCsrf(opts.signal);
+    } catch {
+      return null;
+    }
+    try {
+      return await this.#request<T>(method, path, opts, false);
+    } catch {
+      return null;
+    }
+  }
+
   async fetchCsrf(signal?: AbortSignal): Promise<string> {
-    const res = await this.#request<WireObject>("POST", "/csrf/v1/generate", { signal });
+    // No CSRF retry on the generate call itself — it is server-side exempt, so
+    // a failure there is real and must not recurse.
+    const res = await this.#request<WireObject>("POST", "/csrf/v1/generate", { signal }, false);
     if (!res.ok) throw new AuthTransportError("csrf generate failed", res.status);
     const raw = res.data;
     const token = raw && isString(raw.token) ? raw.token : null;

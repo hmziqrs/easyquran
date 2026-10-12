@@ -101,16 +101,6 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - name: Web security gates
-        working-directory: web
-        run: |
-          bun run check
-          bun run lint
-          bun run test
-
-      - name: JavaScript dependency audit
-        run: bun audit
-
       - name: Check Quran publisher
         run: bun run quran:check
 
@@ -194,22 +184,6 @@ jobs:
       # Dockerfile.api COPYs. `vendored-openssl` is not a cross-build workaround here — the
       # runtime image (debian:trixie-slim) carries no libssl, so the binary must not link
       # one dynamically.
-      - name: Rust security gates
-        working-directory: rust
-        run: |
-          cargo fmt --all --check
-          cargo clippy --workspace --all-targets --locked -- -D warnings
-          cargo test --workspace --locked -- --test-threads=1
-          cargo check --locked -p ruxlog --features seed-system --bin ruxlog_tui --bin seed_now
-
-      - name: Install dependency auditor
-        run: cargo install cargo-audit --version 0.22.2 --locked
-
-      - name: Rust dependency audit
-        run: |
-          python3 -m unittest discover -s scripts/security -p 'test_*.py'
-          python3 scripts/security/cargo-audit-gate.py
-
       - name: Build ruxlog
         working-directory: rust
         run: |

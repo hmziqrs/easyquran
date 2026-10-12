@@ -1,12 +1,12 @@
 # Local policy: cargo deny --manifest-path backend/api/Cargo.toml check.
-# Publication uses scripts/security/cargo-audit-gate.py in images.yml.
+# Local dependency graph audit: scripts/security/cargo-audit-gate.py.
 [advisories]
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "deny"
 unmaintained = "all"
 unsound = "all"
 ignore = [
-  { id = "RUSTSEC-2023-0071", reason = "RSA is absent from the compiled Linux workspace graph; CI cargo-audit-gate.py rejects it if enabled. No patched upstream version exists." },
+  { id = "RUSTSEC-2023-0071", reason = "RSA is absent from the compiled Linux workspace graph; The local cargo-audit-gate.py check rejects it if enabled. No patched upstream version exists." },
 ]
 
 # ── Licenses: deny anything outside this allowlist. ─────────────────────────

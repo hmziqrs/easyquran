@@ -405,3 +405,56 @@ describe("error envelope decoding", () => {
     });
   });
 });
+
+describe("stale-CSRF clear + single retry (EC-15)", () => {
+  function csrfRejected(): Response {
+    return jsonRes({ type: "AUTH_009", status: 401 }, { status: 401 });
+  }
+
+  it("a 401 AUTH_009 on a token-carrying unsafe request refreshes CSRF and retries once", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonRes({ token: "stale-1" })) // bootstrap
+      .mockResolvedValueOnce(csrfRejected()) // original unsafe request
+      .mockResolvedValueOnce(jsonRes({ token: "fresh-2" })) // refresh
+      .mockResolvedValueOnce(jsonRes({ ok: true })); // retried request
+    const c = createAuthClient();
+    await c.ensureAnonymousSession();
+    const res = await c.unsafeRequest("/bookmark/v1/sync", { method: "POST", body: {} });
+    expect(res.ok).toBe(true);
+    expect(c.getCsrfToken()).toBe("fresh-2");
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    // SAFETY: fetch spy records (url, init); call 3 is the retried original with the fresh token.
+    const [retryUrl, retryInit] = fetchMock.mock.calls[3] as [string, RequestInit];
+    expect(retryUrl).toBe("https://eq.test/api/bookmark/v1/sync");
+    // SAFETY: unsafeRequest builds headers as a flat Record<string, string> (never Headers or
+    // a tuple array), so the recorded init.headers carries the csrf-token key directly.
+    expect((retryInit.headers as Record<string, string>)["csrf-token"]).toBe("fresh-2");
+  });
+
+  it("retries at most once: a second AUTH_009 surfaces the failure", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonRes({ token: "stale-1" }))
+      .mockResolvedValueOnce(csrfRejected())
+      .mockResolvedValueOnce(jsonRes({ token: "fresh-2" }))
+      .mockResolvedValueOnce(csrfRejected());
+    const c = createAuthClient();
+    await c.ensureAnonymousSession();
+    const res = await c.unsafeRequest("/bookmark/v1/sync", { method: "POST", body: {} });
+    expect(res.ok).toBe(false);
+    expect(res.status).toBe(401);
+    expect(res.error?.type).toBe("AUTH_009");
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("GET probes never retry on 401", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonRes({ type: "AUTH_009", status: 401 }, { status: 401 }));
+    const c = createAuthClient();
+    const probe = await c.getUser();
+    expect(probe.kind).toBe("anonymous");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

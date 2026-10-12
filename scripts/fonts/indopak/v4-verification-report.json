@@ -209,7 +209,7 @@
   "source_text_committed": false,
   "quran_data_hashed": false,
   "editorial_approval": false,
-  "results_document": "docs/indopak-v4-results.md",
+  "results_document": "docs/indopak.md",
   "search_query_hydration_commit": "4ff7e48",
   "android_ring_ink": {
     "cases": 1430,

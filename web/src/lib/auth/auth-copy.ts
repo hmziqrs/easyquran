@@ -15,6 +15,8 @@ export const RESET_SUCCESS = "Your password has been reset. You can sign in now.
 export const GENERIC_TRY_AGAIN = "Something went wrong. Please try again.";
 export const NETWORK_ERROR = "Network error. Check your connection and try again.";
 export const RATE_LIMIT = "Too many attempts. Please wait a moment and try again.";
+/** A client-capability failure (WebAuthn missing/blocked), not a network one — never map these to NETWORK_ERROR. */
+export const PASSKEY_UNAVAILABLE = "Passkeys aren't available or are blocked in this browser.";
 
 export type ErrorKind =
   | "field"

@@ -8,15 +8,15 @@ import type { SyncMutation } from "./types";
 
 const SYNC_DB = "easyquran-sync";
 const OUTBOX_STORE = "outbox";
+const DEAD_STORE = "dead";
 const BY_DOMAIN_INDEX = "by_domain";
 /**
- * v2 (2026-08): the outbox moved from caller-composed `${domain}:${padded seq}`
- * string keys to storage-allocated autoincrement keys + a `by_domain` index —
- * per-tab in-memory seq counters collided across tabs and `put` silently
- * overwrote queued rows. The bump recreates the store; queued mutations in
- * existing (dev-only) databases are dropped exactly once.
+ * v2 (2026-08): autoincrement keys + `by_domain` index (string-key collision fix).
+ * v3 (2026-10): adds the `dead` dead-letter store (EC-29). Upgrades NEVER
+ * delete the outbox store anymore — queued rows survive every future bump
+ * (EC-55); the only recreation case is a pre-v2 shape (no `by_domain` index).
  */
-const SYNC_DB_VERSION = 2;
+const SYNC_DB_VERSION = 3;
 
 function newMutationId(): string {
   // `in` (not typeof): randomUUID is missing on insecure origins (LAN http dev).
@@ -59,6 +59,8 @@ function compareMutations(a: SyncMutation, b: SyncMutation): number {
  */
 export interface QueueStorage {
   readonly kind: "idb" | "memory";
+  /** True when a resilient wrapper degraded the storage to memory at runtime (EC-25). */
+  readonly degraded?: boolean;
   /** Up to `limit` mutations of `domain`, insertion-key ascending. */
   read(domain: string, limit: number): Promise<SyncMutation[]>;
   readAll(): Promise<SyncMutation[]>;
@@ -68,10 +70,13 @@ export interface QueueStorage {
   erase(seqs: number[]): Promise<void>;
   /** Durable removal of every queued mutation of `domain`; resolves the removed count. */
   clear(domain: string): Promise<number>;
+  /** Move a record into the dead-letter store (EC-29); durable before resolving. */
+  deadWrite<P>(record: SyncMutationDraft<P>): Promise<void>;
 }
 
 export function memoryQueueStorage(): QueueStorage {
   const rows = new Map<number, SyncMutation>();
+  const deadRows = new Map<number, SyncMutation>();
   // Storage-scoped key generator: mirrors IDB autoincrement — unique per
   // storage (not per Outbox instance) and never rewound by removals.
   let nextKey = 1;
@@ -105,19 +110,32 @@ export function memoryQueueStorage(): QueueStorage {
       for (const seq of seqs) rows.delete(seq);
       return seqs.length;
     },
+    async deadWrite<P>(record: SyncMutationDraft<P>) {
+      const dead: SyncMutation<P> = { ...record, seq: nextKey };
+      deadRows.set(nextKey, dead);
+      nextKey += 1;
+    },
   };
 }
 
 /**
  * Cursor read over the sync connection: walks the `by_domain` index (or the
  * whole store for `domain === null`) in primary-key — i.e. insertion — order,
- * stopping after `limit` decoded rows.
+ * stopping after `limit` decoded rows. A row that fails `decodeMutation` is
+ * corrupt durable state: without a purge it is immortal (skipped by every
+ * read, never erased), so it is erased best-effort on sight (EC-26).
  */
-function readRange(db: IDBDatabase, domain: string | null, limit: number): Promise<SyncMutation[]> {
+function readRange(
+  db: IDBDatabase,
+  storeName: string,
+  domain: string | null,
+  limit: number,
+): Promise<SyncMutation[]> {
   return new Promise<SyncMutation[]>((resolve, reject) => {
     const out: SyncMutation[] = [];
-    const tx = db.transaction(OUTBOX_STORE, "readonly");
-    const store = tx.objectStore(OUTBOX_STORE);
+    const corrupt: number[] = [];
+    const tx = db.transaction(storeName, "readonly");
+    const store = tx.objectStore(storeName);
     const request =
       domain === null
         ? store.openCursor()
@@ -126,11 +144,17 @@ function readRange(db: IDBDatabase, domain: string | null, limit: number): Promi
       const cursor = request.result;
       if (cursor === null || out.length >= limit) {
         resolve(out);
+        if (corrupt.length > 0) {
+          void runTxVoid(db, storeName, "readwrite", (purge) => {
+            for (const seq of corrupt) purge.delete(seq);
+          }).catch(() => undefined);
+        }
         return;
       }
       const seq = asNumber(cursor.primaryKey, 1, Number.MAX_SAFE_INTEGER);
       const decoded = seq === undefined ? null : decodeMutation(cursor.value, seq);
       if (decoded !== null) out.push(decoded);
+      else if (seq !== undefined) corrupt.push(seq);
       cursor.continue();
     };
     request.onerror = () => reject(idbError(request.error, "outbox cursor"));
@@ -138,10 +162,14 @@ function readRange(db: IDBDatabase, domain: string | null, limit: number): Promi
 }
 
 /** Put without a key so IDB's atomic autoincrement generator allocates it; resolves the stored mutation with `seq` filled. */
-function putAutoKey<P>(db: IDBDatabase, record: SyncMutationDraft<P>): Promise<SyncMutation<P>> {
+function putAutoKey<P>(
+  db: IDBDatabase,
+  storeName: string,
+  record: SyncMutationDraft<P>,
+): Promise<SyncMutation<P>> {
   return new Promise<SyncMutation<P>>((resolve, reject) => {
-    const tx = db.transaction(OUTBOX_STORE, "readwrite");
-    const request = tx.objectStore(OUTBOX_STORE).put(record);
+    const tx = db.transaction(storeName, "readwrite");
+    const request = tx.objectStore(storeName).put(record);
     request.onsuccess = () => {
       const seq = asNumber(request.result, 1, Number.MAX_SAFE_INTEGER);
       if (seq === undefined) {
@@ -160,12 +188,34 @@ function putAutoKey<P>(db: IDBDatabase, record: SyncMutationDraft<P>): Promise<S
   });
 }
 
+function hasDomainIndex(store: IDBObjectStore): boolean {
+  // Array.from, not .contains: the in-file test double hands back a plain array.
+  return Array.from(store.indexNames).includes(BY_DOMAIN_INDEX);
+}
+
+/**
+ * Idempotent upgrade step (EC-55): an existing outbox store is kept as is —
+ * its queued rows must survive every bump — only gaining the `by_domain`
+ * index if a pre-v2 database lacks it. Any incompatible pre-v2 rows then fail
+ * `decodeMutation` on first read and are purged by the EC-26 path.
+ */
+function ensureOutboxStore(upgrading: IDBDatabase, upgradeTx: IDBTransaction | null): void {
+  if (upgradeTx === null) throw new Error("sync upgrade without a versionchange transaction");
+  if (upgrading.objectStoreNames.contains(OUTBOX_STORE)) {
+    const store = upgradeTx.objectStore(OUTBOX_STORE);
+    if (!hasDomainIndex(store)) store.createIndex(BY_DOMAIN_INDEX, "domain");
+    return;
+  }
+  const store = upgrading.createObjectStore(OUTBOX_STORE, { autoIncrement: true });
+  store.createIndex(BY_DOMAIN_INDEX, "domain");
+}
+
 /**
  * Own open path (not #lib/workers/idb.js openIdb): the sync DB pins its own
- * version and its upgrade recreates the store with `autoIncrement` + a
- * `by_domain` index — shapes the shared one-store-per-db helper never creates.
- * The connection is cached per idbQueueStorage() instance; a close or version
- * change elsewhere evicts it so the next call reopens.
+ * version and its upgrade creates the outbox/dead stores with `autoIncrement` +
+ * `by_domain` indexes — shapes the shared one-store-per-db helper never
+ * creates. The connection is cached per idbQueueStorage() instance; a close or
+ * version change elsewhere evicts it so the next call reopens.
  */
 export function idbQueueStorage(): QueueStorage {
   let connection: Promise<IDBDatabase> | null = null;
@@ -173,12 +223,11 @@ export function idbQueueStorage(): QueueStorage {
     connection ??= new Promise<IDBDatabase>((resolve, reject) => {
       const req = indexedDB.open(SYNC_DB, SYNC_DB_VERSION);
       req.onupgradeneeded = () => {
-        const upgrading = req.result;
-        if (upgrading.objectStoreNames.contains(OUTBOX_STORE)) {
-          upgrading.deleteObjectStore(OUTBOX_STORE);
+        ensureOutboxStore(req.result, req.transaction);
+        if (!req.result.objectStoreNames.contains(DEAD_STORE)) {
+          const dead = req.result.createObjectStore(DEAD_STORE, { autoIncrement: true });
+          dead.createIndex(BY_DOMAIN_INDEX, "domain");
         }
-        const store = upgrading.createObjectStore(OUTBOX_STORE, { autoIncrement: true });
-        store.createIndex(BY_DOMAIN_INDEX, "domain");
       };
       req.onsuccess = () => {
         const opened = req.result;
@@ -201,13 +250,16 @@ export function idbQueueStorage(): QueueStorage {
   return {
     kind: "idb",
     async read(domain, limit) {
-      return await readRange(await db(), domain, limit);
+      return await readRange(await db(), OUTBOX_STORE, domain, limit);
     },
     async readAll() {
-      return await readRange(await db(), null, Number.POSITIVE_INFINITY);
+      return await readRange(await db(), OUTBOX_STORE, null, Number.POSITIVE_INFINITY);
     },
     async write<P>(record: SyncMutationDraft<P>) {
-      return await putAutoKey(await db(), record);
+      return await putAutoKey(await db(), OUTBOX_STORE, record);
+    },
+    async deadWrite<P>(record: SyncMutationDraft<P>) {
+      await putAutoKey(await db(), DEAD_STORE, record);
     },
     async erase(seqs) {
       if (seqs.length === 0) return;
@@ -242,9 +294,46 @@ export function idbQueueStorage(): QueueStorage {
   };
 }
 
+/**
+ * Runtime degradation wrapper (EC-25): private mode / blocked storage can make
+ * `indexedDB.open` reject long after construction. The first failing op flips
+ * the wrapper to in-memory storage permanently — the retried op then succeeds
+ * instead of rejecting forever — and `degraded` lets the surface warn that
+ * changes may not survive a reload.
+ */
+export function resilientQueueStorage(
+  primary: QueueStorage,
+  fallback: () => QueueStorage = memoryQueueStorage,
+): QueueStorage {
+  let memory: QueueStorage | null = null;
+  const attempt = async <T>(op: (storage: QueueStorage) => Promise<T>): Promise<T> => {
+    if (memory !== null) return await op(memory);
+    try {
+      return await op(primary);
+    } catch {
+      memory = fallback();
+      return await op(memory);
+    }
+  };
+  return {
+    get kind() {
+      return (memory ?? primary).kind;
+    },
+    get degraded() {
+      return memory !== null;
+    },
+    read: (domain, limit) => attempt((storage) => storage.read(domain, limit)),
+    readAll: () => attempt((storage) => storage.readAll()),
+    write: <P>(record: SyncMutationDraft<P>) => attempt((storage) => storage.write(record)),
+    deadWrite: <P>(record: SyncMutationDraft<P>) => attempt((storage) => storage.deadWrite(record)),
+    erase: (seqs) => attempt((storage) => storage.erase(seqs)),
+    clear: (domain) => attempt((storage) => storage.clear(domain)),
+  };
+}
+
 function defaultQueueStorage(): QueueStorage {
   // `in` (not typeof): feature-detects the global without tripping on undeclared access.
-  if (browser && "indexedDB" in globalThis) return idbQueueStorage();
+  if (browser && "indexedDB" in globalThis) return resilientQueueStorage(idbQueueStorage());
   return memoryQueueStorage();
 }
 
@@ -261,6 +350,11 @@ export class Outbox {
 
   constructor(storage: QueueStorage) {
     this.storage = storage;
+  }
+
+  /** True once the durable backend degraded to memory at runtime (EC-25). */
+  get degraded(): boolean {
+    return this.storage.degraded === true;
   }
 
   #serialized<T>(op: () => Promise<T>): Promise<T> {
@@ -297,6 +391,47 @@ export class Outbox {
   /** Durable wipe of every queued mutation of `domain` (e.g. logout); resolves the removed count. */
   async clear(domain: string): Promise<number> {
     return await this.#serialized(() => this.storage.clear(domain));
+  }
+
+  /**
+   * Move one mutation from the live queue to the dead-letter store (EC-29):
+   * payload + queuedAt preserved, durable before the original row is erased.
+   * Dead letters are never replayed — the surfaced count (`status.deadLettered`)
+   * plus `lastError` carry the failure to the UI; an inspection/clear API is a
+   * follow-up seam.
+   */
+  async deadLetter<P>(domain: string, mutation: SyncMutation<P>): Promise<void> {
+    await this.#serialized(async () => {
+      await this.storage.deadWrite({
+        id: mutation.id,
+        domain,
+        payload: mutation.payload,
+        queuedAt: mutation.queuedAt,
+      });
+      await this.storage.erase([mutation.seq]);
+    });
+  }
+
+  /**
+   * Re-queue every mutation of `from` under `to` — payload and FIFO order
+   * preserved, fresh insertion keys — then durably clear `from`. Resolves the
+   * moved count. The merge review's explicit attribution path for retained
+   * pre-partition entries (EC-48); never called by the engine unprompted.
+   */
+  async reassign(from: string, to: string): Promise<number> {
+    return await this.#serialized(async () => {
+      const queued = await this.storage.read(from, Number.POSITIVE_INFINITY);
+      for (const mutation of queued) {
+        await this.storage.write({
+          id: mutation.id,
+          domain: to,
+          payload: mutation.payload,
+          queuedAt: mutation.queuedAt,
+        });
+      }
+      if (queued.length > 0) await this.storage.erase(queued.map((m) => m.seq));
+      return queued.length;
+    });
   }
 
   async count(domain: string): Promise<number> {

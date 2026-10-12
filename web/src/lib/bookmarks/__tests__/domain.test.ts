@@ -125,6 +125,8 @@ describe("createBookmarksDomain.sync", () => {
       {
         id: "f1",
         name: "Tafsir",
+        kind: "generic",
+        position: null,
         createdAt: "2026-01-01T00:00:00Z",
         updatedAt: "2026-01-02T00:00:00Z",
       },
@@ -150,11 +152,11 @@ describe("createBookmarksDomain.sync", () => {
     expect(fake.calls[0]![1].body).toEqual({ expectedUserId: 7, mutations: [] });
   });
 
-  it("throws on any non-2xx so the engine keeps the queue", async () => {
+  it("throws on any non-2xx so the engine keeps the queue; 400 is the typed validation rejection (EC-29)", async () => {
     const fake = fakeAuth();
     const domain = createBookmarksDomain(fake.auth, { authenticated: true, user: { id: 7 } }, 7);
 
-    for (const status of [400, 401, 409, 500, 503]) {
+    for (const status of [401, 409, 500, 503]) {
       fake.respondWith({
         ok: false,
         status,
@@ -168,6 +170,19 @@ describe("createBookmarksDomain.sync", () => {
         ]),
       ).rejects.toThrow(`bookmark sync failed (${status})`);
     }
+
+    fake.respondWith({
+      ok: false,
+      status: 400,
+      data: null,
+      error: { type: "AUTH_ERROR" },
+      rotated: false,
+    });
+    await expect(
+      domain.sync([
+        mutation({ kind: "bookmark.delete", id: "b1", updatedAt: "2026-01-01T00:00:00Z" }, 1),
+      ]),
+    ).rejects.toThrow("bookmark sync rejected (400)");
   });
 
   it("throws on a 200 with an unreadable body (never an empty snapshot)", async () => {

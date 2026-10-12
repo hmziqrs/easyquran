@@ -7,6 +7,7 @@
   import AppearanceSection from "./_components/AppearanceSection.svelte";
   import StorageSection from "./_components/StorageSection.svelte";
   import ReadingSection from "./_components/ReadingSection.svelte";
+  import SessionsSection from "./_components/SessionsSection.svelte";
   import PrivacySection from "./_components/PrivacySection.svelte";
   import AccountSection from "./_components/AccountSection.svelte";
   import SettingsShell from "./_components/SettingsShell.svelte";
@@ -71,6 +72,7 @@
       />
     {:else if active === "reading"}
       <ReadingSection id="reading" heading={copy.nav.reading} copy={copy.reading} />
+      <SessionsSection />
     {:else if active === "privacy"}
       <PrivacySection id="privacy" heading={copy.nav.privacy} copy={copy.privacy} />
     {:else}

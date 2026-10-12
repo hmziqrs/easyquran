@@ -23,11 +23,31 @@ const h = vi.hoisted(() => {
     catalogue: [
       entry("ar.muyassar", "Arabic", "ar", "rtl", "Al-Muyassar", "Al-Muyassar"),
       entry("en.sahih", "English", "en", "ltr", "Saheeh International", "Saheeh International"),
+      entry(
+        "qul.r20.en-sahih-international",
+        "English",
+        "en",
+        "ltr",
+        "Saheeh International",
+        "Saheeh International",
+      ),
       entry("en.pickthall", "English", "en", "ltr", "Pickthall", "Marmaduke Pickthall"),
       entry("qul.en.ahmed", "English", "en", "ltr", "Ahmed Ali", "Ahmed Ali"),
       entry("en.wahiduddin", "English", "en", "ltr", "Wahiduddin Khan", "Wahiduddin Khan"),
       entry("ur.jalandhry", "Urdu", "ur", "rtl", "Jalandhry", "Maulana Jalal ad-Din"),
       entry("qul.ur.bayan", "Urdu", "ur", "rtl", "Bayan-ul-Quran", "Dr. Israr Ahmad"),
+      // Two CODES sharing one display name (the real catalogue's ber/zgh pair,
+      // both rendered "Amazigh"): the rail keys and selects by code, so this
+      // must never trip each_key_duplicate nor fuse the two panes.
+      entry("ber.mensur", "Amazigh", "ber", "ltr", "At Mensur", "Ramdane At Mansour"),
+      entry(
+        "qul.r236.zgh-ramdane",
+        "Amazigh",
+        "zgh",
+        "ltr",
+        "Ramdane At Mansour",
+        "Ramdane At Mansour",
+      ),
       entry("ms.basmeih", "Malay", "ms", "ltr", "Basmeih", "Abdullah Muhammad Basmeih"),
       entry("quranenc.fr.hamidullah", "French", "fr", "ltr", "Hamidullah", "Muhammad Hamidullah"),
       entry("tr.diyanet", "Turkish", "tr", "ltr", "Diyanet", "Diyanet Isleri"),
@@ -52,7 +72,18 @@ const h = vi.hoisted(() => {
   };
 });
 
-vi.mock("$app/env", () => ({ browser: true }));
+// `dev` rides along for config/site.ts (in via the storage-report graph).
+vi.mock("$app/env", () => ({ browser: true, dev: false }));
+// The modal's offline line (TRX-16) reads the storage report, whose graph
+// reaches $app/env/public; the kit dev-client there needs this stub in jsdom
+// (same shape as translation-picker.test.ts).
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: undefined,
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+  PUBLIC_TURNSTILE_SITE_KEY: undefined,
+}));
 vi.mock("$app/state", () => ({ page: h.nav }));
 vi.mock("$app/navigation", () => ({ replaceState: h.replaceState }));
 vi.mock("#lib/stores/reader.svelte.js", () => ({ reader: h.readerStub }));
@@ -124,6 +155,11 @@ const FILLER_IDS = [
 let target: HTMLElement;
 let instance: ReturnType<typeof mount> | null = null;
 
+// The translation-recents key; the modal reads that module singleton, which
+// only reloads on a storage event — localStorage.clear() below is invisible to
+// it, so the hook steers it back to empty explicitly.
+const TRANSLATION_RECENTS_KEY = "easyquran.translations.recent";
+
 // jsdom ships no scrollIntoView; patch it on the prototype so the rail's
 // keep-selected-visible effect can be observed in tests.
 const originalScrollIntoView: ((arg?: boolean | ScrollIntoViewOptions) => void) | undefined =
@@ -137,6 +173,9 @@ beforeEach(() => {
   h.nav.url = new URL("https://example.test/al-fatihah");
   h.replaceState.mockClear();
   localStorage.clear();
+  // No Recent group unless a test records uses of its own: without this the
+  // singleton keeps the previous test's MRU and every later modal shows it.
+  window.dispatchEvent(new StorageEvent("storage", { key: TRANSLATION_RECENTS_KEY }));
   stackedTranslations.clear();
   scrolledIntoView = [];
   Element.prototype.scrollIntoView = function scrollSpy(this: Element): void {
@@ -229,6 +268,8 @@ describe("TranslationModal — master-detail layout", () => {
     expect(railNames()).toEqual([
       "English",
       "Arabic",
+      "Amazigh",
+      "Amazigh",
       "French",
       "Indonesian",
       "Malay",
@@ -238,7 +279,9 @@ describe("TranslationModal — master-detail layout", () => {
     ]);
     const english = railOption("English");
     expect(english?.textContent).toContain("\u{1F1EC}\u{1F1E7}");
-    expect(english?.textContent).toContain("4");
+    // The count covers every catalogue row (the Saheeh author's two sources
+    // both count; the pane shows them as one grouped author row).
+    expect(english?.textContent).toContain("5");
     // One compact line per language (44px touch target, 36px on md+); flex-none
     // keeps the rows from shrinking to min-content in the rail's flex column.
     expect(english?.className).toContain("h-11");
@@ -250,7 +293,26 @@ describe("TranslationModal — master-detail layout", () => {
     expect(dividers[0]?.previousElementSibling?.getAttribute("data-language-option")).toBe(
       "Arabic",
     );
-    expect(dividers[0]?.nextElementSibling?.getAttribute("data-language-option")).toBe("French");
+    expect(dividers[0]?.nextElementSibling?.getAttribute("data-language-option")).toBe("Amazigh");
+  });
+
+  it("keeps same-named languages distinct: two Amazigh tabs, each opening its own pane", async () => {
+    // Regression: the rail once keyed its rows by the display name, so the
+    // catalogue's ber/zgh pair (both rendered "Amazigh") tripped
+    // each_key_duplicate and crashed the mobile sheet into the 404 boundary.
+    // Keys and selection now ride the language code.
+    await open();
+    const amazighTabs = railOptions().filter(
+      (b) => b.querySelector("[data-language-name]")?.textContent === "Amazigh",
+    );
+    expect(amazighTabs).toHaveLength(2);
+    amazighTabs[1]?.click();
+    await settle();
+    expect(pane().querySelector("h3")?.textContent).toContain("Amazigh");
+    expect(paneRowIds()).toEqual(["qul.r236.zgh-ramdane"]);
+    amazighTabs[0]?.click();
+    await settle();
+    expect(paneRowIds()).toEqual(["ber.mensur"]);
   });
 
   it("ranks the preferred language, English, other browser languages, the country's, then Arabic", async () => {
@@ -271,6 +333,8 @@ describe("TranslationModal — master-detail layout", () => {
         "Urdu",
         "Malay",
         "Arabic",
+        "Amazigh",
+        "Amazigh",
         "French",
         "Indonesian",
         "Spanish",
@@ -342,11 +406,11 @@ describe("TranslationModal — master-detail layout", () => {
     expect(scrolledOnKey).toContain("Arabic");
   });
 
-  it("pluralizes the count line: 4 translations vs 1 translation", async () => {
+  it("pluralizes the count line: 5 translations vs 1 translation", async () => {
     await open();
     await selectEnglish();
     expect(document.querySelector("[data-results-count]")?.textContent?.trim()).toBe(
-      "4 translations",
+      "5 translations",
     );
     railOption("Turkish")?.click();
     await settle();
@@ -427,30 +491,35 @@ describe("TranslationModal — master-detail layout", () => {
     clear?.click();
     await settle();
     expect(searchInput().value).toBe("");
-    expect(railOptions()).toHaveLength(8);
+    expect(railOptions()).toHaveLength(10);
   });
 
   it.each([
-    ["urdu", "Urdu", 2],
-    ["englsh", "English", 4],
-    ["israr", "Urdu", 1],
-    ["khan", "English", 1],
-    ["turkey", "Turkish", 1],
-    ["cortes", "Spanish", 1],
-  ])("fuzzy search %s finds %i flat cross-language row(s)", async (query, _language, rowCount) => {
-    await open();
-    await setSearch(query);
-    const rows = document.querySelectorAll("li[data-translation-row]");
-    expect(rows).toHaveLength(rowCount);
-    // flat results are prefixed with flag + language
-    expect(rows[0]?.querySelector("[data-row-language]")?.textContent).toBeTruthy();
-    // the rail narrows to the matching languages
-    expect(railOptions().length).toBeLessThanOrEqual(rowCount);
-    // result count line reports the match total
-    expect(document.querySelector("[data-results-count]")?.textContent).toContain(
-      `${rowCount} translation`,
-    );
-  });
+    // [query, language, visible rows, total matches] — multi-source authors
+    // collapse to one visible row while the match total counts every variant.
+    ["urdu", "Urdu", 2, 2],
+    ["englsh", "English", 4, 5],
+    ["israr", "Urdu", 1, 1],
+    ["khan", "English", 1, 1],
+    ["turkey", "Turkish", 1, 1],
+    ["cortes", "Spanish", 1, 1],
+  ])(
+    "fuzzy search %s finds %i grouped row(s) from %i match(es)",
+    async (query, _language, rowCount, matchCount) => {
+      await open();
+      await setSearch(query);
+      const rows = document.querySelectorAll("li[data-translation-row]");
+      expect(rows).toHaveLength(rowCount);
+      // flat results are prefixed with flag + language
+      expect(rows[0]?.querySelector("[data-row-language]")?.textContent).toBeTruthy();
+      // the rail narrows to the matching languages
+      expect(railOptions().length).toBeLessThanOrEqual(rowCount);
+      // result count line reports the match total
+      expect(document.querySelector("[data-results-count]")?.textContent).toContain(
+        `${matchCount} translation`,
+      );
+    },
+  );
 
   it("reports no matches for an unmatched query and restores on clear", async () => {
     await open();
@@ -459,7 +528,7 @@ describe("TranslationModal — master-detail layout", () => {
     expect(railOptions()).toHaveLength(0);
     expect(document.querySelector('[role="status"]')?.textContent).toContain("No translations");
     await setSearch("");
-    expect(railOptions()).toHaveLength(8);
+    expect(railOptions()).toHaveLength(10);
     expect(paneRowIds().length).toBeGreaterThan(0);
   });
 
@@ -691,7 +760,7 @@ describe("TranslationModal — touch & tap targets (stress S8-S14)", () => {
     expect(label).toBeTruthy();
     // the label is associated with the row checkbox, so its whole surface toggles
     expect(label?.getAttribute("for")).toBe(box?.id);
-    expect(box?.id).toBe("tmodal-en.pickthall");
+    expect(box?.id).toBe("tmodal-rail-en.pickthall");
     // >=44px cover + no double-tap-zoom window on it
     expect(label?.className).toContain("min-h-11");
     expect(label?.className).toContain("touch-manipulation");
@@ -902,5 +971,249 @@ describe("TranslationButton badge", () => {
     // the open state drives the portaled modal (its open rendering is covered by
     // the TranslationModal tests above); here we pin the trigger contract.
     expect(button.getAttribute("aria-expanded")).toBe("true");
+  });
+});
+
+describe("TranslationModal — recently used translations (MRU)", () => {
+  // The modal reads the module singleton; steer it through the same storage
+  // event a cross-tab write fires, so each test starts from a known MRU.
+  function setRecents(ids: string[]): void {
+    window.localStorage.setItem(
+      TRANSLATION_RECENTS_KEY,
+      JSON.stringify({
+        v: 1,
+        entries: ids.map((id, i) => ({ id, lastUsedAt: i + 1, useCount: 1 })),
+      }),
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key: TRANSLATION_RECENTS_KEY }));
+  }
+  function clearRecents(): void {
+    window.localStorage.removeItem(TRANSLATION_RECENTS_KEY);
+    window.dispatchEvent(new StorageEvent("storage", { key: TRANSLATION_RECENTS_KEY }));
+  }
+  // SAFETY: tests only ever write valid envelopes under the key, so JSON.parse sees the v1 shape.
+  const readRecents = (): { entries: { id: string; useCount: number }[] } | null =>
+    JSON.parse(window.localStorage.getItem(TRANSLATION_RECENTS_KEY) ?? "null");
+  // The pane's own list, excluding the pinned Recent group's rows.
+  const railRowIds = (): string[] =>
+    [...pane().querySelectorAll("li[data-translation-row]")]
+      .filter((li) => li.closest("[data-recent-group]") === null)
+      .map((li) => li.getAttribute("data-translation-row") ?? "");
+
+  it("is untouched-order until a use exists, then pins a Recent group + boosts the rail", async () => {
+    clearRecents();
+    await open();
+    await selectEnglish();
+    // untouched reader: today's behavior exactly — no group, alphabetical rail
+    expect(document.querySelector("[data-recent-group]")).toBeNull();
+    expect(railRowIds()).toEqual(["qul.en.ahmed", "en.pickthall", "en.sahih", "en.wahiduddin"]);
+    // a recorded use re-ranks the same open modal (storage event, like a cross-tab write)
+    setRecents(["ur.jalandhry", "en.wahiduddin", "en.pickthall"]);
+    await settle();
+    // SAFETY: the group renders whenever the MRU holds catalogue entries
+    const group = document.querySelector("[data-recent-group]") as HTMLElement | null;
+    expect(group?.querySelector("h4")?.textContent?.trim()).toBe("Recent");
+    expect(
+      [...(group?.querySelectorAll("li[data-translation-row]") ?? [])].map((li) =>
+        li.getAttribute("data-translation-row"),
+      ),
+    ).toEqual(["ur.jalandhry", "en.wahiduddin", "en.pickthall"]);
+    // global: rows from other languages carry their language line
+    expect(
+      group?.querySelector('[data-translation-row="ur.jalandhry"] [data-row-language]')
+        ?.textContent,
+    ).toContain("Urdu");
+    // the rail's own list: boosted head in MRU order, then the alphabetical tail
+    expect(railRowIds()).toEqual(["en.wahiduddin", "en.pickthall", "qul.en.ahmed", "en.sahih"]);
+    // the same translation in the group and the rail is one row twice, so each
+    // copy's checkbox id is namespaced by its list and each label resolves to
+    // its own row's checkbox (a duplicate id would bind both labels to the
+    // first copy)
+    const groupBox = group?.querySelector(
+      '[data-translation-row="en.wahiduddin"] input[type="checkbox"]',
+    );
+    const groupLabel = group?.querySelector(
+      '[data-translation-row="en.wahiduddin"] label[data-row-target]',
+    );
+    const railRow = [...pane().querySelectorAll('li[data-translation-row="en.wahiduddin"]')].find(
+      (li) => li.closest("[data-recent-group]") === null,
+    );
+    expect(groupBox?.id).toBe("tmodal-recent-en.wahiduddin");
+    expect(groupLabel?.getAttribute("for")).toBe(groupBox?.id);
+    expect(railRow?.querySelector('input[type="checkbox"]')?.id).toBe("tmodal-rail-en.wahiduddin");
+    expect(railRow?.querySelector("label[data-row-target]")?.getAttribute("for")).toBe(
+      "tmodal-rail-en.wahiduddin",
+    );
+  });
+
+  it("stacking records a use and shows the group at once; unstacking records nothing", async () => {
+    clearRecents();
+    await open();
+    await selectEnglish();
+    expect(document.querySelector("[data-recent-group]")).toBeNull();
+    // SAFETY: selector matches only the row's label cover element
+    const cover = pane().querySelector(
+      'li[data-translation-row="en.pickthall"] label[data-row-target]',
+    ) as HTMLElement | null;
+    cover?.click();
+    await settle();
+    expect(readRecents()?.entries).toEqual([
+      { id: "en.pickthall", lastUsedAt: expect.any(Number), useCount: 1 },
+    ]);
+    expect(document.querySelector("[data-recent-group]")).not.toBeNull();
+    cover?.click();
+    await settle();
+    expect([...stackedTranslations.ids]).toEqual([]);
+    expect(readRecents()?.entries).toHaveLength(1);
+  });
+
+  it("Reading's picker records a one-tap pick (row or quick chip) as a use", async () => {
+    clearRecents();
+    const onPick = vi.fn();
+    instance = mount(TranslationModal, {
+      target,
+      props: {
+        open: true,
+        readPick: { current: "ur.jalandhry", quick: ["ur.jalandhry"], onPick },
+      },
+    });
+    await settle();
+    // the picker anchors on the flowing text's rail (Urdu here): pick its first row
+    const row = document.querySelector<HTMLButtonElement>("[data-row-pick]");
+    expect(row).not.toBeNull();
+    row?.click();
+    expect(onPick).toHaveBeenCalledWith(row?.dataset.rowPick);
+    expect(readRecents()?.entries[0]?.id).toBe(row?.dataset.rowPick);
+  });
+
+  it("offers tafsir only under the Commentary section — never in the list, search, or a reading pick (TRX-01)", async () => {
+    await open();
+    // Arabic keeps its rail entry, but its pane lists no plain rows: the only
+    // offer is the Commentary section's stackable row.
+    railOption("Arabic")?.click();
+    await settle();
+    const plainRows = [...pane().querySelectorAll("li[data-translation-row]")].filter(
+      (li) => li.closest("[data-commentary-group]") === null,
+    );
+    expect(plainRows).toHaveLength(0);
+    const section = document.querySelector("[data-commentary-group]");
+    expect(section).not.toBeNull();
+    expect(section?.querySelector('li[data-translation-row="ar.muyassar"]')).not.toBeNull();
+    // Commentary rows carry no go-to switch link (a tafsir URL 308s back).
+    expect(section?.querySelectorAll("a[data-sveltekit-preload-data]").length ?? 0).toBe(0);
+    // Search never matches commentary.
+    await setSearch("muyassar");
+    expect(paneRowIds()).toEqual([]);
+    expect(document.querySelector("[data-results-count]")?.textContent?.trim()).toBe(
+      "0 translations",
+    );
+    // And the reading picker hides the section entirely.
+    await setSearch("");
+    if (instance) void unmount(instance);
+    instance = mount(TranslationModal, {
+      target,
+      props: { open: true, readPick: { current: "en.sahih", quick: [], onPick: vi.fn() } },
+    });
+    await settle();
+    railOption("Arabic")?.click();
+    await settle();
+    expect(document.querySelector("[data-commentary-group]")).toBeNull();
+  });
+});
+
+describe("TranslationModal — one author, multiple sources (Feature 8)", () => {
+  // Storage-event steering like the MRU describe: the modal reads the module
+  // singleton, which only reloads on a storage event.
+  function setRecents(ids: string[]): void {
+    window.localStorage.setItem(
+      TRANSLATION_RECENTS_KEY,
+      JSON.stringify({
+        v: 1,
+        entries: ids.map((id, i) => ({ id, lastUsedAt: i + 1, useCount: 1 })),
+      }),
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key: TRANSLATION_RECENTS_KEY }));
+  }
+  function clearRecents(): void {
+    window.localStorage.removeItem(TRANSLATION_RECENTS_KEY);
+    window.dispatchEvent(new StorageEvent("storage", { key: TRANSLATION_RECENTS_KEY }));
+  }
+  const mainRowIds = (): string[] =>
+    [...pane().querySelectorAll("li[data-translation-row]")]
+      .filter(
+        (li) =>
+          li.closest("[data-recent-group]") === null &&
+          li.closest("[data-commentary-group]") === null,
+      )
+      .map((li) => li.getAttribute("data-translation-row") ?? "");
+  const sourcesToggle = (): HTMLButtonElement | null =>
+    pane().querySelector("[data-sources-toggle]");
+  const variantRow = (): Element | null =>
+    pane().querySelector('li[data-translation-row="qul.r20.en-sahih-international"]');
+
+  it("collapses a multi-source author onto one row with a sources disclosure", async () => {
+    clearRecents();
+    await open();
+    await selectEnglish();
+    // one row per author; the representative is the original publisher
+    // (tanzil) and the QUL mirror stays hidden until expanded
+    expect(mainRowIds()).toEqual(["qul.en.ahmed", "en.pickthall", "en.sahih", "en.wahiduddin"]);
+    const toggle = sourcesToggle();
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle?.textContent).toContain("2 translations");
+    expect(variantRow()).toBeNull();
+    toggle?.click();
+    await settle();
+    expect(sourcesToggle()?.getAttribute("aria-expanded")).toBe("true");
+    // the variant's differentiators are its own size + source, indented under
+    // the author row (an author line would only repeat the row above)
+    expect(variantRow()?.querySelector("[data-row-size]")?.textContent).toBe("2 KB");
+    expect(variantRow()?.querySelector("[data-row-source]")?.textContent?.trim()).toBe("QUL");
+    expect(variantRow()?.className).toContain("ms-5");
+    expect(variantRow()?.querySelector("[data-author-line]")).toBeNull();
+  });
+
+  it("resolves the collapsed row to the selected variant, checked", async () => {
+    clearRecents();
+    stackedTranslations.setIds(["qul.r20.en-sahih-international"]);
+    await open();
+    await selectEnglish();
+    expect(mainRowIds()).toContain("qul.r20.en-sahih-international");
+    expect(mainRowIds()).not.toContain("en.sahih");
+    // SAFETY: selector matches only the representative row's checkbox input
+    const box = pane().querySelector(
+      'li[data-translation-row="qul.r20.en-sahih-international"] input[type="checkbox"]',
+    ) as HTMLInputElement | null;
+    expect(box?.checked).toBe(true);
+  });
+
+  it("recents rank the author, not the variant", async () => {
+    setRecents(["qul.r20.en-sahih-international", "en.sahih", "en.wahiduddin"]);
+    await open();
+    await selectEnglish();
+    // Recent group: the author appears once, as its last-used variant
+    const group = document.querySelector("[data-recent-group]");
+    expect(
+      [...(group?.querySelectorAll("li[data-translation-row]") ?? [])].map((li) =>
+        li.getAttribute("data-translation-row"),
+      ),
+    ).toEqual(["qul.r20.en-sahih-international", "en.wahiduddin"]);
+    // the rail's grouped row also resolves to the last-used variant, ranked by author
+    expect(mainRowIds()).toEqual([
+      "qul.r20.en-sahih-international",
+      "en.wahiduddin",
+      "qul.en.ahmed",
+      "en.pickthall",
+    ]);
+  });
+
+  it("groups search results by author too", async () => {
+    clearRecents();
+    await open();
+    await setSearch("saheeh");
+    expect(paneRowIds()).toEqual(["en.sahih"]);
+    expect(document.querySelector("[data-results-count]")?.textContent?.trim()).toBe(
+      "2 translations",
+    );
   });
 });

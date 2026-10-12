@@ -8,6 +8,13 @@ pub struct Model {
     pub id: String,
     pub user_id: i32,
     pub name: String,
+    /// Name-only study-set label: "generic" | "daily" | "learning" (§11.7
+    /// settled: no goal metadata rides along).
+    pub kind: String,
+    /// Manual order (LWW integer), NULL = unpositioned.
+    pub position: Option<i32>,
+    /// Tombstone marker (§9.3): tombstoned folders resolve as missing.
+    pub deleted_at: Option<DateTimeWithTimeZone>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }

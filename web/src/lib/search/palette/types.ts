@@ -41,6 +41,11 @@ export interface PaletteEntry {
   /** Side effect to run on select — before navigation, if there is any. */
   run?: () => void;
   /**
+   * Keep the palette open after selecting — for entries whose effect is the
+   * point (a recent query filling the input), not a detour to elsewhere.
+   */
+  keepOpen?: boolean;
+  /**
    * Identity for cross-source dedupe. Two sources that surface the same verse
    * should agree on this so only the better-placed one renders.
    */

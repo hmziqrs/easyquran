@@ -1,6 +1,7 @@
 import type { AuthRequestResult, UnsafeRequestInit } from "#lib/auth/auth-client.js";
 import {
   SyncPausedError,
+  SyncRejectedError,
   type SyncDomain,
   type SyncMutation,
   type SyncRoundResult,
@@ -61,6 +62,13 @@ export function createBookmarksDomain(
         if (res.status === 403 && res.error?.message === "Bookmark sync account changed") {
           onAccountMismatch?.();
           throw new SyncPausedError("bookmarks sync paused: cookie account changed");
+        }
+        // EC-29: a 400 is the server's `InvalidInput` validation verdict on
+        // the batch (all-mutations-validated-first) — durable, not transient.
+        // 401/429/5xx stay generic errors so they never count toward
+        // dead-lettering.
+        if (res.status === 400) {
+          throw new SyncRejectedError(`bookmark sync rejected (${res.status})`);
         }
         throw new Error(`bookmark sync failed (${res.status})`);
       }

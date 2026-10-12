@@ -2,6 +2,7 @@ import { browser } from "$app/env";
 
 import type { ReaderPositionState } from "#lib/data/mushaf-divisions.js";
 import type { VerseKey } from "#lib/data/quran.js";
+import { sessions } from "#lib/sessions/store.svelte.js";
 
 import type { BrowseMode, LastReadAnchor, ReaderCore, RecentsEntry } from "./reader-core.svelte";
 import type { ReaderPersistence } from "./reader-persistence.svelte";
@@ -24,7 +25,28 @@ function recordProgress(s: ReaderCore["s"], num: number, n: number): void {
   };
 }
 
+/** Snapshot the mirror's session-scoped fields into the active session (built before the call, so an owner switch inside cannot smear values across owners). */
+function reportSessionState(core: ReaderCore): void {
+  sessions.recordActive({
+    lastRead: core.s.lastRead,
+    lastReadAnchor: core.s.lastReadAnchor,
+    recents: core.s.recents,
+    progress: core.s.progress,
+  });
+}
+
 export function createReaderSession(core: ReaderCore, persistence: ReaderPersistence) {
+  // Session-aware reading (Feature 4): core.s stays the live mirror of the
+  // ACTIVE session; every position write reports the freshly computed state to
+  // the per-owner sessions store, and wholesale replacements (switch, owner
+  // change) flow back through this applier.
+  sessions.onApplyState((state) => {
+    core.s.lastRead = state.lastRead;
+    core.s.lastReadAnchor = state.lastReadAnchor;
+    core.s.recents = state.recents;
+    core.s.progress = state.progress;
+    persistence.writeNow();
+  });
   return {
     get query(): string {
       return core.s.query;
@@ -96,6 +118,7 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
       pushRecent(core.s, num, n, sourceId);
       recordProgress(core.s, num, n);
       persistence.writeNow();
+      reportSessionState(core);
       if (browser) window.scrollTo(0, 0);
     },
     markRead(num: number, n: number, sourceId?: string): void {
@@ -105,6 +128,7 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
       pushRecent(core.s, num, n, sourceId);
       recordProgress(core.s, num, n);
       persistence.writeNow();
+      reportSessionState(core);
     },
     clearReadingPosition(): void {
       core.s.lastRead = null;
@@ -113,10 +137,12 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
       core.s.recents = [];
       core.s.progress = {};
       persistence.writeNow();
+      reportSessionState(core);
     },
     setLastReadAnchor(anchor: LastReadAnchor | null): void {
       core.s.lastReadAnchor = anchor;
       persistence.scheduleAnchorWrite();
+      reportSessionState(core);
     },
     get pendingAnchor(): LastReadAnchor | null {
       return core.s.pendingAnchor;

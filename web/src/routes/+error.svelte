@@ -269,7 +269,10 @@
 </div>
 
 <style>
-  :global(body:has([data-marketing-root]) > a[href="#main"]) {
+  /* Same duplicate-skip-link fix as (marketing)/+layout.svelte: the root
+       layout's link is a sibling of this [data-marketing-root] div, so the
+       sibling form matches it — the old body > a form matched nothing. */
+  :global(a[href="#main"]:has(~ [data-marketing-root])) {
     display: none;
   }
 </style>

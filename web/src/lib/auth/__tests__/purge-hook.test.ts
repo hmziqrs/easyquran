@@ -49,13 +49,20 @@ describe("installPurgeHook", () => {
   });
 });
 
-describe("makePurgeHook reading-position clear", () => {
-  it("clears the reader's reading position on logout", async () => {
+describe("makePurgeHook reading-position policy (§9.5)", () => {
+  it("keeps the reader's reading position on logout — device-local data survives (EC-14)", async () => {
     reader.openVerse(2, 255, "uthmani");
     expect(reader.hasLastRead).toBe(true);
     const hook = makePurgeHook();
     await hook({ kind: "logout" });
-    expect(reader.hasLastRead).toBe(false);
+    expect(reader.hasLastRead).toBe(true);
+  });
+
+  it("keeps the reading position on session expiry/terminate too (EC-16)", async () => {
+    reader.openVerse(2, 255, "uthmani");
+    const hook = makePurgeHook();
+    await hook({ kind: "current-session-terminated" });
+    expect(reader.hasLastRead).toBe(true);
   });
 
   it("leaves the reader's reading position intact on login", async () => {

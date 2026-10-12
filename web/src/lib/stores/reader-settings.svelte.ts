@@ -86,6 +86,8 @@ export function createReaderSettings(core: ReaderCore, persistence: ReaderPersis
       if (core.s.translationFamily === family) return;
       core.s.translationFamily = family;
       present();
+      // v5: the family persists in the reader blob (TRX-10) — it was session-only before.
+      persistence.writeNow();
     },
 
     get mode(): ReaderMode {

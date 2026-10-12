@@ -1,6 +1,6 @@
 {
   "auth_dialog_title": "Sign in or create account",
-  "auth_dialog_description": "Access your EasyQuran account to sync bookmarks and reading progress.",
+  "auth_dialog_description": "Access your EasyQuran account to sync your bookmarks and reading sessions.",
   "auth_close": "Close",
   "auth_sign_in": "Sign in",
   "auth_create_account": "Create account",
@@ -10,7 +10,7 @@
   "auth_continue": "Continue",
   "auth_field_authentication_code": "Authentication code",
   "auth_use_different_account": "Use a different account",
-  "auth_sign_in_subheading": "Welcome back. Sign in to sync your bookmarks and reading progress.",
+  "auth_sign_in_subheading": "Welcome back. Sign in to sync your bookmarks and reading sessions.",
   "auth_field_email": "Email",
   "auth_email_placeholder": "you@example.com",
   "auth_field_password": "Password",
@@ -20,7 +20,7 @@
   "auth_no_account_prompt": "No account?",
   "auth_create_one_link": "Create one",
   "auth_register_heading": "Create your account",
-  "auth_register_subheading": "A free account syncs your bookmarks, notes and reading place across devices.",
+  "auth_register_subheading": "A free account syncs your bookmarks and reading sessions across devices. Your notes stay on this device.",
   "auth_field_display_name": "Display name",
   "auth_display_name_placeholder": "Your name",
   "auth_password_min_placeholder": "At least 12 characters",
@@ -65,5 +65,68 @@
   "auth_connected_unlink_error": "Couldn't unlink that account. Please try again.",
   "auth_connected_retry": "Retry",
   "auth_connected_loading": "Loading connected accounts…",
-  "auth_connected_session_expired_error": "Your session has expired. Sign in again."
+  "auth_connected_session_expired_error": "Your session has expired. Sign in again.",
+  "auth_merge_title": "Merge into your account",
+  "auth_merge_description": "Choose what this device adds before anything syncs.",
+  "auth_merge_verse": "verse {ayah}",
+  "auth_merge_summary": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=zero": "You have no bookmarks on this device.",
+        "countPlural=one": "You have 1 bookmark on this device.",
+        "countPlural=two": "You have {count} bookmarks on this device.",
+        "countPlural=few": "You have {count} bookmarks on this device.",
+        "countPlural=many": "You have {count} bookmarks on this device.",
+        "countPlural=other": "You have {count} bookmarks on this device."
+      }
+    }
+  ],
+  "auth_merge_merge": "Merge into account",
+  "auth_merge_review": "Review changes",
+  "auth_merge_back": "Back",
+  "auth_merge_sessions": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=zero": "No reading sessions on this device.",
+        "countPlural=one": "You have 1 reading session on this device.",
+        "countPlural=two": "You have {count} reading sessions on this device.",
+        "countPlural=few": "You have {count} reading sessions on this device.",
+        "countPlural=many": "You have {count} reading sessions on this device.",
+        "countPlural=other": "You have {count} reading sessions on this device."
+      }
+    }
+  ],
+  "auth_merge_session_row": "Reading session",
+  "auth_merge_session_state_row": "Reading position and progress",
+  "auth_merge_not_now": "Not now",
+  "auth_merge_never_ask": "Don't ask again",
+  "auth_merge_unowned": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=zero": "No changes from an earlier version of the app",
+        "countPlural=one": "1 change from an earlier version of the app",
+        "countPlural=two": "{count} changes from an earlier version of the app",
+        "countPlural=few": "{count} changes from an earlier version of the app",
+        "countPlural=many": "{count} changes from an earlier version of the app",
+        "countPlural=other": "{count} changes from an earlier version of the app"
+      }
+    }
+  ],
+  "auth_merge_apply_unowned": "Add to account",
+  "auth_merge_discard_unowned": "Discard",
+  "auth_merge_outcome_new": "New on this device",
+  "auth_merge_outcome_device_wins": "Device version is newer — device wins",
+  "auth_merge_outcome_account_wins": "Account has a newer version — account wins",
+  "auth_merge_result": "Merged {merged}, skipped {skipped} (newer account versions kept).",
+  "auth_merge_result_only": "Merged {merged}.",
+  "auth_merge_done": "Done",
+  "auth_merge_error": "Couldn't queue your changes — nothing was lost. Try again.",
+  "auth_session_expired_banner": "Session expired — sign in to resume sync",
+  "auth_sign_out_unsynced_note": "Your unsynced changes are kept on this device for your next sign-in."
 }

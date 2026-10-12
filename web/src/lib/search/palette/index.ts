@@ -5,6 +5,7 @@ import { quranReferenceSource } from "./sources/quran-reference";
 import { quranSajdasSource } from "./sources/quran-sajdas";
 import { quranSurahsSource } from "./sources/quran-surahs";
 import { quranTextSource } from "./sources/quran-text";
+import { searchRecentsSource } from "./sources/search-recents";
 import { searchRoutesSource } from "./sources/search-routes";
 import { settingsRoutesSource } from "./sources/settings-routes";
 import { siteRoutesSource } from "./sources/site-routes";
@@ -21,6 +22,7 @@ import { translationTextSource } from "./sources/translation-text";
 export const BUILTIN_PALETTE_SOURCES = [
   quranReferenceSource,
   quranSurahsSource,
+  searchRecentsSource,
   quranTextSource,
   translationTextSource,
   quranRangesSource,

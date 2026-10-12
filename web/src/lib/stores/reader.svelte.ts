@@ -14,7 +14,7 @@ import {
 import { createReaderPersistence } from "./reader-persistence.svelte";
 import { createReaderSession } from "./reader-session.svelte";
 import { createReaderSettings } from "./reader-settings.svelte";
-import { createReaderShare } from "./reader-share.svelte";
+import { createReaderShare, type ShareResult, type ShareVerse } from "./reader-share.svelte";
 import { createVerseCache } from "./verse-cache.svelte";
 
 export { BrowseMode } from "./reader-core.svelte";
@@ -61,6 +61,8 @@ export interface ReaderApi {
   setPosition(position: ReaderPositionState | null): void;
   isBookmarked(key: VerseKey): boolean;
   readonly bookmarkedKeys: readonly VerseKey[];
+  /** v5 save stamps (epoch ms) keyed like `bookmarkedKeys`; missing entries are legacy (EC-46). */
+  readonly bookmarkSavedAt: Readonly<Record<VerseKey, number>>;
   toggleBookmark(key: VerseKey): void;
   getNote(key: VerseKey): string;
   setNote(key: VerseKey, v: string): void;
@@ -78,7 +80,9 @@ export interface ReaderApi {
   seedAyahs(ayahs: readonly { key: VerseKey; text: string }[]): void;
   refreshFromWorker(num: number): Promise<void>;
   copyVerse(key: VerseKey, text: string): Promise<boolean>;
-  shareVerse(key: VerseKey, text: string): Promise<"shared" | "copied" | "failed">;
+  shareVerse(key: VerseKey, text: string): Promise<ShareResult>;
+  /** FLOW-05 range variant: joined verse texts + the canonical `?ayah=` permalink. */
+  shareRange(from: VerseKey, to: VerseKey, verses: readonly ShareVerse[]): Promise<ShareResult>;
 }
 
 export function createReader(): ReaderApi {
@@ -176,6 +180,9 @@ export function createReader(): ReaderApi {
     get bookmarkedKeys(): readonly VerseKey[] {
       return annotations.bookmarkedKeys;
     },
+    get bookmarkSavedAt(): Readonly<Record<VerseKey, number>> {
+      return annotations.bookmarkSavedAt;
+    },
     toggleBookmark: (key: VerseKey) => annotations.toggleBookmark(key),
     getNote: (key: VerseKey) => annotations.getNote(key),
     setNote: (key: VerseKey, v: string) => annotations.setNote(key, v),
@@ -208,6 +215,8 @@ export function createReader(): ReaderApi {
 
     copyVerse: (key: VerseKey, text: string) => share.copyVerse(key, text),
     shareVerse: (key: VerseKey, text: string) => share.shareVerse(key, text),
+    shareRange: (from: VerseKey, to: VerseKey, verses: readonly ShareVerse[]) =>
+      share.shareRange(from, to, verses),
   };
 }
 

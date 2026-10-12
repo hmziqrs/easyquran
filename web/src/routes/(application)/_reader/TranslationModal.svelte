@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Dialog } from "bits-ui";
   import { onMount } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
   import { page } from "$app/state";
   import { replaceState } from "$app/navigation";
   import { translationSegmentsFromId } from "#lib/data/quran.js";
@@ -15,9 +16,24 @@
     nativeNameFor,
     translationSourceOf,
   } from "#lib/quran/catalogue.js";
+  import {
+    groupTranslationAuthors,
+    translationAuthorKey,
+    translationProvenanceRank,
+  } from "#lib/quran/translation-groups.js";
+  import { isTafsirTranslation } from "#lib/quran/text-marks.js";
   import type { TranslationProvenance } from "#lib/quran/catalogue.js";
   import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
+  import { storageReport } from "#lib/stores/storage-report.svelte.js";
+  import { translationRecents } from "#lib/stores/translation-recents.svelte.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import {
+    reader_tooltip_offline,
+    reader_tooltip_offline_downloaded,
+    reader_tooltip_offline_needs_internet,
+    reader_translations_commentary,
+    reader_translations_recent,
+  } from "#lib/i18n/m/reader.js";
   import { readerHrefFor } from "#lib/i18n/reader.js";
   import { publicHref } from "#lib/i18n/public-href.js";
   import { Icon } from "#lib/components/icon/index.js";
@@ -38,6 +54,14 @@
     flag: string;
     autonym: string | null;
     entries: TranslationCatalogueEntry[];
+  };
+
+  // One author, multiple sources (Feature 8): one row per author; a
+  // multi-source author collapses onto its representative variant.
+  type AuthorGroup = {
+    key: string;
+    representative: TranslationCatalogueEntry;
+    rest: readonly TranslationCatalogueEntry[];
   };
 
   // Provenance rides every row's meta line as the source's own short name (a
@@ -65,31 +89,88 @@
   } = $props();
 
   const picking = $derived(readPick !== null);
+  // Tafsir works are commentary, not translations (TRX-01): they are offered
+  // ONLY under the Commentary section below — never as quick picks, recents,
+  // search results, or in a language's main list, and never as a reading pick.
   const quickRows = $derived(
     (readPick?.quick ?? []).flatMap((id) => {
       const entry = TRANSLATION_CATALOGUE_BY_ID.get(id);
-      return entry ? [entry] : [];
+      if (!entry || isTafsirTranslation(entry.id)) return [];
+      return [entry];
     }),
   );
 
+  /** The pinned Recent group holds at most this many of the MRU's entries. */
+  const RECENT_GROUP_MAX = 5;
+  // Global MRU rows (empty for an untouched reader — no group at all). Recents
+  // rank the AUTHOR, not the variant: later variants of a seen author are skipped.
+  const recentRows = $derived.by(() => {
+    const seen = new Set<string>();
+    const rows: TranslationCatalogueEntry[] = [];
+    for (const id of translationRecents.ids) {
+      if (rows.length >= RECENT_GROUP_MAX) break;
+      const entry = TRANSLATION_CATALOGUE_BY_ID.get(id);
+      if (!entry || isTafsirTranslation(entry.id)) continue;
+      const key = translationAuthorKey(entry);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push(entry);
+    }
+    return rows;
+  });
+
+  // The Commentary section's rows: the frozen tafsir allow-list from the
+  // catalogue, shown under their own heading inside their language's pane.
+  const commentaryRows = $derived(TRANSLATION_CATALOGUE.filter((t) => isTafsirTranslation(t.id)));
+
+  // Every explicit selection records the MRU head and the author's last-used
+  // variant (Feature 1.4), which survives the MRU's 20-entry cap.
+  function recordUse(id: string): void {
+    const entry = TRANSLATION_CATALOGUE_BY_ID.get(id);
+    translationRecents.record(
+      id,
+      Date.now(),
+      entry === undefined ? undefined : translationAuthorKey(entry),
+    );
+  }
+
   function pick(id: string): void {
+    // An explicit picker choice is a use; record before the pick flows so
+    // orderings derived from the MRU (Reading's chips) see the new head at once.
+    recordUse(id);
     readPick?.onPick(id);
     open = false;
   }
 
   const copy = getReaderUiCopy();
+  // Locale changes navigate (full reload), so resolving once matches getReaderUiCopy's lifecycle.
+  const recentLabel = reader_translations_recent(undefined, { locale: copy.locale });
+  const commentaryLabel = reader_translations_commentary(undefined, { locale: copy.locale });
+  // TRX-16 hover-card availability line, resolved the same one-shot way.
+  const offlineLabel = reader_tooltip_offline(undefined, { locale: copy.locale });
+  const downloadedLabel = reader_tooltip_offline_downloaded(undefined, { locale: copy.locale });
+  const needsInternetLabel = reader_tooltip_offline_needs_internet(undefined, {
+    locale: copy.locale,
+  });
   let searchQuery = $state("");
-  // Selected language in the rail; null until the modal first opens.
-  let railLanguage = $state<string | null>(null);
+  // Selected rail language, held as its CODE; null until the modal first opens.
+  // Codes are the rail's identity because display names are not unique — the
+  // catalogue renders "Amazigh" for both ber and zgh — so name-keyed selection
+  // could never tell those tabs (or their panes) apart.
+  let railCode = $state<string | null>(null);
   // Mobile only: true once a language is tapped, showing its pane over the rail.
   let mobilePane = $state(false);
+  // Author groups whose source variants are expanded. SvelteSet: a plain Set
+  // in $state does not observe has/add in this build.
+  let expandedAuthors = new SvelteSet<string>();
 
   // Reset transient navigation state whenever the modal closes.
   $effect(() => {
     if (!open) {
       searchQuery = "";
-      railLanguage = null;
+      railCode = null;
       mobilePane = false;
+      expandedAuthors.clear();
     }
   });
 
@@ -105,18 +186,17 @@
   // selected translation; with nothing selected, the reader's own top browser
   // language, then English, then the rail's first language.
   $effect(() => {
-    if (!open || railLanguage !== null) return;
+    if (!open || railCode !== null) return;
     const anchorId = readPick?.current ?? selectedIds[0] ?? null;
     const anchorEntry = anchorId !== null ? TRANSLATION_CATALOGUE_BY_ID.get(anchorId) : undefined;
-    railLanguage = anchorEntry?.language ?? defaultLanguage();
+    railCode = anchorEntry?.languageCode ?? defaultLanguage();
   });
 
   function defaultLanguage(): string | null {
     for (const code of priorityCodes) {
-      const group = languages.find((l) => l.code === code);
-      if (group) return group.language;
+      if (languages.some((l) => l.code === code)) return code;
     }
-    return languages[0]?.language ?? null;
+    return languages[0]?.code ?? null;
   }
 
   // Live-url first (stress S1): on a scrolled surah route page.url still
@@ -136,20 +216,24 @@
   const isFull = $derived(selectedIds.length >= STACKED_MAX_EXTRAS);
   const searchActive = $derived(searchQuery.trim().length > 0);
 
+  // Search never offers tafsir (TRX-01) — commentary is reached through its
+  // own section, so its ids are filtered out of the match pool entirely.
   const matches = $derived.by(() => {
     const q = searchQuery.trim();
     if (!q) return TRANSLATION_CATALOGUE;
-    return TRANSLATION_CATALOGUE.filter((t) =>
-      translationMatchesQuery(q, {
-        name: t.name,
-        translator: t.translator,
-        language: t.language,
-        languageCode: t.languageCode,
-        country: flagFor(t.languageCode).country,
-        // Stress S2: the native-script autonym is a search haystack, not just
-        // a rail display line — "اردو" must find the Urdu rows.
-        autonym: nativeNameFor(t.languageCode),
-      }),
+    return TRANSLATION_CATALOGUE.filter(
+      (t) =>
+        !isTafsirTranslation(t.id) &&
+        translationMatchesQuery(q, {
+          name: t.name,
+          translator: t.translator,
+          language: t.language,
+          languageCode: t.languageCode,
+          country: flagFor(t.languageCode).country,
+          // Stress S2: the native-script autonym is a search haystack, not just
+          // a rail display line — "اردو" must find the Urdu rows.
+          autonym: nativeNameFor(t.languageCode),
+        }),
     );
   });
 
@@ -158,17 +242,20 @@
   const languageCollator = new Intl.Collator("en", { sensitivity: "base" });
 
   function buildGroups(rows: readonly TranslationCatalogueEntry[]): LanguageGroup[] {
+    // One rail tab per language CODE: the catalogue carries two display-name
+    // variants for some codes (az, dv, ug, …), and grouping by the raw
+    // language string split those into two tabs. The first entry's display
+    // name labels the merged tab.
     const map = new Map<string, TranslationCatalogueEntry[]>();
     for (const t of rows) {
-      const arr = map.get(t.language);
+      const arr = map.get(t.languageCode);
       if (arr) arr.push(t);
-      else map.set(t.language, [t]);
+      else map.set(t.languageCode, [t]);
     }
     return [...map.entries()]
-      .map(([language, entries]) => {
-        const code = entries[0]?.languageCode ?? "";
+      .map(([code, entries]) => {
         return {
-          language,
+          language: entries[0]?.language ?? "",
           code,
           flag: flagFor(code).flag,
           autonym: nativeNameFor(code),
@@ -209,20 +296,24 @@
     buildGroups(searchActive ? matches : TRANSLATION_CATALOGUE).sort(compareRailGroups),
   );
 
-  const activeLanguage = $derived.by(() => {
-    if (railLanguage !== null && languages.some((l) => l.language === railLanguage)) {
-      return railLanguage;
+  // The active rail group, resolved by CODE (railCode, else the rail's head).
+  // Name matching would be ambiguous: ber and zgh both display "Amazigh", and
+  // a name match always lands on the first tab, leaving the other unreachable.
+  const activeGroup = $derived.by(() => {
+    if (railCode !== null) {
+      const group = languages.find((l) => l.code === railCode);
+      if (group) return group;
     }
-    return languages[0]?.language ?? null;
+    return languages[0];
   });
 
   // Keep the selected rail row in view: on open the auto-selected language can
   // sit far below the fold, and search filtering can shrink the rail around it.
   // "nearest" never scrolls when the row is already visible.
   $effect(() => {
-    if (!open || activeLanguage === null) return;
+    if (!open || activeGroup === undefined) return;
     const row = document.querySelector<HTMLElement>(
-      `[data-language-option="${CSS.escape(activeLanguage)}"]`,
+      `[data-language-option="${CSS.escape(activeGroup.language)}"]`,
     );
     // jsdom defines no scrollIntoView; presence-check so tests never call it.
     if (row !== null && "scrollIntoView" in row) {
@@ -240,10 +331,95 @@
     );
   });
 
+  // Search results group by author too (one row per author per language), so
+  // the same work from two sources never reads as indistinguishable rows.
+  const searchGroups = $derived(
+    groupTranslationAuthors(searchRows).map((g) => orderAuthorGroup(g.key, g.variants)),
+  );
+
+  // Sort key for the rail boost: never-used translations share one rank after
+  // every recently used one, so the stable sort keeps the alphabetical order
+  // below the boosted head.
+  function recencyRank(id: string): number {
+    const rank = translationRecents.rankOf(id);
+    return rank === -1 ? Number.MAX_SAFE_INTEGER : rank;
+  }
+
+  // The active rail stays alphabetical until real usage exists; once the MRU
+  // holds entries, its picks for this language float to the top. Tafsir works
+  // never join the main list (TRX-01) — they render under the Commentary
+  // section inside their own language's pane instead.
   const activeEntries = $derived.by(() => {
-    const group = languages.find((l) => l.language === activeLanguage);
-    return group?.entries ?? [];
+    const entries = activeGroup?.entries ?? [];
+    return entries
+      .filter((t) => !isTafsirTranslation(t.id))
+      .sort((a, b) => recencyRank(a.id) - recencyRank(b.id));
   });
+
+  // One row per author: the entries above are already recency-then-name
+  // ordered, so first-seen group order keeps that ranking per author.
+  const activeGroups = $derived(
+    groupTranslationAuthors(activeEntries).map((g) => orderAuthorGroup(g.key, g.variants)),
+  );
+
+  // The variant a collapsed author row resolves to: the flowing/selected one,
+  // else the author's most recently used, else the original publisher
+  // (tanzil/quranenc ahead of QUL mirrors).
+  function isSelected(id: string): boolean {
+    if (picking) return id === readPick?.current;
+    return selectedIds.includes(id);
+  }
+  function compareRepresentatives(
+    key: string,
+    a: TranslationCatalogueEntry,
+    b: TranslationCatalogueEntry,
+  ): number {
+    const selectedDelta = Number(isSelected(b.id)) - Number(isSelected(a.id));
+    if (selectedDelta !== 0) return selectedDelta;
+    const recencyDelta = recencyRank(a.id) - recencyRank(b.id);
+    if (recencyDelta !== 0) return recencyDelta;
+    // Feature 1.4: the author's last-used variant outlives MRU eviction.
+    const remembered = translationRecents.authorVariant(key);
+    if (remembered !== undefined) {
+      if (a.id === remembered) return -1;
+      if (b.id === remembered) return 1;
+    }
+    return translationProvenanceRank(a.id) - translationProvenanceRank(b.id);
+  }
+  function orderAuthorGroup(
+    key: string,
+    variants: readonly TranslationCatalogueEntry[],
+  ): AuthorGroup {
+    const [head, ...tail] = variants;
+    if (head === undefined) throw new Error(`[translations] empty author group ${key}`);
+    if (tail.length === 0) return { key, representative: head, rest: [] };
+    let best = 0;
+    for (let i = 1; i < variants.length; i += 1) {
+      if (compareRepresentatives(key, variants[i]!, variants[best]!) < 0) best = i;
+    }
+    return {
+      key,
+      representative: variants[best]!,
+      rest: variants.filter((_, i) => i !== best),
+    };
+  }
+  function toggleAuthorSources(key: string): void {
+    if (expandedAuthors.has(key)) expandedAuthors.delete(key);
+    else expandedAuthors.add(key);
+  }
+
+  // The Commentary section renders only inside the tafsir language's pane and
+  // never in the reading picker (a tafsir is never the reading translation).
+  const commentaryVisible = $derived.by(() => {
+    if (picking || searchActive || activeGroup === undefined) return false;
+    return commentaryRows.some((t) => t.language === activeGroup.language);
+  });
+
+  // The pane's count line covers every row it lists, Commentary included, so
+  // the tafsir language's pane never reads "0 translations" over two rows.
+  const paneRowCount = $derived(
+    activeEntries.length + (commentaryVisible ? commentaryRows.length : 0),
+  );
 
   // Selected chips: the stacked texts in store order. Updates live from store
   // changes; the row is absent when empty.
@@ -256,13 +432,14 @@
     return rows;
   });
 
-  // Rail dot: languages holding a selected text (or Reading's flowing text).
+  // Rail dot: languages (by code, matching the rail's grouping) holding a
+  // selected text (or Reading's flowing text).
   const languagesInUse = $derived.by(() => {
     const ids = picking ? [readPick?.current] : selectedIds;
     const inUse = new Set<string>();
     for (const id of ids) {
       const entry = id ? TRANSLATION_CATALOGUE_BY_ID.get(id) : undefined;
-      if (entry) inUse.add(entry.language);
+      if (entry) inUse.add(entry.languageCode);
     }
     return inUse;
   });
@@ -270,6 +447,14 @@
   // Mobile: the pane replaces the rail once a language is chosen; searching
   // always shows the pane (the rail is filtered anyway). md+ shows both.
   const paneVisible = $derived(mobilePane || searchActive);
+
+  // TRX-16: the hover card's offline line derives from the verse-cache state
+  // (the storage report's artifacts). Hydrated lazily on first open, so the
+  // reader page never queries artifacts until the picker is opened.
+  const cachedIds = $derived(new Set(storageReport.artifacts.map((artifact) => artifact.id)));
+  $effect(() => {
+    if (open) storageReport.hydrate();
+  });
 
   // Selection changes only touch the stacked store + the ?more= URL param; the
   // reader layout's effects keep worker pinning in sync from there. The URL is
@@ -279,7 +464,10 @@
     replaceState(withMoreParam(visibleUrl(page), stackedTranslations.ids), page.state);
   }
   function toggle(id: string): void {
+    const wasSelected = selectedIds.includes(id);
     stackedTranslations.toggle(id);
+    // Stacking a translation is an explicit choice; unstacking one is not.
+    if (!wasSelected) recordUse(id);
     syncUrl();
   }
   function reorder(id: string, delta: -1 | 1): void {
@@ -319,6 +507,9 @@
     return `${base} cursor-not-allowed opacity-50`;
   }
   function rowHref(t: TranslationCatalogueEntry): `/${string}` | null {
+    // Commentary has no route of its own (TRX-01): a tafsir URL 308s back to
+    // the Arabic reader, so its rows carry no go-to arrow at all.
+    if (picking || isTafsirTranslation(t.id)) return null;
     const seg = translationSegmentsFromId(t.id);
     return hrefFor(position, { id: t.id, lang: seg.lang, translator: seg.translator });
   }
@@ -328,8 +519,8 @@
     return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   }
 
-  function selectLanguage(language: string): void {
-    railLanguage = language;
+  function selectLanguage(code: string): void {
+    railCode = code;
     mobilePane = true;
   }
   function backToRail(): void {
@@ -346,13 +537,13 @@
     else if (event.key === "ArrowUp") next = (index - 1 + languages.length) % languages.length;
     else return;
     event.preventDefault();
-    const language = languages[next]?.language;
-    if (language === undefined) return;
-    railLanguage = language;
+    const group = languages[next];
+    if (group === undefined) return;
+    railCode = group.code;
     // All rail options are already in the DOM, so focus can move synchronously
     // without waiting for the selection state to re-render.
     document
-      .querySelector<HTMLElement>(`[data-language-option="${CSS.escape(language)}"]`)
+      .querySelector<HTMLElement>(`[data-language-option="${CSS.escape(group.language)}"]`)
       ?.focus();
   }
 </script>
@@ -382,11 +573,13 @@
           <Dialog.Description class="sr-only">{copy.translations.description}</Dialog.Description>
           <Dialog.Close>
             {#snippet child({ props })}
+              <!-- TRX-08: exactly one close control per surface — Done at the
+                   bottom on phones, this ✕ on md+. -->
               <button
                 {...props}
                 type="button"
                 aria-label={copy.translations.close}
-                class="-me-2.5 ms-auto flex h-11 w-11 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+                class="-me-2.5 ms-auto hidden h-11 w-11 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground md:flex"
               >
                 <Icon name="x" size={16} />
               </button>
@@ -532,14 +725,23 @@
 
       <TooltipProvider delayDuration={400}>
       <div
-        class="grid min-h-0 flex-1 overflow-hidden border-t border-border md:grid-cols-[232px_minmax(0,1fr)]"
+        class="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden border-t border-border md:grid-cols-[232px_minmax(0,1fr)]"
       >
-        {#snippet translationRow(t: TranslationCatalogueEntry, withLanguage: boolean)}
+        {#snippet translationRow(
+          t: TranslationCatalogueEntry,
+          withLanguage: boolean,
+          list: "rail" | "recent" | "search" | "tafsir" | "variant",
+          sources?: { key: string; count: number; expanded: boolean },
+        )}
           {@const checked = picking ? t.id === readPick?.current : selectedIds.includes(t.id)}
           {@const disabled = !picking && isFull && !checked}
-          {@const href = picking ? null : rowHref(t)}
+          {@const href = rowHref(t)}
           {@const source = translationSourceOf(t.id)}
           {@const native = nativeNameFor(t.languageCode)}
+          <!-- The Recent group and the active rail can show the same translation
+               at once, so each list namespaces its checkbox id — a duplicate id
+               would make both labels resolve to the first copy. -->
+          {@const domId = `tmodal-${list}-${t.id}`}
           <!-- One row anatomy everywhere: a fixed two-line block (name, then a muted
                meta line — language when searching, translator when it differs from
                the name, and always the source), so every row has the same height and
@@ -564,7 +766,7 @@
             onfocusin={rowProps.onfocus as ((event: FocusEvent) => void) | undefined}
             onfocusout={rowProps.onblur as ((event: FocusEvent) => void) | undefined}
             data-translation-row={t.id}
-            class="group/row flex rounded-lg transition-colors {checked
+            class="group/row flex rounded-lg transition-colors {list === 'variant' ? 'ms-5' : ''} {checked
               ? 'bg-primary/10'
               : 'hover:bg-surface-hover'}"
           >
@@ -583,7 +785,7 @@
                      its check read in the theme instead of the browser grey. -->
                 <span class="relative flex size-[18px] flex-none items-center justify-center">
                   <input
-                    id={`tmodal-${t.id}`}
+                    id={domId}
                     type="checkbox"
                     {checked}
                     {disabled}
@@ -612,7 +814,12 @@
                     </span>
                     <span class="flex-none" aria-hidden="true">·</span>
                   {/if}
-                  {#if hasAuthorLine(t)}
+                  {#if list === "variant"}
+                    <!-- A variant hangs off its author row above: its own size
+                         + source are the differentiators. -->
+                    <span data-row-size class="min-w-0 truncate">{formatSize(t.sizeBytes)}</span>
+                    <span class="flex-none" aria-hidden="true">·</span>
+                  {:else if hasAuthorLine(t)}
                     <span data-author-line class="min-w-0 truncate"><bdi>{t.translator}</bdi></span>
                     <span class="flex-none" aria-hidden="true">·</span>
                   {/if}
@@ -637,11 +844,31 @@
             {:else}
               <label
                 data-row-target
-                for={`tmodal-${t.id}`}
+                for={domId}
                 class={rowCoverClass(disabled ? "locked" : "toggle")}
               >
                 {@render coverBody()}
               </label>
+            {/if}
+            {#if sources}
+              <!-- "Show all sources" disclosure for a multi-source author; the
+                   count names the variants it reveals. -->
+              <button
+                type="button"
+                data-sources-toggle={t.id}
+                aria-expanded={sources.expanded}
+                onclick={() => toggleAuthorSources(sources.key)}
+                class="flex h-11 flex-none cursor-pointer touch-manipulation items-center gap-1 self-stretch rounded-lg px-2 text-[12px] tabular-nums text-muted-foreground transition-colors hover:text-foreground md:h-auto"
+              >
+                {copy.translations.results(sources.count)}
+                <Icon
+                  name="arrow-right"
+                  size={12}
+                  class="flex-none transition-transform {sources.expanded
+                    ? '-rotate-90'
+                    : 'rotate-90'}"
+                />
+              </button>
             {/if}
             {#if href}
               <!-- Navigate to this translation's own route at the same
@@ -698,9 +925,14 @@
                 </div>
                 <div class="flex w-full gap-2">
                   <dt class="w-[4.5rem] flex-none text-background/60">
-                    {copy.translations.tooltipSize}
+                    {offlineLabel}
                   </dt>
-                  <dd class="min-w-0 flex-1">{formatSize(t.sizeBytes)}</dd>
+                  <!-- TRX-16: availability reads from the verse cache, not the
+                       byte size — one-line description stays deferred (no
+                       catalogue field to derive it from). -->
+                  <dd class="min-w-0 flex-1">{cachedIds.has(t.id)
+                      ? downloadedLabel
+                      : needsInternetLabel}</dd>
                 </div>
                 <div class="flex w-full gap-2">
                   <dt class="w-[4.5rem] flex-none text-background/60">
@@ -713,15 +945,35 @@
           </Tooltip>
         {/snippet}
 
+        {#if !searchActive && recentRows.length > 0}
+          <!-- Pinned above the rail/pane boundary (global on every viewport —
+               phones see it at first open, before any language is tapped): the
+               reader's most recently used translations across languages; a
+               rail's own recents are also boosted to its head below. An
+               untouched reader (no recorded use) sees no group and no reorder. -->
+          <section
+            data-recent-group
+            class="row-start-1 flex-none border-b border-border px-2 pb-1 md:col-span-2"
+          >
+            <h4 class="px-2 pb-1 pt-2.5 text-xs font-medium text-muted-foreground">
+              {recentLabel}
+            </h4>
+            <ul class="flex flex-col gap-0.5">
+              {#each recentRows as t (t.id)}
+                {@render translationRow(t, true, "recent")}
+              {/each}
+            </ul>
+          </section>
+        {/if}
         <nav
           data-language-rail
           aria-label={copy.translations.languagesLabel}
           class="{paneVisible
             ? 'hidden'
-            : 'flex'} min-h-0 flex-col gap-0.5 overflow-y-auto overscroll-contain border-border p-2 md:flex md:border-e"
+            : 'flex'} row-start-2 min-h-0 flex-col gap-0.5 overflow-y-auto overscroll-contain border-border p-2 md:col-start-1 md:flex md:border-e"
         >
-          {#each languages as l, i (l.language)}
-            {@const active = l.language === activeLanguage}
+          {#each languages as l, i (l.code)}
+            {@const active = l.code === activeGroup?.code}
             {#if i > 0 && isSuggested(languages[i - 1]) && !isSuggested(l)}
               <div data-rail-divider class="mx-2.5 my-1.5 h-px flex-none bg-border" aria-hidden="true"></div>
             {/if}
@@ -732,7 +984,7 @@
               type="button"
               tabindex={active ? 0 : -1}
               aria-current={active ? "true" : undefined}
-              onclick={() => selectLanguage(l.language)}
+              onclick={() => selectLanguage(l.code)}
               onkeydown={(e) => onRailKeydown(e, i)}
               class="flex h-11 flex-none cursor-pointer touch-manipulation items-center gap-2.5 rounded-md px-2.5 text-start transition-colors md:h-9 {active
                 ? 'bg-surface-hover text-foreground'
@@ -755,7 +1007,7 @@
                   >
                 {/if}
               </span>
-              {#if languagesInUse.has(l.language)}
+              {#if languagesInUse.has(l.code)}
                 <span
                   data-language-in-use
                   class="size-1.5 flex-none rounded-full bg-primary"
@@ -773,7 +1025,7 @@
           data-language-pane
           class="{paneVisible
             ? 'flex'
-            : 'hidden'} min-h-0 flex-1 touch-manipulation flex-col overflow-x-hidden overflow-y-auto overscroll-contain md:flex"
+            : 'hidden'} row-start-2 min-h-0 flex-1 touch-manipulation flex-col overflow-x-hidden overflow-y-auto overscroll-contain md:col-start-2 md:flex"
         >
           {#snippet paneBack()}
             <button
@@ -802,26 +1054,67 @@
               </p>
             {:else}
               <ul class="flex flex-col gap-0.5 p-2">
-                {#each searchRows as t (t.id)}
-                  {@render translationRow(t, true)}
+                {#each searchGroups as g (g.key)}
+                  {#if g.rest.length > 0}
+                    {@render translationRow(g.representative, true, "search", {
+                      key: g.key,
+                      count: g.rest.length + 1,
+                      expanded: expandedAuthors.has(g.key),
+                    })}
+                    {#if expandedAuthors.has(g.key)}
+                      {#each g.rest as t (t.id)}
+                        {@render translationRow(t, true, "variant")}
+                      {/each}
+                    {/if}
+                  {:else}
+                    {@render translationRow(g.representative, true, "search")}
+                  {/if}
                 {/each}
               </ul>
             {/if}
-          {:else if activeLanguage !== null}
+          {:else if activeGroup}
             <div
               class="sticky top-0 z-10 flex h-12 flex-none items-center gap-2 border-b border-border bg-popover px-4"
             >
               {@render paneBack()}
-              <h3 class="text-[15px] font-medium text-foreground">{activeLanguage}</h3>
+              <h3 class="text-[15px] font-medium text-foreground">{activeGroup.language}</h3>
               <span data-results-count class="text-[13px] text-muted-foreground">
-                {copy.translations.results(activeEntries.length)}
+                {copy.translations.results(paneRowCount)}
               </span>
             </div>
             <ul class="flex flex-col gap-0.5 p-2">
-              {#each activeEntries as t (t.id)}
-                {@render translationRow(t, false)}
+              {#each activeGroups as g (g.key)}
+                {#if g.rest.length > 0}
+                  {@render translationRow(g.representative, false, "rail", {
+                    key: g.key,
+                    count: g.rest.length + 1,
+                    expanded: expandedAuthors.has(g.key),
+                  })}
+                  {#if expandedAuthors.has(g.key)}
+                    {#each g.rest as t (t.id)}
+                      {@render translationRow(t, false, "variant")}
+                    {/each}
+                  {/if}
+                {:else}
+                  {@render translationRow(g.representative, false, "rail")}
+                {/if}
               {/each}
             </ul>
+            {#if commentaryVisible}
+              <!-- Commentary (tafsir) rows for this language (TRX-01): stackable
+                   like translations, but offered only here — never in the list
+                   above, search, recents, or as a reading pick. -->
+              <section data-commentary-group class="flex-none border-t border-border px-2 py-1">
+                <h4 class="px-2 pb-1 pt-2.5 text-xs font-medium text-muted-foreground">
+                  {commentaryLabel}
+                </h4>
+                <ul class="flex flex-col gap-0.5">
+                  {#each commentaryRows as t (t.id)}
+                    {@render translationRow(t, false, "tafsir")}
+                  {/each}
+                </ul>
+              </section>
+            {/if}
           {/if}
         </section>
       </div>
@@ -843,7 +1136,7 @@
           type="button"
           data-done
           onclick={() => (open = false)}
-          class="flex h-11 flex-none cursor-pointer touch-manipulation items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover md:h-9"
+          class="flex h-11 flex-none cursor-pointer touch-manipulation items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover md:hidden"
         >
           {copy.translations.done}
         </button>

@@ -8,6 +8,7 @@ use crate::{
     db::sea_models::{bookmark, bookmark_folder},
     error::{DbResult, DbResultExt, ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
+    quran::QuranStore,
     services::auth::AuthSession,
     AppState,
 };
@@ -32,9 +33,41 @@ fn ensure_kind_fields(m: &SyncMutation) -> Result<(), ErrorResponse> {
     }
 }
 
-/// Resolve the wire folder_id against THIS user's folders: unknown or foreign
-/// folder ids file the bookmark under root (folder_id = NULL) instead of
-/// tripping the FK or leaking another user's folder.
+/// Cross-field range validation the flat derive can't express (EC-39): the
+/// end must not precede the start, every endpoint must exist (per-surah ayah
+/// counts via `global_of` — the flat 1..=286 bound alone lets 1:8 through),
+/// and the span is capped at 50 verses like the reader's `?keys` API.
+fn ensure_valid_range(quran: &QuranStore, m: &SyncMutation) -> Result<(), ErrorResponse> {
+    if m.kind != MutationKind::BookmarkUpsert {
+        return Ok(());
+    }
+    let bad = |msg: &'static str| Err(ErrorResponse::new(ErrorCode::InvalidInput).with_message(msg));
+    let (surah, ayah) = (m.surah.unwrap_or_default(), m.ayah.unwrap_or_default());
+    let (end_surah, end_ayah) =
+        (m.end_surah.unwrap_or(surah), m.end_ayah.unwrap_or(ayah));
+    if (end_surah, end_ayah) < (surah, ayah) {
+        return bad("range end must not precede its start");
+    }
+    let meta = quran.meta();
+    let start = meta
+        .sura(surah as u16)
+        .and_then(|s| s.global_of(ayah as u16));
+    let end = meta
+        .sura(end_surah as u16)
+        .and_then(|s| s.global_of(end_ayah as u16));
+    let (Some(start), Some(end)) = (start, end) else {
+        return bad("range endpoint is not a verse");
+    };
+    if end - start + 1 > 50 {
+        return bad("range span exceeds 50 verses");
+    }
+    Ok(())
+}
+
+/// Resolve the wire folder_id against THIS user's LIVE folders: unknown,
+/// foreign, or tombstoned folder ids file the bookmark under root
+/// (folder_id = NULL) instead of tripping the FK, leaking another user's
+/// folder, or pointing at a dead one (EC-07).
 async fn resolve_folder_id<'a>(
     tx: &DatabaseTransaction,
     user_id: i32,
@@ -49,7 +82,7 @@ async fn resolve_folder_id<'a>(
 }
 
 /// Apply one mutation, LWW-resolved. Returns 1 when a row changed (applied),
-/// 0 when skipped by LWW or the ownership guard.
+/// 0 when skipped by LWW, the ownership guard, or the live-row quota.
 async fn apply_mutation(
     tx: &DatabaseTransaction,
     user_id: i32,
@@ -57,9 +90,20 @@ async fn apply_mutation(
 ) -> Result<u64, ErrorResponse> {
     match m.kind {
         MutationKind::FolderUpsert => {
-            // ensure_kind_fields guaranteed Some(name) for folder.upsert.
+            // ensure_kind_fields guaranteed Some(name) for folder.upsert;
+            // absent kind/position keep the column defaults / NULL.
             let name = m.name.as_deref().unwrap_or_default();
-            bookmark_folder::Entity::upsert_lww(tx, user_id, &m.id, name, m.updated_at).await
+            let kind = m.folder_kind.as_deref().unwrap_or("generic");
+            bookmark_folder::Entity::upsert_lww(
+                tx,
+                user_id,
+                &m.id,
+                name,
+                kind,
+                m.position,
+                m.updated_at,
+            )
+            .await
         }
         MutationKind::FolderDelete => {
             bookmark_folder::Entity::delete_lww(tx, user_id, &m.id, m.updated_at).await
@@ -68,8 +112,26 @@ async fn apply_mutation(
             let folder_id = resolve_folder_id(tx, user_id, m.folder_id.as_deref()).await?;
             let surah = m.surah.unwrap_or_default();
             let ayah = m.ayah.unwrap_or_default();
-            bookmark::Entity::upsert_lww(tx, user_id, &m.id, folder_id, surah, ayah, m.updated_at)
-                .await
+            // Absent wire context = the global single-ayah sentinels (''
+            // session, end = start, §9.1); ensure_valid_range proved the
+            // endpoints real and the end ≥ the start.
+            let end_surah = m.end_surah.unwrap_or(surah);
+            let end_ayah = m.end_ayah.unwrap_or(ayah);
+            let session_id = m.session_id.as_deref().unwrap_or("");
+            bookmark::Entity::upsert_lww(
+                tx,
+                user_id,
+                &m.id,
+                folder_id,
+                session_id,
+                m.source_id.as_deref(),
+                surah,
+                ayah,
+                end_surah,
+                end_ayah,
+                m.updated_at,
+            )
+            .await
         }
         MutationKind::BookmarkDelete => {
             bookmark::Entity::delete_lww(tx, user_id, &m.id, m.updated_at).await
@@ -137,9 +199,12 @@ pub async fn sync(
     let mutations = payload.mutations.as_deref().unwrap_or(&[]);
 
     // Validate every mutation before applying any: a bad item mid-queue must
-    // reject the whole round, not leave a half-applied push.
+    // reject the whole round, not leave a half-applied push. Range endpoints
+    // check against the Quran meta (EC-39) — reads only, the DBs stay
+    // immutable.
     for m in mutations {
         ensure_kind_fields(m)?;
+        ensure_valid_range(&state.quran, m)?;
     }
 
     // Push and pull share ONE transaction: the resolve_folder_id

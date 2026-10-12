@@ -10,6 +10,8 @@
   import { authModal } from "#lib/auth/auth-modal.svelte.js";
   import { authState } from "#lib/auth/auth-state.svelte.js";
   import { createLoginFlow, createRegisterFlow } from "#lib/auth/flows.svelte.js";
+  import { postAuthPath } from "#lib/auth/post-auth-path.js";
+  import { consumeReturnTarget } from "#lib/auth/return-target.js";
   import { goto } from "$app/navigation";
   import SignInForm from "#lib/auth/components/SignInForm.svelte";
   import RegisterForm from "#lib/auth/components/RegisterForm.svelte";
@@ -30,7 +32,8 @@
   async function onAuthSuccess(): Promise<void> {
     authModal.close();
     const user = authState.user;
-    await goto(user && !user.is_verified ? "/verify-email" : "/surah");
+    const target = consumeReturnTarget();
+    await goto(postAuthPath(user, target));
   }
 </script>
 

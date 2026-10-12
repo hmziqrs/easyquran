@@ -199,7 +199,7 @@ describe("account-owned bookmark synchronization", () => {
     );
   });
 
-  it("cold reload selects B's durable queue, discards unowned rows, preserves A for A's next login", async () => {
+  it("cold reload selects B's durable queue, retains unowned rows, preserves A for A's next login", async () => {
     const storage = memoryQueueStorage();
     const seed = createOutbox(storage);
     await seed.enqueue("bookmarks", queuedBookmark("unknown", 3));
@@ -210,7 +210,9 @@ describe("account-owned bookmark synchronization", () => {
     await vi.waitFor(() => expect(first.calls).toHaveLength(1));
     await first.engine.flush(bookmarksDomainFor(9));
     expect(first.calls[0]).toMatchObject({ expectedUserId: 9, mutations: [{ id: "b" }] });
-    expect(await seed.count("bookmarks")).toBe(0);
+    // EC-48: the pre-partition entry is retained for review — never discarded
+    // on hydrate, never flushed, never auto-attributed to B.
+    expect(await seed.count("bookmarks")).toBe(1);
     expect(await seed.count(bookmarksDomainFor(7))).toBe(1);
     expect(await seed.count(bookmarksDomainFor(9))).toBe(0);
     first.setOwner(null);
@@ -218,6 +220,43 @@ describe("account-owned bookmark synchronization", () => {
     reload.store.hydrate();
     await vi.waitFor(() => expect(reload.calls).toHaveLength(1));
     expect(reload.calls[0]).toMatchObject({ expectedUserId: 7, mutations: [{ id: "a" }] });
+  });
+
+  it("EC-48: retained unowned entries apply to the signed-in account only by explicit choice", async () => {
+    const storage = memoryQueueStorage();
+    const seed = createOutbox(storage);
+    await seed.enqueue("bookmarks", queuedBookmark("unknown", 3));
+    const rig = makeRig({ ownerId: 7, storage });
+    rig.store.hydrate();
+    await vi.waitFor(() => expect(rig.calls).toHaveLength(1));
+
+    // Boot + a full round never touched the unowned entry.
+    expect(rig.calls[0]!.mutations).toEqual([]);
+    expect(rig.store.unownedPending()).toBe(1);
+    expect(await seed.count("bookmarks")).toBe(1);
+
+    // The merge-review action attributes it to the signed-in account and flushes.
+    expect(await rig.store.applyLegacyUnowned(7)).toBe(1);
+    expect(await seed.count("bookmarks")).toBe(0);
+    expect(rig.store.unownedPending()).toBe(0);
+    expect(rig.calls[1]).toMatchObject({ expectedUserId: 7, mutations: [{ id: "unknown" }] });
+    expect(await seed.count(bookmarksDomainFor(7))).toBe(0); // flushed through
+  });
+
+  it("EC-48: applyLegacyUnowned refuses a non-current owner; discardLegacyUnowned wipes on explicit choice", async () => {
+    const storage = memoryQueueStorage();
+    const seed = createOutbox(storage);
+    await seed.enqueue("bookmarks", queuedBookmark("unknown", 3));
+    const rig = makeRig({ ownerId: 7, storage });
+    rig.store.hydrate();
+    await vi.waitFor(() => expect(rig.calls).toHaveLength(1));
+
+    expect(await rig.store.applyLegacyUnowned(9)).toBe(0); // not the signed-in account
+    expect(await seed.count("bookmarks")).toBe(1);
+
+    await rig.store.discardLegacyUnowned();
+    expect(await seed.count("bookmarks")).toBe(0);
+    expect(rig.store.unownedPending()).toBe(0);
   });
 
   it("durability completion after A→B cannot apply A's optimistic row into B", async () => {
@@ -245,40 +284,6 @@ describe("account-owned bookmark synchronization", () => {
     );
     expect(await rig.outbox.count(bookmarksDomainFor(7))).toBe(1);
     expect(await rig.outbox.count(bookmarksDomainFor(9))).toBe(1);
-  });
-
-  it("account switch during guest migration stops A's work and never marks A complete", async () => {
-    const gate = deferred<void>();
-    const storage = memoryQueueStorage();
-    let blocked = true;
-    let writingA = false;
-    const delayed: QueueStorage = {
-      ...storage,
-      async write(record) {
-        if (blocked) {
-          blocked = false;
-          writingA = true;
-          await gate.promise;
-        }
-        return await storage.write(record);
-      },
-    };
-    const rig = makeRig({
-      ownerId: 7,
-      storage: delayed,
-      online: false,
-      legacyKeys: ["1:1", "2:1"],
-    });
-    rig.store.hydrate();
-    await vi.waitFor(() => expect(writingA).toBe(true));
-    rig.setOwner(9);
-    gate.resolve();
-    await vi.waitFor(() =>
-      expect(localStorage.getItem("eq.bookmarks.legacy-migrated.9")).toBe("1"),
-    );
-    expect(localStorage.getItem("eq.bookmarks.legacy-migrated.7")).toBeNull();
-    expect(await rig.outbox.count(bookmarksDomainFor(7))).toBe(1);
-    expect(await rig.outbox.count(bookmarksDomainFor(9))).toBe(2);
   });
 
   it("stale tab sends captured owner so a different cookie account cannot accept its mutations", async () => {

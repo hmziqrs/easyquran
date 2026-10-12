@@ -52,7 +52,7 @@ const ARABIC_FALLBACKS = `"Traditional Arabic", "Geeza Pro", serif`;
 // and are dropped by `enabledArabicFontIds` in production. Today every selectable face is
 // enabled. Known future entries, listed so they slot in here and not into the script pills:
 //   - `indopak-reader-compat-*` — OFL compatibility faces loaded only from the
-//     production-disabled IndoPak path (docs/indopak-font-compatibility.md).
+//     production-disabled IndoPak path (docs/indopak.md).
 //   - `indopak-nastaleeq-hanafi-v4.2.2` — Hanafi nastaleeq face from the unmerged
 //     indopak branch; the known restricted face that slots in when that branch lands.
 export const ARABIC_FONTS: readonly ArabicFontDef[] = [

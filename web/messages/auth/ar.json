@@ -1,6 +1,6 @@
 {
   "auth_dialog_title": "تسجيل الدخول أو إنشاء حساب",
-  "auth_dialog_description": "ادخل إلى حسابك في EasyQuran لمزامنة الإشارات المرجعية وتقدّم القراءة.",
+  "auth_dialog_description": "ادخل إلى حسابك في EasyQuran لمزامنة إشاراتك المرجعية وجلسات قراءتك.",
   "auth_close": "إغلاق",
   "auth_sign_in": "تسجيل الدخول",
   "auth_create_account": "إنشاء حساب",
@@ -10,7 +10,7 @@
   "auth_continue": "متابعة",
   "auth_field_authentication_code": "رمز المصادقة",
   "auth_use_different_account": "استخدام حساب مختلف",
-  "auth_sign_in_subheading": "مرحبًا بعودتك. سجّل الدخول لمزامنة إشاراتك المرجعية وتقدّم قراءتك.",
+  "auth_sign_in_subheading": "مرحبًا بعودتك. سجّل الدخول لمزامنة إشاراتك المرجعية وجلسات قراءتك.",
   "auth_field_email": "البريد الإلكتروني",
   "auth_email_placeholder": "you@example.com",
   "auth_field_password": "كلمة المرور",
@@ -20,7 +20,7 @@
   "auth_no_account_prompt": "ليس لديك حساب؟",
   "auth_create_one_link": "أنشئ واحدًا",
   "auth_register_heading": "أنشئ حسابك",
-  "auth_register_subheading": "يُزامِن حسابك المجاني إشاراتك المرجعية وملاحظاتك وموضع قراءتك عبر أجهزتك.",
+  "auth_register_subheading": "يُزامِن حسابك المجاني إشاراتك المرجعية وجلسات قراءتك عبر أجهزتك. وتبقى ملاحظاتك على هذا الجهاز.",
   "auth_field_display_name": "الاسم المعروض",
   "auth_display_name_placeholder": "اسمك",
   "auth_password_min_placeholder": "12 حرفًا على الأقل",
@@ -65,5 +65,68 @@
   "auth_connected_unlink_error": "تعذّر إلغاء ربط هذا الحساب. حاول مرة أخرى.",
   "auth_connected_retry": "إعادة المحاولة",
   "auth_connected_loading": "جارٍ تحميل الحسابات المرتبطة…",
-  "auth_connected_session_expired_error": "انتهت جلستك. سجّل الدخول مرة أخرى."
+  "auth_connected_session_expired_error": "انتهت جلستك. سجّل الدخول مرة أخرى.",
+  "auth_merge_title": "الدمج في حسابك",
+  "auth_merge_description": "اختر ما يضيفه هذا الجهاز قبل أن تبدأ أي مزامنة.",
+  "auth_merge_verse": "الآية {ayah}",
+  "auth_merge_summary": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=zero": "لا توجد علامات مرجعية على هذا الجهاز.",
+        "countPlural=one": "لديك علامة مرجعية واحدة على هذا الجهاز.",
+        "countPlural=two": "لديك علامتان مرجعيتان على هذا الجهاز.",
+        "countPlural=few": "لديك {count} علامات مرجعية على هذا الجهاز.",
+        "countPlural=many": "لديك {count} علامة مرجعية على هذا الجهاز.",
+        "countPlural=other": "لديك {count} علامة مرجعية على هذا الجهاز."
+      }
+    }
+  ],
+  "auth_merge_merge": "الدمج في الحساب",
+  "auth_merge_review": "مراجعة التغييرات",
+  "auth_merge_back": "رجوع",
+  "auth_merge_sessions": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=zero": "لا توجد جلسات قراءة على هذا الجهاز.",
+        "countPlural=one": "لديك جلسة قراءة واحدة على هذا الجهاز.",
+        "countPlural=two": "لديك جلستا قراءة على هذا الجهاز.",
+        "countPlural=few": "لديك {count} جلسات قراءة على هذا الجهاز.",
+        "countPlural=many": "لديك {count} جلسة قراءة على هذا الجهاز.",
+        "countPlural=other": "لديك {count} جلسة قراءة على هذا الجهاز."
+      }
+    }
+  ],
+  "auth_merge_session_row": "جلسة قراءة",
+  "auth_merge_session_state_row": "موضع القراءة والتقدم",
+  "auth_merge_not_now": "ليس الآن",
+  "auth_merge_never_ask": "لا تسأل مرة أخرى",
+  "auth_merge_unowned": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=zero": "لا توجد تغييرات من إصدار سابق للتطبيق",
+        "countPlural=one": "تغيير واحد من إصدار سابق للتطبيق",
+        "countPlural=two": "تغييران من إصدار سابق للتطبيق",
+        "countPlural=few": "{count} تغييرات من إصدار سابق للتطبيق",
+        "countPlural=many": "{count} تغييرًا من إصدار سابق للتطبيق",
+        "countPlural=other": "{count} تغيير من إصدار سابق للتطبيق"
+      }
+    }
+  ],
+  "auth_merge_apply_unowned": "إضافة إلى الحساب",
+  "auth_merge_discard_unowned": "تجاهل",
+  "auth_merge_outcome_new": "جديد على هذا الجهاز",
+  "auth_merge_outcome_device_wins": "نسخة الجهاز أحدث — تُعتمد نسخة الجهاز",
+  "auth_merge_outcome_account_wins": "الحساب فيه نسخة أحدث — يُعتمد الحساب",
+  "auth_merge_result": "تم دمج {merged}، وتُخطي {skipped} (اعتُمدت نسخ الحساب الأحدث).",
+  "auth_merge_result_only": "تم دمج {merged}.",
+  "auth_merge_done": "تم",
+  "auth_merge_error": "تعذّر إدراج تغييراتك في قائمة الانتظار — لم يُفقد شيء. حاول مرة أخرى.",
+  "auth_session_expired_banner": "انتهت الجلسة — سجّل الدخول لاستئناف المزامنة",
+  "auth_sign_out_unsynced_note": "تُحفظ تغييراتك غير المتزامنة على هذا الجهاز إلى أن تسجّل الدخول مرة أخرى."
 }

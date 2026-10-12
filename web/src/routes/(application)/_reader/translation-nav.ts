@@ -16,9 +16,11 @@ import { deLocalizeUrl } from "#lib/paraglide/runtime.js";
  * reader is (surah / global page / juz / hizb), and hrefFor rebuilds the
  * same position for any target translation via the ctx-aware path helpers —
  * never a hand-built /app/ string (machine-guarded by nav-guard.test.ts).
+ * A surah position also carries the `?v={s}:{a}` scroll mirror so a switch
+ * lands on the same verse instead of the surah top (FLOW-07).
  */
 export type ReaderPosition =
-  | { kind: "surah"; slug: string; lang?: string; translator?: string }
+  | { kind: "surah"; slug: string; lang?: string; translator?: string; v?: string }
   | { kind: "globalPage"; n: number; lang?: string; translator?: string }
   | { kind: "juz"; n: number; lang?: string; translator?: string }
   | { kind: "hizb"; n: number; lang?: string; translator?: string }
@@ -101,19 +103,36 @@ export function positionOf(pathname: string): ReaderPosition {
  */
 export function liveReaderPosition(fallbackUrl: URL | ReadonlyURL): ReaderPosition {
   if (browser) {
-    const live = positionOf(deLocalizeUrl(window.location.href).pathname);
-    if (live !== null) return live;
+    const liveHref = window.location.href;
+    const live = positionOf(deLocalizeUrl(liveHref).pathname);
+    if (live !== null) return withVerseMirror(live, verseMirrorOf(liveHref));
   }
   // Clone: paraglide's deLocalizeUrl treats bare-string input differently from a
   // URL instance, and kit 3 hands us a ReadonlyURL — clone to keep the URL path.
-  return positionOf(deLocalizeUrl(new URL(fallbackUrl.href)).pathname);
+  const fallback = new URL(fallbackUrl.href);
+  return withVerseMirror(
+    positionOf(deLocalizeUrl(fallback).pathname),
+    verseMirrorOf(fallback.href),
+  );
+}
+
+/** `?v={surah}:{ayah}` scroll mirror, same strict shape the reader writes/reads. */
+const VERSE_MIRROR = /^(\d+):(\d+)$/;
+function verseMirrorOf(href: string): string | undefined {
+  const v = new URL(href).searchParams.get("v") ?? "";
+  return VERSE_MIRROR.test(v) ? v : undefined;
+}
+
+function withVerseMirror(pos: ReaderPosition, v: string | undefined): ReaderPosition {
+  if (pos === null || pos.kind !== "surah" || v === undefined) return pos;
+  return { ...pos, v };
 }
 
 /** The Arabic route at the same reader position (Reading → Arabic from a translation page). */
 export function arabicHrefFor(pos: ReaderPosition): `/${string}` | null {
   if (!pos) return null;
   const ctx: SurahRouteContext = { kind: "arabic" };
-  if (pos.kind === "surah") return surahPathFor(ctx, pos.slug);
+  if (pos.kind === "surah") return withMirrorSearch(surahPathFor(ctx, pos.slug), pos.v);
   if (pos.kind === "globalPage") return globalPagePathFor(ctx, pos.n);
   if (pos.kind === "juz") return juzPathFor(ctx, pos.n);
   return hizbPathFor(ctx, pos.n);
@@ -123,10 +142,16 @@ function ctxFor(target: TranslationTarget): SurahRouteContext {
   return { kind: "translation", lang: target.lang, translator: target.translator };
 }
 
+function withMirrorSearch(href: `/${string}`, v: string | undefined): `/${string}` {
+  if (v === undefined) return href;
+  // SAFETY: appending a query to an absolute-path string keeps the `/` prefix, so the template literal still satisfies `/${string}`.
+  return `${href}?v=${v}` as `/${string}`;
+}
+
 export function hrefFor(pos: ReaderPosition, target: TranslationTarget): `/${string}` | null {
   if (!pos) return null;
   const ctx = ctxFor(target);
-  if (pos.kind === "surah") return surahPathFor(ctx, pos.slug);
+  if (pos.kind === "surah") return withMirrorSearch(surahPathFor(ctx, pos.slug), pos.v);
   if (pos.kind === "globalPage") return globalPagePathFor(ctx, pos.n);
   if (pos.kind === "juz") return juzPathFor(ctx, pos.n);
   return hizbPathFor(ctx, pos.n);

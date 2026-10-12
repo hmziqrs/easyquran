@@ -75,6 +75,8 @@ import {
   settings_reading_preview,
   settings_reading_sample,
   settings_reading_sample_alt,
+  settings_reading_resume,
+  settings_reading_resume_note,
   settings_reading_translation_font,
   settings_reading_translation_size,
   settings_section_account,
@@ -288,6 +290,11 @@ export interface SettingsCopy {
       readonly verse: string;
       readonly reading: string;
     };
+    /** Feature 5.9 — "Resume instantly" toggle (prefs.instantResume). */
+    readonly resume: string;
+    readonly resumeNote: string;
+    readonly on: string;
+    readonly off: string;
   };
   readonly privacy: {
     readonly intro: string;
@@ -502,6 +509,10 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
         verse: noArgs(reader_ayah_by_ayah),
         reading: noArgs(reader_reading),
       },
+      resume: noArgs(settings_reading_resume),
+      resumeNote: noArgs(settings_reading_resume_note),
+      on: noArgs(reader_on),
+      off: noArgs(reader_off),
     },
     privacy: {
       intro: noArgs(settings_privacy_intro),

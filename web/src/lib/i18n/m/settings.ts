@@ -2,7 +2,7 @@
 //
 // Settings page: storage, reading, privacy and account sections. Lazy: downloaded whole when the settings route loads or the reader appearance panel opens (offline-pack + notification toggle copy). The marketing appearance panel and the settings privacy section reuse reader_* notifications strings instead and never pull this namespace.
 //
-// 130 messages. Import this barrel, never
+// 132 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see docs/quran-system.md (Part 2, Message chunking).
 
 export { settings_account_device_note } from "#lib/paraglide/messages/settings_account_device_note.js";
@@ -46,6 +46,8 @@ export { settings_reading_font_taha_v1 } from "#lib/paraglide/messages/settings_
 export { settings_reading_font_taha_v1_bold } from "#lib/paraglide/messages/settings_reading_font_taha_v1_bold.js";
 export { settings_reading_intro } from "#lib/paraglide/messages/settings_reading_intro.js";
 export { settings_reading_preview } from "#lib/paraglide/messages/settings_reading_preview.js";
+export { settings_reading_resume } from "#lib/paraglide/messages/settings_reading_resume.js";
+export { settings_reading_resume_note } from "#lib/paraglide/messages/settings_reading_resume_note.js";
 export { settings_reading_sample } from "#lib/paraglide/messages/settings_reading_sample.js";
 export { settings_reading_sample_alt } from "#lib/paraglide/messages/settings_reading_sample_alt.js";
 export { settings_reading_script } from "#lib/paraglide/messages/settings_reading_script.js";

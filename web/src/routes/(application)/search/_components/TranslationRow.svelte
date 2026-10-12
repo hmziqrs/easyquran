@@ -1,8 +1,10 @@
 <script lang="ts">
   import type { TranslationCatalogueEntry } from "#lib/data/quran-types.js";
   import type { SearchCopy } from "#lib/i18n/search-copy.js";
+  import { translationAuthorKey } from "#lib/quran/translation-groups.js";
   import { quranWorker } from "#lib/quran/worker-client.js";
   import { searchSelection } from "#lib/stores/search-selection.svelte.js";
+  import { translationRecents } from "#lib/stores/translation-recents.svelte.js";
   import { formatBytes } from "#lib/utils.js";
 
   let {
@@ -30,6 +32,13 @@
     if (cached || rtl) return;
     void quranWorker.ensureTranslation(entry.id).catch(() => {});
   }
+
+  function toggle(): void {
+    searchSelection.toggle(entry.id);
+    // A search-page pick is an explicit selection too (Feature 1.1): it
+    // records into the MRU and the author's variant memory; unchecking is not.
+    if (!selected) translationRecents.record(entry.id, Date.now(), translationAuthorKey(entry));
+  }
 </script>
 
 <div
@@ -41,7 +50,7 @@
       type="checkbox"
       checked={selected}
       disabled={rtl}
-      onchange={() => searchSelection.toggle(entry.id)}
+      onchange={toggle}
       class="h-4 w-4 flex-none accent-primary"
     />
     <label for={`search-t-${entry.id}`} class="min-w-0 flex-1 truncate text-foreground-secondary">

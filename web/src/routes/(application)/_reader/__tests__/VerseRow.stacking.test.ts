@@ -1,7 +1,7 @@
 import { mount } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-const { nav, readerStub, mountStub } = vi.hoisted(() => ({
+const { nav, readerStub, toolsCalls } = vi.hoisted(() => ({
   // SAFETY: empty params literal widens to the page.params Record<string,string> contract; tests only ever assign string entries
   nav: { url: { hash: "" }, params: {} as Record<string, string> },
   readerStub: {
@@ -10,13 +10,21 @@ const { nav, readerStub, mountStub } = vi.hoisted(() => ({
     // SAFETY: null seeds the nullable openNote union; no test assigns before the row reads it
     openNote: null as string | null,
   },
-  mountStub: () => {},
+  // The dynamically imported verse tools land here as a bare function component
+  // (Svelte 5 calls it with (anchor, props)), so the copy path is assertable.
+  // SAFETY: only the mocked VerseTools pushes here, always with the exact
+  // { text, vKey } props VerseRow passes; the empty literal just needs widening.
+  toolsCalls: [] as { text: string; vKey: string }[],
 }));
 
 vi.mock("$app/env", () => ({ browser: true }));
 vi.mock("$app/state", () => ({ page: nav }));
 vi.mock("#lib/stores/reader.svelte.js", () => ({ reader: readerStub }));
-vi.mock("../VerseTools.svelte", () => ({ default: mountStub }));
+vi.mock("../VerseTools.svelte", () => ({
+  default: (_anchor: Node, props: { text: string; vKey: string }) => {
+    toolsCalls.push(props);
+  },
+}));
 
 import type { StackedTranslation } from "#lib/data/quran-types.js";
 
@@ -42,6 +50,7 @@ beforeEach(() => {
   readerStub.isReadingMode = false;
   readerStub.openNote = null;
   nav.params = {};
+  toolsCalls.length = 0;
   target = document.createElement("div");
   document.body.appendChild(target);
 });
@@ -65,7 +74,8 @@ describe("VerseRow stacked extras", () => {
     const rows = extras();
     expect(rows).toHaveLength(2);
     expect(rows[0]?.getAttribute("lang")).toBe("en");
-    expect(rows[0]?.getAttribute("dir")).toBe("auto");
+    // dir is the lane's declared direction (TRX-11), never a guess
+    expect(rows[0]?.getAttribute("dir")).toBe("ltr");
     expect(rows[0]?.textContent).toContain("T-en.sahih");
     expect(rows[0]?.textContent).toContain("text-en.sahih");
     expect(rows[1]?.getAttribute("lang")).toBe("ur");
@@ -145,6 +155,101 @@ describe("VerseRow stacked extras", () => {
       },
     });
     expect(extras()).toHaveLength(0);
+  });
+
+  it("renders a stacked tafsir as a distinct commentary block labelled commentary (TRX-01)", () => {
+    mount(VerseRow, {
+      target,
+      props: {
+        text: "arabic",
+        n: 1,
+        vKey: "1:1",
+        stacked: [
+          stacked("ar.muyassar", {
+            language: "Arabic",
+            languageCode: "ar",
+            direction: "rtl",
+            name: "Tafsir al-Muyassar",
+            translator: "King Fahad Quran Complex",
+          }),
+        ],
+      },
+    });
+    const lane = extras()[0];
+    expect(lane?.classList.contains("verse-extra--tafsir")).toBe(true);
+    expect(lane?.getAttribute("dir")).toBe("rtl");
+    const credit = lane?.querySelector(".verse-extra-credit");
+    expect(credit?.textContent).toContain("King Fahad Quran Complex (Tafsir al-Muyassar)");
+    expect(credit?.textContent).toContain("(commentary)");
+  });
+
+  it("shows the empty-verse note with the declared direction instead of an empty lane (TRX-11, EC-45)", () => {
+    mount(VerseRow, {
+      target,
+      props: {
+        text: "arabic",
+        n: 3,
+        vKey: "108:3",
+        stacked: [
+          stacked("ku.asan", {
+            language: "Kurdish",
+            languageCode: "ku",
+            direction: "rtl",
+            text: "",
+          }),
+        ],
+      },
+    });
+    const lane = extras()[0];
+    expect(lane?.getAttribute("dir")).toBe("rtl");
+    const missing = lane?.querySelector(".verse-missing");
+    expect(missing?.textContent).toContain("No translation for this verse in Kurdish.");
+    expect(missing?.textContent).not.toContain("<");
+  });
+
+  it("parses transliteration markup into styled runs and never prints raw tags (TRX-02)", () => {
+    mount(VerseRow, {
+      target,
+      props: {
+        text: "Bismi All<u>a</U>hi a<b>l</B>rra<u>h</U>m",
+        n: 1,
+        vKey: "1:1",
+        isTranslation: true,
+      },
+    });
+    // SAFETY: the translation line is the row's only verse-text--translation span
+    const line = target.querySelector(".verse-text--translation") as HTMLElement;
+    expect(line.textContent).not.toContain("<");
+    expect(line.querySelector("u.translit-long")?.textContent).toBe("a");
+    expect(line.querySelector("b.translit-assimilated")?.textContent).toBe("l");
+    expect(target.querySelector(".translit-legend")?.textContent).toContain("Underlined");
+  });
+});
+
+describe("VerseRow copy path (TRX-02 markup stripped, EC-45 placeholder stripped)", () => {
+  it("hands verse tools the text without transliteration tags", async () => {
+    mount(VerseRow, {
+      target,
+      props: {
+        text: "Bismi All<u>a</U>hi a<b>l</B>rra<u>h</U>m",
+        n: 1,
+        vKey: "1:1",
+        isTranslation: true,
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(toolsCalls.at(-1)?.text).toBe("Bismi Allahi alrrahm");
+  });
+
+  it("copies no placeholder text for an empty translation verse", async () => {
+    nav.params = { lang: "ku", translator: "asan" };
+    mount(VerseRow, {
+      target,
+      props: { text: "", n: 3, vKey: "108:3", isTranslation: true },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(toolsCalls.at(-1)?.text).toBe("");
+    expect(JSON.stringify(toolsCalls)).not.toContain("No translation");
   });
 });
 

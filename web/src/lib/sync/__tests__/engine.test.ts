@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { createSyncEngine, syncRetryDelayMs, type SyncEngine } from "#lib/sync/engine.svelte.js";
+import type { SyncDrainMessage } from "#lib/sync/engine.svelte.js";
 import {
   createOutbox,
   memoryQueueStorage,
@@ -9,6 +10,7 @@ import {
 } from "#lib/sync/outbox.js";
 import {
   SyncPausedError,
+  SyncRejectedError,
   type SyncDomain,
   type SyncMutation,
   type SyncRoundResult,
@@ -61,7 +63,13 @@ interface TestRig {
   setOnline(value: boolean): void;
 }
 
-function makeEngine(overrides: { domains?: FakeDomain[]; online?: boolean } = {}): TestRig {
+function makeEngine(
+  overrides: {
+    domains?: FakeDomain[];
+    online?: boolean;
+    publishDrain?: (m: SyncDrainMessage) => void;
+  } = {},
+): TestRig {
   let connected = overrides.online ?? true;
   const outbox = createOutbox(memoryQueueStorage());
   const engine = createSyncEngine({
@@ -69,6 +77,7 @@ function makeEngine(overrides: { domains?: FakeDomain[]; online?: boolean } = {}
     domains: (overrides.domains ?? []).map((fake) => fake.domain),
     online: () => connected,
     flushDelayMs: 2_000,
+    publishDrain: overrides.publishDrain,
   });
   return {
     engine,
@@ -148,6 +157,23 @@ describe("SyncEngine.flush", () => {
     const seqs = a.batches.flat().map((m) => m.seq);
     expect(seqs).toEqual(Array.from({ length: 101 }, (_, i) => i + 1));
     expect(rig.engine.pending).toBe(0);
+  });
+
+  it("drains 250 queued mutations in order, every request within the wire cap (EC-24)", async () => {
+    const a = fakeDomain("bookmarks");
+    const rig = makeEngine({ domains: [a] });
+    // Seed the outbox directly (not engine.enqueue) so no debounce timer runs.
+    for (let i = 0; i < 250; i += 1) await rig.outbox.enqueue("bookmarks", i);
+    await rig.engine.hydrate();
+    expect(rig.engine.pending).toBe(250);
+
+    await rig.engine.flush();
+
+    expect(a.batches.map((batch) => batch.length)).toEqual([100, 100, 50]);
+    const seqs = a.batches.flat().map((m) => m.seq);
+    expect(seqs).toEqual(Array.from({ length: 250 }, (_, i) => i + 1));
+    expect(rig.engine.pending).toBe(0);
+    expect(await rig.outbox.count("bookmarks")).toBe(0);
   });
 
   it("isolates domain failures: healthy domain drains, failing one keeps its queue", async () => {
@@ -480,6 +506,45 @@ describe("SyncEngine drain robustness", () => {
     expect(rig.engine.lastSyncAt).not.toBeNull();
     expect(a.states).toEqual(["bookmarks#1"]);
   });
+
+  it("a paused-only round preserves the previous lastError and phase (EC-43)", async () => {
+    const a = fakeDomain("bookmarks");
+    a.error = new Error("boom");
+    const rig = makeEngine({ domains: [a] });
+    await rig.engine.flush();
+    expect(rig.engine.lastError).toBe("boom");
+    expect(rig.engine.phase).toBe("error");
+
+    a.error = new SyncPausedError("signed out");
+    await rig.engine.flush();
+
+    // Nothing drained: the paused round must not clear the actionable error.
+    expect(rig.engine.lastError).toBe("boom");
+    expect(rig.engine.phase).toBe("error");
+  });
+});
+
+describe("SyncEngine.reassignDomain", () => {
+  it("moves a domain's queue to another domain, preserving payloads, FIFO, and pending counts", async () => {
+    const rig = makeEngine();
+    await rig.outbox.enqueue("bookmarks", "a");
+    await rig.outbox.enqueue("bookmarks", "b");
+    await rig.outbox.enqueue("notes", "n");
+    await rig.engine.hydrate();
+    expect(rig.engine.pendingFor("bookmarks")).toBe(2);
+
+    const moved = await rig.engine.reassignDomain("bookmarks", "bookmarks.user:7");
+
+    expect(moved).toBe(2); // an empty source resolves 0 and writes nothing
+    expect(rig.engine.pendingFor("bookmarks")).toBe(0);
+    expect(rig.engine.pendingFor("bookmarks.user:7")).toBe(2);
+    expect((await rig.outbox.take("bookmarks.user:7", 10)).map((m) => m.payload)).toEqual([
+      "a",
+      "b",
+    ]);
+    expect(await rig.outbox.count("bookmarks")).toBe(0);
+    expect(await rig.outbox.count("notes")).toBe(1);
+  });
 });
 
 describe("SyncEngine pull-only rounds", () => {
@@ -535,9 +600,68 @@ describe("SyncEngine pull-only rounds", () => {
     expect(a.states).toEqual(["bookmarks#1"]);
     expect(rig.engine.pending).toBe(0);
   });
+
+  it("a failed pull-only round with an empty queue schedules a backoff retry (EC-28)", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const a = fakeDomain("bookmarks");
+    a.error = new Error("boom");
+    const rig = makeEngine({ domains: [a] });
+    await rig.engine.hydrate();
+
+    await rig.engine.flush();
+    expect(a.batches).toEqual([[]]); // the pull-only round failed
+
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(a.batches).toHaveLength(1); // inside backoff: no retry yet
+    await vi.advanceTimersByTimeAsync(1);
+    expect(a.batches).toHaveLength(2); // retry fired with zero pending work
+  });
 });
 
 describe("SyncEngine coalescing", () => {
+  it("a coalesced flush naming a different domain widens the drain to all domains (EC-44)", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let firstRound = true;
+    const pushedA: string[][] = [];
+    const gated: SyncDomain<string, string> = {
+      name: "a",
+      async sync(mutations: SyncMutation<string>[]): Promise<SyncRoundResult<string>> {
+        pushedA.push(mutations.map((m) => String(m.payload)));
+        if (firstRound) {
+          firstRound = false;
+          await gate;
+        }
+        return { applied: mutations.length, state: "sa" };
+      },
+      applyServer(): void {},
+    };
+    const b = fakeDomain("b");
+    const outbox = createOutbox(memoryQueueStorage());
+    const engine = createSyncEngine({ outbox, domains: [gated, b.domain], online: () => true });
+    await outbox.enqueue("a", "a1");
+    await outbox.enqueue("b", "b1");
+    await engine.hydrate();
+
+    // flush("a") parks inside a's gated sync; flush("b") coalesces into it
+    // while naming a different domain filter.
+    const firstFlush = engine.flush("a");
+    await vi.waitFor(() => expect(pushedA).toHaveLength(1));
+    const coalesced = engine.flush("b");
+    expect(coalesced).toBe(firstFlush);
+    release();
+    await firstFlush;
+
+    // The coalesced pass widened to all domains: b drained in the same round,
+    // not left queued behind the stale "a" filter.
+    expect(b.batches.map((batch) => batch.map((m) => String(m.payload)))).toContainEqual(["b1"]);
+    expect(engine.pending).toBe(0);
+    expect(await outbox.count("b")).toBe(0);
+  });
+
   it("picks up a mutation enqueued after take() of an in-flight drain (coalesced pass)", async () => {
     let release: () => void = () => {};
     const gate = new Promise<void>((resolve) => {
@@ -576,6 +700,109 @@ describe("SyncEngine coalescing", () => {
     // then finishes with its own pull-only round (one pull per flush call).
     expect(batches.map((batch) => batch.map((m) => m.payload))).toEqual([["m1"], ["m2"], []]);
     expect(engine.pending).toBe(0);
+  });
+});
+
+describe("SyncEngine dead-lettering (EC-29)", () => {
+  it("dead-letters the batch head after repeated server rejections; the rest keeps draining", async () => {
+    vi.useFakeTimers(); // freeze the enqueue debounce so only explicit flushes run
+    const a = fakeDomain("bookmarks");
+    a.error = new SyncRejectedError("invalid");
+    const rig = makeEngine({ domains: [a] });
+    await rig.engine.enqueue("bookmarks", "m1");
+    await rig.engine.enqueue("bookmarks", "m2");
+
+    for (let i = 0; i < 4; i += 1) await rig.engine.flush();
+    expect(await rig.outbox.count("bookmarks")).toBe(2); // below threshold: still queued
+    expect(rig.engine.deadLettered).toBe(0);
+
+    await rig.engine.flush(); // 5th consecutive rejection
+    expect(rig.engine.deadLettered).toBe(1);
+    expect((await rig.outbox.take("bookmarks", 10)).map((m) => m.payload)).toEqual(["m2"]);
+    expect(rig.engine.lastError).toContain("dead-lettered");
+    expect(rig.engine.pending).toBe(1);
+
+    a.error = null;
+    await rig.engine.flush();
+    expect(rig.engine.pending).toBe(0);
+    expect(await rig.outbox.count("bookmarks")).toBe(0);
+  });
+
+  it("offline/generic failures never count toward dead-lettering", async () => {
+    vi.useFakeTimers();
+    const a = fakeDomain("bookmarks");
+    const rig = makeEngine({ domains: [a], online: false });
+    await rig.engine.enqueue("bookmarks", "m1");
+    await rig.engine.enqueue("bookmarks", "m2");
+
+    for (let i = 0; i < 6; i += 1) await rig.engine.flush();
+
+    rig.setOnline(true);
+    a.error = new Error("boom");
+    await rig.engine.flush();
+    await rig.engine.flush();
+
+    expect(rig.engine.deadLettered).toBe(0);
+    expect(await rig.outbox.count("bookmarks")).toBe(2);
+  });
+
+  it("rejected pull-only rounds never pre-charge the dead-letter ledger (EC-29)", async () => {
+    vi.useFakeTimers(); // freeze the enqueue debounce so only explicit flushes run
+    const a = fakeDomain("bookmarks");
+    a.error = new SyncRejectedError("invalid");
+    const rig = makeEngine({ domains: [a] });
+
+    // Six rejected pull-only rounds (empty queue): no mutation to blame, so
+    // none of them may count toward a later mutation's rejection ledger.
+    for (let i = 0; i < 6; i += 1) await rig.engine.flush();
+    expect(a.batches).toEqual([[], [], [], [], [], []]);
+
+    await rig.engine.enqueue("bookmarks", "m1");
+    await rig.engine.enqueue("bookmarks", "m2");
+    for (let i = 0; i < 4; i += 1) await rig.engine.flush();
+    expect(rig.engine.deadLettered).toBe(0); // four own rejections: below threshold
+    expect(await rig.outbox.count("bookmarks")).toBe(2);
+
+    await rig.engine.flush(); // fifth own rejection: the head dead-letters
+    expect(rig.engine.deadLettered).toBe(1);
+    expect((await rig.outbox.take("bookmarks", 10)).map((m) => m.payload)).toEqual(["m2"]);
+  });
+});
+
+describe("SyncEngine cross-tab drain broadcast (EC-33, §9.6)", () => {
+  it("publishes {domain, ids} on easyquran-sync for every drained batch", async () => {
+    const posted: SyncDrainMessage[] = [];
+    const a = fakeDomain("bookmarks.user:7");
+    const rig = makeEngine({ domains: [a], publishDrain: (message) => posted.push(message) });
+    const first = await rig.engine.enqueue("bookmarks.user:7", "m1");
+    const second = await rig.engine.enqueue("bookmarks.user:7", "m2");
+
+    await rig.engine.flush();
+
+    expect(posted).toEqual([{ domain: "bookmarks.user:7", ids: [first.id, second.id] }]);
+  });
+
+  it("pull-only rounds publish nothing", async () => {
+    const posted: SyncDrainMessage[] = [];
+    const a = fakeDomain("bookmarks");
+    const rig = makeEngine({ domains: [a], publishDrain: (message) => posted.push(message) });
+
+    await rig.engine.flush();
+
+    expect(posted).toEqual([]);
+  });
+
+  it("a failed round never publishes: the mutations never left the queue", async () => {
+    const posted: SyncDrainMessage[] = [];
+    const a = fakeDomain("bookmarks");
+    a.error = new Error("boom");
+    const rig = makeEngine({ domains: [a], publishDrain: (message) => posted.push(message) });
+    await rig.engine.enqueue("bookmarks", "m1");
+
+    await rig.engine.flush();
+
+    expect(posted).toEqual([]);
+    expect(rig.engine.pending).toBe(1);
   });
 });
 
@@ -628,5 +855,58 @@ describe("SyncEngine.start", () => {
     expect(rig.engine.pending).toBe(0);
 
     teardown();
+  });
+});
+
+describe("SyncEngine teardown on last unregister (EC-30)", () => {
+  it("stops the wired triggers while no domain is registered: no calls, no timers", async () => {
+    vi.useFakeTimers();
+    const a = fakeDomain("bookmarks");
+    const rig = makeEngine({ domains: [a] });
+    rig.engine.start();
+    await rig.outbox.enqueue("bookmarks", "x");
+    await rig.engine.hydrate();
+
+    rig.engine.unregister("bookmarks");
+    expect(rig.engine.phase).toBe("idle");
+    expect(rig.engine.lastError).toBeNull();
+
+    // Far past every cadence (debounce 2s, online poll 5s, periodic 30s): with
+    // the wiring torn down nothing fires — no network calls while signed out.
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(a.batches).toHaveLength(0);
+    expect(rig.engine.pending).toBe(1);
+  });
+
+  it("register() re-arms the wiring after the unregister teardown, without a new start()", async () => {
+    vi.useFakeTimers();
+    const a = fakeDomain("bookmarks");
+    const rig = makeEngine({ domains: [a] });
+    rig.engine.start();
+    await rig.engine.hydrate();
+
+    rig.engine.unregister("bookmarks");
+    await vi.advanceTimersByTimeAsync(90_000);
+    expect(a.batches).toHaveLength(0); // suspension confirmed before the re-arm
+
+    rig.engine.register(a.domain);
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(a.batches).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1); // 30s periodic pull fires again
+    expect(a.batches).toEqual([[]]);
+  });
+
+  it("an explicit teardown of the start() handle stays down across register()", async () => {
+    vi.useFakeTimers();
+    const a = fakeDomain("bookmarks");
+    const rig = makeEngine({ domains: [a] });
+    const teardown = rig.engine.start();
+
+    teardown();
+    rig.engine.unregister("bookmarks");
+    rig.engine.register(a.domain);
+
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(a.batches).toHaveLength(0); // the host withdrew the wiring on purpose
   });
 });

@@ -388,7 +388,7 @@ afterEach(() => {
 });
 
 describe("worker searchTranslation real SQLite path", () => {
-  it("returns ordered hits with highlight spans from a cached translation DB", async () => {
+  it("returns ranked hits with highlight spans from a cached translation DB", async () => {
     const response = await worker.searchTranslation("en.test", "mercy");
     expect(response.query).toBe("mercy");
     expect(response.sourceId).toBe("en.test");
@@ -398,20 +398,10 @@ describe("worker searchTranslation real SQLite path", () => {
     expect(response.source).toBe("worker");
     expect(response.results).toHaveLength(2);
 
+    // Relevance ranking (§5): the verse with two occurrences outranks the
+    // earlier single-occurrence verse, flipping mushaf order.
     const [first, second] = response.results;
     expect(first).toMatchObject({
-      kind: "ayah",
-      sourceId: "en.test",
-      ayah: {
-        key: "1:1",
-        surah: 1,
-        ayah: 1,
-        globalIndex: 1,
-        text: "Allah is full of Mercy.",
-      },
-      highlights: [{ start: 17, end: 22 }],
-    });
-    expect(second).toMatchObject({
       kind: "ayah",
       sourceId: "en.test",
       ayah: {
@@ -425,6 +415,18 @@ describe("worker searchTranslation real SQLite path", () => {
         { start: 0, end: 5 },
         { start: 12, end: 17 },
       ],
+    });
+    expect(second).toMatchObject({
+      kind: "ayah",
+      sourceId: "en.test",
+      ayah: {
+        key: "1:1",
+        surah: 1,
+        ayah: 1,
+        globalIndex: 1,
+        text: "Allah is full of Mercy.",
+      },
+      highlights: [{ start: 17, end: 22 }],
     });
   });
 

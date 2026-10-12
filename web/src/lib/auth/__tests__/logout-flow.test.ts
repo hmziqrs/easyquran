@@ -6,7 +6,14 @@ vi.mock("$app/env/public", () => ({
   PUBLIC_ENV: undefined,
   PUBLIC_FCM_VAPID_KEY: undefined,
 }));
+vi.mock("#lib/auth/sign-out-notice.svelte.js", () => ({
+  armSignOutNotice: vi.fn(),
+  clearSignOutNotice: vi.fn(),
+  consumeSignOutNotice: vi.fn(() => false),
+  signOutNoticeArmed: vi.fn(() => false),
+}));
 import type { AuthClient, AuthRequestResult } from "#lib/auth/auth-client.js";
+import { armSignOutNotice } from "#lib/auth/sign-out-notice.svelte.js";
 import { createLogoutFlow } from "#lib/auth/flows.svelte.js";
 import { notifications } from "#lib/stores/notifications.svelte.js";
 
@@ -33,6 +40,7 @@ function mockState() {
     setTwoFaPending: vi.fn(),
     reset: vi.fn(),
     probe: vi.fn().mockResolvedValue({ kind: "anonymous" }),
+    user: { id: 7 },
   };
 }
 
@@ -70,6 +78,23 @@ describe("LogoutFlow clearing + purge + anonymous probe", () => {
     expect(clearOrder).toBeLessThan(transitionOrder);
     expect(transitionOrder).toBeLessThan(resetOrder);
     expect(resetOrder).toBeLessThan(probeOrder);
+  });
+
+  it("arms the sign-out notice with the account id while the owner is still current (§9.5/EC-14)", async () => {
+    vi.spyOn(notifications, "prepareLogout").mockResolvedValue(undefined);
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest.mockResolvedValueOnce(ok({ message: "Logged out" }, true));
+    const flow = createLogoutFlow({ client, state });
+    await flow.run();
+
+    expect(armSignOutNotice).toHaveBeenCalledWith(7);
+    // The counts must be read before the purge hook suspends the account view.
+    // (armSignOutNotice is a module-level mock shared across this file's tests,
+    // so compare its latest call against this test's fresh state mocks.)
+    const armOrder = vi.mocked(armSignOutNotice).mock.invocationCallOrder.at(-1)!;
+    const transitionOrder = state.transition.mock.invocationCallOrder[0]!;
+    expect(armOrder).toBeLessThan(transitionOrder);
   });
 
   it("still completes the local teardown when backend reports already-anonymous (401)", async () => {

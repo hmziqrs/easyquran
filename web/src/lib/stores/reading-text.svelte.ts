@@ -9,6 +9,7 @@ import {
   readJSON,
   writeJSON,
 } from "#lib/storage/index.js";
+import { translationRecents } from "#lib/stores/translation-recents.svelte.js";
 
 /**
  * What Reading mode flows: the Arabic, or one translation. Ayah-by-Ayah always shows the
@@ -92,9 +93,15 @@ export class ReadingTextStore {
     return this.#translationId;
   }
 
-  /** Translations picked for Reading, most recent first. */
+  /**
+   * Translations picked for Reading, most recently used first. The persisted
+   * list (cap 8, the picker's chips) is kept as-is; only its ordering is
+   * delegated to the translation-recents MRU, so chips follow global usage
+   * order while staying Reading picks. Until real usage exists the MRU is
+   * empty and this returns the stored order unchanged.
+   */
   get recent(): readonly string[] {
-    return this.#recent;
+    return translationRecents.rankIds(this.#recent);
   }
 
   readArabic(): void {

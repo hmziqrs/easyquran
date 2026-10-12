@@ -130,6 +130,9 @@ export default defineConfig({
         precompress: true,
       }),
       prerender: {
+        // /azkar has no inbound crawl link yet (reader chrome lands later) —
+        // seed it so the static editorial index is emitted.
+        entries: ["/", "/azkar"],
         handleMissingId: "fail",
       },
     }),
