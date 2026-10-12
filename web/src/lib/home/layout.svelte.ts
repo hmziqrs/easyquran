@@ -14,6 +14,7 @@ export const HOME_WIDGET_IDS = [
   "recents",
   "most-read",
   "daily-ayah",
+  "cards",
 ] as const;
 export type HomeWidgetId = (typeof HOME_WIDGET_IDS)[number];
 
@@ -52,6 +53,9 @@ export const HOME_WIDGET_SPECS: readonly WidgetSpec[] = [
   // analytics surface (Feature 6); daily-ayah is editorial extra.
   { id: "most-read", defaultVisible: false, defaultSpan: 1 },
   { id: "daily-ayah", defaultVisible: false, defaultSpan: 1 },
+  // User-added widget cards (pinned surah/ayah/range, zikr + azkar counters) —
+  // the management section lives here; the landing strip reads the same store.
+  { id: "cards", defaultVisible: true, defaultSpan: 1 },
 ];
 
 const RECENTS_COUNT_MIN = 1;

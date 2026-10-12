@@ -26,6 +26,18 @@
     homeLayout,
     type HomeWidgetId,
   } from "#lib/home/layout.svelte.js";
+  import {
+    CARD_KINDS,
+    homeCards,
+    newCardId,
+    nowStamp,
+    type CardKind,
+  } from "#lib/home/cards.svelte.js";
+  import CardTile from "#lib/home/CardTile.svelte";
+  import { suggestSurahs } from "#lib/search/page/surah-suggest.js";
+  import type { SurahSuggestion } from "#lib/search/page/types.js";
+  import { SNIPPETS, type SnippetText } from "#lib/data/snippets.js";
+  import { TRANSLATION_CATALOGUE } from "#lib/quran/catalogue.js";
   import { fetchDailyAyah, type DailyAyah } from "#lib/home/daily-ayah.js";
   import { LOCAL_NOTES_OWNER, notesSource } from "#lib/home/notes-source.svelte.js";
   import {
@@ -67,6 +79,27 @@
     reader_widget_notes_title,
     reader_widget_recents_count,
     reader_widget_recents_empty,
+    reader_cards_title,
+    reader_cards_empty,
+    reader_cards_add,
+    reader_cards_full,
+    reader_cards_target_label,
+    reader_cards_kind_surah,
+    reader_cards_kind_ayah,
+    reader_cards_kind_range,
+    reader_cards_kind_zikr,
+    reader_cards_kind_snippet,
+    reader_cards_pick_surah,
+    reader_cards_ayah_number,
+    reader_cards_range_start,
+    reader_cards_range_end,
+    reader_cards_zikr_text,
+    reader_cards_pick_snippet,
+    reader_cards_translation,
+    reader_cards_translation_arabic,
+    reader_cards_invalid_ayah,
+    reader_cards_invalid_range,
+    reader_cards_needs_surah,
   } from "#lib/i18n/m/reader.js";
 
   // Reader nav context for opening saved places: like /app/bookmarks, a personal
@@ -116,6 +149,31 @@
     readingInName: (name: string): string => reader_home_reading_in({ name }, msgOptions),
     readInWith: (language: string): string =>
       reader_home_read_in_with({ language }, msgOptions),
+    cards: {
+      title: reader_cards_title(undefined, msgOptions),
+      empty: reader_cards_empty(undefined, msgOptions),
+      add: reader_cards_add(undefined, msgOptions),
+      full: reader_cards_full(undefined, msgOptions),
+      target: reader_cards_target_label(undefined, msgOptions),
+      pickSurah: reader_cards_pick_surah(undefined, msgOptions),
+      ayahNumber: reader_cards_ayah_number(undefined, msgOptions),
+      rangeStart: reader_cards_range_start(undefined, msgOptions),
+      rangeEnd: reader_cards_range_end(undefined, msgOptions),
+      zikrText: reader_cards_zikr_text(undefined, msgOptions),
+      pickSnippet: reader_cards_pick_snippet(undefined, msgOptions),
+      translation: reader_cards_translation(undefined, msgOptions),
+      translationArabic: reader_cards_translation_arabic(undefined, msgOptions),
+      invalidAyah: reader_cards_invalid_ayah(undefined, msgOptions),
+      invalidRange: reader_cards_invalid_range(undefined, msgOptions),
+      needsSurah: reader_cards_needs_surah(undefined, msgOptions),
+      kinds: {
+        surah: reader_cards_kind_surah(undefined, msgOptions),
+        ayah: reader_cards_kind_ayah(undefined, msgOptions),
+        range: reader_cards_kind_range(undefined, msgOptions),
+        zikr: reader_cards_kind_zikr(undefined, msgOptions),
+        snippet: reader_cards_kind_snippet(undefined, msgOptions),
+      } satisfies Record<CardKind, string>,
+    },
   };
 
   // Session switcher (Feature 4.5): the continue card, recents and progress
@@ -142,7 +200,193 @@
     if (id === "notes") return h.notesTitle;
     if (id === "most-read") return h.mostReadTitle;
     if (id === "daily-ayah") return h.dailyAyahTitle;
+    if (id === "cards") return h.cards.title;
     return copy.nav.bookmarks;
+  }
+
+  /* ── Widget cards (pinned surah/ayah/range, zikr, azkar sets) ─────────────
+     The form builds one card at a time: pick a kind, fill that kind's fields,
+     optionally set a target and a pinned translation, then Add. Validation
+     errors are per-field strings resolved at submit time — never blocking. */
+  let showCardForm = $state(false);
+  let cardKind = $state<CardKind>("surah");
+  let surahQuery = $state("");
+  let pickedSurahNum = $state<number | null>(null);
+  let pickedSurahName = $state("");
+  let ayahInput = $state("");
+  let rangeStartInput = $state("");
+  let rangeEndInput = $state("");
+  let zikrText = $state("");
+  let snippetSlug = $state<string>(SNIPPETS[0]?.slug ?? "");
+  let cardTargetInput = $state("");
+  let cardSourceId = $state<string>("");
+  let cardFormError = $state("");
+
+  const ZIKR_PRESETS = [
+    { ar: "سُبْحَانَ اللَّهِ", label: "Subhanallah" },
+    { ar: "الْحَمْدُ لِلَّهِ", label: "Alhamdulillah" },
+    { ar: "اللَّهُ أَكْبَرُ", label: "Allahu Akbar" },
+    { ar: "لَا إِلَٰهَ إِلَّا اللَّهُ", label: "La ilaha illa Allah" },
+    { ar: "أَسْتَغْفِرُ اللَّهَ", label: "Astaghfirullah" },
+  ] as const;
+
+  interface TranslationOption {
+    readonly id: string;
+    readonly label: string;
+    readonly language: string;
+  }
+
+  const translationOptions: readonly TranslationOption[] = TRANSLATION_CATALOGUE.map(
+    (entry) => ({
+      id: entry.id,
+      label: entry.translator === null ? entry.name : `${entry.name} — ${entry.translator}`,
+      language: entry.language,
+    }),
+  ).sort((a, b) => a.language.localeCompare(b.language) || a.label.localeCompare(b.label));
+
+  function pickedSurah() {
+    if (pickedSurahNum === null || quranData === undefined) return undefined;
+    return quranData.surahByNum(pickedSurahNum);
+  }
+
+  function pickSurah(suggestion: SurahSuggestion): void {
+    pickedSurahNum = suggestion.num;
+    pickedSurahName = suggestion.name;
+    surahQuery = "";
+  }
+
+  function clearPickedSurah(): void {
+    pickedSurahNum = null;
+    pickedSurahName = "";
+  }
+
+  function kindLabel(kind: CardKind): string {
+    return h.cards.kinds[kind];
+  }
+
+  /** Parses a bounded positive integer field; undefined = out of range/empty. */
+  function boundedInt(raw: string, min: number, max: number): number | undefined {
+    if (/^\d+$/.test(raw.trim()) === false) return undefined;
+    const value = Number(raw.trim());
+    if (value < min || value > max) return undefined;
+    return value;
+  }
+
+  function resetCardForm(): void {
+    showCardForm = false;
+    cardKind = "surah";
+    surahQuery = "";
+    pickedSurahNum = null;
+    pickedSurahName = "";
+    ayahInput = "";
+    rangeStartInput = "";
+    rangeEndInput = "";
+    zikrText = "";
+    cardTargetInput = "";
+    cardSourceId = "";
+    cardFormError = "";
+  }
+
+  function submitCard(): void {
+    cardFormError = "";
+    const targetRaw = cardTargetInput.trim();
+    const target = targetRaw.length === 0 ? undefined : boundedInt(targetRaw, 1, 10_000);
+    if (targetRaw.length > 0 && target === undefined) {
+      cardFormError = h.cards.invalidRange;
+      return;
+    }
+    const sourceId = cardSourceId.length === 0 ? null : cardSourceId;
+
+    if (cardKind === "zikr") {
+      const text = zikrText.trim();
+      if (text.length === 0) {
+        cardFormError = h.cards.zikrText;
+        return;
+      }
+      const added = homeCards.add({
+        id: newCardId(),
+        kind: "zikr",
+        text,
+        count: 0,
+        target,
+        createdAt: nowStamp(),
+      });
+      if (added) resetCardForm();
+      else cardFormError = h.cards.full;
+      return;
+    }
+
+    const surah = pickedSurah();
+    if (surah === undefined) {
+      cardFormError = h.cards.needsSurah;
+      return;
+    }
+
+    if (cardKind === "surah") {
+      const added = homeCards.add({
+        id: newCardId(),
+        kind: "surah",
+        surah: surah.num,
+        sourceId,
+        count: 0,
+        target,
+        createdAt: nowStamp(),
+      });
+      if (added) resetCardForm();
+      else cardFormError = h.cards.full;
+      return;
+    }
+
+    if (cardKind === "ayah") {
+      const ayah = boundedInt(ayahInput, 1, surah.ayahCount);
+      if (ayah === undefined) {
+        cardFormError = h.cards.invalidAyah;
+        return;
+      }
+      const added = homeCards.add({
+        id: newCardId(),
+        kind: "ayah",
+        surah: surah.num,
+        ayah,
+        sourceId,
+        count: 0,
+        target,
+        createdAt: nowStamp(),
+      });
+      if (added) resetCardForm();
+      else cardFormError = h.cards.full;
+      return;
+    }
+
+    const ayahStart = boundedInt(rangeStartInput, 1, surah.ayahCount);
+    const ayahEnd = boundedInt(rangeEndInput, 1, surah.ayahCount);
+    if (
+      ayahStart === undefined ||
+      ayahEnd === undefined ||
+      ayahStart > ayahEnd ||
+      ayahEnd - ayahStart + 1 > 50
+    ) {
+      cardFormError = h.cards.invalidRange;
+      return;
+    }
+    const added = homeCards.add({
+      id: newCardId(),
+      kind: "range",
+      surah: surah.num,
+      ayahStart,
+      ayahEnd,
+      sourceId,
+      count: 0,
+      target,
+      createdAt: nowStamp(),
+    });
+    if (added) resetCardForm();
+    else cardFormError = h.cards.full;
+  }
+
+  function snippetTitle(text: SnippetText): string {
+    if (locale === "ar") return text.ar;
+    return text.en;
   }
 
   // Notes (BM-03): local-only, per-owner. Owner resolution mirrors the reader
@@ -247,6 +491,10 @@
 
   let quranData = $state<QuranData | undefined>(peekQuranData());
 
+  const surahSuggestions = $derived<SurahSuggestion[]>(
+    quranData === undefined ? [] : suggestSurahs(quranData.surahs, surahQuery),
+  );
+
   interface BookmarkPreviewRow {
     /** Authed bookmark id, or the verse key on an anonymous row. */
     key: string;
@@ -349,6 +597,7 @@
   onMount(() => {
     mounted = true;
     homeLayout.hydrate();
+    homeCards.hydrate();
     readingChoice.hydrate();
     if (readingChoice.chosen === null) buildChoiceOptions();
     reader.hydrate();
@@ -779,6 +1028,226 @@
         <p class="mt-2 text-[13px] text-muted">{h.dailyAyahUnavailable}</p>
       {:else}
         <p class="mt-2 text-[13px] text-muted" aria-busy="true">…</p>
+      {/if}
+    </section>
+  {:else if widget.visible && widget.id === "cards"}
+    <section aria-labelledby="yours-cards" class="mt-6">
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="yours-cards" class="eyebrow">{h.cards.title}</h2>
+        <span class="flex items-center gap-3 text-[12px] text-muted"
+          >{homeCards.list.length}{@render editControls(widget.id)}</span
+        >
+      </div>
+
+      {#if homeCards.full}
+        <p class="mt-2 text-[13px] text-muted">{h.cards.full}</p>
+      {/if}
+
+      {#if homeCards.list.length === 0}
+        <p class="mt-2 text-[13px] text-muted">{h.cards.empty}</p>
+      {:else}
+        <div class="mt-2 flex flex-col gap-2">
+          {#each homeCards.list as card (card.id)}
+            <CardTile {card} quranData={quranData} editing={editing} />
+          {/each}
+        </div>
+      {/if}
+
+      {#if showCardForm}
+        <form
+          class="mt-3 flex flex-col gap-3 rounded-md border border-border bg-surface px-4 py-4"
+          onsubmit={(event) => {
+            event.preventDefault();
+            submitCard();
+          }}
+        >
+          <div class="flex flex-wrap gap-1.5" role="group" aria-label={h.cards.add}>
+            {#each CARD_KINDS as kind (kind)}
+              <button
+                type="button"
+                aria-pressed={cardKind === kind}
+                class="flex h-8 items-center rounded-pill border px-3 text-[12.5px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                class:border-border-strong={cardKind === kind}
+                class:text-foreground={cardKind === kind}
+                class:border-border={cardKind !== kind}
+                class:text-foreground-secondary={cardKind !== kind}
+                onclick={() => (cardKind = kind)}
+              >
+                {kindLabel(kind)}
+              </button>
+            {/each}
+          </div>
+
+          {#if cardKind === "zikr"}
+            <div class="flex flex-wrap gap-1.5">
+              {#each ZIKR_PRESETS as preset (preset.label)}
+                <button
+                  type="button"
+                  class="flex h-8 items-center rounded-pill border border-border px-3 text-[12.5px] font-medium text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                  onclick={() => (zikrText = preset.ar)}
+                >
+                  {preset.label}
+                </button>
+              {/each}
+            </div>
+            <label class="flex flex-col gap-1">
+              <span class="eyebrow">{h.cards.zikrText}</span>
+              <input
+                type="text"
+                bind:value={zikrText}
+                maxlength="120"
+                lang="ar"
+                dir="rtl"
+                placeholder={h.cards.zikrText}
+                class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+              />
+            </label>
+          {:else if cardKind === "snippet"}
+            <label class="flex flex-col gap-1">
+              <span class="eyebrow">{h.cards.pickSnippet}</span>
+              <select
+                bind:value={snippetSlug}
+                class="h-9 rounded-pill border border-border bg-transparent px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+              >
+                {#each SNIPPETS as snippet (snippet.slug)}
+                  <option value={snippet.slug}>{snippetTitle(snippet.title)}</option>
+                {/each}
+              </select>
+            </label>
+          {:else}
+            <div class="flex flex-col gap-1">
+              <span class="eyebrow">{h.cards.pickSurah}</span>
+              {#if pickedSurahNum === null}
+                <input
+                  type="search"
+                  bind:value={surahQuery}
+                  placeholder={h.cards.pickSurah}
+                  autocomplete="off"
+                  aria-label={h.cards.pickSurah}
+                  class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                />
+                {#if surahQuery.trim().length > 0}
+                  <ul class="mt-1 divide-y divide-border overflow-hidden rounded-md border border-border">
+                    {#each surahSuggestions as suggestion (suggestion.num)}
+                      <li>
+                        <button
+                          type="button"
+                          class="flex w-full items-center gap-3 px-4 py-2.5 text-start transition-colors hover:bg-surface-hover"
+                          onclick={() => pickSurah(suggestion)}
+                        >
+                          <span class="min-w-0 flex-1">
+                            <span class="block truncate text-sm font-medium text-foreground"
+                              >{suggestion.num}. {suggestion.name}</span
+                            >
+                            <span class="block truncate text-[12.5px] text-muted"
+                              >{suggestion.meaning}</span
+                            >
+                          </span>
+                          <span
+                            lang="ar"
+                            dir="rtl"
+                            class="flex-none font-arabic text-[17px] text-foreground-secondary"
+                            >{suggestion.arabic}</span
+                          >
+                        </button>
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
+              {:else}
+                <span
+                  class="flex h-9 items-center justify-between gap-2 rounded-pill border border-border px-3"
+                >
+                  <span class="truncate text-sm text-foreground">{pickedSurahName}</span>
+                  <button
+                    type="button"
+                    class="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-border text-[12px] text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                    aria-label={h.cards.pickSurah}
+                    onclick={clearPickedSurah}
+                  >
+                    ×
+                  </button>
+                </span>
+              {/if}
+            </div>
+
+            {#if cardKind === "ayah" && pickedSurahNum !== null}
+              <label class="flex flex-col gap-1">
+                <span class="eyebrow">{h.cards.ayahNumber}</span>
+                <input
+                  type="text"
+                  inputmode="numeric"
+                  bind:value={ayahInput}
+                  placeholder={h.cards.ayahNumber}
+                  class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                />
+              </label>
+            {/if}
+
+            {#if cardKind === "range" && pickedSurahNum !== null}
+              <div class="flex gap-3">
+                <label class="flex min-w-0 flex-1 flex-col gap-1">
+                  <span class="eyebrow">{h.cards.rangeStart}</span>
+                  <input
+                    type="text"
+                    inputmode="numeric"
+                    bind:value={rangeStartInput}
+                    class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                  />
+                </label>
+                <label class="flex min-w-0 flex-1 flex-col gap-1">
+                  <span class="eyebrow">{h.cards.rangeEnd}</span>
+                  <input
+                    type="text"
+                    inputmode="numeric"
+                    bind:value={rangeEndInput}
+                    class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                  />
+                </label>
+              </div>
+            {/if}
+          {/if}
+
+          <label class="flex flex-col gap-1">
+            <span class="eyebrow">{h.cards.target}</span>
+            <input
+              type="text"
+              inputmode="numeric"
+              bind:value={cardTargetInput}
+              class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            />
+          </label>
+
+          <label class="flex flex-col gap-1">
+            <span class="eyebrow">{h.cards.translation}</span>
+            <select
+              bind:value={cardSourceId}
+              class="h-9 rounded-pill border border-border bg-transparent px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            >
+              <option value="">{h.cards.translationArabic}</option>
+              {#each translationOptions as option (option.id)}
+                <option value={option.id}>{option.language} · {option.label}</option>
+              {/each}
+            </select>
+          </label>
+
+          {#if cardFormError.length > 0}
+            <p role="alert" class="text-[13px] text-danger">{cardFormError}</p>
+          {/if}
+
+          <div class="flex">
+            <Button type="submit" variant="primary">{h.sessionsNewAdd}</Button>
+          </div>
+        </form>
+      {:else if homeCards.full === false}
+        <div class="mt-3">
+          <Button
+            aria-pressed={showCardForm}
+            onclick={() => (showCardForm = showCardForm === false)}
+          >
+            {h.cards.add}
+          </Button>
+        </div>
       {/if}
     </section>
   {/if}

@@ -4,6 +4,7 @@
   import { resolveLandingCopy } from "#lib/i18n/landing-copy.js";
   import { marketingLocaleFromPath } from "#lib/i18n/marketing-copy.js";
   import MarketingSeo from "./_components/MarketingSeo.svelte";
+  import LandingCards from "#lib/home/LandingCards.svelte";
   import { surahPathFor } from "#lib/data/quran.js";
   import { readerHrefFor, yoursPageHref } from "#lib/i18n/reader.js";
   import { publicHref } from "#lib/i18n/public-href.js";
@@ -160,6 +161,10 @@
       >
     {/each}
   </div>
+
+  <!-- Personal widget cards (client-only island): hidden in the prerendered
+       HTML, appears only once the device's card store proves non-empty. -->
+  <LandingCards />
 </Container>
 
 <Container id="surahs" class="scroll-mt-20 pb-16">
