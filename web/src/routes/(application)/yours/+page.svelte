@@ -475,9 +475,8 @@
           <input
             type="text"
             placeholder={h.sessionsNewPlaceholder}
-            value={newSessionName}
+            bind:value={newSessionName}
             maxlength="100"
-            onchange={(event) => (newSessionName = event.currentTarget.value)}
             class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
           />
         </label>
