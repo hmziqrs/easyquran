@@ -6,7 +6,11 @@
 // folder-delete detaching children to root, same-batch delete-then-reference
 // of a dead folder, mixed-format legacy timestamps resolving by instant,
 // corrupt (unparseable) timestamps treated as oldest, validation caps, and
-// cross-user isolation of client-minted ids.
+// cross-user isolation of client-minted ids. Phase-2 context: session/
+// source/range round-trip with null-end ⇄ end=start (EC-37), range vs
+// single-ayah coexistence (EC-51), per-session uniqueness (EC-03), tombstones
+// refusing stale replays (EC-02), folder kind/position LWW (Feature 2), and
+// range/charset validation caps (EC-39, §9.1).
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
@@ -292,6 +296,18 @@ const CORRUPT_FOLDER: &str = "15151515-1515-4151-8151-151515151515";
 const T0: &str = "2026-08-26T10:00:00.000000Z";
 const T1: &str = "2026-08-27T10:00:00.000000Z";
 const T2: &str = "2026-08-27T11:00:00.000000Z";
+const T3: &str = "2026-08-28T10:00:00.000000Z";
+// Reading-session ids scoping bookmarks (EC-03/EC-37/EC-51).
+const SESSION_DAILY: &str = "16161616-1616-4161-8161-161616161616";
+const SESSION_STUDY: &str = "17171717-1717-4171-8171-171717171717";
+// Context round-trip + range-vs-single rows (EC-37/EC-51).
+const BMARK_CTX: &str = "1a1a1a1a-1a1a-41a1-81a1-1a1a1a1a1a1a";
+const BMARK_RANGE: &str = "18181818-1818-4181-8181-181818181818";
+const BMARK_SINGLE: &str = "19191919-1919-4191-8191-191919191919";
+const BMARK_DAILY: &str = "1b1b1b1b-1b1b-41b1-81b1-1b1b1b1b1b1b";
+const BMARK_STUDY: &str = "1c1c1c1c-1c1c-41c1-81c1-1c1c1c1c1c1c";
+const BMARK_RIVAL_KEY: &str = "1d1d1d1d-1d1d-41d1-81d1-1d1d1d1d1d1d";
+const FOLDER_PLAIN: &str = "20202020-2020-4202-8202-202020202020";
 
 fn folder_upsert(id: &str, name: &str, ts: &str) -> Value {
     json!({ "kind": "folder.upsert", "id": id, "name": name, "updatedAt": ts })
@@ -316,6 +332,46 @@ fn bookmark_delete(id: &str, ts: &str) -> Value {
     json!({ "kind": "bookmark.delete", "id": id, "updatedAt": ts })
 }
 
+/// Folder upsert carrying the study-set label + manual order (Feature 2).
+fn folder_upsert_labeled(id: &str, name: &str, kind: &str, position: i32, ts: &str) -> Value {
+    json!({
+        "kind": "folder.upsert",
+        "id": id,
+        "name": name,
+        "folderKind": kind,
+        "position": position,
+        "updatedAt": ts,
+    })
+}
+
+/// Bookmark upsert with the full phase-2 context: session, translation
+/// source, and range end (`Value::Null` end = single ayah, wire ⇄ stored
+/// `end = start`).
+#[allow(clippy::too_many_arguments)]
+fn bookmark_upsert_ctx(
+    id: &str,
+    surah: i32,
+    ayah: i32,
+    end_surah: Value,
+    end_ayah: Value,
+    session_id: &str,
+    source_id: Value,
+    ts: &str,
+) -> Value {
+    json!({
+        "kind": "bookmark.upsert",
+        "id": id,
+        "folderId": Value::Null,
+        "surah": surah,
+        "ayah": ayah,
+        "endSurah": end_surah,
+        "endAyah": end_ayah,
+        "sessionId": session_id,
+        "sourceId": source_id,
+        "updatedAt": ts,
+    })
+}
+
 fn seeded_round() -> Vec<Value> {
     vec![
         folder_upsert(FOLDER_ID, "Tafsir", T1),
@@ -337,7 +393,8 @@ fn find<'a>(items: &'a Value, id: &str) -> &'a Value {
 // 'YYYY-MM-DD HH:MM:SS' (the shape CURRENT_TIMESTAMP defaults produce) or
 // outright corrupt text — so LWW must resolve via julianday() by instant, and
 // unparseable rows exercise the NULL-oldest rule instead of comparing TEXT
-// lexemes against the canonical RFC3339-micros pushes.
+// lexemes against the canonical RFC3339-micros pushes. End columns are seeded
+// as end = start so post-m000012 raw rows share the scoped key with pushes.
 async fn raw_insert_bookmark(
     db: &sea_orm::DatabaseConnection,
     user_id: i32,
@@ -349,8 +406,10 @@ async fn raw_insert_bookmark(
     db.execute(Statement::from_string(
         DatabaseBackend::Sqlite,
         format!(
-            "INSERT INTO bookmarks (id, user_id, surah, ayah, created_at, updated_at) \
-             VALUES ('{id}', {user_id}, {surah}, {ayah}, '{updated_at}', '{updated_at}')"
+            "INSERT INTO bookmarks (id, user_id, surah, ayah, end_surah, end_ayah, \
+             created_at, updated_at) \
+             VALUES ('{id}', {user_id}, {surah}, {ayah}, {surah}, {ayah}, \
+             '{updated_at}', '{updated_at}')"
         ),
     ))
     .await
@@ -570,6 +629,46 @@ async fn same_batch_folder_delete_then_upsert_with_dead_folder_lands_in_root() {
         find(&body["bookmarks"], BMARK_IN_FOLDER)["folderId"],
         Value::Null,
         "the folder's earlier children are detached too"
+    );
+}
+
+// EC-07, cross-round half: device A deletes folder F (tombstone in an earlier
+// round); device B, still holding a stale snapshot, later moves bookmark X
+// into F. The tombstone stays (delete is LWW-protected), the tombstoned
+// folder resolves as MISSING (not foreign, not FK-tripping), and X lands at
+// root — no orphan, no resurrection.
+#[tokio::test]
+async fn cross_round_move_into_tombstoned_folder_lands_in_root() {
+    let (app, cookie) = logged_in_app().await;
+    let (status, _) = post_sync(&app, &cookie, json!({ "mutations": seeded_round() })).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Round 1: A deletes the folder (children detach to root explicitly).
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [folder_delete(FOLDER_ID, T2)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["folders"], json!([]), "tombstoned folder leaves the snapshot");
+
+    // Round 2: B's stale offline move arrives AFTER the delete round.
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            bookmark_upsert(BMARK_MOVER, json!(FOLDER_ID), 5, 5, T3),
+        ] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["applied"], json!(1), "the move itself applies");
+    assert_eq!(body["folders"], json!([]), "folder stays tombstoned");
+    assert_eq!(
+        find(&body["bookmarks"], BMARK_MOVER)["folderId"],
+        Value::Null,
+        "stale move into the dead folder resolves to root"
     );
 }
 
@@ -998,4 +1097,329 @@ async fn cross_user_ids_are_isolated() {
         json!(1),
         "Alice's row keeps her data despite Bob's newer foreign upsert"
     );
+}
+
+// EC-37: every phase-2 context field survives client→server→snapshot, and
+// an absent context decodes to the global single-ayah sentinels.
+#[tokio::test]
+async fn bookmark_context_round_trips_and_null_end_means_single() {
+    let (app, cookie) = logged_in_app().await;
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            bookmark_upsert_ctx(
+                BMARK_CTX, 2, 255, json!(2), json!(286),
+                SESSION_DAILY, json!("en.haleem"), T1,
+            ),
+            bookmark_upsert(BMARK_ROOT, Value::Null, 1, 1, T1),
+        ] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["applied"], json!(2));
+    let ctx = find(&body["bookmarks"], BMARK_CTX);
+    assert_eq!(ctx["sessionId"], json!(SESSION_DAILY));
+    assert_eq!(ctx["sourceId"], json!("en.haleem"));
+    assert_eq!(ctx["endSurah"], json!(2), "range ends round-trip");
+    assert_eq!(ctx["endAyah"], json!(286));
+    let plain = find(&body["bookmarks"], BMARK_ROOT);
+    assert_eq!(plain["sessionId"], json!(""), "no session = '' global sentinel");
+    assert_eq!(plain["sourceId"], Value::Null);
+    assert_eq!(
+        plain["endSurah"],
+        Value::Null,
+        "wire null end ⇄ stored end = start"
+    );
+    assert_eq!(plain["endAyah"], Value::Null);
+}
+
+// EC-51: the range end is part of the unique key, so a 2:285–286 snippet
+// bookmark never verse-collapses an existing single-ayah 2:285 row.
+#[tokio::test]
+async fn range_and_single_ayah_bookmarks_coexist() {
+    let (app, cookie) = logged_in_app().await;
+    let (status, _) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            bookmark_upsert_ctx(
+                BMARK_SINGLE, 2, 285, Value::Null, Value::Null,
+                SESSION_DAILY, Value::Null, T1,
+            ),
+        ] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            bookmark_upsert_ctx(
+                BMARK_RANGE, 2, 285, json!(2), json!(286),
+                SESSION_DAILY, Value::Null, T2,
+            ),
+        ] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["applied"], json!(1));
+    assert_eq!(
+        body["bookmarks"].as_array().map(Vec::len),
+        Some(2),
+        "both rows live: {body}"
+    );
+    assert_eq!(
+        find(&body["bookmarks"], BMARK_SINGLE)["endSurah"],
+        Value::Null
+    );
+    assert_eq!(find(&body["bookmarks"], BMARK_RANGE)["endAyah"], json!(286));
+}
+
+// EC-03: uniqueness is scoped per session — the same verse bookmarked in two
+// sessions is two rows, not a conflict.
+#[tokio::test]
+async fn same_verse_in_two_sessions_keeps_both_rows() {
+    let (app, cookie) = logged_in_app().await;
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            bookmark_upsert_ctx(
+                BMARK_DAILY, 2, 255, Value::Null, Value::Null,
+                SESSION_DAILY, Value::Null, T1,
+            ),
+            bookmark_upsert_ctx(
+                BMARK_STUDY, 2, 255, Value::Null, Value::Null,
+                SESSION_STUDY, Value::Null, T1,
+            ),
+        ] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["applied"], json!(2));
+    assert_eq!(
+        body["bookmarks"].as_array().map(Vec::len),
+        Some(2),
+        "per-session keys keep both rows"
+    );
+    assert_eq!(
+        find(&body["bookmarks"], BMARK_DAILY)["sessionId"],
+        json!(SESSION_DAILY)
+    );
+    assert_eq!(
+        find(&body["bookmarks"], BMARK_STUDY)["sessionId"],
+        json!(SESSION_STUDY)
+    );
+}
+
+// EC-02: a tombstone is the row's latest state — neither a stale replay of
+// the same id nor a stale different-id push on the same key can resurrect
+// it; only a strictly newer upsert intentionally clears the tombstone.
+#[tokio::test]
+async fn stale_upserts_after_delete_cannot_resurrect() {
+    let (app, cookie) = logged_in_app().await;
+    let (status, _) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_upsert(BMARK_ROOT, Value::Null, 1, 1, T1)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_delete(BMARK_ROOT, T2)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Same id, older than the tombstone: skipped, stays deleted.
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_upsert(BMARK_ROOT, Value::Null, 1, 1, T1)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["applied"], json!(0));
+    assert_eq!(body["bookmarks"], json!([]), "no resurrection via same-id replay");
+
+    // Different id on the SAME key, still older than the tombstone: the
+    // tombstone is the key's latest state — skipped too.
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_upsert(BMARK_RIVAL_KEY, Value::Null, 1, 1, T1)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["applied"], json!(0));
+    assert_eq!(body["bookmarks"], json!([]), "no resurrection via key rival");
+
+    // A strictly NEWER upsert clears the tombstone — intentional
+    // resurrection (§9.3).
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_upsert(BMARK_ROOT, Value::Null, 1, 1, T3)] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["applied"], json!(1));
+    assert_eq!(body["bookmarks"].as_array().map(Vec::len), Some(1));
+}
+
+// Feature 2: folder kind + position round-trip LWW; the absent-kind default
+// row proves the column default ('generic', NULL position).
+#[tokio::test]
+async fn folder_kind_and_position_round_trip_lww() {
+    let (app, cookie) = logged_in_app().await;
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            folder_upsert_labeled(FOLDER_ID, "Daily reading", "daily", 2, T1),
+        ] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    let folder = find(&body["folders"], FOLDER_ID);
+    assert_eq!(folder["kind"], json!("daily"));
+    assert_eq!(folder["position"], json!(2));
+
+    // Newer push re-labels and re-orders; a plain upsert keeps the defaults.
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            folder_upsert_labeled(FOLDER_ID, "Learning", "learning", 1, T2),
+            folder_upsert(FOLDER_PLAIN, "Plain", T2),
+        ] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    let folder = find(&body["folders"], FOLDER_ID);
+    assert_eq!(folder["kind"], json!("learning"), "kind round-trips LWW");
+    assert_eq!(folder["position"], json!(1), "manual order round-trips LWW");
+    assert_eq!(
+        find(&body["folders"], FOLDER_PLAIN)["kind"],
+        json!("generic"),
+        "absent kind keeps the column default"
+    );
+    assert_eq!(find(&body["folders"], FOLDER_PLAIN)["position"], Value::Null);
+
+    // Older replay cannot rewind either field.
+    let (status, body) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            folder_upsert_labeled(FOLDER_ID, "Daily reading", "daily", 2, T1),
+        ] }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body}");
+    assert_eq!(body["applied"], json!(0));
+    let folder = find(&body["folders"], FOLDER_ID);
+    assert_eq!(folder["kind"], json!("learning"));
+    assert_eq!(folder["position"], json!(1));
+}
+
+// EC-39 + §9.1 caps: ranges must not run backwards, endpoints must be real
+// verses (per-surah counts — the flat 1..=286 bound lets 1:8 through), the
+// span is capped at 50, folder kind is a closed literal set, and context ids
+// keep their charset bounds. Every case rejects the whole round up front.
+#[tokio::test]
+async fn invalid_ranges_and_context_reject_the_round() {
+    let (app, cookie) = logged_in_app().await;
+
+    // End before start (compared lexicographically).
+    let (status, _) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            bookmark_upsert_ctx(
+                BMARK_RANGE, 2, 10, json!(2), json!(5),
+                SESSION_DAILY, Value::Null, T1,
+            ),
+        ] }),
+    )
+    .await;
+    assert!(status.is_client_error(), "end before start rejected, got {status}");
+
+    // Endpoint past the surah's ayah count (Al-Fatihah has 7).
+    let (status, _) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            bookmark_upsert_ctx(
+                BMARK_RANGE, 1, 1, json!(1), json!(8),
+                SESSION_DAILY, Value::Null, T1,
+            ),
+        ] }),
+    )
+    .await;
+    assert!(status.is_client_error(), "1:8 is not a verse, got {status}");
+
+    // Start endpoint alone is checked too (1:8 passes the flat bound but
+    // Al-Fatihah has 7 ayahs).
+    let (status, _) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [bookmark_upsert(BMARK_RANGE, Value::Null, 1, 8, T1)] }),
+    )
+    .await;
+    assert!(status.is_client_error(), "1:8 is not a verse, got {status}");
+
+    // Span beyond the 50-verse cap (2:1–2:51 = 51 verses).
+    let (status, _) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            bookmark_upsert_ctx(
+                BMARK_RANGE, 2, 1, json!(2), json!(51),
+                SESSION_DAILY, Value::Null, T1,
+            ),
+        ] }),
+    )
+    .await;
+    assert!(status.is_client_error(), "span 51 exceeds the cap, got {status}");
+
+    // Folder kind outside the literal enum.
+    let (status, _) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [folder_upsert_labeled(FOLDER_ID, "X", "study", 1, T1)] }),
+    )
+    .await;
+    assert!(status.is_client_error(), "unknown folder kind rejected, got {status}");
+
+    // sourceId outside the catalogue-id charset.
+    let (status, _) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            bookmark_upsert_ctx(
+                BMARK_RANGE, 2, 255, Value::Null, Value::Null,
+                SESSION_DAILY, json!("NOT/VALID"), T1,
+            ),
+        ] }),
+    )
+    .await;
+    assert!(status.is_client_error(), "bad sourceId charset rejected, got {status}");
+
+    // sessionId that is neither the '' sentinel nor a dashed-hex uuid.
+    let (status, _) = post_sync(
+        &app,
+        &cookie,
+        json!({ "mutations": [
+            bookmark_upsert_ctx(
+                BMARK_RANGE, 2, 255, Value::Null, Value::Null,
+                "daily", Value::Null, T1,
+            ),
+        ] }),
+    )
+    .await;
+    assert!(status.is_client_error(), "non-uuid sessionId rejected, got {status}");
 }
