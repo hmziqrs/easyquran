@@ -50,6 +50,29 @@ describe("matchNav — ayah references", () => {
   });
 });
 
+describe("matchNav — ayah ranges", () => {
+  it.each(["2:255-286", "2:255-2:286", "٢:٢٥٥-٢٨٦", "surah 2:255-286"])(
+    "resolves the range %s to its first ayah",
+    (query) => {
+      const matches = matchNav(QURAN, query);
+      expect(targets(matches)).toEqual(["ayah:2:255"]);
+      expect(firstTarget(matches)).toMatchObject({ kind: "ayah", surah: 2, ayah: 255 });
+    },
+  );
+
+  it("drops ranges whose end leaves the end surah's ayah count", () => {
+    expect(matchNav(QURAN, "2:255-287")).toEqual([]);
+    expect(matchNav(QURAN, "2:255-2:287")).toEqual([]);
+    expect(matchNav(QURAN, "2:255-1:8")).toEqual([]);
+  });
+
+  it("keeps reading a lone dash as a separator, not a range", () => {
+    const parsed = parseQuery("2-255");
+    expect(parsed.numbers).toEqual([2, 255]);
+    expect(targets(matchNav(QURAN, "2-255"))).toEqual(["ayah:2:255"]);
+  });
+});
+
 describe("matchNav — surah numbers", () => {
   it("resolves a keyword-guarded surah number", () => {
     const matches = matchNav(QURAN, "surah 18");

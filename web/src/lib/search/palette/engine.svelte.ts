@@ -1,6 +1,7 @@
 import { loadQuranData } from "#lib/data/quran-data-client.js";
 import type { QuranData } from "#lib/data/quran-data.js";
 import type { SurahRouteContext } from "#lib/data/quran.js";
+import { storageReport } from "#lib/stores/storage-report.svelte.js";
 
 import { parseQuery } from "./query";
 import {
@@ -83,6 +84,11 @@ export function createPaletteEngine(input: PaletteEngineInput): PaletteEngine {
 
   $effect(() => {
     const query = paletteQuery;
+    // Cold-source retrigger, the palette's onArtifactsChanged: a translation
+    // source answers [] while its download runs in the background, so reading
+    // the artifact list here re-runs the async sources once that download
+    // lands — no second keystroke needed (mirrors the /search page engine).
+    void storageReport.artifacts;
     const reset = (): void => {
       asyncEntries = [];
       searching = false;

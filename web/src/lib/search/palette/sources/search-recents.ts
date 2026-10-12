@@ -10,8 +10,8 @@ const RECENTS_LIMIT = 5;
 
 /**
  * Recent local queries, shown only on an empty palette so they never crowd
- * live matches. Labels stay English — see the palette-label precedent in
- * site-routes.ts. Selecting one fills the palette input; it never navigates.
+ * live matches. Selecting one fills the palette input and keeps it open, so
+ * the filled query runs live; it never navigates.
  */
 export const searchRecentsSource: PaletteSource = {
   id: SOURCE_ID,
@@ -30,6 +30,7 @@ export const searchRecentsSource: PaletteSource = {
       label: q,
       icon: "search",
       score: 0,
+      keepOpen: true,
       run: () => commandPalette.setQuery(q),
     }));
   },
