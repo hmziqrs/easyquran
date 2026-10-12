@@ -112,6 +112,39 @@
     const quranData = peekQuranData();
     if (quranData) reader.setPosition(positionForGlobal(quranData, startGlobal));
   });
+  // EC-42 (FIX): range readers used to call only setPosition, so reading by
+  // page/juz/hizb never updated continue-reading. The first rendered verse of
+  // the range feeds markRead; scrolling advances it (topmost verse row still
+  // on screen wins, mirroring the surah reader's anchor capture).
+  $effect(() => {
+    const first = displayed.ayahs[0];
+    if (!first) return;
+    reader.markRead(first.surah, first.ayah, rangeSourceId ?? undefined);
+  });
+  function markVisibleRead(): void {
+    const navBottom = (stickyNav.collapsed ? 0 : stickyNav.height) + READER_BAR_HEIGHT;
+    const rows = document.querySelectorAll<HTMLElement>("[data-verse-anchor]");
+    for (const row of rows) {
+      if (row.getBoundingClientRect().bottom > navBottom + 1) {
+        const [surah, ayah] = (row.dataset.verseAnchor ?? "").split(":");
+        const num = Number(surah);
+        const n = Number(ayah);
+        if (Number.isSafeInteger(num) && num > 0 && Number.isSafeInteger(n) && n > 0) {
+          reader.markRead(num, n, rangeSourceId ?? undefined);
+        }
+        return;
+      }
+    }
+  }
+
+  let lastMarkAt = 0;
+  function onScroll(): void {
+    // markRead early-returns on the same verse; the gate just bounds DOM work.
+    const now = performance.now();
+    if (now - lastMarkAt < 250) return;
+    lastMarkAt = now;
+    markVisibleRead();
+  }
   let readStatus = $state<"ready" | "loading" | "offline" | "error">("loading");
   // Intentional SSR snapshot; the route-keyed pre-effect installs later prop updates.
   // svelte-ignore state_referenced_locally
@@ -259,6 +292,8 @@
     return stop;
   });
 </script>
+
+<svelte:window onscroll={onScroll} />
 
 <div
   class="flex flex-col gap-4"

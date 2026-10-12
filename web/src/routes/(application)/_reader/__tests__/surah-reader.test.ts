@@ -30,7 +30,12 @@ const {
   headerProps,
   rowProps,
 } = vi.hoisted(() => ({
-  nav: { state: {}, url: new URL("https://example.test/al-fatihah") },
+  nav: {
+    state: {},
+    url: new URL("https://example.test/al-fatihah"),
+    // ReadingAyah/VerseRow resolve the route translation (TRX-11) from params.
+    params: {} as Record<string, string>,
+  },
   workerStub: {
     ready: true,
     whenReady: vi.fn(),
