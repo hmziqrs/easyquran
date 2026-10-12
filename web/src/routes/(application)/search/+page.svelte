@@ -14,6 +14,7 @@
   import { resolveDefaultSelection } from "#lib/search/page/selection.js";
   import type { SectionState } from "#lib/search/page/types.js";
   import { reader } from "#lib/stores/reader.svelte.js";
+  import { searchRecents } from "#lib/stores/search-recents.svelte.js";
   import { searchSelection } from "#lib/stores/search-selection.svelte.js";
   import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
   import { storageReport } from "#lib/stores/storage-report.svelte.js";
@@ -57,6 +58,15 @@
   );
 
   const suggestSourceId = $derived(reader.lastRead?.sourceId ?? "arabic");
+
+  // Recents copy is page-local until the copy pass folds it into the search
+  // message namespace; both UI locales are covered meanwhile.
+  const RECENTS_COPY = {
+    en: { heading: "Recent searches", pause: "Pause search history", resume: "Resume search history", clear: "Clear" },
+    ar: { heading: "آخر عمليات البحث", pause: "إيقاف حفظ البحث", resume: "استئناف حفظ البحث", clear: "مسح" },
+  } as const;
+  const recentsCopy = $derived(RECENTS_COPY[copy.locale]);
+  const showRecents = $derived(engine.inputQuery.length === 0 && searchRecents.queries.length > 0);
 
   onMount(() => {
     const initial = parseSearchUrl(page.url);
@@ -139,6 +149,42 @@
 
       {#if pickerOpen}
         <TranslationPicker {copy} />
+      {/if}
+
+      {#if showRecents}
+        <!-- Local-only history: pause stops recording, clear wipes the device list; never synced (docs/search-system.md §5.1). -->
+        <section aria-label={recentsCopy.heading} class="flex flex-col gap-2">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="px-1 text-[12px] font-medium text-muted">{recentsCopy.heading}</h2>
+            <div class="flex items-center gap-3">
+              <button
+                type="button"
+                onclick={() => searchRecents.setPaused(!searchRecents.paused)}
+                class="text-[12.5px] text-muted underline-offset-4 transition-colors hover:text-foreground hover:underline"
+              >
+                {searchRecents.paused ? recentsCopy.resume : recentsCopy.pause}
+              </button>
+              <button
+                type="button"
+                onclick={() => searchRecents.clear()}
+                class="text-[12.5px] text-muted underline-offset-4 transition-colors hover:text-foreground hover:underline"
+              >
+                {recentsCopy.clear}
+              </button>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            {#each searchRecents.queries as q (q)}
+              <button
+                type="button"
+                onclick={() => engine.run(q)}
+                class="rounded-pill border border-border px-3 py-1.5 text-[12.5px] text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground"
+              >
+                {q}
+              </button>
+            {/each}
+          </div>
+        </section>
       {/if}
 
       <NavSuggestions

@@ -52,13 +52,13 @@ Current sources cover:
 
 Existing raw string scoring stays:
 
-| Evidence | Score |
-|---|---:|
-| Exact | 1.00 |
-| Prefix | 0.90 |
-| Word-boundary substring | 0.80 |
-| Plain substring | 0.60 |
-| Ordered subsequence | 0.30 |
+| Evidence                | Score |
+| ----------------------- | ----: |
+| Exact                   |  1.00 |
+| Prefix                  |  0.90 |
+| Word-boundary substring |  0.80 |
+| Plain substring         |  0.60 |
+| Ordered subsequence     |  0.30 |
 
 Derived transliteration evidence supplements raw scoring; `Math.max` ensures fuzzy logic never
 lowers a stronger raw match.
@@ -107,12 +107,12 @@ transposition errors:
 
 Derived score tiers:
 
-| Evidence | Score |
-|---|---:|
-| Curated alias exact | 0.75 |
-| Fold-key exact | 0.70 |
-| Fold distance 1 | 0.50 |
-| Fold distance 2 | 0.40 |
+| Evidence            | Score |
+| ------------------- | ----: |
+| Curated alias exact |  0.75 |
+| Fold-key exact      |  0.70 |
+| Fold distance 1     |  0.50 |
+| Fold distance 2     |  0.40 |
 
 Fold tiers apply to name, transliteration, slug, and curated alias keys. English meaning keeps
 raw scoring only. Per-word fold needles preserve results when another query word is a mistyped
@@ -178,9 +178,24 @@ Translation results use `tayah:<sourceId>:<surah>:<ayah>` dedupe keys, allowing 
 translation hits for the same ayah to coexist. Result href context always matches searched
 translation source.
 
+The dedicated page persists its own translation selection (`easyquran.search.selection`, v1,
+cross-tab): the picked ids survive reloads and restore the searched sources on the next visit.
+
 Dedicated `/app/search` supports multi-translation batch search, per-source sections,
-shareable query/source state, and load-more pagination. Reader drawer integration, richer
-relevance ranking, and recent-query history remain separate product work.
+shareable query/source state, and load-more pagination. Reader drawer integration and richer
+relevance ranking remain separate product work.
+
+### 5.1 Recent queries (local-only)
+
+Executed searches on `/app/search` (committed queries at or above the 3-scalar minimum) record
+into `easyquran.search.recent` (v1: `{v, entries:[{q, at}], paused}`, cap 10 queries at 128
+chars, consecutive repeats deduped to a timestamp refresh). The store is device-local: never
+synced, never sent. "Pause search history" stops recording while keeping stored queries
+visible; "Clear" wipes the list; blocked/full localStorage degrades to memory-only.
+
+Recents surface on the empty command palette (a `search.recents` source, only before the first
+keystroke; selecting one fills the palette input) and on `/app/search` while no query is
+entered; a deep-linked `?q=` records through the same engine commit.
 
 ---
 
@@ -220,4 +235,6 @@ Search changes keep these contracts green:
 - Palette searches one resolved translation source at a time.
 - Cold translation palette search requires a later keystroke after background download.
 - RTL-script translation search and Turkish dotted/dotless-i handling need dedicated rules.
-- Palette copy/localized group labels remain incomplete.
+- Palette copy/localized group labels remain incomplete (the recent-queries group label and the
+  /app/search recents block's page-local bilingual copy fold into the message pipeline with the
+  rest).
