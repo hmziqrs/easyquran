@@ -15,15 +15,15 @@ survive refactors. Repo-wide hard rules live in [`AGENTS.MD`](../AGENTS.MD).
 
 ## Plans and backlog
 
-| Doc                                                                              | Status                                                                                                                      |
-| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| [`next-features.md`](next-features.md)                                           | Next feature batch + sync design; wins over older plans on conflict                                                         |
-| [`abuse-prevention.md`](abuse-prevention.md)                                     | Draft abuse-prevention and enforcement plan; evidence in `research/abuse-prevention/`                                       |
-| [`locale-suggest.md`](locale-suggest.md)                                         | Draft spec for next-features Feature 10                                                                                     |
-| [`remaining/feature-gap-catalogue.md`](remaining/feature-gap-catalogue.md)       | Parity register against quran.com                                                                                           |
-| [`remaining/copy-corrections.md`](remaining/copy-corrections.md)                 | Pre-release copy ledger                                                                                                     |
-| [`research/ux-audit/`](research/ux-audit/README.md)                              | UX audit write-ups; status of all 200 findings in its [release checklist](research/ux-audit/27-release-polish-checklist.md) |
-| [`research/mushaf-rendering-research.md`](research/mushaf-rendering-research.md) | Research for a print-exact mushaf mode (not implemented)                                                                    |
+| Doc                                                                              | Status                                                                                          |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| [`next-features.md`](next-features.md)                                           | Next feature batch + sync design; wins over older plans on conflict                             |
+| [`abuse-prevention.md`](abuse-prevention.md)                                     | Draft abuse-prevention and enforcement plan; evidence in `research/abuse-prevention/`           |
+| [`locale-suggest.md`](locale-suggest.md)                                         | Draft spec for next-features Feature 10                                                         |
+| [`remaining/feature-gap-catalogue.md`](remaining/feature-gap-catalogue.md)       | Parity register against quran.com                                                               |
+| [`remaining/copy-corrections.md`](remaining/copy-corrections.md)                 | Pre-release copy ledger                                                                         |
+| [`research/mushaf-rendering-research.md`](research/mushaf-rendering-research.md) | Research for a print-exact mushaf mode (not implemented)                                        |
+| [`ux-audit-playbook.md`](ux-audit-playbook.md)                                   | How to run a UX audit (scope, method, severity, finding format); tooling in `scripts/ux-audit/` |
 
 ## Records (overviews of finished work)
 
