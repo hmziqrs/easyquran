@@ -4,6 +4,7 @@ const { envMock, clientMock } = vi.hoisted(() => ({
   envMock: { browser: true },
   clientMock: {
     getUser: vi.fn<() => Promise<SessionProbeResult>>(),
+    clearCsrf: vi.fn(),
   },
 }));
 
@@ -12,6 +13,12 @@ vi.mock("$app/env", () => ({
     return envMock.browser;
   },
 }));
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: "https://eq.test/api",
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+}));
 vi.mock("#lib/auth/auth-client.js", () => ({
   authClient: clientMock,
   createAuthClient: () => clientMock,
@@ -19,7 +26,16 @@ vi.mock("#lib/auth/auth-client.js", () => ({
 
 import type { SessionProbeResult } from "#lib/auth/auth-client.js";
 import type { AuthTransitionContext } from "#lib/auth/auth-state.svelte.js";
-import { createAuthState } from "#lib/auth/auth-state.svelte.js";
+import { createAuthState as createAuthStateBase } from "#lib/auth/auth-state.svelte.js";
+
+// Every state created in this file is disposed after its test: hydrated states
+// keep a window `storage` listener, and cross-tab tests dispatch real events.
+const created: Array<{ dispose(): void }> = [];
+function createAuthState(...args: Parameters<typeof createAuthStateBase>) {
+  const state = createAuthStateBase(...args);
+  created.push(state);
+  return state;
+}
 
 // SAFETY: createAuthState only invokes getUser() on the client; the hoisted double supplies it as a vi.fn() resolving SessionProbeResult.
 const asClient = clientMock as never;
@@ -40,10 +56,13 @@ const HINT_KEY = "eq.auth.session-hint";
 beforeEach(() => {
   envMock.browser = true;
   clientMock.getUser.mockReset();
+  clientMock.clearCsrf.mockReset();
   localStorage.clear();
 });
 
 afterEach(() => {
+  for (const state of created) state.dispose();
+  created.length = 0;
   vi.restoreAllMocks();
 });
 
@@ -134,7 +153,7 @@ describe("AuthState session hint gates the hydrate probe", () => {
   it("an authenticated probe writes the hint so the next load probes again", async () => {
     clientMock.getUser.mockResolvedValue({ kind: "authenticated", user: PROFILE });
     await createAuthState(asClient).probe();
-    expect(localStorage.getItem(HINT_KEY)).toBe("1");
+    expect(localStorage.getItem(HINT_KEY)).not.toBeNull();
 
     clientMock.getUser.mockClear();
     const next = createAuthState(asClient);
@@ -159,9 +178,21 @@ describe("AuthState session hint gates the hydrate probe", () => {
   it("setUser writes the hint on login and clears it on sign-out", () => {
     const state = createAuthState(asClient);
     state.setUser(PROFILE);
-    expect(localStorage.getItem(HINT_KEY)).toBe("1");
+    expect(localStorage.getItem(HINT_KEY)).not.toBeNull();
     state.setUser(null);
     expect(localStorage.getItem(HINT_KEY)).toBeNull();
+  });
+
+  it("every sign-in mints a fresh nonce so account switches fire storage events (EC-31)", () => {
+    const state = createAuthState(asClient);
+    state.setUser(PROFILE);
+    const first = localStorage.getItem(HINT_KEY);
+    expect(first).not.toBeNull();
+    state.setUser(null);
+    state.setUser({ ...PROFILE, id: 9 });
+    const second = localStorage.getItem(HINT_KEY);
+    expect(second).not.toBeNull();
+    expect(second).not.toBe(first);
   });
 
   it("reset (logout) clears the hint", () => {
@@ -284,5 +315,114 @@ describe("AuthState manual state setters", () => {
     expect(state.user).toBeNull();
     state.reset();
     expect(state.hydrated).toBe(false);
+  });
+});
+
+/** Let the fire-and-forget terminate/probe continuations settle. */
+async function settle(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+describe("AuthState session loss mid-use (EC-15/16/19)", () => {
+  it("an anonymous probe from an authenticated view fires current-session-terminated + banner", async () => {
+    const hook = vi.fn().mockResolvedValue(undefined);
+    clientMock.getUser.mockResolvedValueOnce({ kind: "authenticated", user: PROFILE });
+    clientMock.getUser.mockResolvedValueOnce({ kind: "anonymous" });
+    const state = createAuthState(asClient);
+    await state.probe();
+    state.setOnAuthTransition(hook);
+    await state.probe();
+    expect(state.status).toBe("anonymous");
+    expect(state.sessionExpired).toBe(true);
+    expect(clientMock.clearCsrf).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem(HINT_KEY)).toBeNull();
+    expect(hook).toHaveBeenCalledWith({ kind: "current-session-terminated" });
+  });
+
+  it("a transport-failure probe never terminates the signed-in view", async () => {
+    clientMock.getUser.mockResolvedValueOnce({ kind: "authenticated", user: PROFILE });
+    clientMock.getUser.mockResolvedValueOnce({ kind: "unknown", status: 503 });
+    const state = createAuthState(asClient);
+    await state.probe();
+    await state.probe();
+    expect(state.status).toBe("authenticated");
+    expect(state.sessionExpired).toBe(false);
+    expect(clientMock.clearCsrf).not.toHaveBeenCalled();
+  });
+
+  it("a cold-boot anonymous probe (no prior authenticated view) does not terminate", async () => {
+    const hook = vi.fn().mockResolvedValue(undefined);
+    clientMock.getUser.mockResolvedValue({ kind: "anonymous" });
+    const state = createAuthState(asClient);
+    state.setOnAuthTransition(hook);
+    await state.probe();
+    expect(state.status).toBe("anonymous");
+    expect(state.sessionExpired).toBe(false);
+    expect(hook).not.toHaveBeenCalled();
+  });
+
+  it("the banner flag clears on the next successful sign-in", async () => {
+    clientMock.getUser.mockResolvedValueOnce({ kind: "authenticated", user: PROFILE });
+    clientMock.getUser.mockResolvedValueOnce({ kind: "anonymous" });
+    const state = createAuthState(asClient);
+    await state.probe();
+    await state.probe();
+    expect(state.sessionExpired).toBe(true);
+    state.setUser(PROFILE);
+    expect(state.sessionExpired).toBe(false);
+  });
+
+  it("notifySessionLost clears CSRF and lets the probe decide", async () => {
+    clientMock.getUser.mockResolvedValueOnce({ kind: "authenticated", user: PROFILE });
+    clientMock.getUser.mockResolvedValueOnce({ kind: "anonymous" });
+    const state = createAuthState(asClient);
+    await state.probe();
+    clientMock.getUser.mockClear();
+    state.notifySessionLost();
+    expect(clientMock.clearCsrf).toHaveBeenCalledTimes(1);
+    await settle();
+    expect(clientMock.getUser).toHaveBeenCalledTimes(1);
+    expect(state.status).toBe("anonymous");
+    expect(state.sessionExpired).toBe(true);
+  });
+});
+
+describe("AuthState cross-tab session hint (EC-31)", () => {
+  function hintEvent(newValue: string | null): StorageEvent {
+    return new StorageEvent("storage", { key: HINT_KEY, newValue });
+  }
+
+  it("a hint removal in another tab terminates this tab without the expiry banner", async () => {
+    clientMock.getUser.mockResolvedValueOnce({ kind: "authenticated", user: PROFILE });
+    const hook = vi.fn().mockResolvedValue(undefined);
+    const state = createAuthState(asClient);
+    state.hydrate({ force: true });
+    await settle();
+    expect(state.status).toBe("authenticated");
+    state.setOnAuthTransition(hook);
+    window.dispatchEvent(hintEvent(null));
+    await settle();
+    expect(state.status).toBe("anonymous");
+    expect(state.sessionExpired).toBe(false);
+    expect(clientMock.clearCsrf).toHaveBeenCalledTimes(1);
+    expect(hook).toHaveBeenCalledWith({ kind: "current-session-terminated" });
+  });
+
+  it("a hint change in another tab re-probes and adopts the new account", async () => {
+    clientMock.getUser.mockResolvedValueOnce({ kind: "authenticated", user: PROFILE });
+    const hook = vi.fn().mockResolvedValue(undefined);
+    const state = createAuthState(asClient);
+    state.hydrate({ force: true });
+    await settle();
+    state.setOnAuthTransition(hook);
+    // mockResolvedValue (not Once): earlier tests' hydrated states also probe on
+    // this event; every probe must see the same new account.
+    const otherUser = { ...PROFILE, id: 9 };
+    clientMock.getUser.mockResolvedValue({ kind: "authenticated", user: otherUser });
+    window.dispatchEvent(hintEvent("nonce-from-other-tab"));
+    await settle();
+    expect(state.status).toBe("authenticated");
+    expect(state.user?.id).toBe(9);
+    expect(hook).toHaveBeenCalledWith({ kind: "login" });
   });
 });

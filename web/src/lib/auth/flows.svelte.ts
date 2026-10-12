@@ -25,6 +25,7 @@ import {
 import { authState } from "#lib/auth/auth-state.svelte.js";
 import type { AuthTransitionContext } from "#lib/auth/auth-state.svelte.js";
 import { FRESH_AUTH_REQUIRED, isFreshAuthenticationRequired } from "#lib/auth/fresh-auth-client.js";
+import { armSignOutNotice } from "#lib/auth/sign-out-notice.svelte.js";
 import {
   createOAuthFlow,
   type OAuthFlow,
@@ -44,6 +45,8 @@ export interface FlowStateLike {
   setTwoFaPending(pending: boolean): void;
   reset(): void;
   probe(): Promise<SessionProbeResult>;
+  /** Present on the real authState; read at sign-out to attribute pending sync work. */
+  readonly user?: { readonly id: number } | null;
 }
 
 export interface FlowDeps {
@@ -889,6 +892,10 @@ export class LogoutFlow {
         return false;
       }
       this.client.clearCsrf();
+      // §9.5 (EC-14): read the account's unsynced-partition counts while the
+      // owner is still current — the purge hook's suspendAuth() follows and the
+      // stores would report 0 afterwards.
+      armSignOutNotice(this.state.user?.id ?? null);
       await this.state.transition({ kind: "logout" });
       this.state.reset();
       const probe = await this.state.probe();
