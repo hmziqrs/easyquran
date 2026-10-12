@@ -90,6 +90,56 @@ function stateAt(num: number, n: number, furthest: number) {
   };
 }
 
+/** Durable mutations mirroring everything `engine` has enqueued (applyServer's `drained`). */
+function drainedOf(engine: FakeEngine): SyncMutation<SessionMutation>[] {
+  return engine.enqueued.map((entry, index) => ({
+    id: `m${index + 1}`,
+    domain: entry.domain,
+    seq: index + 1,
+    payload: entry.payload,
+    queuedAt: 0,
+  }));
+}
+
+function snapshotWithPosition(
+  sessionId: string,
+  position: { surah: number; ayah: number; updatedAt?: string },
+): SessionSnapshot {
+  return {
+    applied: 0,
+    skipped: 0,
+    sessions: [
+      {
+        id: sessionId,
+        name: "Reading",
+        kind: "free",
+        translationId: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        archivedAt: null,
+      },
+    ],
+    positions: [
+      {
+        sessionId,
+        surah: position.surah,
+        ayah: position.ayah,
+        localPage: null,
+        ratio: null,
+        sourceId: null,
+        updatedAt: position.updatedAt ?? "2026-01-01T00:00:00.000Z",
+      },
+    ],
+    progress: [],
+  };
+}
+
+function storedState(owner: number) {
+  return decodeSessionsEnvelope(
+    JSON.parse(localStorage.getItem(`easyquran.sessions.${owner}`) ?? "null"),
+  );
+}
+
 beforeEach(() => {
   localStorage.clear();
 });
@@ -274,7 +324,8 @@ describe("SessionsStore sync (§9.2/§9.5)", () => {
     expect(engine.enqueued.some((entry) => entry.payload.kind === "session.delete")).toBe(true);
   });
 
-  it("applyServer merges LWW sessions, keeps local-only rows, and never regresses progress (EC-05)", () => {
+  it("applyServer merges LWW sessions, keeps local-only rows, and never regresses progress (EC-05)", async () => {
+    vi.useFakeTimers();
     const engine = fakeEngine();
     const { store, registered } = makeStore({ authenticated: true, user: { id: 7 } }, engine);
     store.onAuthTransition();
@@ -282,7 +333,6 @@ describe("SessionsStore sync (§9.2/§9.5)", () => {
     expect(created).not.toBeNull();
     // The default session holds a HIGHER offline progress than the server row.
     expect(store.switchTo(accountDefaultSessionId(7))).toBe(true);
-    store.recordActive(stateAt(2, 60, 60));
 
     const snapshot: SessionSnapshot = {
       applied: 0,
@@ -318,16 +368,43 @@ describe("SessionsStore sync (§9.2/§9.5)", () => {
         },
       ],
     };
+    // With no local write pending, the server position row applies (pure LWW).
     registered[0]?.applyServer(snapshot, []);
+    expect(storedState(7)?.state[accountDefaultSessionId(7)]?.lastRead).toEqual({ num: 2, n: 50 });
+
+    // A recordActive AFTER that snapshot is a fresher local write whose push is
+    // still debounced: the same stale server row must not overwrite it
+    // (position-push round 2).
+    store.recordActive(stateAt(2, 60, 60));
+    registered[0]?.applyServer(snapshot, []);
+    expect(storedState(7)?.state[accountDefaultSessionId(7)]?.lastRead).toEqual({ num: 2, n: 60 });
+
+    // The push drains and the server answers with the pushed row: the overlay
+    // retires and the progress merge runs for real — the local 60 beats the
+    // server row 40 (EC-05: MAX, never regresses).
+    await vi.advanceTimersByTimeAsync(5000);
+    const pushedSnapshot: SessionSnapshot = {
+      ...snapshot,
+      positions: [
+        {
+          sessionId: accountDefaultSessionId(7),
+          surah: 2,
+          ayah: 60,
+          localPage: 3,
+          ratio: 0.5,
+          sourceId: null,
+          updatedAt: "2026-01-02T00:00:00.000Z",
+        },
+      ],
+    };
+    registered[0]?.applyServer(pushedSnapshot, drainedOf(engine));
 
     // Local-only session survives the merge (its upsert is still queued).
     expect(store.list.map((session) => session.name)).toContain("Quran study");
     const envelope = decodeSessionsEnvelope(
       JSON.parse(localStorage.getItem("easyquran.sessions.7") ?? "null"),
     );
-    // Server position applied for the account default session (pure LWW)…
-    expect(envelope?.state[accountDefaultSessionId(7)]?.lastRead).toEqual({ num: 2, n: 50 });
-    // …while progress keeps the higher offline value (EC-05: MAX, never regresses).
+    expect(envelope?.state[accountDefaultSessionId(7)]?.lastRead).toEqual({ num: 2, n: 60 });
     expect(envelope?.state[accountDefaultSessionId(7)]?.progress[2]?.furthestAyah).toBe(60);
   });
 
@@ -366,5 +443,125 @@ describe("session buckets (Feature 4.8, EC-36)", () => {
     expect(sessionBucketFor("weekly", wednesdayNight)).toBe(
       sessionBucketFor("weekly", thursdayMorning),
     );
+  });
+});
+
+describe("SessionsStore position push vs snapshot pulls (position-push)", () => {
+  it("a snapshot pull inside the push debounce window never regresses lastRead; the coalesced push still carries the read verse", async () => {
+    // Live repro (round 1): Reading session at server position 4:24; the reader
+    // marks 105:3; a pull-only sync round (visibilitychange / 30s periodic) lands
+    // inside the 4s push debounce. The stale server row must not overwrite the
+    // un-pushed lastRead, and the eventual push must carry 105:3 — not 4:24.
+    vi.useFakeTimers();
+    const engine = fakeEngine();
+    const { store, registered } = makeStore({ authenticated: true, user: { id: 1 } }, engine);
+    store.onAuthTransition();
+    const reading = store.create("Reading");
+    expect(reading).not.toBeNull();
+    const readingId = reading?.id ?? "";
+    const stale = snapshotWithPosition(readingId, { surah: 4, ayah: 24 });
+    registered[0]?.applyServer(stale, []);
+    expect(storedState(1)?.state[readingId]?.lastRead).toEqual({ num: 4, n: 24 }); // seed sanity
+
+    const applied: Array<{ lastRead: unknown }> = [];
+    store.onApplyState((state) => applied.push({ lastRead: state.lastRead }));
+
+    // markRead(105:3) in the reader: progress grows AND lastRead moves, push debounced.
+    store.recordActive({
+      lastRead: { num: 105, n: 3 },
+      lastReadAnchor: null,
+      recents: [],
+      progress: { 105: { furthestAyah: 3, ts: 1 }, 4: { furthestAyah: 24, ts: 1 } },
+    });
+
+    // Pull-only round inside the window: drained is empty (nothing was queued).
+    registered[0]?.applyServer(stale, []);
+
+    expect(storedState(1)?.state[readingId]?.lastRead).toEqual({ num: 105, n: 3 });
+    expect(applied.at(-1)?.lastRead).toEqual({ num: 105, n: 3 }); // mirror never clobbered
+
+    await vi.advanceTimersByTimeAsync(5000);
+    const position = engine.enqueued.find((entry) => entry.payload.kind === "position.upsert");
+    if (position?.payload.kind !== "position.upsert") {
+      expect.unreachable("the coalesced push must include position.upsert, not just progress");
+    }
+    expect(position.payload.sessionId).toBe(readingId);
+    expect(position.payload.surah).toBe(105);
+    expect(position.payload.ayah).toBe(3);
+    expect(
+      engine.enqueued.some(
+        (entry) =>
+          entry.payload.kind === "progress.upsert" &&
+          entry.payload.surah === 105 &&
+          entry.payload.furthestAyah === 3,
+      ),
+    ).toBe(true);
+  });
+
+  it("overlay retires once the drained position matches local, so later server rows apply again", async () => {
+    vi.useFakeTimers();
+    const engine = fakeEngine();
+    const { store, registered } = makeStore({ authenticated: true, user: { id: 1 } }, engine);
+    store.onAuthTransition();
+    const reading = store.create("Reading");
+    const readingId = reading?.id ?? "";
+    store.recordActive(stateAt(105, 3, 3));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(engine.enqueued.some((entry) => entry.payload.kind === "position.upsert")).toBe(true);
+
+    // The batch drains; the server snapshot now agrees with the local position.
+    registered[0]?.applyServer(
+      snapshotWithPosition(readingId, { surah: 105, ayah: 3 }),
+      drainedOf(engine),
+    );
+    expect(storedState(1)?.state[readingId]?.lastRead).toEqual({ num: 105, n: 3 });
+
+    // Overlay retired: a newer server row (another device) applies freely.
+    registered[0]?.applyServer(
+      snapshotWithPosition(readingId, {
+        surah: 108,
+        ayah: 1,
+        updatedAt: "2026-02-01T00:00:00.000Z",
+      }),
+      [],
+    );
+    expect(storedState(1)?.state[readingId]?.lastRead).toEqual({ num: 108, n: 1 });
+  });
+
+  it("local write past the drained row keeps the overlay until its own push drains", async () => {
+    vi.useFakeTimers();
+    const engine = fakeEngine();
+    const { store, registered } = makeStore({ authenticated: true, user: { id: 1 } }, engine);
+    store.onAuthTransition();
+    const reading = store.create("Reading");
+    const readingId = reading?.id ?? "";
+    store.recordActive(stateAt(105, 3, 3));
+    await vi.advanceTimersByTimeAsync(5000); // pos(105:3) queued
+    store.recordActive(stateAt(105, 4, 4)); // newer local write, push re-debounced
+
+    // The older batch drains while the newer write is still un-pushed: the stale
+    // row must not overwrite 105:4.
+    registered[0]?.applyServer(
+      snapshotWithPosition(readingId, { surah: 105, ayah: 3 }),
+      drainedOf(engine),
+    );
+    expect(storedState(1)?.state[readingId]?.lastRead).toEqual({ num: 105, n: 4 });
+
+    await vi.advanceTimersByTimeAsync(5000); // pos(105:4) queued
+    registered[0]?.applyServer(
+      snapshotWithPosition(readingId, { surah: 105, ayah: 4 }),
+      drainedOf(engine),
+    );
+    expect(storedState(1)?.state[readingId]?.lastRead).toEqual({ num: 105, n: 4 });
+    // Retired for real this time.
+    registered[0]?.applyServer(
+      snapshotWithPosition(readingId, {
+        surah: 108,
+        ayah: 2,
+        updatedAt: "2026-02-01T00:00:00.000Z",
+      }),
+      [],
+    );
+    expect(storedState(1)?.state[readingId]?.lastRead).toEqual({ num: 108, n: 2 });
   });
 });

@@ -1,10 +1,10 @@
 import { browser } from "$app/env";
 
+import { readingAnalytics } from "#lib/analytics/reading-analytics.js";
 import { authClient } from "#lib/auth/auth-client.js";
 import { authState } from "#lib/auth/auth-state.svelte.js";
-import { readingAnalytics } from "#lib/analytics/reading-analytics.js";
-import { decodeReader } from "#lib/stores/reader-persistence.svelte.js";
 import { readJSON, trailingDebounce, writeJSON } from "#lib/storage/index.js";
+import { decodeReader } from "#lib/stores/reader-persistence.svelte.js";
 import {
   registerDomain,
   unregisterDomain,
@@ -109,7 +109,11 @@ export class SessionsStore {
   /** Queued-but-undrained session upserts — win over the server snapshot (row-level LWW, §9.3). */
   #pendingSessions = new Map<string, ReadingSession>();
   #pendingSessionDeletes = new Set<string>();
-  /** Sessions with queued position/progress — their snapshot rows are skipped until drained. */
+  /**
+   * Sessions whose position/progress is not yet confirmed by the server — raised
+   * by recordActive (covers the debounced push window) and again at enqueue
+   * time; their snapshot rows are skipped until the carrying mutation drains.
+   */
   #pendingStateSessions = new Set<string>();
   /** Last furthestAyah pushed per `${sessionId}:${surah}` — only growth is enqueued. */
   #pushedProgress = new Map<string, number>();
@@ -198,6 +202,13 @@ export class SessionsStore {
     this.#envelope = { ...envelope, state: { ...envelope.state, [activeId]: { ...state } } };
     writeJSON(sessionsKeyFor(this.#owner), this.#envelope);
     if (this.#ownerIsAccount() && activeId !== LOCAL_DEFAULT_SESSION_ID) {
+      // Raise the optimistic overlay NOW, not at enqueue time: between this write
+      // and the 4s debounced push there is nothing in the outbox, and a pull-only
+      // sync round (visibilitychange, 30s periodic) would otherwise apply the
+      // stale server position row over this fresher lastRead — the envelope AND
+      // the reader mirror both regress, and the eventual push then re-uploads the
+      // stale verse (round-1 repro: progress 105:3 landed, position stayed 4:24).
+      this.#pendingStateSessions.add(activeId);
       this.#schedulePush.schedule();
     }
   }
@@ -312,7 +323,7 @@ export class SessionsStore {
         const payload = mutation.payload;
         if (payload.kind === "session.upsert") this.#pendingSessions.delete(payload.id);
         else if (payload.kind === "session.delete") this.#pendingSessionDeletes.delete(payload.id);
-        else this.#pendingStateSessions.delete(payload.sessionId);
+        else this.#retireStateOverlay(payload);
       }
     }
     if (!this.#hydrated || !this.#ownerIsAccount()) return;
@@ -483,6 +494,7 @@ export class SessionsStore {
     const state = envelope.state[sessionId];
     if (state === undefined) return;
     const updatedAt = nowIso();
+    let pushedState = false;
     if (state.lastRead !== null) {
       const anchor = state.lastReadAnchor;
       this.#enqueue(
@@ -498,6 +510,7 @@ export class SessionsStore {
         },
         sessionId,
       );
+      pushedState = true;
     }
     for (const [surah, entry] of Object.entries(state.progress)) {
       const num = Number(surah);
@@ -515,7 +528,39 @@ export class SessionsStore {
         // Record only after the enqueue is durable — a rejection must not suppress the re-push.
         () => this.#pushedProgress.set(key, entry.furthestAyah),
       );
+      pushedState = true;
     }
+    if (!pushedState) {
+      // recordActive raised the overlay for this push, but nothing went to the
+      // outbox (cleared position, or progress rows all already pushed) — no
+      // drained mutation will ever retire it, so drop it here or server rows
+      // for this session would be blocked forever.
+      this.#pendingStateSessions.delete(sessionId);
+    }
+  }
+
+  /**
+   * A drained position/progress mutation may retire its session's overlay — but
+   * only when the row it carried still matches the local state. A newer local
+   * write (lastRead moved on between enqueue and drain) keeps the overlay so the
+   * snapshot's older row cannot overwrite it; that write's own push retires the
+   * overlay once its row drains. `lastRead === null` means nothing local needs
+   * protecting (cleared position), so the row applies.
+   */
+  #retireStateOverlay(
+    payload: Extract<SessionMutation, { kind: "position.upsert" | "progress.upsert" }>,
+  ): void {
+    const lastRead = this.#envelope?.state[payload.sessionId]?.lastRead ?? null;
+    if (
+      lastRead !== null &&
+      (payload.kind === "progress.upsert" ||
+        lastRead.num !== payload.surah ||
+        lastRead.n !== payload.ayah ||
+        (lastRead.sourceId ?? null) !== (payload.sourceId ?? null))
+    ) {
+      return;
+    }
+    this.#pendingStateSessions.delete(payload.sessionId);
   }
 
   #enqueueSessionUpsert(session: ReadingSession): void {
