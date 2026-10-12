@@ -86,6 +86,8 @@ describe("locale suggest trigger matrix (plan §3)", () => {
       "/hizb/2",
       "/surah",
       "/pages",
+      "/azkar",
+      "/ar/azkar",
       "/search",
       "/settings",
       "/bookmarks",
