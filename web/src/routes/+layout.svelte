@@ -23,6 +23,8 @@
   import { authState } from "#lib/auth/auth-state.svelte.js";
   import { installPurgeHook } from "#lib/auth/purge-hook.js";
   import { bookmarks } from "#lib/bookmarks/store.svelte.js";
+  import { localeSuggest } from "#lib/i18n/locale-suggest.svelte.js";
+  import LocaleSuggest from "#lib/components/i18n/LocaleSuggest.svelte";
 
   let { children } = $props();
 
@@ -155,6 +157,9 @@
       void import("#lib/firebase/analytics.js")
         .then(({ pageView }) => pageView(location.pathname))
         .catch(() => {});
+      // Locale suggest re-evaluates on every client-side navigation (plan §5.3):
+      // onMount never re-fires, so a suppressed first landing must not burn the chance.
+      localeSuggest.evaluate(location.pathname);
     }
     if (firstPaintComplete) ensureOfflineEngine(location.pathname);
   });
@@ -186,4 +191,5 @@
 <DownloadBar />
 <GlobalSearch />
 <AuthModalShell />
+<LocaleSuggest />
 {@render children()}
