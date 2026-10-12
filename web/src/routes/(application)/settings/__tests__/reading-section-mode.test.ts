@@ -33,7 +33,9 @@ const h = vi.hoisted(() => {
   };
 });
 
-vi.mock("$app/env", () => ({ browser: true }));
+// `dev` is read at module init by #lib/config/site.ts (via the prefs import in
+// ReadingSection); any boolean keeps that init happy under the mock.
+vi.mock("$app/env", () => ({ browser: true, dev: false }));
 vi.mock("$app/env/public", () => ({
   PUBLIC_API_BASE_URL: undefined,
   PUBLIC_QURAN_API_BASE: undefined,
