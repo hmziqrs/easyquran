@@ -7,8 +7,9 @@ import { readRangeText } from "#lib/server/quran-sqlite.js";
 
 import type { PageServerLoad } from "./$types";
 
-// Arabic-only prerender (Feature 7.2): the /t/** translated twin is SSR +
-// 7-day disk cache, never SSG — it lands with its route files in a later slice.
+// Arabic-only prerender (Feature 7.2). The /t/{lang}/{translator}/azkar/[slug]
+// twin is SSR + 7-day disk cache, never SSG — its route files sit under
+// t/[lang]/[translator]/azkar/.
 export const prerender = true;
 
 export function entries() {

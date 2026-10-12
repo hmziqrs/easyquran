@@ -273,7 +273,11 @@ changes Arabic scripture or translation-content semantics.
 - Catalog keys are meaning-named and structurally identical across locales; catalogs contain
   no HTML, classes, URLs, or icon ids.
 - `MARKETING_PUBLICATIONS` gates localized publication. Locale switches are links and preserve
-  query/fragment; there is no locale cookie, storage preference, or Accept-Language override.
+  query/fragment; there is no locale cookie or Accept-Language override. The one client-side
+  locale record is the locale-suggest dismissal (`easyquran.localeSuggest`,
+  `{v, resolved: {locale: "accepted" | "dismissed"}}`, `docs/plan/09-locale-suggest.md` —
+  next-features Feature 10): it only suppresses the one-time suggest popup. The URL stays the
+  sole locale truth — the record is never read to pick, redirect, or rewrite a locale.
 
 ## Message chunking
 
