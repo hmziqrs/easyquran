@@ -111,7 +111,8 @@ export function memoryQueueStorage(): QueueStorage {
       return seqs.length;
     },
     async deadWrite<P>(record: SyncMutationDraft<P>) {
-      deadRows.set(nextKey, { ...record, seq: nextKey } as SyncMutation);
+      const dead: SyncMutation<P> = { ...record, seq: nextKey };
+      deadRows.set(nextKey, dead);
       nextKey += 1;
     },
   };

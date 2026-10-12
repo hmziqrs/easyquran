@@ -130,8 +130,10 @@ export function decodeBookmarkFolder(raw: unknown): BookmarkFolder | null {
   // Absent kind = pre-kind server snapshot → "generic"; an UNKNOWN kind is a
   // malformed row → dropped, not silently re-labelled.
   const rawKind = asString(obj.kind);
+  // SAFETY: FOLDER_KINDS is the complete BookmarkFolderKind union, so this membership test is the runtime check; the assertion only satisfies includes()'s element-type signature.
   if (rawKind !== undefined && !FOLDER_KINDS.includes(rawKind as BookmarkFolderKind)) return null;
   const position = asNumber(obj.position, -1_000_000, 1_000_000);
+  // SAFETY: the guard above rejected every rawKind outside FOLDER_KINDS, so rawKind here is a BookmarkFolderKind or undefined; undefined falls back to "generic".
   return {
     id,
     name,

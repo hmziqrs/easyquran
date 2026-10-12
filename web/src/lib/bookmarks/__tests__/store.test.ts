@@ -863,6 +863,7 @@ describe("BookmarksStore — cross-tab drain retire (EC-33, §9.6)", () => {
     constructor() {
       MockSyncChannel.instances.push(this);
     }
+    // eslint-disable-next-line anti-slop/no-unknown-parameters -- mirrors the DOM BroadcastChannel.postMessage contract; malformed payloads below deliberately feed the decoder's rejection paths.
     postMessage(data: unknown): void {
       // BroadcastChannel semantics: every *other* instance hears the message.
       for (const other of MockSyncChannel.instances) {

@@ -99,16 +99,20 @@ function errorMessage(err: unknown): string {
 }
 
 /** Narrow an untrusted cross-tab payload (§9.6): a drain notice is `{domain, ids[]}` and nothing else. */
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- data is the raw BroadcastChannel message payload; this decoder is its boundary parser.
 function decodeDrainMessage(data: unknown): SyncDrainMessage | null {
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- typeof-object is the only discriminator for the raw BroadcastChannel payload at this parse boundary.
   if (typeof data !== "object" || data === null) return null;
   if (!("domain" in data) || !("ids" in data)) return null;
   // SAFETY: property existence is checked above; this narrows the fields for validation only.
   const { domain, ids, page } = data as { domain: unknown; ids: unknown; page?: unknown };
+  // eslint-disable-next-line anti-slop/no-runtime-typeof -- domain is a wire string field with no static type before this check.
   if (typeof domain !== "string" || !Array.isArray(ids)) return null;
   // Same-page notices (this page's own engine published) are not cross-tab
   // retire triggers — the store retires its own overlays via applyServer.
   if (page === SYNC_PAGE_NONCE) return null;
   for (const id of ids) {
+    // eslint-disable-next-line anti-slop/no-runtime-typeof -- each ids element is an opaque wire value until this string check.
     if (typeof id !== "string") return null;
   }
   return { domain, ids };
@@ -385,11 +389,13 @@ export class BookmarksStore {
     if (patch.name !== undefined && !isValidFolderName(patch.name)) return;
     const existing = this.#folders.find((folder) => folder.id === id);
     if (!existing) return;
+    // Explicit per-field assignment (not conditional spreads): each property is
+    // always present, taking the patch value or falling back to the existing row.
     const updated: BookmarkFolder = {
       ...existing,
-      ...(patch.name !== undefined ? { name: patch.name } : {}),
-      ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
-      ...(patch.position !== undefined ? { position: patch.position } : {}),
+      name: patch.name !== undefined ? patch.name : existing.name,
+      kind: patch.kind !== undefined ? patch.kind : existing.kind,
+      position: patch.position !== undefined ? patch.position : existing.position,
       updatedAt: nowIso(),
     };
     this.#enqueue(
@@ -523,7 +529,7 @@ export class BookmarksStore {
    * the app singleton never closes; tests construct isolated stores.
    */
   #installDrainListener(): void {
-    if (this.#drainChannel !== null || typeof BroadcastChannel === "undefined") return;
+    if (this.#drainChannel !== null || !("BroadcastChannel" in globalThis)) return;
     const channel = new BroadcastChannel(SYNC_DRAIN_CHANNEL);
     channel.onmessage = (event: MessageEvent<unknown>): void => {
       const message = decodeDrainMessage(event.data);
@@ -656,6 +662,7 @@ export class BookmarksStore {
         this.#enqueueError = null;
         apply();
       },
+      // eslint-disable-next-line anti-slop/no-unknown-parameters -- rejection reason is any thrown value (opaque boundary); errorMessage() narrows it to a displayable string.
       (err: unknown) => {
         if (!this.#isCurrent(account)) return;
         // EC-27: a failed durable write is surfaced, never silently dropped.

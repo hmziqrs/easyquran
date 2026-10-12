@@ -368,12 +368,12 @@ function installFakeIndexedDB(): Map<string, FakeDB> {
   }
 
   const idb = {
-    open(name: string, version: number): FakeOpenRequest {
-      const existing = dbByName.get(name);
+    open(dbName: string, version: number): FakeOpenRequest {
+      const existing = dbByName.get(dbName);
       const upgrade = existing === undefined || version > existing.version;
       const db = existing ?? makeDB(version);
       if (upgrade) db.version = version;
-      if (existing === undefined) dbByName.set(name, db);
+      if (existing === undefined) dbByName.set(dbName, db);
       const req: FakeOpenRequest = {
         result: db,
         error: null,
@@ -434,8 +434,10 @@ describe("Outbox (idb backend)", () => {
 
   it("upgrades v2 -> v3 without dropping queued rows and adds the dead store (EC-55)", async () => {
     // SAFETY: test seam — the installed fake is widened to its open() subset so a shipped-v2 database can be hand-built before the v3 open.
-    const fakeIdb = (globalThis as { indexedDB: unknown }).indexedDB as unknown as {
-      open(name: string, version: number): FakeOpenRequest;
+    const fakeIdbUnknown = (globalThis as { indexedDB: unknown }).indexedDB;
+    // SAFETY: same test seam — the unknown global is narrowed back to the fake's open() subset.
+    const fakeIdb = fakeIdbUnknown as {
+      open(dbName: string, version: number): FakeOpenRequest;
     };
     const old = fakeIdb.open("easyquran-sync", 2).result;
     const store = old.createObjectStore("outbox", { autoIncrement: true });
@@ -508,7 +510,8 @@ describe("Outbox (idb backend)", () => {
     const db = dbs.get("easyquran-sync")!;
     // A row the decoder must reject: domain present (so the index matches it)
     // but no id/queuedAt — e.g. a partially written record.
-    db.stores.get("outbox")!.data.set(99, { domain: "bookmarks" } as unknown as SyncMutationDraft);
+    // SAFETY: test seam — this row is intentionally malformed (missing id/payload/queuedAt) to prove the read path purges undecodable rows (EC-26).
+    db.stores.get("outbox")!.data.set(99, { domain: "bookmarks" } as SyncMutationDraft);
 
     const rows = await outbox.take("bookmarks", 10);
 
