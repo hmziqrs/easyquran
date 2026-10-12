@@ -172,16 +172,81 @@ describe("SessionsStore sync (§9.2/§9.5)", () => {
     expect(active).not.toBeNull();
     store.recordActive(stateAt(2, 255, 255));
     store.recordActive(stateAt(2, 260, 260));
-    expect(engine.enqueued.length).toBe(0); // debounced
+    expect(engine.enqueued.length).toBe(1); // registration's default upsert only; pushes debounced
     await vi.advanceTimersByTimeAsync(5000);
-    const kinds = engine.enqueued.map((entry) => entry.payload.kind).sort();
-    expect(kinds).toEqual(["position.upsert", "progress.upsert"]);
+    // The default session row goes first (server drops position/progress for
+    // sessions it has never seen), then the coalesced position+progress.
+    expect(engine.enqueued.map((entry) => entry.payload.kind)).toEqual([
+      "session.upsert",
+      "position.upsert",
+      "progress.upsert",
+    ]);
     for (const entry of engine.enqueued) {
       expect(entry.domain).toBe("sessions.user:7");
       if (entry.payload.kind === "position.upsert") {
         expect(entry.payload.sessionId).toBe(active);
         expect(entry.payload.ayah).toBe(260);
       }
+    }
+  });
+
+  it("markRead after a late login lands position+progress in the outbox (live order)", async () => {
+    // Live order: the store boots anonymous (auth probe still in flight), the
+    // reader records positions locally, THEN the probe resolves and the
+    // account's domain registers — later markRead writes must still sync.
+    vi.useFakeTimers();
+    const engine = fakeEngine();
+    const auth: FakeAuth = { authenticated: false, user: null };
+    const { store } = makeStore(auth, engine);
+    store.recordActive(stateAt(2, 10, 10));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(engine.enqueued.length).toBe(0); // anonymous: nothing queued
+
+    auth.authenticated = true;
+    auth.user = { id: 1 };
+    store.onAuthTransition();
+
+    store.recordActive(stateAt(2, 255, 255)); // markRead after login
+    await vi.advanceTimersByTimeAsync(5000);
+    // Default session row first (FIFO — the server's ownership guard needs it
+    // before any position/progress row for the same session id).
+    expect(engine.enqueued.map((entry) => entry.payload.kind)).toEqual([
+      "session.upsert",
+      "position.upsert",
+      "progress.upsert",
+    ]);
+    for (const entry of engine.enqueued) {
+      expect(entry.domain).toBe("sessions.user:1");
+    }
+  });
+
+  it("first login uploads the account default session row", () => {
+    const engine = fakeEngine();
+    const auth: FakeAuth = { authenticated: false, user: null };
+    const { store } = makeStore(auth, engine);
+    store.recordActive(stateAt(3, 7, 7)); // anonymous reading first
+    auth.authenticated = true;
+    auth.user = { id: 1 };
+    store.onAuthTransition();
+    const upsert = engine.enqueued.find((entry) => entry.payload.kind === "session.upsert");
+    expect(upsert?.domain).toBe("sessions.user:1");
+    if (upsert?.payload.kind === "session.upsert") {
+      expect(upsert.payload.id).toBe(accountDefaultSessionId(1));
+      expect(upsert.payload.name).toBe("Reading");
+    }
+  });
+
+  it("registration re-uploads the default row with its local rename and stamp (LWW-safe)", () => {
+    const engine = fakeEngine();
+    const { store } = makeStore({ authenticated: true, user: { id: 7 } }, engine);
+    store.update(accountDefaultSessionId(7), { name: "Morning" });
+    store.onAuthTransition();
+    const upsert = engine.enqueued.find((entry) => entry.payload.kind === "session.upsert");
+    if (upsert?.payload.kind === "session.upsert") {
+      expect(upsert.payload.name).toBe("Morning");
+      expect(upsert.payload.updatedAt).not.toBe("1970-01-01T00:00:00.000Z");
+    } else {
+      expect.unreachable("registration must enqueue the default session upsert");
     }
   });
 

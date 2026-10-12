@@ -585,6 +585,15 @@ export class SessionsStore {
     };
     this.#register(adapter);
     this.#registered = name;
+    // The server's live-ownership guard (EC-52) drops position/progress upserts
+    // naming a session row it has never seen, and the account default session
+    // is seeded locally (never create()'d) — so registration uploads its row
+    // first. FIFO puts it ahead of every position/progress push of this
+    // partition; row-level LWW makes the repeat at each login a no-op once the
+    // server holds an equal-or-newer stamp.
+    const defaultId = accountDefaultSessionId(ownerId);
+    const defaultRow = this.#envelope?.sessions.find((session) => session.id === defaultId);
+    this.#enqueueSessionUpsert(defaultRow ?? defaultSessionFor(defaultId));
     this.#engine.start();
     void this.#engine.flush(name).catch(() => undefined);
     // Registration may lag position writes (late probe): push the active
