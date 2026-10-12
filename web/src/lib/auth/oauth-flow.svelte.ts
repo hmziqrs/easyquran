@@ -147,6 +147,10 @@ export class OAuthFlow {
         navigateOAuthPopup(popup, this.loginUrl);
         return await awaitOAuthPopup({ provider: this.provider, url: this.loginUrl, popup });
       } catch {
+        // Bootstrap failure: record the start failure so the auth surface's
+        // alert renders — beginPopup resolves "unavailable" (never rejects),
+        // and without this the rejected begin would be completely silent.
+        this.lastErrorCode = OAUTH_START_FAILED;
         try {
           popup.close();
         } catch {

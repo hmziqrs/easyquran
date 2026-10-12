@@ -196,6 +196,9 @@ describe("OAuthFlow.beginPopup", () => {
     expect(popup.closed).toBe(true);
     expect(flow.pending).toBe(false);
     expect(sessionStorage.getItem(OAUTH_POPUP_PENDING_KEY)).toBeNull();
+    // The auth surface's alert reads lastErrorCode — a rejected begin must not
+    // resolve silently.
+    expect(flow.lastErrorCode).toBe(OAUTH_START_FAILED);
   });
 
   it("settles unavailable when the bootstrap fails and the popup close throws", async () => {

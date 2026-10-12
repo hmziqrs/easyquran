@@ -68,15 +68,22 @@
       <code class="break-all rounded-md bg-surface px-3 py-2 font-mono text-sm">{flow.setupData.secret}</code>
     </div>
     {#if flow.setupData.backupCodes.length > 0}
-      <details class="flex flex-col gap-1.5">
-        <summary class="cursor-pointer text-sm font-medium text-foreground-secondary">Show backup codes</summary>
-        <p class="text-xs text-muted">Save these once. They will not be shown again.</p>
-        <ul class="grid grid-cols-2 gap-1 font-mono text-sm">
-          {#each flow.setupData.backupCodes as code (code)}
-            <li>{code}</li>
-          {/each}
-        </ul>
-      </details>
+      <div class="flex flex-col gap-1.5">
+        <!-- View-once warning sits outside the disclosure: the server stores only
+             hashes of these codes, so they can never be re-displayed after this
+             dialog — a user who never expands the group must still see that. -->
+        <p class="text-xs font-medium text-muted">
+          Save these somewhere safe — each code works once and they cannot be shown again.
+        </p>
+        <details class="flex flex-col gap-1.5">
+          <summary class="cursor-pointer text-sm font-medium text-foreground-secondary">Show backup codes</summary>
+          <ul class="grid grid-cols-2 gap-1 font-mono text-sm">
+            {#each flow.setupData.backupCodes as code (code)}
+              <li>{code}</li>
+            {/each}
+          </ul>
+        </details>
+      </div>
     {/if}
     <form
       onsubmit={(e) => {

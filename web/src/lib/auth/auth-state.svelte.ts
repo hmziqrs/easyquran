@@ -52,6 +52,17 @@ export interface AuthTransitionContext {
 
 export type AuthTransitionHook = (ctx: AuthTransitionContext) => Promise<void> | void;
 
+/**
+ * How often a signed-in tab re-probes the session while idle (EC-15/16/19).
+ * Without this, a session revoked elsewhere (terminate from /account, expiry,
+ * ban) is invisible until the tab happens to make its next guarded request —
+ * an idle reader tab never does, so the expiry banner never appears. One
+ * `GET /user/v1/get` per interval is the whole cost; the probe result runs the
+ * normal `#applyProbe` mapping (anonymous from authenticated → banner +
+ * `current-session-terminated`).
+ */
+export const SESSION_PROBE_INTERVAL_MS = 60_000;
+
 class AuthState {
   #status = $state<AuthStatus>("unknown");
   #user = $state<UserProfile | null>(null);
@@ -60,6 +71,7 @@ class AuthState {
   #hydrated = false;
   #hintListener: ((event: StorageEvent) => void) | null = null;
   #probeInFlight: Promise<SessionProbeResult> | null = null;
+  #probeTimer: ReturnType<typeof setInterval> | null = null;
   #onAuthTransition: AuthTransitionHook | null = null;
   readonly #client: AuthClient;
 
@@ -108,6 +120,26 @@ class AuthState {
     this.#onAuthTransition = hook;
   }
 
+  /**
+   * Idle-tab revocation watchdog: while the tab is signed in, re-probe on a
+   * slow interval so a remotely terminated/expired session still reaches the
+   * `#terminate(true)` banner path (EC-15). Single interval, browser only;
+   * `probe()`'s in-flight dedupe absorbs an overlap with a caller-driven probe.
+   */
+  #startSessionProbeTimer(): void {
+    if (!browser || this.#probeTimer !== null) return;
+    this.#probeTimer = setInterval(() => {
+      if (this.#status !== "authenticated") return;
+      void this.probe();
+    }, SESSION_PROBE_INTERVAL_MS);
+  }
+
+  #stopSessionProbeTimer(): void {
+    if (this.#probeTimer === null) return;
+    clearInterval(this.#probeTimer);
+    this.#probeTimer = null;
+  }
+
   probe(): Promise<SessionProbeResult> {
     if (this.#probeInFlight) return this.#probeInFlight;
     this.#probeInFlight = (async () => {
@@ -149,7 +181,9 @@ class AuthState {
       clearSignOutNotice();
       // Fresh nonce on every sign-in so other tabs see a changed value (EC-31).
       writeRaw("local", SESSION_HINT_KEY, newSessionHintNonce());
+      this.#startSessionProbeTimer();
     } else {
+      this.#stopSessionProbeTimer();
       removeRaw("local", SESSION_HINT_KEY);
     }
   }
@@ -159,6 +193,7 @@ class AuthState {
   }
 
   setUnknown(): void {
+    this.#stopSessionProbeTimer();
     this.#status = "unknown";
     this.#user = null;
     this.#twoFaPending = false;
@@ -182,6 +217,7 @@ class AuthState {
   }
 
   reset(): void {
+    this.#stopSessionProbeTimer();
     this.#status = "unknown";
     this.#user = null;
     this.#twoFaPending = false;
@@ -213,8 +249,9 @@ class AuthState {
     window.addEventListener("storage", onHint);
   }
 
-  /** Drop the cross-tab listener. Test isolation only — the app singleton lives for the tab. */
+  /** Drop the cross-tab listener (and the revocation watchdog). Test isolation only — the app singleton lives for the tab. */
   dispose(): void {
+    this.#stopSessionProbeTimer();
     if (this.#hintListener === null) return;
     window.removeEventListener("storage", this.#hintListener);
     this.#hintListener = null;
@@ -222,6 +259,7 @@ class AuthState {
 
   async #terminate(banner: boolean): Promise<void> {
     if (this.#status !== "authenticated") return;
+    this.#stopSessionProbeTimer();
     this.#client.clearCsrf();
     if (banner) this.#sessionExpired = true;
     this.#status = "anonymous";
@@ -244,6 +282,7 @@ class AuthState {
       this.#user = result.user;
       this.#twoFaPending = false;
       this.#sessionExpired = false;
+      this.#startSessionProbeTimer();
       // Cross-tab sign-in adoption invalidates an unread sign-out notice too.
       clearSignOutNotice();
       // Present-but-stale hint self-heals through the probe; only mint a nonce
@@ -258,6 +297,7 @@ class AuthState {
         await this.#terminate(true);
         return;
       }
+      this.#stopSessionProbeTimer();
       this.#status = "anonymous";
       this.#user = null;
       this.#twoFaPending = false;

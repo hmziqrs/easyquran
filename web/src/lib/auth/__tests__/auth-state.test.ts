@@ -26,7 +26,10 @@ vi.mock("#lib/auth/auth-client.js", () => ({
 
 import type { SessionProbeResult } from "#lib/auth/auth-client.js";
 import type { AuthTransitionContext } from "#lib/auth/auth-state.svelte.js";
-import { createAuthState as createAuthStateBase } from "#lib/auth/auth-state.svelte.js";
+import {
+  SESSION_PROBE_INTERVAL_MS,
+  createAuthState as createAuthStateBase,
+} from "#lib/auth/auth-state.svelte.js";
 
 // Every state created in this file is disposed after its test: hydrated states
 // keep a window `storage` listener, and cross-tab tests dispatch real events.
@@ -384,6 +387,99 @@ describe("AuthState session loss mid-use (EC-15/16/19)", () => {
     expect(clientMock.getUser).toHaveBeenCalledTimes(1);
     expect(state.status).toBe("anonymous");
     expect(state.sessionExpired).toBe(true);
+  });
+});
+
+describe("AuthState revocation watchdog (EC-15 idle tabs)", () => {
+  it("re-probes on the interval while authenticated; an anonymous result terminates with the banner", async () => {
+    vi.useFakeTimers();
+    try {
+      clientMock.getUser.mockResolvedValueOnce({ kind: "authenticated", user: PROFILE });
+      clientMock.getUser.mockResolvedValueOnce({ kind: "anonymous" });
+      const hook = vi.fn().mockResolvedValue(undefined);
+      const state = createAuthState(asClient);
+      state.setOnAuthTransition(hook);
+      await state.probe();
+      expect(state.authenticated).toBe(true);
+      expect(clientMock.getUser).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(SESSION_PROBE_INTERVAL_MS);
+
+      expect(clientMock.getUser).toHaveBeenCalledTimes(2);
+      expect(state.status).toBe("anonymous");
+      expect(state.sessionExpired).toBe(true);
+      expect(hook).toHaveBeenCalledWith({ kind: "current-session-terminated" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops probing once anonymous: later ticks issue no requests", async () => {
+    vi.useFakeTimers();
+    try {
+      clientMock.getUser.mockResolvedValueOnce({ kind: "authenticated", user: PROFILE });
+      clientMock.getUser.mockResolvedValueOnce({ kind: "anonymous" });
+      const state = createAuthState(asClient);
+      await state.probe();
+      await vi.advanceTimersByTimeAsync(SESSION_PROBE_INTERVAL_MS);
+      expect(clientMock.getUser).toHaveBeenCalledTimes(2);
+      expect(state.anonymous).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(SESSION_PROBE_INTERVAL_MS * 3);
+      expect(clientMock.getUser).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("setUser(null) and dispose() tear the watchdog down", async () => {
+    vi.useFakeTimers();
+    try {
+      const state = createAuthState(asClient);
+      state.setUser(PROFILE);
+      state.setUser(null);
+      await vi.advanceTimersByTimeAsync(SESSION_PROBE_INTERVAL_MS);
+      expect(clientMock.getUser).not.toHaveBeenCalled();
+
+      state.setUser(PROFILE);
+      state.dispose();
+      await vi.advanceTimersByTimeAsync(SESSION_PROBE_INTERVAL_MS);
+      expect(clientMock.getUser).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("never schedules during SSR (browser=false)", async () => {
+    vi.useFakeTimers();
+    envMock.browser = false;
+    try {
+      const state = createAuthState(asClient);
+      state.setUser(PROFILE);
+      await vi.advanceTimersByTimeAsync(SESSION_PROBE_INTERVAL_MS);
+      expect(clientMock.getUser).not.toHaveBeenCalled();
+    } finally {
+      envMock.browser = true;
+      vi.useRealTimers();
+    }
+  });
+
+  it("a transport-failure watchdog probe keeps the session and the timer alive", async () => {
+    vi.useFakeTimers();
+    try {
+      clientMock.getUser.mockResolvedValueOnce({ kind: "authenticated", user: PROFILE });
+      clientMock.getUser.mockResolvedValueOnce({ kind: "unknown", status: 503 });
+      clientMock.getUser.mockResolvedValueOnce({ kind: "authenticated", user: PROFILE });
+      const state = createAuthState(asClient);
+      await state.probe();
+      await vi.advanceTimersByTimeAsync(SESSION_PROBE_INTERVAL_MS);
+      expect(state.authenticated).toBe(true);
+      expect(state.sessionExpired).toBe(false);
+      await vi.advanceTimersByTimeAsync(SESSION_PROBE_INTERVAL_MS);
+      expect(clientMock.getUser).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
