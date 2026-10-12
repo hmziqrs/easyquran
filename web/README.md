@@ -41,9 +41,8 @@ DBs and packaged OFL compatibility font. Version 4 (SIL Lateef base, Quran.com-s
 boxes) serves both IndoPak reader modes.
 `?audit=all` covers every private occurrence; `?audit=flow` checks optional-ayah marks with
 original neighboring verses. All specimen variants return 404 in production.
-Build/audit/browser commands and evidence: [font tooling](../scripts/fonts/indopak/README.md),
-[compatibility report](../docs/indopak-font-compatibility.md),
-[deep audit and unresolved source differences](../docs/indopak-deep-audit.md).
+Build/audit/browser commands and evidence: [font tooling](../scripts/fonts/indopak/README.md);
+status, verification and unresolved source differences: [`docs/indopak.md`](../docs/indopak.md).
 
 Development-only quran.com parity specimen: `/design/qurancom`, comparing mirrored quran.com
 script text and fonts against our provisioned DBs per verse (`?script=`, `?verses=`); 404 in

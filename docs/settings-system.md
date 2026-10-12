@@ -162,8 +162,8 @@ default, and future schemas are tolerated by reading supported fields only. The 
 variant renders
 markup as colored runs in `web/src/lib/quran/view/tajweed.ts`; plain-text surfaces (copy,
 share, sidebar previews, bismillah title attributes) strip the markup in views. IndoPak text
-renders in the user-chosen Arabic font; compatibility preview and its production blocker are
-documented in [`indopak-font-compatibility.md`](indopak-font-compatibility.md).
+renders in its own packaged compatibility font (v4, SIL Lateef base) in both reader modes; see
+[`indopak.md`](indopak.md).
 
 Decode accepts known fields, bounds values, and tolerates future schemas by reading supported
 fields only. Whole-blob writes include both fields; presentation applies after hydration.
@@ -280,13 +280,10 @@ Settings changes preserve:
 - Service-worker metadata may temporarily include orphaned data records until maintenance.
 - Reader persisted blob still has a multi-writer last-write-wins window.
 - Alternate Arabic font first paint uses Amiri until lazy font finishes loading.
-- IndoPak text carries nine PUA codes, 1,383 occurrences. An OFL Noto compatibility preview
-  covers the complete repertoire, but E004 in 17:7 still fails browser bidi/shaping. Production
-  activation remains blocked; existing IndoPak font selection is unchanged. Equivalent
-  DigitalKhatt glyphs exist, but its audited conventional build also lacks 13 ordinary corpus
-  characters. No DB rebuild or restricted font asset is required for nominal coverage. Evidence,
-  reproducible font build and remaining display/semantic review:
-  [`indopak-font-compatibility.md`](indopak-font-compatibility.md).
+- IndoPak is production-disabled (`PRODUCTION_DISABLED_SOURCES`). Its v4 compatibility font
+  covers all nine PUA codes (1,383 occurrences) with zero missing glyphs; editorial/recitation
+  review, owner visual scores and source discrepancies with Quran.com remain open — see
+  [`indopak.md`](indopak.md).
 - Translation family is not persisted.
 - Real application build-version display needs new build-time plumbing.
 - Server preference sync has no storage, endpoint, or conflict policy yet.

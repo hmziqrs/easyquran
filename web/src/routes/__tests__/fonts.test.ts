@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
 /**
- * The fonts gate (docs/plan/README.md (phase specs in git history)). Fonts are self-hosted only —
+ * The fonts gate (docs/history.md — design-system migration; phase specs in git history). Fonts are self-hosted only —
  * a CDN reference would break offline reading, which is a functional bug, not a style
  * one. This guard converts that risk into a build failure, and pins the Onest ramp
  * (one Latin face; hmziq brand kit weights: 400 text, 500 headings, nothing above 600)

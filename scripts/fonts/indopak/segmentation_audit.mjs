@@ -749,7 +749,7 @@ function main() {
 
   const report = {
     phase: "B",
-    plan: "docs/indopak-v4-verification-plan.md#3-phase-b--renderer-logic-over-the-whole-corpus-new-tooling",
+    plan: "docs/indopak.md#verification",
     command: "node scripts/fonts/indopak/segmentation_audit.mjs",
     database_id: "quran-indopak",
     database_open_mode: "ro&immutable=1",

@@ -152,7 +152,7 @@ Ticking a box updates the URL and the reader immediately; Escape, ✕ and "Done"
 
 ![Kurdish 108:3: an empty row with just a number, on the wrong side](screenshots/translations-deep/empty-verse-row.webp)
 
-**What's wrong.** The four verses that are blank in the source ([docs/research/translation-empty-verses.md](../translation-empty-verses.md)) render as an empty row containing only the blue number bubble. Because the text is empty, `dir="auto"` falls back to left-to-right, so in these right-to-left translations the number jumps to the **left** edge, unlike every other row.
+**What's wrong.** The four verses that are blank in the source ([`docs/quran-system.md`](../../quran-system.md#sources-and-metadata)) render as an empty row containing only the blue number bubble. Because the text is empty, `dir="auto"` falls back to left-to-right, so in these right-to-left translations the number jumps to the **left** edge, unlike every other row.
 
 **Fix.** Follow option 1 of that research note: show the Arabic verse with a small line "No translation for this verse in {translator}." Set `dir` from the translation's declared direction, not `auto`, so markers stay on the correct side.
 

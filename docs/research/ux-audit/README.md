@@ -4,9 +4,9 @@
 
 easyquran is built for non-technical people who want to read the Qur'an simply. This audit asks one question of every screen: _would a first-time, non-technical reader — on a phone, maybe older, maybe Arabic-first, maybe unable to read Arabic — understand it, trust it, and get where they want to go?_ It was run in two passes: a first pass over the core screens (docs 01–16) and a second, release-readiness pass over everything else (docs 17–26). [27 · Release polish checklist](27-release-polish-checklist.md) turns every finding into a tickable list.
 
-> **Absorption note (2026-10-11):** items now bundled into `docs/next-features.md` are mapped in its
-> §13 (absorbed) and §14 (superseded) — check there before implementing an item; that doc wins on
-> conflict.
+> **Status (2026-10-12):** every finding's current status — fixed, partly, open, tracked in
+> `docs/next-features.md`, or unchecked — is in the [release polish checklist](27-release-polish-checklist.md).
+> Items bundled into `docs/next-features.md` are mapped in its §13/§14; that doc wins on conflict.
 
 ![Reader overview with the main problems numbered](screenshots/reader/overview-desktop.webp)
 
@@ -76,7 +76,6 @@ Treat [THEME-01 · Custom colours can make the Qur'an text invisible](17-themes-
 | [26 · Cross-browser (WebKit vs Chromium)](26-cross-browser.md)                     | iPhone input zoom, justification, dvh/tap highlight, Firefox risk list                                                  |     |  1  |  2  |  1  |
 | [27 · Release polish checklist](27-release-polish-checklist.md)                    | **Every finding as a tickable list, ordered by release priority, with 'done when' checks**                              |     |     |     |     |
 | [tools/](tools/README.md)                                                          | The capture/axe harness to re-run everything                                                                            |     |     |     |     |
-| [_merge/](_merge/)                                                                 | Raw notes from the four second-pass audits (coverage detail, extensions)                                                |     |     |     |     |
 
 ## Area health at a glance
 
@@ -327,6 +326,6 @@ All evidence lives in [`screenshots/`](screenshots/) (155 WebP files, ≈ 5.8 MB
 
 ## Related docs
 
-- `docs/design-system.md` — the contract most VIS/A11Y/THEME findings measure against (one small value drift, from [_merge/fork-a.md](_merge/fork-a.md): Magenta dark `--primary` is `oklch(0.50 0.23 352)` in §5 but `oklch(0.51 0.22 352)` in `layout.css:526`).
+- `docs/design-system.md` — the contract most VIS/A11Y/THEME findings measure against (one small value drift: Magenta dark `--primary` is `oklch(0.50 0.23 352)` in §5 but `oklch(0.51 0.22 352)` in `layout.css:526`).
 - `docs/remaining/feature-gap-catalogue.md` — missing _features_ (this audit covers the UX of what already ships; overlaps noted inline: R04, R05, D01, L01).
 - `docs/remaining/copy-corrections.md` — placeholder copy ledger ([MKT-02](14-marketing-site-parity.md#mkt-02--website-copy-is-out-of-date-with-the-app) and [SCR-01](19-remaining-screens-and-flows.md#scr-01--legal-pages-say-placeholder-text-and-promise-things-the-app-doesnt-do) extend it).
