@@ -28,8 +28,8 @@
   function detailHref(slug: string): string {
     // Snippet detail paths are public editorial routes, not reader hrefs —
     // localize them directly; localizeHref keeps root-absolute inputs absolute.
-    const localized = localizeHref(snippetPathFor(ctx, slug));
-    return publicHref(`/${localized.slice(1)}`);
+    const localizedSlugPath = localizeHref(snippetPathFor(ctx, slug));
+    return publicHref(`/${localizedSlugPath.slice(1)}`);
   }
 
   const title = $derived(localized(SNIPPET_INDEX_TITLE));
