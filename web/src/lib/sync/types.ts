@@ -62,6 +62,21 @@ export class SyncPausedError extends Error {
   }
 }
 
+/**
+ * Thrown by a domain's `sync` when the server rejected the batch as invalid
+ * (validation 4xx — e.g. HTTP 400 `InvalidInput`). A durable verdict, unlike a
+ * network/5xx error, so the engine counts it on a separate ledger and
+ * dead-letters the batch head after enough consecutive rejections so the rest
+ * of the queue can drain (EC-29). Never thrown for offline rounds,
+ * `SyncPausedError`, or account-mismatch rejections.
+ */
+export class SyncRejectedError extends Error {
+  constructor(message = "sync rejected by server") {
+    super(message);
+    this.name = "SyncRejectedError";
+  }
+}
+
 export type SyncPhase = "idle" | "syncing" | "error";
 
 export interface SyncStatus {
@@ -69,4 +84,8 @@ export interface SyncStatus {
   readonly pending: number;
   readonly lastSyncAt: number | null;
   readonly lastError: string | null;
+  /** True once the durable outbox degraded to in-memory storage (EC-25) — queued changes may not survive a reload. */
+  readonly degraded?: boolean;
+  /** Mutations moved to the dead-letter store by this engine (EC-29). */
+  readonly deadLettered?: number;
 }
