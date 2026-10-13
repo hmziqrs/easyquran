@@ -460,6 +460,9 @@ const PRODUCT_ROUTE_IDS: ReadonlySet<string> = new Set([
   "/(application)/settings",
   "/(application)/bookmarks",
   "/(application)/yours",
+  // Personal per-card detail — the /ar gate would 404 the 3-segment route
+  // without this entry, since parseReaderRoute has no descriptor for it.
+  "/(application)/yours/cards/[id]",
   // Curated snippet pages (Feature 7.2) — localized editorial twins, not
   // reader routes; parseReaderRoute has no descriptor for them.
   "/(application)/azkar",

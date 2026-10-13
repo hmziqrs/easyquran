@@ -39,6 +39,9 @@ const READER_ROUTE_PATTERNS = [
     "u",
   ),
   new RegExp("^/(?:search|settings|bookmarks|yours)$", "u"),
+  // The per-card detail joins the bounded app pages (3 segments under the
+  // personal hub); the id segment is a device-local uuid, never a numeric alias.
+  new RegExp("^/yours/cards/[^/]+$", "u"),
 ];
 
 function isReaderRoute(pathname: string): boolean {

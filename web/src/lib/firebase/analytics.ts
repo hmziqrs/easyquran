@@ -68,7 +68,12 @@ export function track(
  */
 export function scrubReaderPath(path: string): string {
   const sansLocale = path === "/ar" || path.startsWith("/ar/") ? path.slice(3) || "/" : path;
-  return isReaderSurfacePath(sansLocale) ? "/reader" : path;
+  if (isReaderSurfacePath(sansLocale)) return "/reader";
+  // §11.3: the per-card detail path embeds a device-local uuid with zero
+  // analytics value — GA4 sees only the bare /yours/cards prefix (both locales;
+  // the bare /yours hub still passes through verbatim).
+  if (/^\/yours\/cards\/[^/]+$/u.test(sansLocale)) return "/yours/cards";
+  return path;
 }
 
 export function pageView(path: string, title?: string): Promise<void> {

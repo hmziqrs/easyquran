@@ -36,7 +36,10 @@
     (page.route.id ?? "").endsWith("/settings") ||
       (page.route.id ?? "").endsWith("/search") ||
       (page.route.id ?? "").endsWith("/bookmarks") ||
-      (page.route.id ?? "").endsWith("/yours"),
+      (page.route.id ?? "").endsWith("/yours") ||
+      // Nested personal detail: skips the ?mode/?more URL-sync exactly like its
+      // /yours parent (additive — the endsWith pins above stay intact).
+      (page.route.id ?? "").includes("/yours/cards/"),
   );
 
   const bareUrl = $derived(deLocalizeUrl(page.url.href));
@@ -57,6 +60,12 @@
    * /surah index.
    */
   function chromeLocaleHrefFor(locale: UiLocale, pathname: string): `/${string}` {
+    if (pathname.startsWith("/yours/cards/")) {
+      // Per-card detail: a 3-segment personal path isReaderPathname rejects, so
+      // it must resolve before the readerHrefFor fallthrough (that validator
+      // throws on product paths). Falls back to the /surah index like /yours.
+      return locale === "en" ? "/surah" : "/ar/surah";
+    }
     if (pathname === "/bookmarks" || pathname === "/yours") {
       return locale === "en" ? "/surah" : "/ar/surah";
     }

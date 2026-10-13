@@ -192,6 +192,8 @@ describe("reroute table (scheme A)", () => {
     expect(await route("/ar/settings")).toBe("/settings");
     expect(await route("/ar/bookmarks")).toBe("/bookmarks");
     expect(await route("/ar/yours")).toBe("/yours");
+    // The per-card detail joins the bounded app pages (hooks.ts 3-segment pattern).
+    expect(await route("/ar/yours/cards/abc")).toBe("/yours/cards/abc");
   });
 
   it("never reroutes /en/** (hooks.server owns the 308) or unknown locales", async () => {

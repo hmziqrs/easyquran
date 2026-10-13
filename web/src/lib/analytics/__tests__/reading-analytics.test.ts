@@ -254,5 +254,9 @@ describe("reading analytics summary + GA4 scrub", () => {
     for (const path of ["/", "/bookmarks", "/settings", "/yours", "/ar/settings", "/search"]) {
       expect(scrubReaderPath(path)).toBe(path);
     }
+    // Card detail (§11.3): the device-local uuid never ships — both locale
+    // forms collapse to the bare prefix.
+    expect(scrubReaderPath("/yours/cards/abc")).toBe("/yours/cards");
+    expect(scrubReaderPath("/ar/yours/cards/abc")).toBe("/yours/cards");
   });
 });
