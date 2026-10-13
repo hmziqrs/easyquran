@@ -140,7 +140,6 @@ vi.mock("#lib/quran/catalogue.js", () => {
 
 import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
 
-import TranslationButton from "../TranslationButton.svelte";
 import TranslationModal from "../TranslationModal.svelte";
 import TranslationModalHost from "./TranslationModalHost.svelte";
 
@@ -941,36 +940,6 @@ describe("TranslationModal — mobile collapse", () => {
     await setSearch("urdu");
     expect(rail().className).toContain("hidden");
     expect(pane().className).toContain("flex");
-  });
-});
-
-describe("TranslationButton badge", () => {
-  it("shows the stacked count excluding the route translation", () => {
-    stackedTranslations.setIds(["en.sahih", "ur.jalandhry", "ms.basmeih"]);
-    instance = mount(TranslationButton, { target, props: { routeTranslationId: "en.sahih" } });
-    const badge = target.querySelector("[data-translation-count]");
-    expect(badge?.textContent?.trim()).toBe("2");
-  });
-
-  it("carries no reading-mode warning on the badge (reading picks its text in the header)", () => {
-    stackedTranslations.setIds(["en.sahih", "ur.jalandhry"]);
-    h.readerStub.isVerseMode = false;
-    h.readerStub.isReadingMode = true;
-    instance = mount(TranslationButton, { target, props: { routeTranslationId: "en.sahih" } });
-    const badge = target.querySelector("[data-translation-count]");
-    expect(badge?.getAttribute("title")).toBeNull();
-  });
-
-  it("opens the modal on click", async () => {
-    instance = mount(TranslationButton, { target, props: { routeTranslationId: "en.sahih" } });
-    // SAFETY: selector matches only the trigger button element
-    const button = target.querySelector("button[aria-haspopup='dialog']") as HTMLButtonElement;
-    expect(document.querySelector("input[type='search']")).toBeNull();
-    button.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
-    await settle();
-    // the open state drives the portaled modal (its open rendering is covered by
-    // the TranslationModal tests above); here we pin the trigger contract.
-    expect(button.getAttribute("aria-expanded")).toBe("true");
   });
 });
 

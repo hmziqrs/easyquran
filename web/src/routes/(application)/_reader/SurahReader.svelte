@@ -54,8 +54,8 @@
   import ReaderHeader from "./ReaderHeader.svelte";
   import ReaderPageNav from "./ReaderPageNav.svelte";
   import ReaderStatusBanner from "./ReaderStatusBanner.svelte";
-  import { readingFlowId, readingQuickPicks, type ReadPick } from "./reading-flow";
-  import TranslationModal from "./TranslationModal.svelte";
+  import { readingFlowId, readingQuickPicks, type ReadPick } from "#lib/reader/reading-flow.js";
+  import { TranslationModal } from "#lib/components/translation/index.js";
   import { registerTypographyWrapper } from "./typography-change";
   import { createArabicCompanion } from "./arabic-companion.svelte";
   import type {
@@ -65,7 +65,7 @@
     TranslationDirection,
   } from "#lib/data/quran-types.js";
   import { loadArabicFont } from "#lib/fonts/arabic-fonts.js";
-  import { arabicHrefFor, liveReaderPosition } from "./translation-nav";
+  import { arabicHrefFor, liveReaderPosition } from "#lib/reader/translation-nav.js";
   import { positionLabel } from "./position-label";
   import { ReaderDegradationState } from "./reader-degradation.svelte";
   import VerseRow from "./VerseRow.svelte";

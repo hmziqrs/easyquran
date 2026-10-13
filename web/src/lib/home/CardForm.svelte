@@ -28,7 +28,6 @@
     reader_cards_schedule_invalid,
     reader_cards_target_label,
     reader_cards_translation,
-    reader_cards_translation_arabic,
     reader_cards_zikr_text,
   } from "#lib/i18n/m/reader.js";
   import { Button } from "#lib/components/ui/button/index.js";
@@ -37,6 +36,9 @@
   import * as Select from "#lib/components/ui/select/index.js";
   import { IconButton } from "#lib/components/ui/icon-button/index.js";
   import { Icon } from "#lib/components/index.js";
+  import { ReadingTextPicker, TranslationModal } from "#lib/components/translation/index.js";
+  import { readingQuickPicks, type ReadPick } from "#lib/reader/reading-flow.js";
+  import { translationRecents } from "#lib/stores/translation-recents.svelte.js";
   import {
     CARD_KINDS,
     MAX_COLLECTION_ITEMS,
@@ -54,7 +56,7 @@
   import { suggestSurahs } from "#lib/search/page/surah-suggest.js";
   import type { SurahSuggestion } from "#lib/search/page/types.js";
   import { SNIPPETS } from "#lib/data/snippets.js";
-  import { TRANSLATION_CATALOGUE } from "#lib/quran/catalogue.js";
+  import { TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
 
   /**
    * The one add/edit card form (extracted from /yours, extended with the
@@ -109,7 +111,6 @@
     zikrText: reader_cards_zikr_text(undefined, msgOptions),
     pickSnippet: reader_cards_pick_snippet(undefined, msgOptions),
     translation: reader_cards_translation(undefined, msgOptions),
-    translationArabic: reader_cards_translation_arabic(undefined, msgOptions),
     invalidAyah: reader_cards_invalid_ayah(undefined, msgOptions),
     invalidRange: reader_cards_invalid_range(undefined, msgOptions),
     needsSurah: reader_cards_needs_surah(undefined, msgOptions),
@@ -141,18 +142,6 @@
   /** Flat ayah bound when the picked surah's count cannot resolve yet. */
   const AYAH_MAX = 286;
 
-  interface TranslationOption {
-    readonly id: string;
-    readonly label: string;
-    readonly language: string;
-  }
-
-  const translationOptions: readonly TranslationOption[] = TRANSLATION_CATALOGUE.map((entry) => ({
-    id: entry.id,
-    label: entry.translator === null ? entry.name : `${entry.name} — ${entry.translator}`,
-    language: entry.language,
-  })).sort((a, b) => a.language.localeCompare(b.language) || a.label.localeCompare(b.label));
-
   // shadcn Select label persistence: the closed trigger reads its label from
   // `items`, not the (unmounted) menu rows.
   const snippetItems = SNIPPETS.map((snippet) => ({
@@ -162,13 +151,6 @@
   const itemModeItems = [
     { value: "ref", label: h.collectionRef },
     { value: "snippet", label: h.collectionSnippet },
-  ];
-  const translationItems = [
-    { value: "", label: h.translationArabic },
-    ...translationOptions.map((option) => ({
-      value: option.id,
-      label: `${option.language} · ${option.label}`,
-    })),
   ];
 
   interface BuilderItem {
@@ -245,7 +227,24 @@
   );
   let targetInput = $state(initialCard?.target !== undefined ? String(initialCard.target) : "");
   let sourceIdInput = $state(initialSourceId(initialCard));
+  let pickerOpen = $state(false);
   let error = $state("");
+
+  // The translation field is the reader's own Reading-text pick: Arabic pill =
+  // null sourceId, Translation pill + ▾ = the shared picker modal. Quick picks
+  // seed from the global MRU (the form has no stacked texts of its own).
+  const pinnedName = $derived(
+    sourceIdInput.length === 0
+      ? null
+      : (TRANSLATION_CATALOGUE_BY_ID.get(sourceIdInput)?.name ?? null),
+  );
+  const readPick = $derived<ReadPick>({
+    current: sourceIdInput.length === 0 ? null : sourceIdInput,
+    quick: readingQuickPicks(null, translationRecents.ids, []),
+    onPick: (id: string) => {
+      sourceIdInput = id;
+    },
+  });
 
   let panelEl = $state<HTMLFormElement>();
   let headingEl = $state<HTMLHeadingElement>();
@@ -819,19 +818,14 @@
 
   <div class="flex flex-col gap-1">
     <span class="eyebrow">{h.translation}</span>
-    <Select.Root type="single" bind:value={sourceIdInput} items={translationItems}>
-      <Select.Trigger class="w-full" aria-label={h.translation}>
-        <Select.Value />
-      </Select.Trigger>
-      <Select.Content>
-        <Select.Item value="" label={h.translationArabic}>{h.translationArabic}</Select.Item>
-        {#each translationOptions as option (option.id)}
-          <Select.Item value={option.id} label={`${option.language} · ${option.label}`}>
-            {option.language} · {option.label}
-          </Select.Item>
-        {/each}
-      </Select.Content>
-    </Select.Root>
+    <ReadingTextPicker
+      locale={locale}
+      flowing={sourceIdInput.length === 0 ? "arabic" : "translation"}
+      translationName={pinnedName}
+      onArabic={() => (sourceIdInput = "")}
+      onTranslation={() => (pickerOpen = true)}
+      onOpen={() => (pickerOpen = true)}
+    />
   </div>
 
   <ScheduleEditor bind:slots={scheduleSlots} />
@@ -845,3 +839,7 @@
     <Button type="submit" variant="primary">{h.save}</Button>
   </div>
 </form>
+
+<!-- The reader's translation picker, single-pick mode: one tap pins the card's
+     translation (tafsir never offered — TRX-01), Arabic stays a pill. -->
+<TranslationModal bind:open={pickerOpen} {readPick} />

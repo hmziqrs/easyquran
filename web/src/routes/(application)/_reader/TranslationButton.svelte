@@ -2,7 +2,7 @@
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
-  import TranslationModal from "./TranslationModal.svelte";
+  import { TranslationModal } from "#lib/components/translation/index.js";
 
   let { routeTranslationId = null }: { routeTranslationId?: string | null } = $props();
 

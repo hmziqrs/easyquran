@@ -43,8 +43,8 @@
     TooltipProvider,
     TooltipTrigger,
   } from "#lib/components/ui/tooltip/index.js";
-  import { hrefFor, liveReaderPosition } from "./translation-nav";
-  import type { ReadPick } from "./reading-flow";
+  import { hrefFor, liveReaderPosition } from "#lib/reader/translation-nav.js";
+  import type { ReadPick } from "#lib/reader/reading-flow.js";
   import { translationMatchesQuery } from "./translation-search";
   import { detectCountries, languagePriority } from "./translation-region";
 
