@@ -5,7 +5,7 @@
 // Vite-generated file list (`build`) is `$app/manifest`'s `immutable`, the
 // static-dir file list (`files`) is its `assets`, and `base`-prefixed paths
 // are built with `resolve()` from `$app/paths`.
-import { version } from "$app/env";
+import { dev, version } from "$app/env";
 import { assets, immutable } from "$app/manifest";
 import { resolve } from "$app/paths";
 
@@ -408,6 +408,9 @@ async function precache(): Promise<void> {
         await cache.put(url, res);
       }),
     );
+    // 404.html is a prerender build artifact; in dev it doesn't exist, so the
+    // probe can only log a failed fetch. Nothing to warm there.
+    if (dev) return;
     const shellCtrl = new AbortController();
     const shellTimer = setTimeout(() => shellCtrl.abort(), 4000);
     const shell = await fetch(SHELL_ROUTE, {

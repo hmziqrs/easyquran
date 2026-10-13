@@ -1,10 +1,16 @@
+import { dev } from "$app/env";
 import { PUBLIC_TURNSTILE_SITE_KEY } from "$app/env/public";
 
 /** Public sitekey; empty disables the widget (server gate stays off unless its secret is set). */
 export const TURNSTILE_SITE_KEY = (PUBLIC_TURNSTILE_SITE_KEY ?? "").trim();
 
+// Dev also disables the widget even with a sitekey: Cloudflare's challenge
+// script runs debugger-based bot traps that pause DevTools and floods the
+// console from its challenge iframe (XHR churn, OTS font errors), while the
+// local API's Turnstile gate is off without a secret — so the widget only
+// tests noise in development.
 export function turnstileEnabled(): boolean {
-  return TURNSTILE_SITE_KEY.length > 0;
+  return !dev && TURNSTILE_SITE_KEY.length > 0;
 }
 
 export interface TurnstileRenderOptions {
