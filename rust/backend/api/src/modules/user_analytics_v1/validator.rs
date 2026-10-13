@@ -2,27 +2,6 @@ use chrono::{DateTime, FixedOffset, NaiveDate};
 use serde::{Deserialize, Serialize};
 use validator::{Validate, ValidationError};
 
-/// Closed event set for the first-party reading pipeline (Feature 6.4 emit
-/// points): `ayah.read` = a verse finished reading (carries `seconds`),
-/// `ayah.open` = a verse opened (no duration). The wire literals are the
-/// stored `kind` values — never free-form client strings.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum EventKind {
-    #[serde(rename = "ayah.read")]
-    AyahRead,
-    #[serde(rename = "ayah.open")]
-    AyahOpen,
-}
-
-impl EventKind {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            EventKind::AyahRead => "ayah.read",
-            EventKind::AyahOpen => "ayah.open",
-        }
-    }
-}
-
 /// Client-supplied device-local day (EC-36): strict `YYYY-MM-DD`, parsed not
 /// pattern-matched so `2026-13-01` dies here. The server never derives day
 /// boundaries from its own clock or timezone.
@@ -35,12 +14,11 @@ fn valid_local_day(day: &str) -> Result<(), ValidationError> {
     }
 }
 
-/// Catalogue-id charset bound (§9.1): ≤ 64 chars of `[a-z0-9._-]`. Bounds the
+/// Catalogue-id charset bound: ≤ 64 chars of `[a-z0-9._-]`. Bounds the
 /// row, never the Quran data.
 fn valid_source_id(id: &str) -> Result<(), ValidationError> {
-    let charset = |c: char| {
-        c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-')
-    };
+    let charset =
+        |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-');
     if id.len() <= 64 && id.chars().all(charset) {
         Ok(())
     } else {
@@ -49,24 +27,43 @@ fn valid_source_id(id: &str) -> Result<(), ValidationError> {
     }
 }
 
-/// One reading event. `ayah` carries a FLAT bound only — the per-surah
-/// ayah-count check runs in the controller against the Quran meta (the flat
-/// 1..=286 alone lets 1:8 through, Feature 6.3). `at` is RFC3339 (enforced by
-/// chrono's serde deserializer) and clamped server-side.
+/// Client-minted ids: dashed-hex UUID, 36 chars.
+fn valid_client_uuid(id: &str) -> Result<(), ValidationError> {
+    let ok = id.len() == 36
+        && id.chars().enumerate().all(|(i, c)| match i {
+            8 | 13 | 18 | 23 => c == '-',
+            _ => c.is_ascii_hexdigit(),
+        });
+    if ok {
+        Ok(())
+    } else {
+        Err(ValidationError::new("invalid_uuid").with_message("must be a dashed hex UUID".into()))
+    }
+}
+
+/// One verse read (docs/reading-model.md §4). `id` is client-minted so a
+/// retried batch is idempotent. `ayah` carries a FLAT bound only — the
+/// per-surah ayah-count check runs in the controller against the Quran meta.
+/// `at` is RFC3339 (enforced by chrono's serde deserializer) and clamped
+/// server-side.
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadingEventItem {
-    pub kind: EventKind,
+    #[validate(custom(function = valid_client_uuid))]
+    pub id: String,
+    /// The reading thread the verse was read in, when known.
+    #[validate(custom(function = valid_client_uuid))]
+    pub session_id: Option<String>,
     #[validate(range(min = 1, max = 114))]
     pub surah: i32,
     #[validate(range(min = 1, max = 286))]
     pub ayah: i32,
     #[validate(custom(function = valid_source_id))]
     pub source_id: Option<String>,
-    /// Dwell time in seconds; only meaningful on `ayah.read`. Capped at one
-    /// hour per event — a stuck tab must not write day-long durations.
-    #[validate(range(min = 0, max = 3600))]
-    pub seconds: Option<i32>,
+    /// Active reading time attributed to this verse. Capped at one hour — a
+    /// stuck tab must not write day-long durations.
+    #[validate(range(min = 0, max = 3_600_000))]
+    pub ms: i64,
     #[validate(custom(function = valid_local_day))]
     pub local_day: String,
     pub at: DateTime<FixedOffset>,
@@ -75,9 +72,8 @@ pub struct ReadingEventItem {
 #[derive(Debug, Deserialize, Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct V1EventsPayload {
-    /// REQUIRED (same contract as reading_session_v1, §9.2): no legacy
-    /// clients exist for this module, so an account mismatch is always a
-    /// stale-tab/account-switch, rejected before any write.
+    /// REQUIRED: an account mismatch is always a stale tab / account switch,
+    /// rejected before any write.
     pub expected_user_id: i32,
     /// Batched + capped; each batch applies wholly or not at all.
     #[validate(length(max = 100), nested)]

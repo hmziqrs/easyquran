@@ -16,7 +16,8 @@ pub enum MutationKind {
     FolderDelete,
 }
 
-/// Client-minted ids are UUIDv4: 8-4-4-4-12 hex groups, 36 chars total.
+/// Client-minted ids are UUIDs (v4, or the v5 default folder): 8-4-4-4-12
+/// hex groups, 36 chars total.
 fn valid_client_uuid(id: &str) -> Result<(), ValidationError> {
     fn invalid(detail: &'static str) -> ValidationError {
         ValidationError::new("invalid_uuid").with_message(detail.into())
@@ -36,33 +37,11 @@ fn valid_client_uuid(id: &str) -> Result<(), ValidationError> {
     Ok(())
 }
 
-/// Session ids are client-minted too (UUIDv4 or the UUIDv5 account default —
-/// both pass the dashed-hex shape, §9.1). The '' global sentinel is allowed
-/// so a legacy-shaped push is not rejected outright.
-fn valid_session_id(id: &str) -> Result<(), ValidationError> {
-    if id.is_empty() || valid_client_uuid(id).is_ok() {
-        Ok(())
-    } else {
-        Err(ValidationError::new("invalid_session_id")
-            .with_message("sessionId must be a dashed hex UUID or empty".into()))
-    }
-}
-
-/// Folder kind is a name-only label (§11.7): a closed literal set, no goal
-/// metadata — anything else is rejected, not defaulted.
-fn valid_folder_kind(kind: &str) -> Result<(), ValidationError> {
-    if matches!(kind, "generic" | "daily" | "learning") {
-        Ok(())
-    } else {
-        Err(ValidationError::new("invalid_folder_kind")
-            .with_message("kind must be generic, daily, or learning".into()))
-    }
-}
-
 /// `source_id` is a translation catalogue id: ≤ 64 chars of `[a-z0-9._-]`
-/// (§9.1 validation caps — bounds the row, never the Quran data).
+/// (bounds the row, never the Quran data).
 fn valid_source_id(id: &str) -> Result<(), ValidationError> {
-    let charset = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-');
+    let charset =
+        |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-');
     if id.len() <= 64 && id.chars().all(charset) {
         Ok(())
     } else {
@@ -82,12 +61,9 @@ pub struct SyncMutation {
     pub id: String,
     #[validate(length(min = 1, max = 100))]
     pub name: Option<String>,
-    /// Folder study-set label. Wire name is `folderKind` — `kind` is already
-    /// the mutation-kind discriminator on this flat struct; the SNAPSHOT item
-    /// carries it as plain `kind` (there is no collision there).
-    #[validate(custom(function = valid_folder_kind))]
-    pub folder_kind: Option<String>,
     pub position: Option<i32>,
+    /// Target folder for bookmark.upsert. Absent, unknown, foreign, or
+    /// tombstoned ids land in the account's default folder.
     #[validate(custom(function = valid_client_uuid))]
     pub folder_id: Option<String>,
     #[validate(range(min = 1, max = 114))]
@@ -102,10 +78,6 @@ pub struct SyncMutation {
     pub end_surah: Option<i32>,
     #[validate(range(min = 1, max = 286))]
     pub end_ayah: Option<i32>,
-    /// '' / absent = global (the sentinel, never a bare NULL in the key).
-    /// A scoped row names its session by the client-minted UUID (§9.1).
-    #[validate(custom(function = valid_session_id))]
-    pub session_id: Option<String>,
     #[validate(custom(function = valid_source_id))]
     pub source_id: Option<String>,
     /// RFC3339, enforced by chrono's serde deserializer.
@@ -115,7 +87,9 @@ pub struct SyncMutation {
 #[derive(Debug, Deserialize, Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct V1BookmarkSyncPayload {
-    pub expected_user_id: Option<i32>,
+    /// REQUIRED: a mismatch is always a stale tab / account switch, rejected
+    /// before any write.
+    pub expected_user_id: i32,
     #[validate(length(max = 200), nested)]
     pub mutations: Option<Vec<SyncMutation>>,
 }

@@ -113,7 +113,7 @@ aws-sdk-s3 = { version = "1.152.0", default-features = false, features = [
   "rt-tokio",
   "default-https-client",
 ] }
-uuid = { version = "1.17", features = ["v4", "fast-rng"] }
+uuid = { version = "1.17", features = ["v4", "v5", "fast-rng"] }
 base32 = "0.5.1"
 hmac = "0.12.1"
 sha1 = "0.10.6"

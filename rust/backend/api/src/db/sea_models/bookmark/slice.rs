@@ -3,13 +3,12 @@ use serde::{Deserialize, Serialize};
 
 /// Response item for the bookmark sync snapshot (camelCase wire format).
 /// Range ends are `null` on the wire unless they differ from the start
-/// (stored `end = start` ⇄ wire `null` end, §9.1).
+/// (stored `end = start` ⇄ wire `null` end).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BookmarkListItem {
     pub id: String,
-    pub folder_id: Option<String>,
-    pub session_id: String,
+    pub folder_id: String,
     pub source_id: Option<String>,
     pub surah: i32,
     pub ayah: i32,
@@ -25,7 +24,6 @@ impl From<super::Model> for BookmarkListItem {
         Self {
             id: m.id,
             folder_id: m.folder_id,
-            session_id: m.session_id,
             source_id: m.source_id,
             surah: m.surah,
             ayah: m.ayah,

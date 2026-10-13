@@ -1,15 +1,17 @@
-//! First-party reading analytics (next-features Feature 6): opt-in per-user
-//! reading events + summary. Append-only ingest writes the raw event and the
-//! retention-proof daily rollup in ONE transaction; raw rows are purged past
-//! the retention window on ingest (no scheduler dependency). Every query is
-//! user-scoped — one user's history is never answerable for another. The
+//! Reading insights (docs/reading-model.md §4): per-user verse reads +
+//! personal summary. Ingest writes the raw event and both retention-proof
+//! rollups (day × surah, surah × ayah) in ONE transaction, idempotent on the
+//! client-minted event id; raw rows are purged past the retention window on
+//! ingest (no scheduler dependency). Every query is user-scoped. The
 //! admin-facing `analytics_v1` (post-centric) is untouched.
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use axum_macros::debug_handler;
 use chrono::{DateTime, FixedOffset, Utc};
-use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, DatabaseTransaction,
-              Statement, TransactionTrait};
+use sea_orm::{
+    ConnectionTrait, DatabaseBackend, DatabaseConnection, DatabaseTransaction, Statement,
+    TransactionTrait,
+};
 use serde_json::{json, Value};
 use tracing::instrument;
 
@@ -22,12 +24,11 @@ use crate::{
     AppState,
 };
 
-use super::validator::{EventKind, ReadingEventItem, V1EventsPayload};
+use super::validator::{ReadingEventItem, V1EventsPayload};
 
-/// Raw events survive 90 days, then only the `reading_daily` rollup answers
-/// (Feature 6.3 retention).
+/// Raw events survive 90 days, then only the rollups answer.
 const RETENTION_DAYS: i64 = 90;
-/// Same clock-skew clamp as reading_session_v1 (EC-34): a fast device cannot
+/// Same clock-skew clamp as reading_session_v1: a fast device cannot
 /// stamp events into the future — and a far-future `at` cannot outlive the
 /// retention purge forever.
 const CLOCK_SKEW_ALLOWANCE_SECS: i64 = 60;
@@ -42,8 +43,8 @@ fn clamp_at(at: DateTime<FixedOffset>) -> DateTime<FixedOffset> {
 }
 
 /// Verses validated against the Quran meta's per-surah ayah counts — the
-/// flat 1..=286 bound alone lets 1:8 through (Feature 6.3). Reads only; the
-/// DBs stay immutable.
+/// flat 1..=286 bound alone lets 1:8 through. Reads only; the DBs stay
+/// immutable.
 fn ensure_real_verse(quran: &QuranStore, surah: i32, ayah: i32) -> Result<(), ErrorResponse> {
     let real = quran
         .meta()
@@ -61,7 +62,8 @@ fn ensure_real_verse(quran: &QuranStore, surah: i32, ayah: i32) -> Result<(), Er
 /// Drop this user's raw events older than the retention window. Kept NULL-
 /// safe: a corrupt NULL `created_at` counts as oldest and goes first.
 async fn purge_expired(tx: &DatabaseTransaction, user_id: i32) -> DbResult<()> {
-    let cutoff = lww_timestamp((Utc::now() - chrono::Duration::days(RETENTION_DAYS)).fixed_offset());
+    let cutoff =
+        lww_timestamp((Utc::now() - chrono::Duration::days(RETENTION_DAYS)).fixed_offset());
     tx.execute(Statement::from_sql_and_values(
         DatabaseBackend::Sqlite,
         r#"DELETE FROM reading_events
@@ -74,54 +76,80 @@ async fn purge_expired(tx: &DatabaseTransaction, user_id: i32) -> DbResult<()> {
     Ok(())
 }
 
-/// Insert one event + fold it into the rollup. Only `ayah.read` grows the
-/// rollup (`ayahs_read`, `seconds`); opens are raw-detail only.
+/// Insert one event; only a NEW event id folds into the rollups, so a
+/// retried batch never double-counts.
 async fn insert_event(
     tx: &DatabaseTransaction,
     user_id: i32,
     e: &ReadingEventItem,
 ) -> DbResult<()> {
     let created_at = lww_timestamp(clamp_at(e.at));
+    let inserted = tx
+        .execute(Statement::from_sql_and_values(
+            DatabaseBackend::Sqlite,
+            r#"INSERT INTO reading_events
+                   (user_id, id, session_id, surah, ayah, source_id, ms, local_day, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT (user_id, id) DO NOTHING"#,
+            [
+                user_id.into(),
+                e.id.clone().into(),
+                e.session_id.clone().into(),
+                e.surah.into(),
+                e.ayah.into(),
+                e.source_id.clone().into(),
+                e.ms.into(),
+                e.local_day.clone().into(),
+                created_at.clone().into(),
+            ],
+        ))
+        .await
+        .map_err_to_response()?;
+    if inserted.rows_affected() == 0 {
+        return Ok(());
+    }
     tx.execute(Statement::from_sql_and_values(
         DatabaseBackend::Sqlite,
-        r#"INSERT INTO reading_events
-               (user_id, surah, ayah, source_id, kind, seconds, local_day, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#,
+        r#"INSERT INTO reading_daily (user_id, local_day, surah, ayahs_read, ms)
+           VALUES (?, ?, ?, 1, ?)
+           ON CONFLICT (user_id, local_day, surah) DO UPDATE SET
+               ayahs_read = reading_daily.ayahs_read + 1,
+               ms = reading_daily.ms + excluded.ms"#,
+        [
+            user_id.into(),
+            e.local_day.clone().into(),
+            e.surah.into(),
+            e.ms.into(),
+        ],
+    ))
+    .await
+    .map_err_to_response()?;
+    tx.execute(Statement::from_sql_and_values(
+        DatabaseBackend::Sqlite,
+        r#"INSERT INTO reading_ayah_totals (user_id, surah, ayah, reads, ms, last_read_at)
+           VALUES (?, ?, ?, 1, ?, ?)
+           ON CONFLICT (user_id, surah, ayah) DO UPDATE SET
+               reads = reading_ayah_totals.reads + 1,
+               ms = reading_ayah_totals.ms + excluded.ms,
+               last_read_at = MAX(reading_ayah_totals.last_read_at, excluded.last_read_at)"#,
         [
             user_id.into(),
             e.surah.into(),
             e.ayah.into(),
-            e.source_id.as_deref().into(),
-            e.kind.as_str().into(),
-            e.seconds.map(i64::from).into(),
-            e.local_day.clone().into(),
+            e.ms.into(),
             created_at.into(),
         ],
     ))
     .await
     .map_err_to_response()?;
-    if e.kind == EventKind::AyahRead {
-        tx.execute(Statement::from_sql_and_values(
-            DatabaseBackend::Sqlite,
-            r#"INSERT INTO reading_daily (user_id, local_day, surah, ayahs_read, seconds)
-               VALUES (?, ?, ?, 1, ?)
-               ON CONFLICT (user_id, local_day, surah) DO UPDATE SET
-                   ayahs_read = reading_daily.ayahs_read + 1,
-                   seconds = reading_daily.seconds + excluded.seconds"#,
-            [user_id.into(), e.local_day.clone().into(), e.surah.into(),
-             e.seconds.map(i64::from).unwrap_or(0).into()],
-        ))
-        .await
-        .map_err_to_response()?;
-    }
     Ok(())
 }
 
 /// Validate-then-apply ingest round: every event's verse is checked BEFORE
 /// any write (a bad item mid-batch rejects the whole round, never a partial
 /// import), then raw inserts + rollup upserts + the retention purge share one
-/// transaction. Returns the accepted count. Retry duplication is a known
-/// append-only limit (no idempotency key on the wire) — accepted for v1.
+/// transaction. Returns the accepted count (replayed ids count as accepted —
+/// the client may drop them).
 pub async fn ingest_events(
     db: &DatabaseConnection,
     quran: &QuranStore,
@@ -161,28 +189,30 @@ fn str_col(row: &sea_orm::QueryResult, col: &str) -> String {
     row.try_get::<String>("", col).unwrap_or_default()
 }
 
-/// Most-read summary, all queries user-scoped. Top surahs + day counts read
-/// the ROLLUP (retention-proof); top ayahs read raw events (ayah-level detail
-/// intentionally ages out with the purge — less sensitive data retained
-/// longer than needed). SQL pattern per Feature 6.2 (GROUP BY … ORDER BY
-/// COUNT/SUM DESC), deterministic tie order `(surah[, ayah]) ASC`.
+/// Personal summary, every query user-scoped and read from the rollups, so
+/// nothing ages out with the raw-event purge. Deterministic tie order
+/// `(surah[, ayah]) ASC`.
 pub async fn summary_for_user(
     db: &DatabaseConnection,
     user_id: i32,
 ) -> Result<Value, ErrorResponse> {
-    let stmt = |sql: &str| Statement::from_sql_and_values(DatabaseBackend::Sqlite, sql, [user_id.into()]);
+    let stmt =
+        |sql: &str| Statement::from_sql_and_values(DatabaseBackend::Sqlite, sql, [user_id.into()]);
     let totals = db
         .query_one(stmt(
-            "SELECT COUNT(*) AS events, COALESCE(SUM(seconds), 0) AS seconds \
-             FROM reading_events WHERE user_id = ?",
+            "SELECT CAST(COALESCE(SUM(ayahs_read), 0) AS INTEGER) AS ayahs, \
+                    CAST(COALESCE(SUM(ms), 0) AS INTEGER) AS ms, \
+                    COUNT(DISTINCT local_day) AS days \
+             FROM reading_daily WHERE user_id = ?",
         ))
         .await
         .map_err_to_response()?
-        .map(|r| (i64_col(&r, "events"), i64_col(&r, "seconds")))
-        .unwrap_or((0, 0));
+        .map(|r| (i64_col(&r, "ayahs"), i64_col(&r, "ms"), i64_col(&r, "days")))
+        .unwrap_or((0, 0, 0));
     let top_surahs = db
         .query_all(stmt(
-            "SELECT surah, CAST(SUM(ayahs_read) AS INTEGER) AS reads \
+            "SELECT surah, CAST(SUM(ayahs_read) AS INTEGER) AS reads, \
+                    CAST(SUM(ms) AS INTEGER) AS ms \
              FROM reading_daily WHERE user_id = ? \
              GROUP BY surah ORDER BY reads DESC, surah ASC LIMIT 5",
         ))
@@ -190,33 +220,33 @@ pub async fn summary_for_user(
         .map_err_to_response()?;
     let top_ayahs = db
         .query_all(stmt(
-            "SELECT surah, ayah, COUNT(*) AS reads FROM reading_events \
-             WHERE user_id = ? AND kind = 'ayah.read' \
-             GROUP BY surah, ayah ORDER BY reads DESC, surah ASC, ayah ASC LIMIT 5",
+            "SELECT surah, ayah, reads, ms FROM reading_ayah_totals \
+             WHERE user_id = ? ORDER BY reads DESC, surah ASC, ayah ASC LIMIT 5",
         ))
         .await
         .map_err_to_response()?;
     let days = db
         .query_all(stmt(
             "SELECT local_day, CAST(SUM(ayahs_read) AS INTEGER) AS ayahs_read, \
-                    CAST(SUM(seconds) AS INTEGER) AS seconds \
+                    CAST(SUM(ms) AS INTEGER) AS ms \
              FROM reading_daily WHERE user_id = ? \
              GROUP BY local_day ORDER BY local_day DESC LIMIT 30",
         ))
         .await
         .map_err_to_response()?;
     Ok(json!({
-        "totals": { "events": totals.0, "seconds": totals.1 },
+        "totals": { "ayahs": totals.0, "ms": totals.1, "days": totals.2 },
         "topSurahs": top_surahs.iter().map(|r| json!({
-            "surah": i64_col(r, "surah"), "reads": i64_col(r, "reads")
+            "surah": i64_col(r, "surah"), "reads": i64_col(r, "reads"), "ms": i64_col(r, "ms")
         })).collect::<Vec<_>>(),
         "topAyahs": top_ayahs.iter().map(|r| json!({
-            "surah": i64_col(r, "surah"), "ayah": i64_col(r, "ayah"), "reads": i64_col(r, "reads")
+            "surah": i64_col(r, "surah"), "ayah": i64_col(r, "ayah"),
+            "reads": i64_col(r, "reads"), "ms": i64_col(r, "ms")
         })).collect::<Vec<_>>(),
         "days": days.iter().map(|r| json!({
             "localDay": str_col(r, "local_day"),
             "ayahsRead": i64_col(r, "ayahs_read"),
-            "seconds": i64_col(r, "seconds"),
+            "ms": i64_col(r, "ms"),
         })).collect::<Vec<_>>(),
     }))
 }
@@ -229,9 +259,9 @@ pub async fn events(
     payload: ValidatedJson<V1EventsPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user = auth.user_required()?;
-    // expectedUserId REQUIRED (same §9.2 rationale as reading_session_v1): a
-    // mismatch is always a stale tab / account switch, rejected before any
-    // write so one account's reading never lands in another's history.
+    // expectedUserId REQUIRED: a mismatch is always a stale tab / account
+    // switch, rejected before any write so one account's reading never lands
+    // in another's history.
     if payload.expected_user_id != user.id {
         return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
             .with_message("Reading analytics account changed"));

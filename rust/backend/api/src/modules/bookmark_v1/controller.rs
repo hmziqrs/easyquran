@@ -1,5 +1,6 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use axum_macros::debug_handler;
+use chrono::{DateTime, FixedOffset, Utc};
 use sea_orm::{DatabaseTransaction, TransactionTrait};
 use serde_json::json;
 use tracing::instrument;
@@ -41,10 +42,10 @@ fn ensure_valid_range(quran: &QuranStore, m: &SyncMutation) -> Result<(), ErrorR
     if m.kind != MutationKind::BookmarkUpsert {
         return Ok(());
     }
-    let bad = |msg: &'static str| Err(ErrorResponse::new(ErrorCode::InvalidInput).with_message(msg));
+    let bad =
+        |msg: &'static str| Err(ErrorResponse::new(ErrorCode::InvalidInput).with_message(msg));
     let (surah, ayah) = (m.surah.unwrap_or_default(), m.ayah.unwrap_or_default());
-    let (end_surah, end_ayah) =
-        (m.end_surah.unwrap_or(surah), m.end_ayah.unwrap_or(ayah));
+    let (end_surah, end_ayah) = (m.end_surah.unwrap_or(surah), m.end_ayah.unwrap_or(ayah));
     if (end_surah, end_ayah) < (surah, ayah) {
         return bad("range end must not precede its start");
     }
@@ -64,77 +65,72 @@ fn ensure_valid_range(quran: &QuranStore, m: &SyncMutation) -> Result<(), ErrorR
     Ok(())
 }
 
-/// Resolve the wire folder_id against THIS user's LIVE folders: unknown,
-/// foreign, or tombstoned folder ids file the bookmark under root
-/// (folder_id = NULL) instead of tripping the FK, leaking another user's
-/// folder, or pointing at a dead one (EC-07).
-async fn resolve_folder_id<'a>(
+/// Same clock-skew clamp as reading_session_v1: a fast device cannot stamp a
+/// write into the future and win every later LWW comparison.
+const CLOCK_SKEW_ALLOWANCE_SECS: i64 = 60;
+
+fn clamp_ts(ts: DateTime<FixedOffset>) -> DateTime<FixedOffset> {
+    let ceiling = Utc::now() + chrono::Duration::seconds(CLOCK_SKEW_ALLOWANCE_SECS);
+    if ts.with_timezone(&Utc) > ceiling {
+        ceiling.fixed_offset()
+    } else {
+        ts
+    }
+}
+
+/// Resolve the wire folder_id against THIS user's LIVE folders: absent,
+/// unknown, foreign, or tombstoned ids file the bookmark in the default
+/// folder — never a dead or foreign folder.
+async fn resolve_folder_id(
     tx: &DatabaseTransaction,
     user_id: i32,
-    folder_id: Option<&'a str>,
-) -> Result<Option<&'a str>, ErrorResponse> {
+    folder_id: Option<&str>,
+) -> Result<String, ErrorResponse> {
     match folder_id {
-        Some(fid) if bookmark_folder::Entity::owned_by_user(tx, user_id, fid).await? => {
-            Ok(Some(fid))
+        Some(fid) if bookmark_folder::Entity::live_for_user(tx, user_id, fid).await? => {
+            Ok(fid.to_string())
         }
-        _ => Ok(None),
+        _ => Ok(bookmark_folder::default_folder_id(user_id)),
     }
 }
 
 /// Apply one mutation, LWW-resolved. Returns 1 when a row changed (applied),
-/// 0 when skipped by LWW, the ownership guard, or the live-row quota.
+/// 0 when skipped by LWW, quota, or the default-folder delete guard.
 async fn apply_mutation(
     tx: &DatabaseTransaction,
     user_id: i32,
     m: &SyncMutation,
 ) -> Result<u64, ErrorResponse> {
+    let updated_at = clamp_ts(m.updated_at);
     match m.kind {
         MutationKind::FolderUpsert => {
-            // ensure_kind_fields guaranteed Some(name) for folder.upsert;
-            // absent kind/position keep the column defaults / NULL.
+            // ensure_kind_fields guaranteed Some(name) for folder.upsert.
             let name = m.name.as_deref().unwrap_or_default();
-            let kind = m.folder_kind.as_deref().unwrap_or("generic");
-            bookmark_folder::Entity::upsert_lww(
-                tx,
-                user_id,
-                &m.id,
-                name,
-                kind,
-                m.position,
-                m.updated_at,
-            )
-            .await
+            bookmark_folder::Entity::upsert_lww(tx, user_id, &m.id, name, m.position, updated_at)
+                .await
         }
         MutationKind::FolderDelete => {
-            bookmark_folder::Entity::delete_lww(tx, user_id, &m.id, m.updated_at).await
+            bookmark_folder::Entity::delete_lww(tx, user_id, &m.id, updated_at).await
         }
         MutationKind::BookmarkUpsert => {
             let folder_id = resolve_folder_id(tx, user_id, m.folder_id.as_deref()).await?;
             let surah = m.surah.unwrap_or_default();
             let ayah = m.ayah.unwrap_or_default();
-            // Absent wire context = the global single-ayah sentinels (''
-            // session, end = start, §9.1); ensure_valid_range proved the
-            // endpoints real and the end ≥ the start.
-            let end_surah = m.end_surah.unwrap_or(surah);
-            let end_ayah = m.end_ayah.unwrap_or(ayah);
-            let session_id = m.session_id.as_deref().unwrap_or("");
-            bookmark::Entity::upsert_lww(
-                tx,
-                user_id,
-                &m.id,
-                folder_id,
-                session_id,
-                m.source_id.as_deref(),
+            // Absent wire end = single ayah (end = start); ensure_valid_range
+            // proved the endpoints real and the end ≥ the start.
+            let write = bookmark::BookmarkWrite {
+                id: &m.id,
+                folder_id: &folder_id,
+                source_id: m.source_id.as_deref(),
                 surah,
                 ayah,
-                end_surah,
-                end_ayah,
-                m.updated_at,
-            )
-            .await
+                end_surah: m.end_surah.unwrap_or(surah),
+                end_ayah: m.end_ayah.unwrap_or(ayah),
+            };
+            bookmark::Entity::upsert_lww(tx, user_id, &write, updated_at).await
         }
         MutationKind::BookmarkDelete => {
-            bookmark::Entity::delete_lww(tx, user_id, &m.id, m.updated_at).await
+            bookmark::Entity::delete_lww(tx, user_id, &m.id, updated_at).await
         }
     }
 }
@@ -152,6 +148,7 @@ async fn sync_round(
     Vec<bookmark_folder::FolderListItem>,
     Vec<bookmark::BookmarkListItem>,
 )> {
+    bookmark_folder::Entity::ensure_default(tx, user_id).await?;
     let mut applied: u64 = 0;
     let mut skipped: u64 = 0;
     for m in mutations {
@@ -190,11 +187,9 @@ pub async fn sync(
     payload: ValidatedJson<V1BookmarkSyncPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user = auth.user_required()?;
-    if let Some(expected_user_id) = payload.expected_user_id {
-        if expected_user_id != user.id {
-            return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
-                .with_message("Bookmark sync account changed"));
-        }
+    if payload.expected_user_id != user.id {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("Bookmark sync account changed"));
     }
     let mutations = payload.mutations.as_deref().unwrap_or(&[]);
 
@@ -207,10 +202,10 @@ pub async fn sync(
         ensure_valid_range(&state.quran, m)?;
     }
 
-    // Push and pull share ONE transaction: the resolve_folder_id
-    // SELECT-then-insert sequence can no longer race a concurrent folder
-    // delete into an FK violation (SQLite serializes writers inside the tx),
-    // and any error rolls the whole round back — no partial state survives.
+    // Push and pull share ONE transaction: resolve_folder_id's
+    // SELECT-then-insert cannot race a concurrent folder delete into an FK
+    // violation (SQLite serializes writers inside the tx), and any error rolls
+    // the whole round back — no partial state survives.
     let tx = state.sea_db.begin().await.map_err_to_response()?;
     let (applied, skipped, folders, bookmarks) = match sync_round(&tx, user.id, mutations).await {
         Ok(round) => round,

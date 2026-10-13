@@ -42,14 +42,8 @@ pub mod user_oauth_identity;
 
 pub mod bookmark;
 pub mod bookmark_folder;
-// Reading-session sync tables (next-features §9.1) — flat sibling files, one
-// Model per table, same LWW action pattern as the bookmark pair above.
+// Reading threads + account progress (docs/reading-model.md §2). Reading
+// insights SQL lives in user_analytics_v1.
 pub mod reading_session;
-pub mod reading_session_position;
-pub mod reading_session_progress;
-// Reading-analytics tables (next-features Feature 6): append-only raw events
-// + the retention-proof daily rollup; SQL lives in user_analytics_v1.
-pub mod reading_daily;
-pub mod reading_event;
 
 pub use crate::utils::color as color_utils;

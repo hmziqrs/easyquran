@@ -7,8 +7,7 @@ use serde::{Deserialize, Serialize};
 pub struct FolderListItem {
     pub id: String,
     pub name: String,
-    /// Study-set label ("generic" | "daily" | "learning"), round-trips LWW.
-    pub kind: String,
+    pub is_default: bool,
     /// Manual order, NULL = unpositioned.
     pub position: Option<i32>,
     pub created_at: DateTimeWithTimeZone,
@@ -20,7 +19,7 @@ impl From<super::Model> for FolderListItem {
         Self {
             id: m.id,
             name: m.name,
-            kind: m.kind,
+            is_default: m.is_default,
             position: m.position,
             created_at: m.created_at,
             updated_at: m.updated_at,

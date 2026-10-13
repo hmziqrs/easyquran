@@ -4,16 +4,18 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "bookmark_folders")]
 pub struct Model {
+    /// Composite PK (user_id, id): the same client-minted id under two
+    /// accounts is two folders, never a collision.
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub user_id: i32,
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
-    pub user_id: i32,
     pub name: String,
-    /// Name-only study-set label: "generic" | "daily" | "learning" (§11.7
-    /// settled: no goal metadata rides along).
-    pub kind: String,
+    /// Server-owned: true only for the id `default_folder_id(user_id)`.
+    pub is_default: bool,
     /// Manual order (LWW integer), NULL = unpositioned.
     pub position: Option<i32>,
-    /// Tombstone marker (§9.3): tombstoned folders resolve as missing.
+    /// Tombstone marker: tombstoned folders resolve as missing.
     pub deleted_at: Option<DateTimeWithTimeZone>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
@@ -27,19 +29,11 @@ pub enum Relation {
         to = "super::super::user::Column::Id"
     )]
     User,
-    #[sea_orm(has_many = "super::super::bookmark::Entity")]
-    Bookmarks,
 }
 
 impl Related<super::super::user::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::User.def()
-    }
-}
-
-impl Related<super::super::bookmark::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Bookmarks.def()
     }
 }
 

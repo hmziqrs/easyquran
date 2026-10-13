@@ -546,7 +546,7 @@ async fn bookmark_sync_rejects_account_mismatch_before_mutation_or_snapshot() {
     let app = router_with_state(state.clone());
     let private_folder = "11111111-1111-4111-8111-111111111111";
     let queued_folder = "22222222-2222-4222-8222-222222222222";
-    let (status, _) = post_json(&app, "/bookmark/v1/sync", Some(&cookie), json!({"mutations": [{"kind": "folder.upsert", "id": private_folder, "name": "Current account private folder", "updatedAt": "2026-10-11T00:00:00Z"}]})).await;
+    let (status, _) = post_json(&app, "/bookmark/v1/sync", Some(&cookie), json!({"expectedUserId": current.id, "mutations": [{"kind": "folder.upsert", "id": private_folder, "name": "Current account private folder", "updatedAt": "2026-10-11T00:00:00Z"}]})).await;
     assert_eq!(status, StatusCode::OK);
     let (status, body) = post_json(&app, "/bookmark/v1/sync", Some(&cookie), json!({
         "expectedUserId": previous.id,
@@ -566,8 +566,9 @@ async fn bookmark_sync_rejects_account_mismatch_before_mutation_or_snapshot() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["folders"].as_array().unwrap().len(), 1);
-    assert_eq!(body["folders"][0]["id"], private_folder);
+    // The server-seeded default folder leads; the private folder follows.
+    assert_eq!(body["folders"].as_array().unwrap().len(), 2);
+    assert_eq!(body["folders"][1]["id"], private_folder);
     let (status, body) = post_json(
         &app,
         "/bookmark/v1/sync",
