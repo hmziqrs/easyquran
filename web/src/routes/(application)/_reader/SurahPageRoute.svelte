@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import { replaceState } from "$app/navigation";
+  import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { SITE } from "#lib/config/site.js";
   import { Seo } from "#lib/components/index.js";
@@ -118,7 +118,12 @@
         readerHrefFor(copy.locale, surahAyahPathFor(routeContext, surah, ayah)),
       );
       if (page.url.href !== new URL(targetHref, page.url.href).href) {
-        replaceState(withModeParam(targetHref, reader.mode, page.url), page.state);
+        // Shallow replace-goto: kit 3's replacement for the deprecated replaceState.
+        void goto(withModeParam(targetHref, reader.mode, page.url), {
+          state: page.state,
+          shallow: true,
+          replace: true,
+        });
       }
       const row = await ayahRow(ayah);
       if (!row) return;

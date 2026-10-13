@@ -3,7 +3,7 @@
   import { onMount } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { page } from "$app/state";
-  import { replaceState } from "$app/navigation";
+  import { goto } from "$app/navigation";
   import { translationSegmentsFromId } from "#lib/data/quran.js";
   import { STACKED_MAX_EXTRAS } from "#lib/data/quran-types.js";
   import type { TranslationCatalogueEntry } from "#lib/data/quran-types.js";
@@ -461,7 +461,12 @@
   // read via visibleUrl: kit 3 shallow writes never land in page.url, and a
   // stale page.url here would drop params that only exist in the visible URL.
   function syncUrl(): void {
-    replaceState(withMoreParam(visibleUrl(page), stackedTranslations.ids), page.state);
+    // Shallow replace-goto: kit 3's replacement for the deprecated replaceState.
+    void goto(withMoreParam(visibleUrl(page), stackedTranslations.ids), {
+      state: page.state,
+      shallow: true,
+      replace: true,
+    });
   }
   function toggle(id: string): void {
     const wasSelected = selectedIds.includes(id);

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { replaceState } from "$app/navigation";
+  import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { loadQuranData } from "#lib/data/quran-data-client.js";
   import { visibleUrl } from "#lib/reader/visible-url.js";
@@ -108,11 +108,12 @@
     const url = visibleUrl(page);
     const next = serializeSearchState(engine.committedQuery, searchSelection.ids);
     if (next === url.search) return;
-    try {
-      replaceState(`${url.pathname}${next}`, page.state);
-    } catch {
-      return;
-    }
+    // Shallow replace-goto: kit 3's replacement for the deprecated replaceState.
+    // The catch swallows the dev-only race where navigation disposes this page
+    // before the router finishes initializing; the next keystroke re-syncs.
+    goto(`${url.pathname}${next}`, { state: page.state, shallow: true, replace: true }).catch(
+      () => {},
+    );
   });
 
   function togglePicker(): void {

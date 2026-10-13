@@ -712,7 +712,23 @@ export async function handleNavigation(req: Request): Promise<Response> {
   }
 
   const fallback = await app.match(SHELL_ROUTE);
-  return fallback || Response.error();
+  if (fallback) return fallback;
+  // Every cache missed and the NAV_TIMEOUT_MS budget already killed one fetch.
+  // Resolving with Response.error() here makes Chrome report "The FetchEvent
+  // ... resulted in a network error response" for a request that would succeed
+  // given time (dev compiles a cold route in seconds). Retry once unbounded:
+  // an offline request rejects immediately, so offline behavior is unchanged.
+  try {
+    const retry = await fetch(req);
+    if (retry.ok && retry.type !== "opaque" && isCacheable(retry)) {
+      const pageCache = await caches.open(PAGES_CACHE);
+      await pageCache.put(new Request(key), retry.clone()).catch(() => {});
+      await touchRecency(req.url);
+    }
+    return retry;
+  } catch {
+    return Response.error();
+  }
 }
 
 export async function handleData(req: Request): Promise<Response> {
@@ -763,7 +779,14 @@ export async function handleData(req: Request): Promise<Response> {
       if (packHit) return packHit;
     }
   }
-  return Response.error();
+  // Same rationale as the handleNavigation retry: the revalidate timeout must
+  // not downgrade a slow or erroring __data.json into an opaque error
+  // Response; pass the real response (status included) through instead.
+  try {
+    return await fetch(req);
+  } catch {
+    return Response.error();
+  }
 }
 
 async function swrApp(req: Request): Promise<Response> {

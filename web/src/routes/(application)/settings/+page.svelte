@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { page } from "$app/state";
-  import { replaceState } from "$app/navigation";
+  import { goto } from "$app/navigation";
   import { getSettingsCopy } from "#lib/i18n/settings-copy.js";
   import type { IconName } from "#lib/components/icon/index.js";
   import AppearanceSection from "./_components/AppearanceSection.svelte";
@@ -48,7 +48,8 @@
   function select(id: string): void {
     if (!isSectionId(id) || active === id) return;
     active = id;
-    replaceState(`#${id}`, page.state);
+    // Shallow replace-goto: kit 3's replacement for the deprecated replaceState.
+    void goto(`#${id}`, { state: page.state, shallow: true, replace: true });
     void tick().then(() => {
       document.getElementById(id)?.focus();
     });

@@ -24,7 +24,6 @@ const {
   quranStore,
   refreshAllSpy,
   gotoSpy,
-  replaceStateSpy,
   readerStub,
   mountStub,
   headerProps,
@@ -51,7 +50,6 @@ const {
   quranStore: { status: "idle" as string, error: null as string | null },
   refreshAllSpy: vi.fn().mockResolvedValue(undefined),
   gotoSpy: vi.fn().mockResolvedValue(undefined),
-  replaceStateSpy: vi.fn(),
   readerStub: {
     hasLastRead: false,
     // Mirrors the real store contract's default mushaf script (schema v4 field).
@@ -97,7 +95,6 @@ vi.mock("$app/navigation", () => ({
   beforeNavigate: () => {},
   goto: gotoSpy,
   refreshAll: refreshAllSpy,
-  replaceState: replaceStateSpy,
 }));
 // kit 3: base is gone; resolve() prefixes the (always-empty) base with a slash.
 vi.mock("$app/paths", () => ({ resolve: (p: string) => `/${p}` }));
@@ -244,7 +241,6 @@ beforeEach(() => {
   });
   refreshAllSpy.mockReset().mockResolvedValue(undefined);
   gotoSpy.mockReset().mockResolvedValue(undefined);
-  replaceStateSpy.mockClear();
   quranStore.status = "idle";
   quranStore.error = null;
   readerStub.seedAyahs.mockReset();
@@ -302,6 +298,25 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// writeHistoryState rides the same goto double as real navigations since the
+// kit 3 replaceState migration (shallow + replace + state.surahReader);
+// these predicates split the two so "no navigation" assertions stay honest.
+function isHistoryWrite(call: unknown[]): boolean {
+  // SAFETY: gotoSpy is an untyped vi.fn() double; its call rows are
+  // [url, GotoOptions]-shaped — writeHistoryState is the only caller passing
+  // options and it always sets shallow + state.surahReader.
+  const opts = call[1] as { shallow?: boolean; state?: object } | undefined;
+  return opts?.shallow === true && opts.state !== undefined && "surahReader" in opts.state;
+}
+
+function navigationGotos(): unknown[][] {
+  return gotoSpy.mock.calls.filter((call) => !isHistoryWrite(call));
+}
+
+function historyWriteGotos(): unknown[][] {
+  return gotoSpy.mock.calls.filter((call) => isHistoryWrite(call));
+}
+
 describe("SurahReader anchor history", () => {
   it.each([true, false])(
     "protects a requested anchor while scrolling=%s",
@@ -315,8 +330,8 @@ describe("SurahReader anchor history", () => {
         flushRaf();
       }
       await flushMicrotasks(20);
-      if (anchorScrolling) expect(replaceStateSpy).not.toHaveBeenCalled();
-      else expect(replaceStateSpy).toHaveBeenCalled();
+      if (anchorScrolling) expect(historyWriteGotos()).toHaveLength(0);
+      else expect(historyWriteGotos().length).toBeGreaterThan(0);
       await unmount(view);
     },
   );
@@ -337,7 +352,7 @@ describe("SurahReader W7 single-page empty recovery", () => {
     expect(refreshAllSpy).toHaveBeenCalledTimes(1);
     expect(workerStub.readRange).toHaveBeenCalled();
     // Recovery never performs document navigation.
-    expect(gotoSpy).not.toHaveBeenCalled();
+    expect(navigationGotos()).toHaveLength(0);
   });
 
   it("does not re-enter retryInitialPage while one is already in flight", async () => {
@@ -432,7 +447,7 @@ describe("SurahReader W7 distinct, clearable degradation state", () => {
     await driveAdjacentRead();
 
     // No document navigation on failure.
-    expect(gotoSpy).not.toHaveBeenCalled();
+    expect(navigationGotos()).toHaveLength(0);
     expect(refreshAllSpy).not.toHaveBeenCalled();
     // Inline retry affordance is shown with the failed page number.
     const region = target.querySelector('[role="status"]');
@@ -774,7 +789,7 @@ describe("SurahReader reading mode", () => {
     await settle();
     expect(readerStub.mode).toBe("reading");
     expect(document.querySelectorAll('input[type="radio"]')).toHaveLength(0);
-    expect(gotoSpy).not.toHaveBeenCalled();
+    expect(navigationGotos()).toHaveLength(0);
   });
 
   it("defaults Reading to the Arabic on an Arabic page", async () => {
@@ -820,7 +835,7 @@ describe("SurahReader reading mode", () => {
     await settle();
     expect(readingText.text).toBe("translation");
     expect(header().readingFlowName).toBe("Name en.arberry");
-    expect(gotoSpy).not.toHaveBeenCalled();
+    expect(navigationGotos()).toHaveLength(0);
   });
 
   it("the Translation pill keeps the saved pick, even one that is not stacked", async () => {
@@ -870,8 +885,8 @@ describe("SurahReader reading mode", () => {
     header().onReadArabic();
     await settle();
     expect(readingText.text).toBe("arabic");
-    expect(gotoSpy).toHaveBeenCalledTimes(1);
-    const href = String(gotoSpy.mock.calls[0]?.[0]);
+    expect(navigationGotos()).toHaveLength(1);
+    const href = String(navigationGotos()[0]?.[0]);
     // One URL per surah: the Arabic twin is the bare root, mode rides in query.
     expect(href).toContain("/al-fatihah");
     expect(href).not.toContain("/page/");

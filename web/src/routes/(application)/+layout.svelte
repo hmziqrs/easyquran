@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import { page } from "$app/state";
-  import { goto, replaceState } from "$app/navigation";
+  import { goto } from "$app/navigation";
   import amiriArabic from "@fontsource/amiri/files/amiri-arabic-400-normal.woff2?url";
   import { Nav } from "#lib/components/nav/index.js";
   import { Footer } from "#lib/components/footer/index.js";
@@ -126,12 +126,13 @@
     const param = parseModeParam(url);
     if (param && param !== current) reader.setMode(param);
     if (!modeParamMatches(url, current)) {
-      try {
-        replaceState(withModeParam(url, current), page.state);
-      } catch {
-        // Dev navigation can dispose this reader layout before SvelteKit finishes
-        // initializing its router; next navigation restores the mode parameter.
-      }
+      // Kit 3 deprecated replaceState(); a shallow replace-goto is the same
+      // update_state({ replace: true }) write. The catch swallows the dev-only
+      // race where navigation disposes this reader layout before the router
+      // finishes initializing; the next navigation restores the mode parameter.
+      goto(withModeParam(url, current), { state: page.state, shallow: true, replace: true }).catch(
+        () => {},
+      );
     }
   });
 
@@ -147,12 +148,12 @@
     }
     const effective = untrack(() => stackedTranslations.ids);
     if (!moreParamMatches(url, effective)) {
-      try {
-        replaceState(withMoreParam(url, effective), page.state);
-      } catch {
-        // dev-only: layout effects can run before the SvelteKit router initializes on a cold
-        // load; the next navigation re-runs this effect and syncs the URL.
-      }
+      // Same shallow replace-goto as the mode effect above; the catch covers
+      // the dev-only cold-load race where the router is not initialized yet —
+      // the next navigation re-runs this effect and syncs the URL.
+      goto(withMoreParam(url, effective), { state: page.state, shallow: true, replace: true }).catch(
+        () => {},
+      );
     }
   });
 

@@ -6,7 +6,7 @@ const h = vi.hoisted(() => ({
     url: new URL("https://example.test/juz/15?mode=verse"),
     state: {},
   },
-  replaceState: vi.fn(),
+  goto: vi.fn().mockResolvedValue(undefined),
   reader: {
     // SAFETY: widens the literal to the store's ReaderMode union; setMode only assigns those two.
     mode: "verse" as "verse" | "reading",
@@ -17,7 +17,7 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("$app/state", () => ({ page: h.nav }));
-vi.mock("$app/navigation", () => ({ replaceState: h.replaceState }));
+vi.mock("$app/navigation", () => ({ goto: h.goto }));
 vi.mock("#lib/stores/reader.svelte.js", () => ({ reader: h.reader }));
 
 import ReaderModeToggle from "../ReaderModeToggle.svelte";
@@ -28,7 +28,7 @@ let instance: ReturnType<typeof mount> | null = null;
 
 beforeEach(() => {
   h.reader.mode = "verse";
-  h.replaceState.mockClear();
+  h.goto.mockClear();
   target = document.createElement("div");
   document.body.appendChild(target);
 });
@@ -59,9 +59,9 @@ describe("ReaderModeToggle", () => {
       option("reading")?.click();
       expect(wrapped).toHaveBeenCalledTimes(1);
       expect(h.reader.mode).toBe("reading");
-      expect(h.replaceState).toHaveBeenCalledTimes(1);
-      // SAFETY: replaceState is always called with a withModeParam-built URL instance
-      const url = h.replaceState.mock.calls[0]?.[0] as URL;
+      expect(h.goto).toHaveBeenCalledTimes(1);
+      // SAFETY: goto is always called with a withModeParam-built URL instance
+      const url = h.goto.mock.calls[0]?.[0] as URL;
       expect(url.searchParams.get("mode")).toBe("reading");
       // tapping the active mode is a no-op: no reflow, no URL write
       option("reading")?.click();

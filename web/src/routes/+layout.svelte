@@ -158,6 +158,10 @@
   });
 
   afterNavigate((navigation) => {
+    // Shallow replace-gotos (the kit 3 replacement for the old replaceState URL
+    // syncs) run navigation hooks, but they never move the page — analytics,
+    // locale suggest and the offline engine must only see real navigations.
+    if (navigation.shallow) return;
     if (navigation.type !== "enter") {
       void import("#lib/firebase/analytics.js")
         .then(({ pageView }) => pageView(location.pathname))

@@ -60,7 +60,7 @@ const h = vi.hoisted(() => {
       params: {} as Record<string, string>,
       state: {},
     },
-    replaceState: vi.fn(),
+    goto: vi.fn().mockResolvedValue(undefined),
     // The reader's detected countries (timezone + language-tag regions). Mocked
     // so rail order never depends on the test machine's timezone.
     // SAFETY: the empty literal only widens to the string[] detectCountries returns; tests assign country codes.
@@ -85,7 +85,7 @@ vi.mock("$app/env/public", () => ({
   PUBLIC_TURNSTILE_SITE_KEY: undefined,
 }));
 vi.mock("$app/state", () => ({ page: h.nav }));
-vi.mock("$app/navigation", () => ({ replaceState: h.replaceState }));
+vi.mock("$app/navigation", () => ({ goto: h.goto }));
 vi.mock("#lib/stores/reader.svelte.js", () => ({ reader: h.readerStub }));
 vi.mock("#lib/paraglide/runtime.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("#lib/paraglide/runtime.js")>();
@@ -171,7 +171,7 @@ beforeEach(() => {
   h.readerStub.isVerseMode = true;
   h.readerStub.isReadingMode = false;
   h.nav.url = new URL("https://example.test/al-fatihah");
-  h.replaceState.mockClear();
+  h.goto.mockClear();
   localStorage.clear();
   // No Recent group unless a test records uses of its own: without this the
   // singleton keeps the previous test's MRU and every later modal shows it.
@@ -555,9 +555,9 @@ describe("TranslationModal — master-detail layout", () => {
     expect(box).toBeTruthy();
     box?.click();
     expect([...stackedTranslations.ids]).toEqual(["ur.jalandhry"]);
-    expect(h.replaceState).toHaveBeenCalledTimes(1);
-    // SAFETY: replaceState is always called with a withMoreParam-built URL instance
-    const url = h.replaceState.mock.calls[0]?.[0] as URL;
+    expect(h.goto).toHaveBeenCalledTimes(1);
+    // SAFETY: the shallow goto is always called with a withMoreParam-built URL instance
+    const url = h.goto.mock.calls[0]?.[0] as URL;
     expect(url.searchParams.get("more")).toBe("ur.jalandhry");
   });
 
@@ -727,8 +727,8 @@ describe("TranslationModal — selected chips", () => {
     );
     clearAll?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect([...stackedTranslations.ids]).toEqual([]);
-    // SAFETY: every replaceState call receives a withMoreParam-built URL instance
-    const lastUrl = h.replaceState.mock.calls.at(-1)?.[0] as URL;
+    // SAFETY: every shallow goto call receives a withMoreParam-built URL instance
+    const lastUrl = h.goto.mock.calls.at(-1)?.[0] as URL;
     expect(lastUrl.searchParams.get("more")).toBeNull();
   });
 

@@ -30,7 +30,7 @@ export function parseSearchUrl(url: { search: string } | URL): SearchUrlState {
 
 /**
  * Serializes search state to a query string with empty parts omitted: both empty
- * yields "", so the page can `replaceState` without leaving a bare `?` behind.
+ * yields "", so the page can shallow-write the URL without leaving a bare `?` behind.
  */
 export function serializeSearchState(q: string, ids: readonly string[]): string {
   const parts: string[] = [];

@@ -2,7 +2,7 @@
   import { onMount, onDestroy, tick, untrack } from "svelte";
   import type { Attachment } from "svelte/attachments";
   import { SvelteSet } from "svelte/reactivity";
-  import { beforeNavigate, goto, refreshAll, replaceState } from "$app/navigation";
+  import { beforeNavigate, goto, refreshAll } from "$app/navigation";
   import { page as appPage } from "$app/state";
   import {
     parseKey,
@@ -596,9 +596,14 @@
     const next = withModeParam(bare, reader.mode, window.location.href);
     const target = next.href;
     if (target !== lastWrittenUrl || localPage !== lastWrittenPage) {
-      replaceState(next, {
-        ...appPage.state,
-        surahReader: snapshot,
+      // Shallow replace-goto: kit 3's replacement for the deprecated replaceState.
+      void goto(next, {
+        state: {
+          ...appPage.state,
+          surahReader: snapshot,
+        },
+        shallow: true,
+        replace: true,
       });
       lastWrittenUrl = target;
       lastWrittenPage = localPage;

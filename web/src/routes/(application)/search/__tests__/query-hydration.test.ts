@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 const h = vi.hoisted(() => ({
   url: new URL("https://easyquran.app/search"),
-  replaceState: vi.fn(),
+  goto: vi.fn().mockResolvedValue(undefined),
   search: vi.fn(async () => ({ results: [], total: 0 })),
 }));
 
@@ -21,7 +21,7 @@ vi.mock("$app/state", () => ({
     state: {},
   },
 }));
-vi.mock("$app/navigation", () => ({ replaceState: h.replaceState }));
+vi.mock("$app/navigation", () => ({ goto: h.goto }));
 vi.mock("#lib/data/quran-data-client.js", () => ({
   loadQuranData: () => Promise.reject(new Error("Metadata unavailable in isolated search test")),
 }));
@@ -56,14 +56,14 @@ describe("search query hydration", () => {
     h.url = new URL("https://easyquran.app/search");
     h.url.searchParams.set("q", query);
     if (translations) h.url.searchParams.set("t", translations);
-    h.replaceState.mockReset();
+    h.goto.mockClear();
     h.search.mockClear();
     target = document.createElement("div");
     document.body.append(target);
     component = mount(SearchPage, { target });
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(h.search).toHaveBeenCalledWith(query, expect.any(Object));
-    for (const [href] of h.replaceState.mock.calls) {
+    for (const [href] of h.goto.mock.calls) {
       const written = new URL(String(href), h.url);
       expect(written.searchParams.get("q")).toBe(query);
       if (translations) expect(written.searchParams.get("t")).toBe(translations);

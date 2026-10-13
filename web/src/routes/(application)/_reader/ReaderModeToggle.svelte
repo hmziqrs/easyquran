@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { replaceState } from "$app/navigation";
+  import { goto } from "$app/navigation";
   import { Icon, type IconName } from "#lib/components/icon/index.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
   import { withModeParam } from "#lib/reader/mode-param.js";
@@ -23,7 +23,12 @@
     changeTypography(() => {
       reader.setMode(mode);
       // visibleUrl: kit 3 shallow writes (the ?v= verse anchor) live only there.
-      replaceState(withModeParam(visibleUrl(page), mode), page.state);
+      // Shallow replace-goto = kit 3's replacement for the deprecated replaceState.
+      void goto(withModeParam(visibleUrl(page), mode), {
+        state: page.state,
+        shallow: true,
+        replace: true,
+      });
     });
   }
 

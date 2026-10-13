@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { goto, replaceState } from "$app/navigation";
+  import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { Icon } from "#lib/components/icon/index.js";
   import { loadArabicFont } from "#lib/fonts/arabic-fonts.js";
@@ -25,7 +25,7 @@
 
   const mix = $derived(readMix(page.url.searchParams));
   // Writable deriveds: a real navigation (an axis link) re-reads them from the URL; slider
-  // and drawer changes are local and written back with replaceState.
+  // and drawer changes are local and written back with shallow replace-gotos.
   let tweaks = $derived(readTweaks(page.url.searchParams));
   let browseOpen = $derived(page.url.searchParams.get("drawer") === "1");
   let mode = $state<"verse" | "reading">("verse");
@@ -43,7 +43,9 @@
     });
   }
 
-  // replaceState does not refresh page.url, so links are built from this merged copy.
+  // Shallow writes never refresh page.url (kit 3), so links are built from this
+  // merged copy. The write itself is a shallow replace-goto — kit 3's
+  // replacement for the deprecated replaceState.
   const params = $derived.by(() => {
     const next = new URLSearchParams([...page.url.searchParams]);
     writeTweaks(next, tweaks);
@@ -55,7 +57,7 @@
     const url = new URL(window.location.href);
     writeTweaks(url.searchParams, tweaks);
     if (!browseOpen) url.searchParams.delete("drawer");
-    replaceState(url, page.state);
+    void goto(url, { state: page.state, shallow: true, replace: true });
   }, 250);
 
   function changeTweaks(next: Tweaks): void {
