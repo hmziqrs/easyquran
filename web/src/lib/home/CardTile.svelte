@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { appLocale } from "#lib/i18n/app-locale.js";
-  import {
+  import { DropdownMenu } from "bits-ui";
+  import { goto } from "$app/navigation";
+
+  import { appLocale } from "#lib/i18n/app-locale.js";  import {
     reader_cards_count_of,
     reader_cards_count_plain,
     reader_cards_duplicate,
@@ -26,22 +28,25 @@
   import { slotStateFor } from "#lib/home/schedule.js";
   import type { QuranData } from "#lib/data/quran-data.js";
   import { Icon } from "#lib/components/index.js";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { iconButtonVariants } from "#lib/components/ui/icon-button/icon-button-variants.js";
 
   /**
    * One home widget card: pinned surah / ayah / range / zikr / azkar set /
    * collection with its tap counter, optional target progress, due/next
-   * schedule hint and — on manager surfaces — a per-card actions panel
-   * (detail / edit / duplicate / reset / remove). Shared by the /yours grid
-   * and the landing strip: the strip passes neither `menu` nor `onEdit`, so it
-   * keeps its plain Open pill and the card carries its own translation
-   * context (pinned sourceId, else Arabic), never the reader's live state.
+   * schedule hint and — on manager surfaces — a bits-ui DropdownMenu of
+   * per-card actions (detail / edit / duplicate / reset / remove). Shared by
+   * the /yours grid and the landing strip: the strip passes neither `menu`
+   * nor `onEdit`, so it keeps its plain Open pill and the card carries its
+   * own translation context (pinned sourceId, else Arabic), never the
+   * reader's live state.
    */
   interface Props {
     card: HomeCard;
     quranData: QuranData | undefined;
-    /** Manager surface: the actions panel replaces the Open pill. */
+    /** Manager surface: the actions menu replaces the Open pill. */
     menu?: boolean;
-    /** Edit-card handoff; the panel hides the item when absent. */
+    /** Edit-card handoff; the menu hides the item when absent. */
     onEdit?: (card: HomeCard) => void;
   }
 
@@ -79,89 +84,32 @@
     return state === null ? null : scheduleBadgeCopy(state, locale);
   });
 
-  /* ── Actions panel (ARIA disclosure, not a menu widget) ──────────────────── */
-  let panelOpen = $state(false);
+  /* ── Actions menu (bits-ui DropdownMenu: keyboard nav, escape, outside
+     click and focus return are the primitive's job) ───────────────────────── */
   let duplicateFull = $state(false);
-  let rootEl = $state<HTMLDivElement>();
-  let triggerEl = $state<HTMLButtonElement>();
-
-  const panelId = $derived(`card-actions-${card.id}`);
-
-  function togglePanel(): void {
-    if (panelOpen) {
-      panelOpen = false;
-      triggerEl?.focus();
-      return;
-    }
-    duplicateFull = false;
-    panelOpen = true;
-  }
-
-  function closePanel(): void {
-    panelOpen = false;
-    triggerEl?.focus();
-  }
-
-  // Escape closes the panel through the shared hotkey registry (dynamically
-  // imported so @tanstack/hotkeys never rides the landing strip's bundle).
-  $effect(() => {
-    if (!panelOpen) return;
-    let destroyed = false;
-    let handle: { unregister(): void } | undefined;
-    void import("#lib/hotkeys.svelte.js").then(({ registerHotkey }) => {
-      if (destroyed) return;
-      handle = registerHotkey(
-        "Escape",
-        (event) => {
-          // IME: a composition session's Escape belongs to the IME, not us.
-          if (event.isComposing) return;
-          closePanel();
-        },
-        { meta: { name: "Close card actions panel" } },
-      );
-    });
-    return () => {
-      destroyed = true;
-      handle?.unregister();
-    };
-  });
-
-  $effect(() => {
-    if (!panelOpen) return;
-    const onPointerDown = (event: PointerEvent) => {
-      const root = rootEl;
-      if (root !== undefined && event.target instanceof Node && !root.contains(event.target)) {
-        panelOpen = false;
-      }
-    };
-    document.addEventListener("pointerdown", onPointerDown, true);
-    return () => document.removeEventListener("pointerdown", onPointerDown, true);
-  });
 
   function openDetails(): void {
-    panelOpen = false;
+    void goto(publicHref(cardDetailHref(card.id)));
   }
 
   function editCard(): void {
     const handler = onEdit;
     if (handler === undefined) return;
-    panelOpen = false;
     handler(card);
   }
 
-  function duplicateCard(): void {
-    // Refused (store full): the panel STAYS open and shows the refusal line.
+  function duplicateCard(event: Event): void {
+    // Refused (store full): preventDefault keeps the menu open so the
+    // refusal line stays visible next to the items.
     if (homeCards.duplicate(card.id) === false) {
       duplicateFull = true;
-      return;
+      event.preventDefault();
     }
-    closePanel();
   }
 
   function resetCard(): void {
     if (card.count === 0) return;
     homeCards.reset(card.id);
-    closePanel();
   }
 
   function removeCard(): void {
@@ -171,10 +119,12 @@
     armCardUndo(card);
     homeCards.remove(card.id);
   }
+
+  const menuItemClass =
+    "flex w-full cursor-default select-none items-center rounded-sm px-2.5 py-1.5 text-start text-[13px] text-foreground-secondary outline-none transition-colors data-[highlighted]:bg-surface-hover data-[highlighted]:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-40";
 </script>
 
 <div
-  bind:this={rootEl}
   class="relative flex flex-col gap-2 rounded-md border border-border bg-surface p-4 transition-colors"
   class:border-border-strong={done}
 >
@@ -198,17 +148,47 @@
     </span>
 
     {#if menu}
-      <button
-        type="button"
-        bind:this={triggerEl}
-        aria-expanded={panelOpen}
-        aria-controls={panelId}
-        aria-label={reader_cards_menu(undefined, msgOptions)}
-        class="flex h-11 w-11 flex-none items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        onclick={togglePanel}
-      >
-        <Icon name="dots" size={18} />
-      </button>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger
+          aria-label={reader_cards_menu(undefined, msgOptions)}
+          class="-me-1 -mt-1 {iconButtonVariants({ variant: "ghost", size: "sm" })}"
+        >
+          <Icon name="dots" size={18} />
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content
+          sideOffset={4}
+          align="end"
+          class="z-20 flex min-w-[10rem] flex-col rounded-md border border-border-strong bg-surface p-1 shadow-lg"
+        >
+          {#if duplicateFull}
+            <p role="alert" class="px-2.5 py-1.5 text-[12px] text-danger">
+              {reader_cards_full(undefined, msgOptions)}
+            </p>
+          {/if}
+          <DropdownMenu.Item class={menuItemClass} onSelect={openDetails}>
+            {reader_cards_open(undefined, msgOptions)}
+          </DropdownMenu.Item>
+          {#if onEdit !== undefined}
+            <DropdownMenu.Item class={menuItemClass} onSelect={editCard}>
+              {reader_cards_edit_title(undefined, msgOptions)}
+            </DropdownMenu.Item>
+          {/if}
+          <DropdownMenu.Item class={menuItemClass} onSelect={duplicateCard}>
+            {reader_cards_duplicate(undefined, msgOptions)}
+          </DropdownMenu.Item>
+          <DropdownMenu.Separator class="-mx-1 my-1 h-px bg-border" />
+          <DropdownMenu.Item
+            class={menuItemClass}
+            disabled={card.count === 0}
+            onSelect={resetCard}
+          >
+            {reader_cards_reset(undefined, msgOptions)}
+          </DropdownMenu.Item>
+          <DropdownMenu.Item class="{menuItemClass} text-danger data-[highlighted]:text-danger" onSelect={removeCard}>
+            {reader_cards_remove(undefined, msgOptions)}
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
     {:else if view.href !== null}
       <a
         href={publicHref(view.href)}
@@ -259,14 +239,10 @@
     </div>
   {/if}
 
-  <button
+  <Button
     type="button"
-    class="flex min-h-11 w-full flex-none flex-col items-center justify-center gap-0.5 rounded-pill border text-[13px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-    class:border-primary={done}
-    class:text-primary={done}
-    class:border-border={done === false}
-    class:text-foreground={done === false}
-    class:hover:border-border-strong={done === false}
+    variant={done ? "primary" : "secondary"}
+    class="w-full flex-col gap-0.5 py-2"
     aria-label={plusLabel}
     onclick={() => homeCards.increment(card.id)}
   >
@@ -276,58 +252,5 @@
       <span class="text-[15px] leading-none">+</span>
       <span class="text-[11px] leading-none font-normal">{card.count}</span>
     {/if}
-  </button>
-
-  {#if menu && panelOpen}
-    <div
-      id={panelId}
-      class="absolute end-0 top-[calc(100%+4px)] z-20 flex min-w-[10rem] flex-col rounded-md border border-border-strong bg-surface p-1"
-    >
-      {#if duplicateFull}
-        <p role="alert" class="px-2.5 py-1.5 text-[12px] text-danger">
-          {reader_cards_full(undefined, msgOptions)}
-        </p>
-      {/if}
-      <a
-        href={publicHref(cardDetailHref(card.id))}
-        data-sveltekit-preload-data="hover"
-        class="flex w-full items-center rounded-sm px-2.5 py-1.5 text-start text-[13px] text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        onclick={openDetails}
-      >
-        {reader_cards_open(undefined, msgOptions)}
-      </a>
-      {#if onEdit !== undefined}
-        <button
-          type="button"
-          class="flex w-full items-center rounded-sm px-2.5 py-1.5 text-start text-[13px] text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-          onclick={editCard}
-        >
-          {reader_cards_edit_title(undefined, msgOptions)}
-        </button>
-      {/if}
-      <button
-        type="button"
-        class="flex w-full items-center rounded-sm px-2.5 py-1.5 text-start text-[13px] text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        onclick={duplicateCard}
-      >
-        {reader_cards_duplicate(undefined, msgOptions)}
-      </button>
-      <button
-        type="button"
-        aria-disabled={card.count === 0}
-        class="flex w-full items-center rounded-sm px-2.5 py-1.5 text-start text-[13px] text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        class:opacity-40={card.count === 0}
-        onclick={resetCard}
-      >
-        {reader_cards_reset(undefined, msgOptions)}
-      </button>
-      <button
-        type="button"
-        class="flex w-full items-center rounded-sm px-2.5 py-1.5 text-start text-[13px] text-danger transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        onclick={removeCard}
-      >
-        {reader_cards_remove(undefined, msgOptions)}
-      </button>
-    </div>
-  {/if}
+  </Button>
 </div>

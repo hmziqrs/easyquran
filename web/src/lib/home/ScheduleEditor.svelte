@@ -18,6 +18,10 @@
   } from "#lib/i18n/m/reader.js";
   import { MAX_SCHEDULE_SLOTS, newCardId } from "#lib/home/cards.svelte.js";
   import { SCHEDULE_PRESETS, type ScheduleSlot } from "#lib/home/schedule.js";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { IconButton } from "#lib/components/ui/icon-button/index.js";
+  import { Input } from "#lib/components/ui/input/index.js";
+  import { Icon } from "#lib/components/index.js";
 
   /**
    * Fixed-clock schedule editor (no geolocation, no astronomy): named
@@ -69,23 +73,27 @@
   {#if slots.length < MAX_SCHEDULE_SLOTS}
     <div class="flex flex-wrap gap-1.5">
       {#each SCHEDULE_PRESETS as preset (preset.label)}
-        <button
+        <Button
           type="button"
-          class="flex h-8 items-center rounded-pill border border-border px-3 text-[12.5px] font-medium text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          variant="secondary"
+          size="sm"
+          class="h-8 px-3 text-[12.5px]"
           onclick={() => addSlot(preset.label, preset.time)}
         >
           {presetLabel(preset.label)}
-        </button>
+        </Button>
       {/each}
     </div>
     <div class="flex">
-      <button
+      <Button
         type="button"
-        class="flex h-8 items-center rounded-pill border border-border px-3 text-[12.5px] font-medium text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        variant="secondary"
+        size="sm"
+        class="h-8 px-3 text-[12.5px]"
         onclick={() => addSlot("", "")}
       >
         {reader_cards_schedule_add(undefined, msgOptions)}
-      </button>
+      </Button>
     </div>
   {:else}
     <p class="text-[13px] text-muted">{reader_cards_schedule_full(undefined, msgOptions)}</p>
@@ -95,28 +103,28 @@
     <div class="flex flex-wrap items-center gap-2">
       <!-- An empty label falls back to the slot's own time at save, so the row
            always persists (decode drops empty labels). -->
-      <input
+      <Input
         type="text"
         bind:value={slot.label}
-        maxlength="40"
+        maxlength={40}
         aria-label={reader_cards_schedule_name(undefined, msgOptions)}
         placeholder={reader_cards_schedule_name(undefined, msgOptions)}
-        class="h-9 min-w-0 flex-1 rounded-pill border border-border bg-transparent px-3 text-sm text-foreground placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        class="h-9 min-w-0 flex-1 rounded-pill px-3 text-sm"
       />
-      <input
+      <Input
         type="time"
         bind:value={slot.time}
         aria-label={reader_cards_schedule_time(undefined, msgOptions)}
-        class="h-9 rounded-pill border border-border bg-transparent px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        class="h-9 w-auto rounded-pill px-3 text-sm"
       />
-      <button
-        type="button"
-        class="flex h-9 w-9 flex-none items-center justify-center rounded-pill border border-border text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        aria-label={reader_cards_schedule_remove(undefined, msgOptions)}
+      <IconButton
+        label={reader_cards_schedule_remove(undefined, msgOptions)}
+        variant="secondary"
+        size="sm"
         onclick={() => removeSlot(slot.id)}
       >
-        ×
-      </button>
+        <Icon name="x" size={16} />
+      </IconButton>
     </div>
   {/each}
 </div>

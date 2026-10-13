@@ -856,14 +856,16 @@
               <span role="alert" class="ms-2 font-medium text-danger">{h.cards.full}</span>
             {/if}
           </p>
-          <button
+          <Button
             type="button"
-            bind:this={undoButton}
-            class="inline-flex h-8 items-center rounded-pill border border-border-strong px-3 text-[12.5px] font-medium text-foreground-secondary transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            bind:ref={undoButton}
+            variant="secondary"
+            size="sm"
+            class="h-8 px-3 text-[12.5px]"
             onclick={undoRemove}
           >
             {reader_bookmarks_undo(undefined, msgOptions)}
-          </button>
+          </Button>
         </div>
       {/if}
 

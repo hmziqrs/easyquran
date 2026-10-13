@@ -32,6 +32,10 @@
     reader_cards_zikr_text,
   } from "#lib/i18n/m/reader.js";
   import { Button } from "#lib/components/ui/button/index.js";
+  import { Tabs, TabsList, TabsTrigger } from "#lib/components/ui/tabs/index.js";
+  import { Input } from "#lib/components/ui/input/index.js";
+  import { IconButton } from "#lib/components/ui/icon-button/index.js";
+  import { Icon } from "#lib/components/index.js";
   import {
     CARD_KINDS,
     MAX_COLLECTION_ITEMS,
@@ -200,7 +204,10 @@
     });
   }
 
-  let kind = $state<CardKind>(initialCard?.kind ?? "surah");
+  let kindValue = $state<string>(initialCard?.kind ?? "surah");
+  // SAFETY: kindValue is only ever set from the CARD_KINDS tab values below,
+  // so the widening cast cannot produce a kind outside the union.
+  const kind = $derived(kindValue as CardKind);
   let surahQuery = $state("");
   let pickedSurahNum = $state<number | null>(initialSurahNum(initialCard));
   let pickedSurahName = $state(initialSurahName(initialCard, seed.data));
@@ -260,9 +267,9 @@
     pickedSurahName = "";
   }
 
-  function chooseKind(next: CardKind): void {
-    if (editing || kind === next) return;
-    kind = next;
+  function chooseKind(next: string): void {
+    if (editing || kindValue === next) return;
+    kindValue = next;
     ayahInput = "";
     rangeStartInput = "";
     rangeEndInput = "";
@@ -462,24 +469,19 @@
     {editing ? h.editTitle : h.addTitle}
   </h3>
 
-  <div class="flex flex-wrap gap-1.5" role="group" aria-label={editing ? h.editTitle : h.addTitle}>
-    {#each CARD_KINDS as kindOption (kindOption)}
-      <button
-        type="button"
-        aria-pressed={kind === kindOption}
-        aria-disabled={editing && kind !== kindOption}
-        class="flex h-8 items-center rounded-pill border px-3 text-[12.5px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        class:border-border-strong={kind === kindOption}
-        class:text-foreground={kind === kindOption}
-        class:border-border={kind !== kindOption}
-        class:text-foreground-secondary={kind !== kindOption}
-        class:opacity-40={editing && kind !== kindOption}
-        onclick={() => chooseKind(kindOption)}
-      >
-        {cardKindLabel(kindOption, locale)}
-      </button>
-    {/each}
-  </div>
+  <Tabs value={kindValue} onValueChange={chooseKind}>
+    <TabsList class="flex-wrap">
+      {#each CARD_KINDS as kindOption (kindOption)}
+        <TabsTrigger
+          value={kindOption}
+          disabled={editing && kind !== kindOption}
+          class="h-8 min-h-0 px-3 text-[12.5px]"
+        >
+          {cardKindLabel(kindOption, locale)}
+        </TabsTrigger>
+      {/each}
+    </TabsList>
+  </Tabs>
   {#if editing}
     <p class="text-[12.5px] text-muted">{h.kindLocked}</p>
   {/if}
@@ -487,25 +489,27 @@
   {#if kind === "zikr"}
     <div class="flex flex-wrap gap-1.5">
       {#each ZIKR_PRESETS as preset (preset.label)}
-        <button
+        <Button
           type="button"
-          class="flex h-8 items-center rounded-pill border border-border px-3 text-[12.5px] font-medium text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          variant="secondary"
+          size="sm"
+          class="h-8 px-3 text-[12.5px]"
           onclick={() => (zikrText = preset.ar)}
         >
           {preset.label}
-        </button>
+        </Button>
       {/each}
     </div>
     <label class="flex flex-col gap-1">
       <span class="eyebrow">{h.zikrText}</span>
-      <input
+      <Input
         type="text"
         bind:value={zikrText}
-        maxlength="120"
+        maxlength={120}
         lang="ar"
         dir="rtl"
         placeholder={h.zikrText}
-        class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        class="h-9 px-3 text-sm"
       />
     </label>
   {:else if kind === "snippet"}
@@ -542,45 +546,43 @@
               <option value="snippet">{h.collectionSnippet}</option>
             </select>
             <span class="flex-1"></span>
-            <button
-              type="button"
-              aria-label={h.itemUp}
-              aria-disabled={index === 0}
-              class="flex h-7 w-7 items-center justify-center rounded-pill border border-border text-[12.5px] text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-              class:opacity-40={index === 0}
+            <IconButton
+              label={h.itemUp}
+              variant="secondary"
+              size="sm"
+              disabled={index === 0}
               onclick={() => moveItem(index, -1)}
             >
               ↑
-            </button>
-            <button
-              type="button"
-              aria-label={h.itemDown}
-              aria-disabled={index === builderItems.length - 1}
-              class="flex h-7 w-7 items-center justify-center rounded-pill border border-border text-[12.5px] text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-              class:opacity-40={index === builderItems.length - 1}
+            </IconButton>
+            <IconButton
+              label={h.itemDown}
+              variant="secondary"
+              size="sm"
+              disabled={index === builderItems.length - 1}
               onclick={() => moveItem(index, 1)}
             >
               ↓
-            </button>
-            <button
-              type="button"
-              aria-label={h.itemRemove}
-              class="flex h-7 w-7 items-center justify-center rounded-pill border border-border text-[12.5px] text-danger transition-colors hover:border-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            </IconButton>
+            <IconButton
+              label={h.itemRemove}
+              variant="secondary"
+              size="sm"
               onclick={() => removeItem(index)}
             >
-              ×
-            </button>
+              <Icon name="x" size={16} />
+            </IconButton>
           </div>
 
           {#if row.mode === "ref"}
             {#if row.surahNum === null}
-              <input
+              <Input
                 type="search"
                 bind:value={row.query}
                 placeholder={h.pickSurah}
                 autocomplete="off"
                 aria-label={h.pickSurah}
-                class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                class="h-9 px-3 text-sm"
               />
               {#if row.query.trim().length > 0}
                 <ul class="divide-y divide-border overflow-hidden rounded-md border border-border">
@@ -615,34 +617,35 @@
                 class="flex h-9 items-center justify-between gap-2 rounded-pill border border-border px-3"
               >
                 <span class="truncate text-sm text-foreground">{row.surahName}</span>
-                <button
-                  type="button"
-                  class="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-border text-[12px] text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-                  aria-label={h.pickSurah}
+                <IconButton
+                  label={h.pickSurah}
+                  variant="secondary"
+                  size="sm"
+                  class="size-6 [&_svg]:size-3"
                   onclick={() => clearItemSurah(index)}
                 >
-                  ×
-                </button>
+                  <Icon name="x" size={12} />
+                </IconButton>
               </span>
             {/if}
             {#if row.surahNum !== null}
               <div class="flex gap-3">
                 <label class="flex min-w-0 flex-1 flex-col gap-1">
                   <span class="eyebrow">{h.rangeStart}</span>
-                  <input
+                  <Input
                     type="text"
                     inputmode="numeric"
                     bind:value={row.ayahStart}
-                    class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                    class="h-9 px-3 text-sm"
                   />
                 </label>
                 <label class="flex min-w-0 flex-1 flex-col gap-1">
                   <span class="eyebrow">{h.rangeEnd}</span>
-                  <input
+                  <Input
                     type="text"
                     inputmode="numeric"
                     bind:value={row.ayahEnd}
-                    class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                    class="h-9 px-3 text-sm"
                   />
                 </label>
               </div>
@@ -663,26 +666,28 @@
     </div>
     {#if builderItems.length < MAX_COLLECTION_ITEMS}
       <div class="flex">
-        <button
+        <Button
           type="button"
-          class="flex h-8 items-center rounded-pill border border-border px-3 text-[12.5px] font-medium text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          variant="secondary"
+          size="sm"
+          class="h-8 px-3 text-[12.5px]"
           onclick={addItem}
         >
           {h.collectionAdd}
-        </button>
+        </Button>
       </div>
     {/if}
   {:else}
     <div class="flex flex-col gap-1">
       <span class="eyebrow">{h.pickSurah}</span>
       {#if pickedSurahNum === null}
-        <input
+        <Input
           type="search"
           bind:value={surahQuery}
           placeholder={h.pickSurah}
           autocomplete="off"
           aria-label={h.pickSurah}
-          class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          class="h-9 px-3 text-sm"
         />
         {#if surahQuery.trim().length > 0}
           <ul class="mt-1 divide-y divide-border overflow-hidden rounded-md border border-border">
@@ -715,14 +720,15 @@
           class="flex h-9 items-center justify-between gap-2 rounded-pill border border-border px-3"
         >
           <span class="truncate text-sm text-foreground">{pickedSurahName}</span>
-          <button
-            type="button"
-            class="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-border text-[12px] text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-            aria-label={h.pickSurah}
+          <IconButton
+            label={h.pickSurah}
+            variant="secondary"
+            size="sm"
+            class="size-6 [&_svg]:size-3"
             onclick={clearPickedSurah}
           >
-            ×
-          </button>
+            <Icon name="x" size={12} />
+          </IconButton>
         </span>
       {/if}
     </div>
@@ -730,12 +736,12 @@
     {#if kind === "ayah" && pickedSurahNum !== null}
       <label class="flex flex-col gap-1">
         <span class="eyebrow">{h.ayahNumber}</span>
-        <input
+        <Input
           type="text"
           inputmode="numeric"
           bind:value={ayahInput}
           placeholder={h.ayahNumber}
-          class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          class="h-9 px-3 text-sm"
         />
       </label>
     {/if}
@@ -744,20 +750,20 @@
       <div class="flex gap-3">
         <label class="flex min-w-0 flex-1 flex-col gap-1">
           <span class="eyebrow">{h.rangeStart}</span>
-          <input
+          <Input
             type="text"
             inputmode="numeric"
             bind:value={rangeStartInput}
-            class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            class="h-9 px-3 text-sm"
           />
         </label>
         <label class="flex min-w-0 flex-1 flex-col gap-1">
           <span class="eyebrow">{h.rangeEnd}</span>
-          <input
+          <Input
             type="text"
             inputmode="numeric"
             bind:value={rangeEndInput}
-            class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            class="h-9 px-3 text-sm"
           />
         </label>
       </div>
@@ -766,11 +772,11 @@
 
   <label class="flex flex-col gap-1">
     <span class="eyebrow">{h.target}</span>
-    <input
+    <Input
       type="text"
       inputmode="numeric"
       bind:value={targetInput}
-      class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+      class="h-9 px-3 text-sm"
     />
   </label>
 

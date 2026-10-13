@@ -37,6 +37,7 @@
     reader_cards_translation_arabic,
   } from "#lib/i18n/m/reader.js";
   import { Icon, Seo } from "#lib/components/index.js";
+  import { Button } from "#lib/components/ui/button/index.js";
   import { Skeleton } from "#lib/components/ui/skeleton/index.js";
   import { homeCards, type HomeCard } from "#lib/home/cards.svelte.js";
   import {
@@ -315,39 +316,46 @@
     </div>
 
     <div class="mt-4 flex flex-wrap items-center gap-2">
-      <button
+      <Button
         type="button"
-        bind:this={editButton}
+        bind:ref={editButton}
         aria-expanded={showForm}
         aria-controls={FORM_ID}
-        class="flex h-8 items-center rounded-pill border border-border px-3 text-[12.5px] font-medium text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        variant="secondary"
+        size="sm"
+        class="h-8 px-3 text-[12.5px]"
         onclick={toggleForm}
       >
         {h.edit}
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
-        class="flex h-8 items-center rounded-pill border border-border px-3 text-[12.5px] font-medium text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        variant="secondary"
+        size="sm"
+        class="h-8 px-3 text-[12.5px]"
         onclick={duplicateCard}
       >
         {h.duplicate}
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
-        aria-disabled={card.count === 0}
-        class="flex h-8 items-center rounded-pill border border-border px-3 text-[12.5px] font-medium text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        class:opacity-40={card.count === 0}
+        variant="secondary"
+        size="sm"
+        class="h-8 px-3 text-[12.5px]"
+        disabled={card.count === 0}
         onclick={resetCount}
       >
         {h.reset}
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
-        class="flex h-8 items-center rounded-pill border border-border px-3 text-[12.5px] font-medium text-danger transition-colors hover:border-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        variant="secondary"
+        size="sm"
+        class="h-8 px-3 text-[12.5px] text-danger hover:text-danger"
         onclick={removeCard}
       >
         {h.remove}
-      </button>
+      </Button>
     </div>
     {#if duplicateFailed}
       <p role="alert" class="mt-2 text-[13px] text-danger">{h.full}</p>
@@ -400,14 +408,10 @@
       </div>
     </div>
 
-    <button
+    <Button
       type="button"
-      class="mt-3 flex min-h-11 w-full flex-col items-center justify-center gap-0.5 rounded-pill border text-[13px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-      class:border-primary={done}
-      class:text-primary={done}
-      class:border-border={done === false}
-      class:text-foreground={done === false}
-      class:hover:border-border-strong={done === false}
+      variant={done ? "primary" : "secondary"}
+      class="mt-3 w-full flex-col gap-0.5 py-2"
       aria-label="{h.recite}: {view.title}"
       onclick={recite}
     >
@@ -418,7 +422,7 @@
         <span class="text-[15px] leading-none" aria-hidden="true">+</span>
         <span class="text-[11px] leading-none font-normal">{card.count}</span>
       {/if}
-    </button>
+    </Button>
 
     <section class="mt-6">
       <h2 class="eyebrow">{h.activity}</h2>
