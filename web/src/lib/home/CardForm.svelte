@@ -34,6 +34,7 @@
   import { Button } from "#lib/components/ui/button/index.js";
   import { Tabs, TabsList, TabsTrigger } from "#lib/components/ui/tabs/index.js";
   import { Input } from "#lib/components/ui/input/index.js";
+  import * as Select from "#lib/components/ui/select/index.js";
   import { IconButton } from "#lib/components/ui/icon-button/index.js";
   import { Icon } from "#lib/components/index.js";
   import {
@@ -151,6 +152,24 @@
     label: entry.translator === null ? entry.name : `${entry.name} — ${entry.translator}`,
     language: entry.language,
   })).sort((a, b) => a.language.localeCompare(b.language) || a.label.localeCompare(b.label));
+
+  // shadcn Select label persistence: the closed trigger reads its label from
+  // `items`, not the (unmounted) menu rows.
+  const snippetItems = SNIPPETS.map((snippet) => ({
+    value: snippet.slug,
+    label: snippetTitle(snippet.title),
+  }));
+  const itemModeItems = [
+    { value: "ref", label: h.collectionRef },
+    { value: "snippet", label: h.collectionSnippet },
+  ];
+  const translationItems = [
+    { value: "", label: h.translationArabic },
+    ...translationOptions.map((option) => ({
+      value: option.id,
+      label: `${option.language} · ${option.label}`,
+    })),
+  ];
 
   interface BuilderItem {
     /** Per-row item type: reader reference or azkar set — mutually exclusive. */
@@ -328,12 +347,13 @@
     );
   });
 
-  /** HH:MM-validated slots; empty labels fall back to the slot's own time. */
-  function cleanedSchedule(): ScheduleSlot[] | undefined {
+  /** HH:MM-validated slots; null = a slot failed validation, undefined = none set
+      (a schedule-less card is valid — the sentinel split is what Save checks). */
+  function cleanedSchedule(): ScheduleSlot[] | null | undefined {
     const slots: ScheduleSlot[] = [];
     for (const slot of scheduleSlots) {
       const time = parseTimeHHMM(slot.time.trim());
-      if (time === undefined) return undefined;
+      if (time === undefined) return null;
       const trimmedLabel = slot.label.trim();
       slots.push({ id: slot.id, label: trimmedLabel.length > 0 ? trimmedLabel : time, time });
     }
@@ -381,7 +401,7 @@
     }
     const sourceId = sourceIdInput.length === 0 ? null : sourceIdInput;
     const schedule = cleanedSchedule();
-    if (schedule === undefined) {
+    if (schedule === null) {
       error = h.scheduleInvalid;
       return undefined;
     }
@@ -411,6 +431,9 @@
     if (surah === undefined) {
       error = h.needsSurah;
       return undefined;
+    }
+    if (kind === "surah") {
+      return { id, kind: "surah", surah: surah.num, sourceId, count, target, createdAt, events, schedule };
     }
     if (kind === "ayah") {
       const ayah = boundedInt(ayahInput, 1, surah.ayahCount);
@@ -513,17 +536,21 @@
       />
     </label>
   {:else if kind === "snippet"}
-    <label class="flex flex-col gap-1">
+    <div class="flex flex-col gap-1">
       <span class="eyebrow">{h.pickSnippet}</span>
-      <select
-        bind:value={snippetSlug}
-        class="h-9 rounded-pill border border-border bg-transparent px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-      >
-        {#each SNIPPETS as snippet (snippet.slug)}
-          <option value={snippet.slug}>{snippetTitle(snippet.title)}</option>
-        {/each}
-      </select>
-    </label>
+      <Select.Root type="single" bind:value={snippetSlug} items={snippetItems}>
+        <Select.Trigger class="w-full" aria-label={h.pickSnippet}>
+          <Select.Value />
+        </Select.Trigger>
+        <Select.Content>
+          {#each SNIPPETS as snippet (snippet.slug)}
+            <Select.Item value={snippet.slug} label={snippetTitle(snippet.title)}>
+              {snippetTitle(snippet.title)}
+            </Select.Item>
+          {/each}
+        </Select.Content>
+      </Select.Root>
+    </div>
   {:else if kind === "collection"}
     <span class="eyebrow">{h.collectionItems}</span>
     {#if builderItems.length === 0}
@@ -536,15 +563,22 @@
       {#each builderItems as row, index (index)}
         <div class="flex flex-col gap-2 rounded-md border border-border px-3 py-3">
           <div class="flex items-center gap-2">
-            <select
-              aria-label={h.itemKind}
+            <Select.Root
+              type="single"
               value={row.mode}
-              onchange={(event) => setItemMode(index, event.currentTarget.value)}
-              class="h-7 rounded-pill border border-border bg-transparent px-1.5 text-[12.5px] text-foreground-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+              onValueChange={(value) => setItemMode(index, value)}
+              items={itemModeItems}
             >
-              <option value="ref">{h.collectionRef}</option>
-              <option value="snippet">{h.collectionSnippet}</option>
-            </select>
+              <Select.Trigger size="sm" aria-label={h.itemKind}>
+                <Select.Value />
+              </Select.Trigger>
+              <Select.Content>
+                <Select.Item value="ref" label={h.collectionRef}>{h.collectionRef}</Select.Item>
+                <Select.Item value="snippet" label={h.collectionSnippet}>
+                  {h.collectionSnippet}
+                </Select.Item>
+              </Select.Content>
+            </Select.Root>
             <span class="flex-1"></span>
             <IconButton
               label={h.itemUp}
@@ -651,15 +685,18 @@
               </div>
             {/if}
           {:else}
-            <select
-              bind:value={row.slug}
-              aria-label={h.pickSnippet}
-              class="h-9 rounded-pill border border-border bg-transparent px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-            >
-              {#each SNIPPETS as snippet (snippet.slug)}
-                <option value={snippet.slug}>{snippetTitle(snippet.title)}</option>
-              {/each}
-            </select>
+            <Select.Root type="single" bind:value={row.slug} items={snippetItems}>
+              <Select.Trigger class="w-full" aria-label={h.pickSnippet}>
+                <Select.Value placeholder={h.pickSnippet} />
+              </Select.Trigger>
+              <Select.Content>
+                {#each SNIPPETS as snippet (snippet.slug)}
+                  <Select.Item value={snippet.slug} label={snippetTitle(snippet.title)}>
+                    {snippetTitle(snippet.title)}
+                  </Select.Item>
+                {/each}
+              </Select.Content>
+            </Select.Root>
           {/if}
         </div>
       {/each}
@@ -780,18 +817,22 @@
     />
   </label>
 
-  <label class="flex flex-col gap-1">
+  <div class="flex flex-col gap-1">
     <span class="eyebrow">{h.translation}</span>
-    <select
-      bind:value={sourceIdInput}
-      class="h-9 rounded-pill border border-border bg-transparent px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-    >
-      <option value="">{h.translationArabic}</option>
-      {#each translationOptions as option (option.id)}
-        <option value={option.id}>{option.language} · {option.label}</option>
-      {/each}
-    </select>
-  </label>
+    <Select.Root type="single" bind:value={sourceIdInput} items={translationItems}>
+      <Select.Trigger class="w-full" aria-label={h.translation}>
+        <Select.Value />
+      </Select.Trigger>
+      <Select.Content>
+        <Select.Item value="" label={h.translationArabic}>{h.translationArabic}</Select.Item>
+        {#each translationOptions as option (option.id)}
+          <Select.Item value={option.id} label={`${option.language} · ${option.label}`}>
+            {option.language} · {option.label}
+          </Select.Item>
+        {/each}
+      </Select.Content>
+    </Select.Root>
+  </div>
 
   <ScheduleEditor bind:slots={scheduleSlots} />
 

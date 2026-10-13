@@ -64,6 +64,7 @@ describe("plan 03 controls are pills, icon holders are squares", () => {
     ["icon-button-variants.ts", read("src/lib/components/ui/icon-button/icon-button-variants.ts")],
     ["input.svelte", read("src/lib/components/ui/input/input.svelte")],
     ["tabs-trigger.svelte", read("src/lib/components/ui/tabs/tabs-trigger.svelte")],
+    ["select-trigger.svelte", read("src/lib/components/ui/select/select-trigger.svelte")],
     ["Chip.svelte", read("src/lib/components/chip/Chip.svelte")],
   ];
 

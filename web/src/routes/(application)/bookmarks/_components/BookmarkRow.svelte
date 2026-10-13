@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Icon } from "#lib/components/icon/index.js";
-  import { cn } from "#lib/utils.js";
+  import * as Select from "#lib/components/ui/select/index.js";
   import type { BookmarksCopy } from "#lib/i18n/bookmarks-copy.js";
   import type { BookmarkFolder } from "#lib/bookmarks/schema.js";
 
@@ -74,6 +74,13 @@
     return folders.some((folderOption) => folderOption.id === id) ? id : "";
   });
 
+  // shadcn Select label persistence: the trigger keeps naming the destination
+  // folder from `items` after the menu closes.
+  const moveItems = $derived([
+    { value: "", label: copy.unfiled },
+    ...folders.map((folderOption) => ({ value: folderOption.id, label: folderOption.name })),
+  ]);
+
   // "Saved 3 days ago" (BM-02): relative day in the page locale; legacy
   // anonymous rows (updatedAt "") and unparsable stamps show nothing.
   const savedLabel = $derived.by<string | null>(() => {
@@ -135,28 +142,29 @@
 
   <span class="flex items-center gap-1.5">
     {#if onMove}
-      <label class="sr-only" for="bookmarks-move-{bookmark.id}"
-        >{copy.moveLabel(reference)}</label
-      >
       <!-- ACCT-04: a "Move to…" menu (folder glyph + destination) vs a bare select. -->
       <span class="inline-flex items-center gap-1 text-[12.5px] text-foreground-secondary">
         <Icon name="rows" size={13} class="text-muted" />
         {copy.moveTo}
       </span>
-      <select
-        id="bookmarks-move-{bookmark.id}"
+      <Select.Root
+        type="single"
         value={moveValue}
-        onchange={(event) => {
-          const value = (event.currentTarget as HTMLSelectElement).value;
-          onMove?.(bookmark.id, value === "" ? null : value);
-        }}
-        class={cn(ghostButton, "h-8 appearance-none bg-transparent pe-6")}
+        onValueChange={(value) => onMove?.(bookmark.id, value === "" ? null : value)}
+        items={moveItems}
       >
-        <option value="">{copy.unfiled}</option>
-        {#each folders as folderOption (folderOption.id)}
-          <option value={folderOption.id}>{folderOption.name}</option>
-        {/each}
-      </select>
+        <Select.Trigger size="sm" aria-label={copy.moveLabel(reference)}>
+          <Select.Value />
+        </Select.Trigger>
+        <Select.Content>
+          <Select.Item value="" label={copy.unfiled}>{copy.unfiled}</Select.Item>
+          {#each folders as folderOption (folderOption.id)}
+            <Select.Item value={folderOption.id} label={folderOption.name}>
+              {folderOption.name}
+            </Select.Item>
+          {/each}
+        </Select.Content>
+      </Select.Root>
     {/if}
     <button
       type="button"

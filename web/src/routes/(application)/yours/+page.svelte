@@ -16,8 +16,10 @@
   import { Seo, Icon } from "#lib/components/index.js";
   import { Button } from "#lib/components/ui/button/index.js";
   import { Skeleton } from "#lib/components/ui/skeleton/index.js";
+  import * as Select from "#lib/components/ui/select/index.js";
   import { reader } from "#lib/stores/reader.svelte.js";
   import { bookmarks } from "#lib/bookmarks/store.svelte.js";
+  import type { BookmarkFolder } from "#lib/bookmarks/schema.js";
   import { parseVerseKey, verseKeyOf } from "#lib/bookmarks/schema.js";
   import BookmarkRow from "../bookmarks/_components/BookmarkRow.svelte";
   import { resumeToLastRead, resumeToVerse } from "#lib/reader/resume.js";
@@ -138,6 +140,11 @@
   // below all read the live mirror, which tracks the active session.
   const sessionOptions = $derived(sessions.list.filter((session) => session.archivedAt === null));
   const activeSessionId = $derived(sessions.activeId ?? "");
+  // shadcn Select label persistence: the trigger reads the picked row's name
+  // from `items`, which stays available after the menu closes.
+  const sessionItems = $derived(
+    sessionOptions.map((session) => ({ value: session.id, label: session.name })),
+  );
   let newSessionName = $state("");
 
   function addSession(): void {
@@ -285,6 +292,9 @@
   }
 
   const recentsLimit = $derived(homeLayout.entries[widgetIndex("recents")]?.settings.count ?? 5);
+  const recentsCountItems = $derived(
+    RECENTS_COUNT_CHOICES.map((n) => ({ value: String(n), label: String(n) })),
+  );
 
   const indexLinks = $derived([
     { label: copy.index.surahsTitle, href: publicHref(readerHrefFor(copy.locale, "/surah")) },
@@ -307,6 +317,8 @@
     href: string;
     updatedAt: string;
     hasNote: boolean;
+    /** Authed folder membership; anonymous rows are always unfiled. */
+    folderId: string | null;
   }
 
   const bookmarkCount = $derived(
@@ -322,6 +334,7 @@
       ayah: number;
       at: string;
       sourceId: string | null;
+      folderId: string | null;
     }
     const coords: Coords[] = bookmarks.authed
       ? bookmarks.bookmarks.map((bookmark) => ({
@@ -330,6 +343,7 @@
           ayah: bookmark.ayah,
           at: bookmark.updatedAt,
           sourceId: bookmark.sourceId ?? null,
+          folderId: bookmark.folderId ?? null,
         }))
       : reader.bookmarkedKeys.flatMap((key) => {
           const parsed = parseVerseKey(key);
@@ -343,6 +357,7 @@
               ayah: parsed.ayah,
               at: stamp > 0 ? new Date(stamp).toISOString() : "",
               sourceId: null,
+              folderId: null,
             },
           ];
         });
@@ -359,10 +374,30 @@
           href: surahAyahPathFor(ctxForSavedSource(entry.sourceId), surah, entry.ayah),
           updatedAt: entry.at,
           hasNote: reader.getNote(verseKeyOf(entry.surah, entry.ayah)).trim().length > 0,
+          folderId: entry.folderId,
         },
       ];
     });
   });
+
+  // Folder chrome mirrors /bookmarks (Feature 2.3 order: manual position first,
+  // NULL last, then name) so the widget's rows and move menu match the page.
+  const sortedFolders = $derived(
+    [...bookmarks.folders].sort((a, b) => {
+      const positions =
+        (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER);
+      return positions !== 0 ? positions : a.name.localeCompare(b.name);
+    }),
+  );
+
+  function folderOf(folderId: string | null): BookmarkFolder | null {
+    if (folderId === null) return null;
+    return bookmarks.folderById(folderId) ?? null;
+  }
+
+  function moveBookmarkRow(bookmarkId: string, folderId: string | null): void {
+    bookmarks.moveToFolder(bookmarkId, folderId);
+  }
 
   const lastRead = $derived(reader.lastRead);
   const lastReadSurah = $derived(lastRead ? quranData?.surahByNum(lastRead.num) : undefined);
@@ -502,19 +537,24 @@
       <p role="status" class="mt-5 text-[13px] text-danger">{h.sessionsSyncError}</p>
     {/if}
     <div class="mt-5 flex flex-wrap items-end gap-3">
-      <label class="flex min-w-0 flex-1 flex-col gap-1 sm:max-w-[260px]">
+      <div class="flex min-w-0 flex-1 flex-col gap-1 sm:max-w-[260px]">
         <span class="eyebrow">{h.sessionsLabel}</span>
-        <select
-          aria-label={h.sessionsLabel}
+        <Select.Root
+          type="single"
           value={activeSessionId}
-          onchange={(event) => sessions.switchTo(event.currentTarget.value)}
-          class="h-9 rounded-pill border border-border bg-transparent px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          onValueChange={(value) => sessions.switchTo(value)}
+          items={sessionItems}
         >
-          {#each sessionOptions as session (session.id)}
-            <option value={session.id}>{session.name}</option>
-          {/each}
-        </select>
-      </label>
+          <Select.Trigger aria-label={h.sessionsLabel} class="w-full">
+            <Select.Value placeholder={h.sessionsLabel} />
+          </Select.Trigger>
+          <Select.Content>
+            {#each sessionOptions as session (session.id)}
+              <Select.Item value={session.id} label={session.name}>{session.name}</Select.Item>
+            {/each}
+          </Select.Content>
+        </Select.Root>
+      </div>
       <form
         class="flex min-w-0 flex-1 items-end gap-2"
         onsubmit={(event) => {
@@ -628,20 +668,24 @@
       <div class="flex items-center justify-between gap-3">
         <h2 id="yours-recent" class="eyebrow">{copy.index.yoursRecent}</h2>
         {#if editing}
-          <label class="flex items-center gap-1.5 text-[12px] text-muted">
+          <span class="flex items-center gap-1.5 text-[12px] text-muted">
             {h.recentsCount}
-            <select
-              aria-label={h.recentsCount}
-              value={recentsLimit}
-              onchange={(event) =>
-                homeLayout.setCount("recents", Number(event.currentTarget.value))}
-              class="h-7 rounded-pill border border-border bg-transparent px-1.5 text-[12.5px] text-foreground-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            <Select.Root
+              type="single"
+              value={String(recentsLimit)}
+              onValueChange={(value) => homeLayout.setCount("recents", Number(value))}
+              items={recentsCountItems}
             >
-              {#each RECENTS_COUNT_CHOICES as n (n)}
-                <option value={n}>{n}</option>
-              {/each}
-            </select>
-          </label>
+              <Select.Trigger size="sm" aria-label={h.recentsCount}>
+                <Select.Value />
+              </Select.Trigger>
+              <Select.Content>
+                {#each RECENTS_COUNT_CHOICES as n (n)}
+                  <Select.Item value={String(n)} label={String(n)}>{n}</Select.Item>
+                {/each}
+              </Select.Content>
+            </Select.Root>
+          </span>
         {/if}
         {@render editControls(widget.id)}
       </div>
@@ -698,18 +742,22 @@
       {:else if bookmarkRows.length > 0}
         <ul class="mt-2 divide-y divide-border overflow-hidden rounded-md border border-border bg-surface">
           {#each bookmarkRows as row (row.key)}
-            <!-- Shared row (BM-01): same component as /bookmarks. -->
+            <!-- Shared row (BM-01): same component as /bookmarks — authed rows
+                 carry their folder badge + move menu; anon rows stay bare. -->
             <BookmarkRow
               copy={rowCopy}
               bookmark={{
                 id: row.key,
-                folderId: null,
+                folderId: row.folderId,
                 surah: row.surah,
                 ayah: row.ayah,
                 updatedAt: row.updatedAt,
               }}
               surahName={row.name}
               href={row.href}
+              folder={folderOf(row.folderId)}
+              folders={sortedFolders}
+              onMove={bookmarks.authed ? moveBookmarkRow : undefined}
               noteIcon={row.hasNote}
               onRemove={() => removeBookmarkRow(row)}
             />

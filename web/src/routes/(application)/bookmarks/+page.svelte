@@ -19,6 +19,7 @@
   import { appLocale } from "#lib/i18n/app-locale.js";
   import { getBookmarksCopy } from "#lib/i18n/bookmarks-copy.js";
   import { Button } from "#lib/components/ui/button/index.js";
+  import * as Select from "#lib/components/ui/select/index.js";
   import { Icon } from "#lib/components/icon/index.js";
   import { Skeleton } from "#lib/components/ui/skeleton/index.js";
   import BookmarkRow from "./_components/BookmarkRow.svelte";
@@ -73,6 +74,22 @@
   type SortMode = "date" | "folder" | "surah";
   let sortMode = $state<SortMode>("folder");
   let folderFilter = $state<string>("all");
+
+  // shadcn Select label persistence: closed triggers read their labels from
+  // `items`; the filter list is derived because sortedFolders is.
+  const sortItems = [
+    { value: "date", label: copy.sortDate },
+    { value: "folder", label: copy.sortFolder },
+    { value: "surah", label: copy.sortSurah },
+  ];
+  const folderItems = $derived(
+    sortedFolders.map((folder) => ({ value: folder.id, label: folder.name })),
+  );
+  const filterItems = $derived([
+    { value: "all", label: copy.filterAll },
+    { value: "unfiled", label: copy.unfiled },
+    ...folderItems,
+  ]);
 
   const filteredRows = $derived(
     bookmarks.bookmarks.filter((bookmark) => {
@@ -440,20 +457,23 @@
               >{copy.selected(selected.size)}</span
             >
             <span class="flex items-center gap-1.5">
-              <label class="sr-only" for="bookmarks-bulk-move">{copy.moveSelectedTo}</label>
-              <select
-                id="bookmarks-bulk-move"
-                onchange={(event) => {
-                  const value = (event.currentTarget as HTMLSelectElement).value;
-                  moveSelected(value === "" ? null : value);
-                }}
-                class="h-8 rounded-lg border border-border-strong bg-surface px-2 text-[12.5px] text-foreground-secondary transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+              <!-- P05 bulk move: an action menu, not a stateful field — the
+                   controlled null value keeps the trigger on its prompt. -->
+              <Select.Root
+                type="single"
+                value={undefined}
+                onValueChange={(value) => moveSelected(value === "" ? null : value)}
+                items={folderItems}
               >
-                <option value="">{copy.moveSelectedTo}</option>
-                {#each sortedFolders as folder (folder.id)}
-                  <option value={folder.id}>{folder.name}</option>
-                {/each}
-              </select>
+                <Select.Trigger size="sm" aria-label={copy.moveSelectedTo}>
+                  <Select.Value placeholder={copy.moveSelectedTo} />
+                </Select.Trigger>
+                <Select.Content>
+                  {#each sortedFolders as folder (folder.id)}
+                    <Select.Item value={folder.id} label={folder.name}>{folder.name}</Select.Item>
+                  {/each}
+                </Select.Content>
+              </Select.Root>
             </span>
             <button
               type="button"
@@ -494,38 +514,47 @@
         {#if !emptyList}
           <div class="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2">
             <span class="flex items-center gap-1.5">
-              <label for="bookmarks-sort" class="text-caption text-muted">{copy.sortLabel}</label>
-              <select
-                id="bookmarks-sort"
+              <span class="text-caption text-muted">{copy.sortLabel}</span>
+              <Select.Root
+                type="single"
                 value={sortMode}
-                class="h-8 rounded-lg border border-border-strong bg-surface px-2 text-[12.5px] text-foreground-secondary transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-                onchange={(event) => {
-                  sortMode = (event.currentTarget as HTMLSelectElement).value as SortMode;
+                onValueChange={(value) => {
+                  // SAFETY: the only values the menu can emit are sortItems' own.
+                  sortMode = value as SortMode;
                 }}
+                items={sortItems}
               >
-                <option value="date">{copy.sortDate}</option>
-                <option value="folder">{copy.sortFolder}</option>
-                <option value="surah">{copy.sortSurah}</option>
-              </select>
+                <Select.Trigger size="sm" aria-label={copy.sortLabel}>
+                  <Select.Value />
+                </Select.Trigger>
+                <Select.Content>
+                  <Select.Item value="date" label={copy.sortDate}>{copy.sortDate}</Select.Item>
+                  <Select.Item value="folder" label={copy.sortFolder}>{copy.sortFolder}</Select.Item>
+                  <Select.Item value="surah" label={copy.sortSurah}>{copy.sortSurah}</Select.Item>
+                </Select.Content>
+              </Select.Root>
             </span>
             <span class="flex items-center gap-1.5">
-              <label for="bookmarks-folder-filter" class="text-caption text-muted"
-                >{copy.filterLabel}</label
-              >
-              <select
-                id="bookmarks-folder-filter"
+              <span class="text-caption text-muted">{copy.filterLabel}</span>
+              <Select.Root
+                type="single"
                 value={folderFilter}
-                class="h-8 rounded-lg border border-border-strong bg-surface px-2 text-[12.5px] text-foreground-secondary transition-colors hover:border-border hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-                onchange={(event) => {
-                  folderFilter = (event.currentTarget as HTMLSelectElement).value;
+                onValueChange={(value) => {
+                  folderFilter = value;
                 }}
+                items={filterItems}
               >
-                <option value="all">{copy.filterAll}</option>
-                <option value="unfiled">{copy.unfiled}</option>
-                {#each sortedFolders as folder (folder.id)}
-                  <option value={folder.id}>{folder.name}</option>
-                {/each}
-              </select>
+                <Select.Trigger size="sm" aria-label={copy.filterLabel}>
+                  <Select.Value />
+                </Select.Trigger>
+                <Select.Content>
+                  <Select.Item value="all" label={copy.filterAll}>{copy.filterAll}</Select.Item>
+                  <Select.Item value="unfiled" label={copy.unfiled}>{copy.unfiled}</Select.Item>
+                  {#each sortedFolders as folder (folder.id)}
+                    <Select.Item value={folder.id} label={folder.name}>{folder.name}</Select.Item>
+                  {/each}
+                </Select.Content>
+              </Select.Root>
             </span>
           </div>
         {/if}

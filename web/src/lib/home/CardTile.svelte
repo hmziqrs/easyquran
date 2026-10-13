@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { DropdownMenu } from "bits-ui";
+  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
   import { goto } from "$app/navigation";
 
   import { appLocale } from "#lib/i18n/app-locale.js";  import {
@@ -34,7 +34,7 @@
   /**
    * One home widget card: pinned surah / ayah / range / zikr / azkar set /
    * collection with its tap counter, optional target progress, due/next
-   * schedule hint and — on manager surfaces — a bits-ui DropdownMenu of
+   * schedule hint and — on manager surfaces — the shadcn dropdown-menu of
    * per-card actions (detail / edit / duplicate / reset / remove). Shared by
    * the /yours grid and the landing strip: the strip passes neither `menu`
    * nor `onEdit`, so it keeps its plain Open pill and the card carries its
@@ -84,8 +84,8 @@
     return state === null ? null : scheduleBadgeCopy(state, locale);
   });
 
-  /* ── Actions menu (bits-ui DropdownMenu: keyboard nav, escape, outside
-     click and focus return are the primitive's job) ───────────────────────── */
+  /* ── Actions menu (shadcn dropdown-menu over bits-ui: keyboard nav, escape,
+     outside click and focus return are the primitive's job) ──────────────── */
   let duplicateFull = $state(false);
 
   function openDetails(): void {
@@ -114,14 +114,11 @@
 
   function removeCard(): void {
     // The trigger unmounts with the tile; the section-level undo banner takes
-    // focus from here (card-undo is module-owned, so the banner also works
+    // the focus from here (card-undo is module-owned, so the banner also works
     // when removal happens on the detail page).
     armCardUndo(card);
     homeCards.remove(card.id);
   }
-
-  const menuItemClass =
-    "flex w-full cursor-default select-none items-center rounded-sm px-2.5 py-1.5 text-start text-[13px] text-foreground-secondary outline-none transition-colors data-[highlighted]:bg-surface-hover data-[highlighted]:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-40";
 </script>
 
 <div
@@ -155,38 +152,34 @@
         >
           <Icon name="dots" size={18} />
         </DropdownMenu.Trigger>
-        <DropdownMenu.Content
-          sideOffset={4}
-          align="end"
-          class="z-20 flex min-w-[10rem] flex-col rounded-md border border-border-strong bg-surface p-1 shadow-lg"
-        >
+        <DropdownMenu.Content sideOffset={4} align="end">
           {#if duplicateFull}
             <p role="alert" class="px-2.5 py-1.5 text-[12px] text-danger">
               {reader_cards_full(undefined, msgOptions)}
             </p>
           {/if}
-          <DropdownMenu.Item class={menuItemClass} onSelect={openDetails}>
-            {reader_cards_open(undefined, msgOptions)}
-          </DropdownMenu.Item>
-          {#if onEdit !== undefined}
-            <DropdownMenu.Item class={menuItemClass} onSelect={editCard}>
-              {reader_cards_edit_title(undefined, msgOptions)}
+          <DropdownMenu.Group>
+            <DropdownMenu.Item onSelect={openDetails}>
+              {reader_cards_open(undefined, msgOptions)}
             </DropdownMenu.Item>
-          {/if}
-          <DropdownMenu.Item class={menuItemClass} onSelect={duplicateCard}>
-            {reader_cards_duplicate(undefined, msgOptions)}
-          </DropdownMenu.Item>
-          <DropdownMenu.Separator class="-mx-1 my-1 h-px bg-border" />
-          <DropdownMenu.Item
-            class={menuItemClass}
-            disabled={card.count === 0}
-            onSelect={resetCard}
-          >
-            {reader_cards_reset(undefined, msgOptions)}
-          </DropdownMenu.Item>
-          <DropdownMenu.Item class="{menuItemClass} text-danger data-[highlighted]:text-danger" onSelect={removeCard}>
-            {reader_cards_remove(undefined, msgOptions)}
-          </DropdownMenu.Item>
+            {#if onEdit !== undefined}
+              <DropdownMenu.Item onSelect={editCard}>
+                {reader_cards_edit_title(undefined, msgOptions)}
+              </DropdownMenu.Item>
+            {/if}
+            <DropdownMenu.Item onSelect={duplicateCard}>
+              {reader_cards_duplicate(undefined, msgOptions)}
+            </DropdownMenu.Item>
+          </DropdownMenu.Group>
+          <DropdownMenu.Separator />
+          <DropdownMenu.Group>
+            <DropdownMenu.Item disabled={card.count === 0} onSelect={resetCard}>
+              {reader_cards_reset(undefined, msgOptions)}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item variant="destructive" onSelect={removeCard}>
+              {reader_cards_remove(undefined, msgOptions)}
+            </DropdownMenu.Item>
+          </DropdownMenu.Group>
         </DropdownMenu.Content>
       </DropdownMenu.Root>
     {:else if view.href !== null}
