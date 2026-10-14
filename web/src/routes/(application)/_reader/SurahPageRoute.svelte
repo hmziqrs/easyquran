@@ -20,6 +20,7 @@
   import { trackReaderView } from "#lib/quran/track-view.svelte.js";
   import { reader } from "#lib/stores/reader.svelte.js";
   import { withModeParam } from "#lib/reader/mode-param.js";
+  import { locationMatchesVisibleUrl } from "#lib/reader/visible-url.js";
   import ReaderShell from "./ReaderShell.svelte";
   import Results from "./Results.svelte";
   import SurahReader from "./SurahReader.svelte";
@@ -114,6 +115,10 @@
       // The target page streams in place through the reader's anchor-preserving
       // queue — no navigation, the path never moves.
       await readerView?.ensureAyah(targetPage.localPage, `${surah.num}:${ayah}`);
+      // The awaits above can outlive a traversal: once the address bar has
+      // moved off this route, reveal nothing further and never shallow-write
+      // onto the traversed-to entry.
+      if (!locationMatchesVisibleUrl(page)) return;
       const targetHref = publicHref(
         readerHrefFor(copy.locale, surahAyahPathFor(routeContext, surah, ayah)),
       );
