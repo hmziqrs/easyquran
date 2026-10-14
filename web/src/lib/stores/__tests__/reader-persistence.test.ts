@@ -23,7 +23,6 @@ import {
   decodeReader,
   type NotesOwnerSource,
 } from "../reader-persistence.svelte";
-import { createReader } from "../reader.svelte";
 
 const KEY = "easyquran.reader";
 const NOTES_KEY_LOCAL = "easyquran.notes.local";
@@ -55,17 +54,9 @@ function readNotes(owner: string = "local"): { v: number; notes: Record<string, 
 }
 
 describe("decodeReader", () => {
-  it("preserves a fully valid blob", () => {
+  it("preserves a fully valid blob and ignores the retired v≤5 position/bookmark fields", () => {
     const out = decodeReader({
       v: 1,
-      current: 2,
-      fontSize: 40,
-      mode: "reading",
-      bookmarks: { "1:1": true, "2:2": false },
-      notes: { "3:3": "hi" },
-      lastRead: { num: 4, n: 5 },
-    });
-    expect(out).toEqual({
       current: 2,
       fontSize: 40,
       mode: "reading",
@@ -73,6 +64,7 @@ describe("decodeReader", () => {
       notes: { "3:3": "hi" },
       lastRead: { num: 4, n: 5 },
     });
+    expect(out).toEqual({ current: 2, fontSize: 40, mode: "reading", notes: { "3:3": "hi" } });
   });
 
   it("decodes a future-version blob tolerantly (known fields kept, never wiped)", () => {
@@ -96,28 +88,6 @@ describe("decodeReader", () => {
     expect(out.mode).toBeUndefined();
   });
 
-  it("keeps bookmarks/notes records only when the stored value is an object", () => {
-    expect(decodeReader({ bookmarks: "nope" }).bookmarks).toBeUndefined();
-    expect(decodeReader({ notes: 5 }).notes).toBeUndefined();
-    expect(decodeReader({ bookmarks: {} }).bookmarks).toEqual({});
-  });
-
-  it("filters non-true bookmarks and non-string notes", () => {
-    const out = decodeReader({
-      bookmarks: { "1:1": true, "2:2": 1, "3:3": "true" },
-      notes: { "4:4": "ok", "5:5": 7 },
-    });
-    expect(out.bookmarks).toEqual({ "1:1": true });
-    expect(out.notes).toEqual({ "4:4": "ok" });
-  });
-
-  it("decodes lastRead null / valid object / rejects garbage", () => {
-    expect(decodeReader({ lastRead: null }).lastRead).toBeNull();
-    expect(decodeReader({ lastRead: { num: 2, n: 3 } }).lastRead).toEqual({ num: 2, n: 3 });
-    expect(decodeReader({ lastRead: { num: "x", n: 3 } }).lastRead).toBeUndefined();
-    expect(decodeReader({ lastRead: [1, 2] }).lastRead).toBeUndefined();
-  });
-
   it("returns {} for non-object blobs", () => {
     expect(decodeReader(null)).toEqual({});
     expect(decodeReader("nope")).toEqual({});
@@ -125,42 +95,9 @@ describe("decodeReader", () => {
   });
 
   it("upgrades a v1 blob keeping user data; new fields absent until defaulted on hydrate", () => {
-    const out = decodeReader({
-      v: 1,
-      current: 2,
-      bookmarks: { "2:255": true },
-      lastRead: { num: 2, n: 255, sourceId: "uthmani" },
-    });
-    expect(out).toEqual({
-      current: 2,
-      bookmarks: { "2:255": true },
-      lastRead: { num: 2, n: 255, sourceId: "uthmani" },
-    });
-    expect(out.lastReadAnchor).toBeUndefined();
-    expect(out.recents).toBeUndefined();
-    expect(out.progress).toBeUndefined();
-  });
-
-  it("decodes lastReadAnchor null / valid / rejects garbage", () => {
-    expect(decodeReader({ lastReadAnchor: null }).lastReadAnchor).toBeNull();
-    expect(
-      decodeReader({ lastReadAnchor: { verseKey: "1:1", localPage: 1, ratio: 0 } }).lastReadAnchor,
-    ).toEqual({ verseKey: "1:1", localPage: 1, ratio: 0 });
-    expect(
-      decodeReader({ lastReadAnchor: { verseKey: 1, localPage: 1, ratio: 0 } }).lastReadAnchor,
-    ).toBeUndefined();
-    expect(
-      decodeReader({ lastReadAnchor: { verseKey: "1:1", localPage: 1, ratio: 2 } }).lastReadAnchor,
-    ).toBeUndefined();
-  });
-
-  it("drops malformed recents entries and progress keys, not the whole blob", () => {
-    const out = decodeReader({
-      recents: [{ num: 2, n: 255, ts: 1 }, { num: "x", n: 1, ts: 1 }, "nope"],
-      progress: { "2": { furthestAyah: 5, ts: 1 }, bad: { furthestAyah: 1, ts: 1 } },
-    });
-    expect(out.recents).toEqual([{ num: 2, n: 255, ts: 1 }]);
-    expect(out.progress).toEqual({ 2: { furthestAyah: 5, ts: 1 } });
+    const out = decodeReader({ v: 1, current: 2, notes: { "2:255": "kursi" } });
+    expect(out).toEqual({ current: 2, notes: { "2:255": "kursi" } });
+    expect(out.translationFamily).toBeUndefined();
   });
 
   it("decodes v3 arabicFont from the allowlist and drops unknown ids", () => {
@@ -183,18 +120,11 @@ describe("decodeReader", () => {
     expect(decodeReader({ arabicScript: "coptic" }).arabicScript).toBeUndefined();
   });
 
-  it("decodes the v5 additive fields (translationFamily, bookmarkSavedAt) with allowlists", () => {
+  it("decodes the v5 translationFamily with an allowlist", () => {
     expect(decodeReader({ translationFamily: "serif" }).translationFamily).toBe("serif");
     expect(decodeReader({ translationFamily: "mono" }).translationFamily).toBeUndefined();
-    // v4 blobs predate both fields: decode stays silent, defaults apply downstream.
+    // v4 blobs predate the field: decode stays silent, defaults apply downstream.
     expect(decodeReader({ v: 4 }).translationFamily).toBeUndefined();
-    expect(decodeReader({ v: 4 }).bookmarkSavedAt).toBeUndefined();
-    expect(
-      decodeReader({
-        bookmarkSavedAt: { "2:255": 1718000000000, "3:9": 1.5, "4:1": -1, "5:1": "x" },
-      }).bookmarkSavedAt,
-    ).toEqual({ "2:255": 1718000000000 });
-    expect(decodeReader({ bookmarkSavedAt: "nope" }).bookmarkSavedAt).toBeUndefined();
   });
 
   it("decodeNotes accepts the v1 envelope and rejects everything else", () => {
@@ -251,73 +181,25 @@ describe("createReaderPersistence scheduling", () => {
     persistence.dispose();
   });
 
-  it("scheduleAnchorWrite() only writes after the trailing debounce", () => {
-    const core = createReaderCore();
-    const persistence = createReaderPersistence(core);
-    persistence.hydrate();
-    core.s.lastReadAnchor = { verseKey: "2:255", localPage: 3, ratio: 0.5 };
-    persistence.scheduleAnchorWrite();
-    vi.advanceTimersByTime(299);
-    expect(read()).toBeNull();
-    vi.advanceTimersByTime(1);
-    expect(read()).toMatchObject({
-      lastReadAnchor: { verseKey: "2:255", localPage: 3, ratio: 0.5 },
-    });
-    persistence.dispose();
-  });
-
-  it("round-trips lastReadAnchor, recents, and progress through localStorage", () => {
-    const core = createReaderCore();
-    const persistence = createReaderPersistence(core);
-    persistence.hydrate();
-    core.s.lastReadAnchor = { verseKey: "2:255", localPage: 3, ratio: 0.5 };
-    core.s.recents = [{ num: 2, n: 255, sourceId: "uthmani", ts: 1000 }];
-    core.s.progress = { 2: { furthestAyah: 255, ts: 1000 } };
-    persistence.writeNow();
-    // SAFETY: blob was just written by writeNow() from core.s, whose serialized shape is Persisted.
-    const stored = JSON.parse(window.localStorage.getItem(KEY) ?? "null") as Persisted;
-    expect(stored.v).toBe(READER_SCHEMA_VERSION);
-    expect(stored.lastReadAnchor).toEqual({ verseKey: "2:255", localPage: 3, ratio: 0.5 });
-    expect(stored.recents).toEqual([{ num: 2, n: 255, sourceId: "uthmani", ts: 1000 }]);
-    expect(stored.progress).toEqual({ "2": { furthestAyah: 255, ts: 1000 } });
-    const decoded = decodeReader(stored);
-    expect(decoded.lastReadAnchor).toEqual({ verseKey: "2:255", localPage: 3, ratio: 0.5 });
-    expect(decoded.recents).toEqual([{ num: 2, n: 255, sourceId: "uthmani", ts: 1000 }]);
-    expect(decoded.progress).toEqual({ 2: { furthestAyah: 255, ts: 1000 } });
-    persistence.dispose();
-  });
-
-  it("markRead records a per-surah high-water progress", () => {
-    const r = createReader();
-    r.hydrate();
-    r.markRead(1, 5);
-    r.markRead(1, 2);
-    const blob = JSON.parse(window.localStorage.getItem(KEY) ?? "{}");
-    expect(blob.progress["1"].furthestAyah).toBe(5);
-  });
-
-  it("round-trips v5 translationFamily and bookmarkSavedAt through writeBlob and re-decode", () => {
+  it("round-trips translationFamily through writeBlob and re-decode", () => {
     const core = createReaderCore();
     const persistence = createReaderPersistence(core);
     persistence.hydrate();
     core.s.arabicFont = "scheherazade-new";
     core.s.translationSize = 21;
     core.s.translationFamily = "serif";
-    core.s.bookmarkSavedAt = { "2:255": 1718000000000 };
     persistence.writeNow();
     // SAFETY: blob was just written by writeNow() from core.s, whose serialized shape is Persisted.
     const stored = JSON.parse(window.localStorage.getItem(KEY) ?? "null") as Persisted;
     expect(stored.arabicFont).toBe("scheherazade-new");
     expect(stored.translationSize).toBe(21);
     expect(stored.translationFamily).toBe("serif");
-    expect(stored.bookmarkSavedAt).toEqual({ "2:255": 1718000000000 });
     // v5: notes never live in the blob — only under easyquran.notes.{owner}.
     expect(stored).not.toHaveProperty("notes");
     const decoded = decodeReader(stored);
     expect(decoded.arabicFont).toBe("scheherazade-new");
     expect(decoded.translationSize).toBe(21);
     expect(decoded.translationFamily).toBe("serif");
-    expect(decoded.bookmarkSavedAt).toEqual({ "2:255": 1718000000000 });
 
     const next = createReaderCore();
     const nextPersistence = createReaderPersistence(next);
@@ -325,7 +207,6 @@ describe("createReaderPersistence scheduling", () => {
     expect(next.s.arabicFont).toBe("scheherazade-new");
     expect(next.s.translationSize).toBe(21);
     expect(next.s.translationFamily).toBe("serif");
-    expect(next.s.bookmarkSavedAt).toEqual({ "2:255": 1718000000000 });
     nextPersistence.dispose();
     persistence.dispose();
   });
@@ -336,40 +217,13 @@ describe("createReaderPersistence scheduling", () => {
     persistence.hydrate();
     persistence.writeNow();
     expect(read()).toMatchObject({
-      v: 5,
+      v: 6,
       arabicFont: "kfgqpc-hafs",
       // Untouched blob carries the v4 default script (annotated Uthmani).
       arabicScript: "uthmani-annotated",
       translationSize: 17,
       translationFamily: "sans",
-      bookmarkSavedAt: {},
     });
-    persistence.dispose();
-  });
-
-  it("toggleBookmark stamps bookmarkSavedAt on save and clears it on remove (EC-46)", () => {
-    const r = createReader();
-    r.hydrate();
-    r.toggleBookmark("2:255");
-    const saved = JSON.parse(window.localStorage.getItem(KEY) ?? "{}");
-    expect(saved.bookmarks["2:255"]).toBe(true);
-    expect(saved.bookmarkSavedAt["2:255"]).toEqual(expect.any(Number));
-    r.toggleBookmark("2:255");
-    const removed = JSON.parse(window.localStorage.getItem(KEY) ?? "{}");
-    expect(removed.bookmarks["2:255"]).toBeUndefined();
-    expect(removed.bookmarkSavedAt["2:255"]).toBeUndefined();
-  });
-
-  it("hydrates a v4 blob without fabricating save times: legacy entries carry none (EC-46)", () => {
-    window.localStorage.setItem(
-      KEY,
-      JSON.stringify({ v: 4, bookmarks: { "2:255": true, "1:1": true } }),
-    );
-    const core = createReaderCore();
-    const persistence = createReaderPersistence(core);
-    persistence.hydrate();
-    expect(core.s.bookmarks).toEqual({ "2:255": true, "1:1": true });
-    expect(core.s.bookmarkSavedAt).toEqual({});
     persistence.dispose();
   });
 
@@ -394,9 +248,9 @@ describe("createReaderPersistence scheduling", () => {
     persistence.hydrate();
     core.s.notes["2:2"] = "a";
     persistence.scheduleNoteWrite();
-    core.s.bookmarks["3:3"] = true;
+    core.s.current = 3;
     persistence.writeNow();
-    expect(read()).toMatchObject({ bookmarks: { "3:3": true } });
+    expect(read()).toMatchObject({ current: 3 });
     expect(read()).not.toHaveProperty("notes");
     expect(readNotes()).toEqual({ v: 1, notes: { "2:2": "a" } });
     const blobAfter = window.localStorage.getItem(KEY);
@@ -444,39 +298,22 @@ describe("createReaderPersistence hydration race", () => {
 
   const read = (): Persisted | null => JSON.parse(window.localStorage.getItem(KEY) ?? "null");
 
-  it("writeNow() before hydrate() defers and never wipes stored bookmarks/notes/lastRead", () => {
+  it("writeNow() before hydrate() defers and never wipes stored notes", () => {
     window.localStorage.setItem(
       KEY,
-      JSON.stringify({
-        v: 1,
-        current: 2,
-        bookmarks: { "2:255": true },
-        notes: { "2:255": "kursi" },
-        lastRead: { num: 2, n: 255 },
-      }),
+      JSON.stringify({ v: 1, current: 2, notes: { "2:255": "kursi" } }),
     );
     const { stub } = fakeAuth();
     const core = createReaderCore();
     const persistence = createReaderPersistence(core, stub);
     core.s.current = 5;
     persistence.writeNow();
-    expect(read()).toMatchObject({
-      current: 2,
-      bookmarks: { "2:255": true },
-      notes: { "2:255": "kursi" },
-      lastRead: { num: 2, n: 255 },
-    });
+    expect(read()).toMatchObject({ current: 2, notes: { "2:255": "kursi" } });
     persistence.hydrate();
-    expect(core.s.bookmarks).toEqual({ "2:255": true });
     expect(core.s.notes).toEqual({ "2:255": "kursi" });
-    expect(core.s.lastRead).toEqual({ num: 2, n: 255 });
     expect(core.s.current).toBe(5);
-    expect(read()).toMatchObject({
-      current: 5,
-      bookmarks: { "2:255": true },
-      lastRead: { num: 2, n: 255 },
-    });
-    // v5: the rewritten blob drops the notes field; the legacy data was seeded
+    expect(read()).toMatchObject({ current: 5 });
+    // The rewritten blob drops the notes field; the legacy data was seeded
     // into the per-owner notes key instead.
     expect(read()).not.toHaveProperty("notes");
     expect(readNotes()).toEqual({ v: 1, notes: { "2:255": "kursi" } });
@@ -543,20 +380,17 @@ describe("createReaderPersistence cross-tab re-apply", () => {
     const core = createReaderCore();
     const persistence = createReaderPersistence(core, stub);
     persistence.hydrate();
-    core.s.bookmarkSavedAt = { "2:255": 1718000000000 };
     core.s.translationFamily = "serif";
     persistence.writeNow();
     // A tab still running the v4 build rewrites the blob with the v4 shape:
-    // no bookmarkSavedAt/translationFamily, notes back inside the blob.
+    // no translationFamily, notes back inside the blob.
     window.localStorage.setItem(
       KEY,
       JSON.stringify({ v: 4, bookmarks: { "2:255": true }, notes: { "2:255": "kursi" } }),
     );
     window.dispatchEvent(new StorageEvent("storage", { key: KEY }));
-    // Absent v5 fields decode as undefined and applyPersisted skips them, so the
-    // in-memory state survives the stale write. The disk copy is the accepted
-    // EC-54 loss: those entries re-hydrate as legacy (no known save time).
-    expect(core.s.bookmarkSavedAt).toEqual({ "2:255": 1718000000000 });
+    // Absent fields decode as undefined and applyPersisted skips them, so the
+    // in-memory state survives the stale write.
     expect(core.s.translationFamily).toBe("serif");
     // Legacy blob notes are migration input only — never re-applied to memory (EC-17).
     expect(core.s.notes).toEqual({});

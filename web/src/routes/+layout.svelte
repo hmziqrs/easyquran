@@ -24,8 +24,12 @@
   import { installPurgeHook } from "#lib/auth/purge-hook.js";
   import { bookmarks } from "#lib/bookmarks/store.svelte.js";
   import { sessions } from "#lib/sessions/store.svelte.js";
+  import { installEntryTagging, isReaderRouteId, noteLeaving } from "#lib/sessions/entry.js";
   import { localeSuggest } from "#lib/i18n/locale-suggest.svelte.js";
   import LocaleSuggest from "#lib/components/i18n/LocaleSuggest.svelte";
+  import { Toaster } from "#lib/components/ui/sonner/index.js";
+  import { toast } from "svelte-sonner";
+  import { getBookmarksCopy } from "#lib/i18n/bookmarks-copy.js";
 
   let { children } = $props();
 
@@ -98,7 +102,13 @@
     online.hydrate();
     offline.hydrate();
 
-    const cleanups = [startAnalytics(), startCrashReporting()];
+    const cleanups = [
+      startAnalytics(),
+      startCrashReporting(),
+      installEntryTagging(),
+      // Sign-in folds the device's bookmarks into the account silently; say so once.
+      bookmarks.onMerged((count) => toast(getBookmarksCopy().merged(count))),
+    ];
 
     const postAppReady = (): void => {
       const ctrl = navigator.serviceWorker?.controller;
@@ -138,7 +148,7 @@
   $effect(() => {
     const status = authState.status;
     const user = authState.user;
-    untrack(() => bookmarks.onAuthChanged(status === "authenticated" && user !== null));
+    untrack(() => bookmarks.onAuthChanged());
     // Sessions mirror the bookmarks seam: a signed-in cold boot resolves auth
     // through the probe (no transition fires when previous === null), so the
     // store's per-owner domain registers here on every status/user change.
@@ -146,7 +156,9 @@
     untrack(() => { void notifications.onAuthChanged(status, user?.id ?? null); });
   });
 
-  beforeNavigate(({ willUnload, to }) => {
+  beforeNavigate(({ willUnload, to, from }) => {
+    // Reading threads: untagged navigation away from a reader page is continuation.
+    noteLeaving(isReaderRouteId(from?.route.id));
     if (
       !("serviceWorker" in navigator) &&
       updated.current &&
@@ -197,6 +209,7 @@
 >
 <NotificationToast />
 <UpdateToast />
+<Toaster position="bottom-center" />
 <DownloadBar />
 <GlobalSearch />
 <AuthModalShell />

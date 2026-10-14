@@ -88,7 +88,7 @@ function namedAyahEntry(
     icon: "book",
     score: 1,
     href,
-    run: openVerse(surah.num, ayah),
+    run: openVerse(surah.num),
     dedupeKey: `ayah:${surah.num}:${ayah}`,
   };
 }

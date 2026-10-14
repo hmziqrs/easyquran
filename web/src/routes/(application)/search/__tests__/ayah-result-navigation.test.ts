@@ -9,8 +9,8 @@ import { createQuranData } from "#lib/data/quran-data.js";
 const h = vi.hoisted(() => ({ opened: vi.fn(), factory: vi.fn() }));
 vi.mock("#lib/search/page/navigate.js", () => ({
   ayahHrefFor: () => "/al-baqarah#ayah-2-64",
-  openVerse: (surah: number, ayah: number, sourceId?: string) => {
-    h.factory(surah, ayah, sourceId);
+  openVerse: (surah: number) => {
+    h.factory(surah);
     return h.opened;
   },
 }));
@@ -41,9 +41,9 @@ afterEach(async () => {
 
 describe("search result navigation", () => {
   it.each([
-    { id: "arabic", kind: "arabic" as const, source: undefined },
-    { id: "en.sahih", kind: "translation" as const, source: "en.sahih" },
-  ])("records the opened $id verse", async ({ id, kind, source }) => {
+    { id: "arabic", kind: "arabic" as const },
+    { id: "en.sahih", kind: "translation" as const },
+  ])("opens the $id verse as a new reading thread", async ({ id, kind }) => {
     h.opened.mockClear();
     h.factory.mockClear();
     target = document.createElement("div");
@@ -59,7 +59,7 @@ describe("search result navigation", () => {
     const link = target.querySelector("a");
     expect(link).not.toBeNull();
     link?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-    expect(h.factory).toHaveBeenCalledWith(2, 64, source);
+    expect(h.factory).toHaveBeenCalledWith(2);
     expect(h.opened).toHaveBeenCalledTimes(1);
   });
 });

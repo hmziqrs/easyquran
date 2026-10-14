@@ -16,43 +16,33 @@ describe("decodeConsent", () => {
       analytics: true,
       performance: true,
       advertising: false,
-      readingAnalytics: false,
     });
     expect(decodeConsent({ analytics: false })).toEqual({
       analytics: false,
       performance: true,
       advertising: false,
-      readingAnalytics: false,
     });
     expect(decodeConsent({ advertising: true })).toEqual({
       analytics: true,
       performance: true,
       advertising: true,
-      readingAnalytics: false,
     });
     expect(decodeConsent({ analytics: "false", advertising: 1 })).toEqual({
       analytics: true,
       performance: true,
       advertising: false,
-      readingAnalytics: false,
     });
-  });
-  it("readingAnalytics is explicit-true only (Art. 9 opt-in, Feature 6)", () => {
-    expect(decodeConsent({ readingAnalytics: true }).readingAnalytics).toBe(true);
-    expect(decodeConsent({ readingAnalytics: 1 }).readingAnalytics).toBe(false);
   });
   it("falls back to defaults for non-objects", () => {
     expect(decodeConsent(null)).toEqual({
       analytics: true,
       performance: true,
       advertising: false,
-      readingAnalytics: false,
     });
     expect(decodeConsent("x")).toEqual({
       analytics: true,
       performance: true,
       advertising: false,
-      readingAnalytics: false,
     });
   });
 });

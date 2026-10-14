@@ -178,6 +178,7 @@
   ariaCurrent: "page" | undefined,
   cls: string,
   body: Snippet,
+  entry: boolean = true,
 )}
   <!-- A div, not SidebarMenuItem's <li>: SidebarVirtualList's row is already the list
        item, and an <li> outside a <ul> rendered the browser's default bullet. -->
@@ -188,7 +189,13 @@
          focus were invisible — the feedback area looked smaller than the row. -->
     <SidebarMenuButton isActive={isActive} aria-current={ariaCurrent} class={cn(cls, "bg-transparent")}>
       {#snippet child({ props })}
-        <a {...props} {href} data-sveltekit-preload-data="hover" onclick={onItemClick}>
+        <a
+          {...props}
+          {href}
+          data-session-origin={entry ? "index" : undefined}
+          data-sveltekit-preload-data="hover"
+          onclick={onItemClick}
+        >
           {@render body()}
         </a>
       {/snippet}
@@ -334,6 +341,8 @@
                       n === routeVerse ? "page" : undefined,
                       "h-auto gap-3 px-3.5 py-2.5",
                       body,
+                      // Verse rows move within the surah being read: continuation.
+                      false,
                     )}
                   {/if}
                 {/snippet}

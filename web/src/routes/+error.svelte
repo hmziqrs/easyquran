@@ -166,6 +166,7 @@
             {@const hue = hueAt(i)}
             <li>
               <a
+                data-session-origin="index"
                 href={publicHref(readerHrefFor(locale, surahPathFor(ARABIC_CTX, s.slug)))}
                 data-sveltekit-preload-data="hover"
                 class="group flex items-center gap-3.5 rounded-md border border-border p-4 transition-colors duration-150 hover:border-border-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"

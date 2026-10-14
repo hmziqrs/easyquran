@@ -45,7 +45,7 @@ function fakePrefs(): SettingsPrefsPort {
 
 function fakeConsent(): SettingsConsentPort {
   return {
-    current: { analytics: true, performance: true, advertising: false, readingAnalytics: false },
+    current: { analytics: true, performance: true, advertising: false },
     set() {},
   };
 }
@@ -62,7 +62,7 @@ function settingsDoc(arabicScript: QuranSourceId): SettingsDoc {
       translationSize: 17,
       translationFamily: "sans",
     },
-    privacy: { analytics: true, performance: true, advertising: false, readingAnalytics: false },
+    privacy: { analytics: true, performance: true, advertising: false },
   };
 }
 

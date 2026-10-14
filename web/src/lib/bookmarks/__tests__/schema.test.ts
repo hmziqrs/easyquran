@@ -1,218 +1,95 @@
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
-  AYAH_MAX,
-  FOLDER_NAME_MAX,
-  bookmarkRangeKeyOf,
+  compareFolders,
   decodeBookmark,
   decodeBookmarkFolder,
   decodeBookmarksEnvelope,
+  defaultFolderIdFor,
   isSingleVerseBookmark,
-  newBookmarkEntityId,
-  parseVerseKey,
-  verseKeyOf,
+  liveKeyOf,
+  type BookmarkFolder,
 } from "../schema";
 
-/** JSON scalar a wire fixture may carry; decoders must reject every non-string/number shape. */
-type Wire = string | number | boolean | null;
+const F = "f1f1f1f1-f1f1-4f1f-8f1f-f1f1f1f1f1f1";
+const B = "b1b1b1b1-b1b1-4b1b-8b1b-b1b1b1b1b1b1";
+const TS = "2026-10-14T00:00:00.000Z";
 
-function folderWire(
-  overrides: Partial<
-    Record<"id" | "name" | "kind" | "position" | "createdAt" | "updatedAt", Wire>
-  > = {},
-) {
-  return {
-    id: "f1",
-    name: "Ramadan",
-    createdAt: "2026-01-01T00:00:00Z",
-    updatedAt: "2026-01-02T00:00:00Z",
-    ...overrides,
-  };
-}
-
-function bookmarkWire(
-  overrides: Partial<
-    Record<
-      "id" | "folderId" | "surah" | "ayah" | "endSurah" | "endAyah" | "createdAt" | "updatedAt",
-      Wire
-    >
-  > = {},
-) {
-  return {
-    id: "b1",
-    folderId: null,
-    surah: 2,
-    ayah: 255,
-    createdAt: "2026-01-01T00:00:00Z",
-    updatedAt: "2026-01-02T00:00:00Z",
-    ...overrides,
-  };
-}
-
-describe("verseKeyOf / parseVerseKey", () => {
-  it("round-trips the legacy `${surah}:${ayah}` format", () => {
-    expect(verseKeyOf(1, 1)).toBe("1:1");
-    expect(verseKeyOf(2, 255)).toBe("2:255");
-    expect(verseKeyOf(114, 6)).toBe("114:6");
-    for (const key of ["1:1", "2:255", "114:6"]) {
-      expect(parseVerseKey(key)).toEqual({
-        surah: Number(key.split(":")[0]),
-        ayah: Number(key.split(":")[1]),
-      });
-    }
-  });
-
-  it("rejects malformed keys instead of defaulting", () => {
-    for (const bad of ["", "2", ":255", "2:", "a:b", "2:255x", "2:25:5", " 2:255"]) {
-      expect(parseVerseKey(bad), bad).toBeNull();
-    }
+describe("default folder ids", () => {
+  it("match the server's UUIDv5 derivation byte for byte", () => {
+    // Same vectors as uuid.uuid5(NS, name) — and Rust `Uuid::new_v5`.
+    expect(defaultFolderIdFor(1)).toBe("9c314774-c392-5a9a-b569-79b8e7e31226");
+    expect(defaultFolderIdFor("local")).toBe("e520c7f8-36a1-5ef3-8a07-7a2c672d0d76");
   });
 });
 
-describe("decodeBookmarkFolder", () => {
-  it("decodes a valid row, defaulting kind/position when absent", () => {
-    expect(decodeBookmarkFolder(folderWire())).toEqual({
-      id: "f1",
-      name: "Ramadan",
-      kind: "generic",
-      position: null,
-      createdAt: "2026-01-01T00:00:00Z",
-      updatedAt: "2026-01-02T00:00:00Z",
-    });
-  });
-
-  it("decodes study-set kind and manual position", () => {
-    const folder = decodeBookmarkFolder(folderWire({ kind: "daily", position: 3 }));
-    expect(folder?.kind).toBe("daily");
-    expect(folder?.position).toBe(3);
-  });
-
-  it("rejects an unknown folder kind", () => {
-    expect(decodeBookmarkFolder(folderWire({ kind: "weekly" }))).toBeNull();
-  });
-
-  it("rejects malformed rows", () => {
-    expect(decodeBookmarkFolder(null)).toBeNull();
-    expect(decodeBookmarkFolder("nope")).toBeNull();
-    expect(decodeBookmarkFolder(folderWire({ id: "" }))).toBeNull();
-    expect(decodeBookmarkFolder(folderWire({ name: "" }))).toBeNull();
-    expect(decodeBookmarkFolder(folderWire({ name: "x".repeat(FOLDER_NAME_MAX + 1) }))).toBeNull();
-    expect(decodeBookmarkFolder(folderWire({ createdAt: 42 }))).toBeNull();
-    expect(decodeBookmarkFolder(folderWire({ updatedAt: undefined }))).toBeNull();
-  });
-});
-
-describe("decodeBookmark", () => {
-  it("decodes a row with folderId null and with a folder id", () => {
-    expect(decodeBookmark(bookmarkWire())).toEqual({
-      id: "b1",
-      folderId: null,
-      surah: 2,
-      ayah: 255,
-      createdAt: "2026-01-01T00:00:00Z",
-      updatedAt: "2026-01-02T00:00:00Z",
-    });
-    expect(decodeBookmark(bookmarkWire({ folderId: "f1" }))?.folderId).toBe("f1");
-  });
-
-  it("rejects out-of-range or non-integer coordinates and bad folderId", () => {
-    expect(decodeBookmark(bookmarkWire({ surah: 0 }))).toBeNull();
-    expect(decodeBookmark(bookmarkWire({ surah: 115 }))).toBeNull();
-    expect(decodeBookmark(bookmarkWire({ ayah: 0 }))).toBeNull();
-    expect(decodeBookmark(bookmarkWire({ ayah: AYAH_MAX + 1 }))).toBeNull();
-    expect(decodeBookmark(bookmarkWire({ surah: 2.5 }))).toBeNull();
-    expect(decodeBookmark(bookmarkWire({ folderId: 42 }))).toBeNull();
-    expect(decodeBookmark(bookmarkWire({ folderId: "" }))).toBeNull();
-    expect(decodeBookmark(bookmarkWire({ id: "" }))).toBeNull();
-    expect(decodeBookmark(bookmarkWire({ updatedAt: null }))).toBeNull();
-  });
-
-  it("decodes the range end only when the server emits both keys (Feature 7.4, §9.1)", () => {
-    // Single rows keep the legacy shape (no end keys), covered above.
-    const range = decodeBookmark(bookmarkWire({ id: "b2", ayah: 285, endSurah: 2, endAyah: 286 }));
-    expect(range).toMatchObject({ surah: 2, ayah: 285, endSurah: 2, endAyah: 286 });
-    // Exactly one end key = corrupt row → dropped, not half-decoded.
-    expect(decodeBookmark(bookmarkWire({ endSurah: 2 }))).toBeNull();
-    expect(decodeBookmark(bookmarkWire({ endAyah: 286 }))).toBeNull();
-    expect(decodeBookmark(bookmarkWire({ endSurah: 115, endAyah: 1 }))).toBeNull();
-  });
-
-  it("keys rows by start verse plus range end and singles them out (EC-51)", () => {
-    const single = { surah: 2, ayah: 285, endSurah: null, endAyah: null };
-    const range = { surah: 2, ayah: 285, endSurah: 2, endAyah: 286 };
-    expect(isSingleVerseBookmark(single)).toBe(true);
-    expect(isSingleVerseBookmark(range)).toBe(false);
-    // Absent ends behave like null (pre-range clients never sent the keys).
+describe("decoders", () => {
+  it("decodes a folder, flagging the default", () => {
     expect(
-      isSingleVerseBookmark({ surah: 2, ayah: 285, endSurah: undefined, endAyah: undefined }),
-    ).toBe(true);
-    // Distinct keys: a range and its start verse never collapse into each other.
-    expect(bookmarkRangeKeyOf(single)).toBe("2:285-2:285");
-    expect(bookmarkRangeKeyOf(range)).toBe("2:285-2:286");
-  });
-});
-
-describe("newBookmarkEntityId fallback (insecure origins, no randomUUID)", () => {
-  const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("emits UUID-v4-shaped ids from getRandomValues when randomUUID is missing", () => {
-    vi.stubGlobal("crypto", {
-      getRandomValues(arr: Uint8Array): Uint8Array {
-        for (let i = 0; i < arr.length; i += 1) arr[i] = Math.floor(Math.random() * 256);
-        return arr;
-      },
+      decodeBookmarkFolder({ id: F, name: "Hifz", isDefault: true, createdAt: TS, updatedAt: TS }),
+    ).toEqual({
+      id: F,
+      name: "Hifz",
+      isDefault: true,
+      position: null,
+      createdAt: TS,
+      updatedAt: TS,
     });
-    const first = newBookmarkEntityId();
-    const second = newBookmarkEntityId();
-    expect(first).toMatch(UUID_V4);
-    expect(second).toMatch(UUID_V4);
-    expect(first).not.toBe(second);
+    expect(
+      decodeBookmarkFolder({ id: "short", name: "x", createdAt: TS, updatedAt: TS }),
+    ).toBeNull();
+    expect(decodeBookmarkFolder({ id: F, name: "", createdAt: TS, updatedAt: TS })).toBeNull();
   });
 
-  it("still emits UUID-v4 shape from Math.random alone", () => {
-    vi.stubGlobal("crypto", {});
-    expect(newBookmarkEntityId()).toMatch(UUID_V4);
-    expect(newBookmarkEntityId()).toMatch(UUID_V4);
-  });
-});
-
-describe("decodeBookmarksEnvelope", () => {
-  it("decodes counts, folders and bookmarks", () => {
-    const envelope = decodeBookmarksEnvelope({
-      applied: 3,
-      skipped: 1,
-      folders: [folderWire()],
-      bookmarks: [bookmarkWire(), bookmarkWire({ id: "b2" })],
-    });
-    expect(envelope).not.toBeNull();
-    expect(envelope?.applied).toBe(3);
-    expect(envelope?.skipped).toBe(1);
-    expect(envelope?.folders).toHaveLength(1);
-    expect(envelope?.bookmarks).toHaveLength(2);
+  it("decodes a bookmark; every row needs a folder and ranges travel as a pair", () => {
+    const row = { id: B, folderId: F, surah: 2, ayah: 285, createdAt: TS, updatedAt: TS };
+    expect(decodeBookmark(row)).toMatchObject({ endSurah: null, endAyah: null, sourceId: null });
+    expect(decodeBookmark({ ...row, endSurah: 2, endAyah: 286 })).toMatchObject({ endAyah: 286 });
+    expect(decodeBookmark({ ...row, endSurah: 2 })).toBeNull();
+    expect(decodeBookmark({ ...row, folderId: null })).toBeNull();
+    expect(decodeBookmark({ ...row, surah: 115 })).toBeNull();
   });
 
   it("drops malformed rows instead of failing the whole snapshot", () => {
     const envelope = decodeBookmarksEnvelope({
-      applied: 2,
-      skipped: 0,
-      folders: [folderWire(), folderWire({ id: 7 })],
-      bookmarks: [bookmarkWire(), bookmarkWire({ surah: 999 })],
+      applied: 1,
+      folders: [{ id: F, name: "A", createdAt: TS, updatedAt: TS }, { nope: true }],
+      bookmarks: [{ id: B, folderId: F, surah: 1, ayah: 1, createdAt: TS, updatedAt: TS }, null],
     });
     expect(envelope?.folders).toHaveLength(1);
     expect(envelope?.bookmarks).toHaveLength(1);
+    expect(envelope?.skipped).toBe(0);
+    expect(decodeBookmarksEnvelope({ folders: [] })).toBeNull();
+  });
+});
+
+describe("keys and order", () => {
+  it("keys rows by folder + start verse + range end", () => {
+    const single = { folderId: F, surah: 2, ayah: 285, endSurah: null, endAyah: null };
+    const range = { ...single, endSurah: 2, endAyah: 286 };
+    expect(isSingleVerseBookmark(single)).toBe(true);
+    expect(isSingleVerseBookmark(range)).toBe(false);
+    expect(liveKeyOf(single)).not.toBe(liveKeyOf(range));
+    expect(liveKeyOf(single)).not.toBe(liveKeyOf({ ...single, folderId: B }));
   });
 
-  it("rejects bodies without both arrays or with garbage counts", () => {
-    expect(decodeBookmarksEnvelope(null)).toBeNull();
-    expect(decodeBookmarksEnvelope("nope")).toBeNull();
-    expect(decodeBookmarksEnvelope({ folders: [] })).toBeNull();
-    expect(decodeBookmarksEnvelope({ bookmarks: [] })).toBeNull();
-    expect(
-      decodeBookmarksEnvelope({ applied: "3", skipped: 0, folders: [], bookmarks: [] })?.applied,
-    ).toBe(0);
+  it("sorts the default folder first, then manual position, then name", () => {
+    const folder = (name: string, position: number | null, isDefault = false): BookmarkFolder => ({
+      id: name,
+      name,
+      isDefault,
+      position,
+      createdAt: TS,
+      updatedAt: TS,
+    });
+    const sorted = [
+      folder("b", null),
+      folder("z", 0),
+      folder("Bookmarks", null, true),
+      folder("a", null),
+    ]
+      .sort((x, y) => compareFolders(x, y))
+      .map((f) => f.name);
+    expect(sorted).toEqual(["Bookmarks", "z", "a", "b"]);
   });
 });

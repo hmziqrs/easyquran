@@ -62,6 +62,7 @@
             {#each group.snippets as snippet (snippet.slug)}
               <li>
                 <a
+                  data-session-origin="snippet"
                   href={detailHref(snippet.slug)}
                   class="flex flex-col gap-0.5 rounded-lg px-3 py-2.5 transition-colors hover:bg-background-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
                 >

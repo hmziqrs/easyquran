@@ -1,5 +1,5 @@
 import { bookmarksDomainFor } from "#lib/bookmarks/domain.js";
-import { sessionsDomainFor } from "#lib/sessions/domain.svelte.js";
+import { sessionsDomainFor } from "#lib/sessions/domain.js";
 import { syncEngine } from "#lib/sync/index.js";
 
 /**

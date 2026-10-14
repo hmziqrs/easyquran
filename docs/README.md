@@ -17,4 +17,6 @@ its phase — next-features.md has none (its phase V is represented in the regis
 note below); that registry, not this folder listing, is the source of truth for status.
 
 Frozen: [`next-features.md`](next-features.md) takes zero edits until phase V's single correction
-pass; [`research/`](research/) is raw evidence — cited, never rewritten.
+pass — except the owner-directed 2026-10-14 cut of its bookmark/session/analytics briefs, now
+[`reading-model.md`](reading-model.md); [`research/`](research/) is raw evidence — cited, never
+rewritten.

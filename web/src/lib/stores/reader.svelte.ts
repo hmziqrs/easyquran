@@ -8,7 +8,6 @@ import {
   type BrowseMode,
   type LastReadAnchor,
   type ReaderMode,
-  type RecentsEntry,
   createReaderCore,
 } from "./reader-core.svelte";
 import { createReaderPersistence } from "./reader-persistence.svelte";
@@ -37,9 +36,9 @@ export interface ReaderApi {
   readonly openNote: VerseKey | null;
   toggleNote(key: VerseKey): void;
   setCurrent(num: number): void;
-  openVerse(num: number, n: number, sourceId?: string): void;
+  /** Jump to a verse: the reader route resolves the reading thread. */
+  openVerse(num: number): void;
   markRead(num: number, n: number, sourceId?: string): void;
-  clearReadingPosition(): void;
   readonly arabicSizePx: string;
   bigger(): void;
   smaller(): void;
@@ -59,22 +58,16 @@ export interface ReaderApi {
   /** Live mushaf position (sticky indicator). Transient — null until a reader view writes it. */
   readonly position: ReaderPositionState | null;
   setPosition(position: ReaderPositionState | null): void;
-  isBookmarked(key: VerseKey): boolean;
-  readonly bookmarkedKeys: readonly VerseKey[];
-  /** v5 save stamps (epoch ms) keyed like `bookmarkedKeys`; missing entries are legacy (EC-46). */
-  readonly bookmarkSavedAt: Readonly<Record<VerseKey, number>>;
-  toggleBookmark(key: VerseKey): void;
   getNote(key: VerseKey): string;
   setNote(key: VerseKey, v: string): void;
   readonly lastRead: { num: number; n: number; sourceId?: string } | null;
   readonly hasLastRead: boolean;
   readonly lastReadRef: string;
   readonly lastReadAnchor: LastReadAnchor | null;
-  setLastReadAnchor(anchor: LastReadAnchor | null): void;
+  setLastReadAnchor(anchor: LastReadAnchor): void;
   readonly pendingAnchor: LastReadAnchor | null;
   setPendingAnchor(anchor: LastReadAnchor | null): void;
   consumePendingAnchor(): LastReadAnchor | null;
-  readonly recentReads: readonly RecentsEntry[];
   progressFor(num: number): number | null;
   versesFor(num: number): string[];
   seedAyahs(ayahs: readonly { key: VerseKey; text: string }[]): void;
@@ -134,9 +127,8 @@ export function createReader(): ReaderApi {
     toggleNote: (key: VerseKey) => session.toggleNote(key),
 
     setCurrent: (num: number) => session.setCurrent(num),
-    openVerse: (num: number, n: number, sourceId?: string) => session.openVerse(num, n, sourceId),
+    openVerse: (num: number) => session.openVerse(num),
     markRead: (num: number, n: number, sourceId?: string) => session.markRead(num, n, sourceId),
-    clearReadingPosition: () => session.clearReadingPosition(),
 
     get arabicSizePx() {
       return settings.arabicSizePx;
@@ -176,14 +168,6 @@ export function createReader(): ReaderApi {
     },
     setPosition: (position: ReaderPositionState | null) => session.setPosition(position),
 
-    isBookmarked: (key: VerseKey) => annotations.isBookmarked(key),
-    get bookmarkedKeys(): readonly VerseKey[] {
-      return annotations.bookmarkedKeys;
-    },
-    get bookmarkSavedAt(): Readonly<Record<VerseKey, number>> {
-      return annotations.bookmarkSavedAt;
-    },
-    toggleBookmark: (key: VerseKey) => annotations.toggleBookmark(key),
     getNote: (key: VerseKey) => annotations.getNote(key),
     setNote: (key: VerseKey, v: string) => annotations.setNote(key, v),
     get lastRead() {
@@ -198,15 +182,12 @@ export function createReader(): ReaderApi {
     get lastReadAnchor() {
       return annotations.lastReadAnchor;
     },
-    setLastReadAnchor: (anchor: LastReadAnchor | null) => session.setLastReadAnchor(anchor),
+    setLastReadAnchor: (anchor: LastReadAnchor) => session.setLastReadAnchor(anchor),
     get pendingAnchor() {
       return session.pendingAnchor;
     },
     setPendingAnchor: (anchor: LastReadAnchor | null) => session.setPendingAnchor(anchor),
     consumePendingAnchor: () => session.consumePendingAnchor(),
-    get recentReads() {
-      return annotations.recentReads;
-    },
     progressFor: (num: number) => annotations.progressFor(num),
 
     versesFor: (num: number) => verseCache.versesFor(num),

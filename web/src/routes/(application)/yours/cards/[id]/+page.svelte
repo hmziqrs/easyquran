@@ -42,6 +42,7 @@
   import { homeCards, type HomeCard } from "#lib/home/cards.svelte.js";
   import {
     cardContents,
+    cardEntryAttrs,
     scheduleBadgeCopy,
     tileCopyFor,
     yoursBackHref,
@@ -454,6 +455,7 @@
             <li>
               {#if row.href !== null}
                 <a
+                  {...cardEntryAttrs(card, card.kind === "collection" ? card.items[index] : undefined)}
                   href={publicHref(row.href)}
                   data-sveltekit-preload-data="hover"
                   class="flex items-center gap-2 px-4 py-3 text-sm text-foreground transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"

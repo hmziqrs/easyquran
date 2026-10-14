@@ -24,16 +24,6 @@ export interface LastReadAnchor {
   localPage: number;
   ratio: number;
 }
-export interface RecentsEntry {
-  num: number;
-  n: number;
-  sourceId?: string;
-  ts: number;
-}
-export interface SurahProgress {
-  furthestAyah: number;
-  ts: number;
-}
 
 export interface Persisted {
   v: number;
@@ -46,21 +36,11 @@ export interface Persisted {
   /** Translation typeface family (TRX-10). v5 persists it; earlier blobs default to "sans". */
   translationFamily: TranslationFamily;
   mode: ReaderMode;
-  bookmarks: Record<VerseKey, boolean>;
-  /**
-   * Anonymous bookmark save timestamps (epoch ms), keyed like `bookmarks`.
-   * Entries absent here (legacy v≤4 bookmarks) carry no known time and sort last (EC-46).
-   */
-  bookmarkSavedAt: Record<VerseKey, number>;
   /**
    * Legacy v≤4 field — migration input only. v5 stopped writing it: notes live under
    * the per-owner key `easyquran.notes.{owner}` (EC-17), never inside the blob.
    */
   notes: Record<VerseKey, string>;
-  lastRead: { num: number; n: number; sourceId?: string } | null;
-  lastReadAnchor: LastReadAnchor | null;
-  recents: RecentsEntry[];
-  progress: Record<number, SurahProgress>;
 }
 
 export interface ReaderState extends Persisted {
@@ -73,10 +53,10 @@ export interface ReaderState extends Persisted {
 }
 
 // v4 adds `arabicScript` (Uthmani/Simple-clean/IndoPak/Tajweed mushaf variant).
-// v5 adds `translationFamily` (persisted; was session-only) and `bookmarkSavedAt`
-// (anonymous bookmark timestamps), and moves notes out to `easyquran.notes.{owner}`.
-// Decode reads supported fields only, so v3/v4 blobs hydrate with the defaults.
-export const READER_SCHEMA_VERSION = 5;
+// v5 adds `translationFamily` and moves notes out to `easyquran.notes.{owner}`.
+// v6 drops position + bookmark fields: reading threads (#lib/sessions) and
+// bookmarks (#lib/bookmarks) own them now. Decode reads supported fields only.
+export const READER_SCHEMA_VERSION = 6;
 
 export const ARABIC_SCRIPT_VALUES: readonly QuranSourceId[] = QURAN_SOURCE_IDS;
 
@@ -107,13 +87,7 @@ export const READER_DEFAULTS: ReaderState = {
   translationSize: 17,
   translationFamily: "sans",
   mode: "verse",
-  bookmarks: {},
-  bookmarkSavedAt: {},
   notes: {},
-  lastRead: null,
-  lastReadAnchor: null,
-  recents: [],
-  progress: {},
   pendingAnchor: null,
   query: "",
   browse: BrowseMode.Surah,

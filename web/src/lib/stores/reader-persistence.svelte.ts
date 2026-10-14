@@ -8,14 +8,10 @@ import type { QuranSourceId } from "#lib/data/quran-types.js";
 import type { VerseKey } from "#lib/data/quran.js";
 import { clientQuranEnvironment } from "#lib/quran/client-environment.js";
 import { isScriptEnabled } from "#lib/quran/script-availability.js";
-import { asNumberRecord } from "#lib/storage/decoders.js";
 import {
-  asArray,
-  asBooleanRecord,
   asLiteral,
   asNumber,
   asObject,
-  asString,
   asStringRecord,
   onPageHide,
   onStorageKey,
@@ -39,13 +35,10 @@ import {
   type Persisted,
   type ReaderCore,
   type ReaderMode,
-  type RecentsEntry,
-  type SurahProgress,
 } from "./reader-core.svelte";
 import { applyReaderPresentation } from "./reader-presentation";
 
 const STORAGE_KEY = "easyquran.reader";
-const ANCHOR_PERSIST_DEBOUNCE_MS = 300;
 
 // Notes live outside the reader blob under a per-owner key (EC-17): owner = user id
 // when signed in, `local` otherwise, so one account's notes are never read for another.
@@ -118,71 +111,10 @@ export function decodeReader(raw: unknown): Partial<Persisted> {
   const mode = asLiteral<ReaderMode>(stored.mode, READER_MODE_VALUES);
   if (mode) out.mode = mode;
 
-  const bookmarksObj = asObject(stored.bookmarks);
-  if (bookmarksObj) out.bookmarks = asBooleanRecord(bookmarksObj);
-
-  // v5 field: absent in v≤4 blobs → legacy bookmarks carry no known save time (EC-46).
-  const savedAtObj = asObject(stored.bookmarkSavedAt);
-  if (savedAtObj) out.bookmarkSavedAt = asNumberRecord(savedAtObj, 0, Number.MAX_SAFE_INTEGER);
-
   // Legacy v≤4 field: decode-only migration input for the per-owner notes key;
   // v5 never writes it back into the blob.
   const notesObj = asObject(stored.notes);
   if (notesObj) out.notes = asStringRecord(notesObj);
-
-  if (stored.lastRead === null) {
-    out.lastRead = null;
-  } else {
-    const lr = asObject(stored.lastRead);
-    if (lr) {
-      const num = asNumber(lr.num, -Infinity, Infinity);
-      const n = asNumber(lr.n, -Infinity, Infinity);
-      const sourceId = asString(lr.sourceId);
-      if (num !== undefined && n !== undefined)
-        out.lastRead = sourceId !== undefined ? { num, n, sourceId } : { num, n };
-    }
-  }
-
-  if (stored.lastReadAnchor === null) {
-    out.lastReadAnchor = null;
-  } else {
-    const a = asObject(stored.lastReadAnchor);
-    if (a) {
-      const verseKey = asString(a.verseKey);
-      const localPage = asNumber(a.localPage, 1, Number.POSITIVE_INFINITY);
-      const ratio = asNumber(a.ratio, 0, 1);
-      if (verseKey && localPage !== undefined && ratio !== undefined)
-        out.lastReadAnchor = { verseKey, localPage, ratio };
-    }
-  }
-
-  if (Array.isArray(stored.recents)) {
-    out.recents = asArray<RecentsEntry>(stored.recents, (item) => {
-      const e = asObject(item);
-      if (!e) return undefined;
-      const num = asNumber(e.num, 1, SURAH_COUNT);
-      const n = asNumber(e.n, 1, Number.POSITIVE_INFINITY);
-      const ts = asNumber(e.ts, 0, Number.POSITIVE_INFINITY);
-      if (num === undefined || n === undefined || ts === undefined) return undefined;
-      const sourceId = asString(e.sourceId);
-      return sourceId !== undefined ? { num, n, sourceId, ts } : { num, n, ts };
-    });
-  }
-
-  const progressObj = asObject(stored.progress);
-  if (progressObj) {
-    const progress: Record<number, SurahProgress> = {};
-    for (const [k, v] of Object.entries(progressObj)) {
-      const num = Number(k);
-      if (!Number.isInteger(num) || num < 1) continue;
-      const entry = asObject(v);
-      if (!entry) continue;
-      const furthestAyah = asNumber(entry.furthestAyah, 1, Number.POSITIVE_INFINITY);
-      const ts = asNumber(entry.ts, 0, Number.POSITIVE_INFINITY);
-      if (furthestAyah !== undefined && ts !== undefined) progress[num] = { furthestAyah, ts };
-    }
-    out.progress = progress;
-  }
 
   return out;
 }
@@ -203,14 +135,8 @@ function applyPersisted(s: ReaderCore["s"], p: Partial<Persisted>): void {
   if (p.translationSize !== undefined) s.translationSize = p.translationSize;
   if (p.translationFamily !== undefined) s.translationFamily = p.translationFamily;
   if (p.mode !== undefined) s.mode = p.mode;
-  if (p.bookmarks !== undefined) s.bookmarks = p.bookmarks;
-  if (p.bookmarkSavedAt !== undefined) s.bookmarkSavedAt = p.bookmarkSavedAt;
   // `p.notes` (legacy blob notes) is deliberately NOT applied here: notes state is
   // owned by the per-owner notes key loader below, which seeds from it exactly once.
-  if (p.lastRead !== undefined) s.lastRead = p.lastRead;
-  if (p.lastReadAnchor !== undefined) s.lastReadAnchor = p.lastReadAnchor;
-  if (p.recents !== undefined) s.recents = p.recents;
-  if (p.progress !== undefined) s.progress = p.progress;
 }
 
 export interface ReaderPersistence {
@@ -218,8 +144,6 @@ export interface ReaderPersistence {
   writeNow(): void;
   scheduleNoteWrite(): void;
   flushNoteWrite(): void;
-  scheduleAnchorWrite(): void;
-  flushAnchorWrite(): void;
   /**
    * Re-resolves the notes owner (post-auth user id, else `local`) and swaps the
    * in-memory notes when it changed. No-op while auth is unresolved or before
@@ -235,7 +159,6 @@ export function createReaderPersistence(
   auth: NotesOwnerSource = authState,
 ): ReaderPersistence {
   const noteWriter = trailingDebounce(() => writeNotes(), NOTE_PERSIST_DEBOUNCE_MS);
-  const anchorWriter = trailingDebounce(() => writeBlob(), ANCHOR_PERSIST_DEBOUNCE_MS);
   let hydrated = false;
   let dirty = false;
   let teardowns: Array<() => void> = [];
@@ -259,12 +182,6 @@ export function createReaderPersistence(
       translationSize,
       translationFamily,
       mode,
-      bookmarks,
-      bookmarkSavedAt,
-      lastRead,
-      lastReadAnchor,
-      recents,
-      progress,
     } = core.s;
     writeJSON(STORAGE_KEY, {
       v,
@@ -275,12 +192,6 @@ export function createReaderPersistence(
       translationSize,
       translationFamily,
       mode,
-      bookmarks,
-      bookmarkSavedAt,
-      lastRead,
-      lastReadAnchor,
-      recents,
-      progress,
     });
   }
 
@@ -383,7 +294,6 @@ export function createReaderPersistence(
       teardowns.push(
         onPageHide(() => {
           noteWriter.flush();
-          anchorWriter.flush();
         }),
       );
       syncNotesOwner();
@@ -397,7 +307,6 @@ export function createReaderPersistence(
       // Flush (not cancel) a pending note write: notes live in their own key now,
       // so dropping the debounced write would silently lose the edit.
       noteWriter.flush();
-      anchorWriter.cancel();
       writeBlob();
     },
     scheduleNoteWrite() {
@@ -406,16 +315,9 @@ export function createReaderPersistence(
     flushNoteWrite() {
       noteWriter.flush();
     },
-    scheduleAnchorWrite() {
-      anchorWriter.schedule();
-    },
-    flushAnchorWrite() {
-      anchorWriter.flush();
-    },
     syncNotesOwner,
     dispose() {
       noteWriter.flush();
-      anchorWriter.flush();
       notesListener?.();
       notesListener = null;
       for (const teardown of teardowns) teardown();

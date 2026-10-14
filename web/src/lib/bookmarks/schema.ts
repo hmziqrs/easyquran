@@ -1,10 +1,13 @@
 import type { VerseKey } from "#lib/data/quran.js";
 import { asArray, asNumber, asObject, asString } from "#lib/storage/index.js";
+import { uuidV5 } from "#lib/sync/ids.js";
 
 /**
- * Bookmarks wire/domain contracts for the offline sync engine's "bookmarks"
- * domain. Wire JSON is decoded defensively at the boundary (#lib/storage/index.js
- * decoders); nothing from a response body is trusted past this module.
+ * Folder-based bookmarks (docs/reading-model.md §3). Every bookmark lives in a
+ * folder; every owner has a default folder whose id is derived (UUIDv5), so
+ * offline devices converge on one default instead of minting duplicates. A
+ * verse may sit in many folders. Wire JSON and the device-local envelope both
+ * decode defensively here.
  */
 
 export const SURAH_MIN = 1;
@@ -12,16 +15,24 @@ export const SURAH_MAX = 114;
 /** Longest surah (Al-Baqarah). */
 export const AYAH_MAX = 286;
 export const FOLDER_NAME_MAX = 100;
+/** Seed name of every default folder (the user may rename it). */
+export const DEFAULT_FOLDER_NAME = "Bookmarks";
 
-/** Study-set label (§11.7: name-only) — lockstep with the server's `valid_folder_kind`. */
-export type BookmarkFolderKind = "generic" | "daily" | "learning";
+/**
+ * UUIDv5 namespace for default-folder ids — byte-for-byte the server's
+ * `DEFAULT_FOLDER_NAMESPACE` (bookmark_folder/actions.rs).
+ */
+const DEFAULT_FOLDER_NAMESPACE = "6f0e4c1a-2b7d-4e59-9a83-5c1d2e3f4a5b";
 
-export const FOLDER_KINDS: readonly BookmarkFolderKind[] = ["generic", "daily", "learning"];
+/** Default folder id: `user:{id}` for an account, `local` for the device owner. */
+export function defaultFolderIdFor(owner: number | "local"): string {
+  return uuidV5(DEFAULT_FOLDER_NAMESPACE, owner === "local" ? "local" : `user:${owner}`);
+}
 
 export interface BookmarkFolder {
   readonly id: string;
   readonly name: string;
-  readonly kind: BookmarkFolderKind;
+  readonly isDefault: boolean;
   /** Manual order (LWW integer); null = unpositioned, sorts after positioned. */
   readonly position: number | null;
   readonly createdAt: string;
@@ -30,41 +41,28 @@ export interface BookmarkFolder {
 
 export interface Bookmark {
   readonly id: string;
-  readonly folderId: string | null;
+  readonly folderId: string;
   readonly surah: number;
   readonly ayah: number;
   readonly createdAt: string;
   readonly updatedAt: string;
-  /** Saved translation context (Feature 3.5): absent → consumers fall back to Arabic (EC-38). */
-  readonly sourceId?: string | null;
-  /** Range end (Feature 7.4): absent/null = single ayah (§9.1 `end = start` sentinel). */
-  readonly endSurah?: number | null;
-  readonly endAyah?: number | null;
-}
-
-/** Mutable decode target for `decodeBookmark`: optional keys stay absent, never null. */
-interface DecodedBookmark {
-  id: string;
-  folderId: string | null;
-  surah: number;
-  ayah: number;
-  createdAt: string;
-  updatedAt: string;
-  sourceId?: string;
-  endSurah?: number;
-  endAyah?: number;
+  /** Saved translation context: null → consumers fall back to Arabic. */
+  readonly sourceId: string | null;
+  /** Range end: null = single ayah. */
+  readonly endSurah: number | null;
+  readonly endAyah: number | null;
 }
 
 export type BookmarksMutation =
   | {
       readonly kind: "bookmark.upsert";
       readonly id: string;
-      readonly folderId: string | null;
+      readonly folderId: string;
       readonly surah: number;
       readonly ayah: number;
-      /** Range end (Feature 7.4): omitted/null = single ayah (§9.1 sentinel). */
-      readonly endSurah?: number | null;
-      readonly endAyah?: number | null;
+      readonly endSurah: number | null;
+      readonly endAyah: number | null;
+      readonly sourceId: string | null;
       readonly updatedAt: string;
     }
   | { readonly kind: "bookmark.delete"; readonly id: string; readonly updatedAt: string }
@@ -72,14 +70,11 @@ export type BookmarksMutation =
       readonly kind: "folder.upsert";
       readonly id: string;
       readonly name: string;
-      /** Wire name `folderKind` — `kind` is already the mutation discriminator. */
-      readonly folderKind?: BookmarkFolderKind;
-      readonly position?: number | null;
+      readonly position: number | null;
       readonly updatedAt: string;
     }
   | { readonly kind: "folder.delete"; readonly id: string; readonly updatedAt: string };
 
-/** Full server state, as returned by POST /bookmark/v1/sync. */
 export interface BookmarksSnapshot {
   readonly folders: readonly BookmarkFolder[];
   readonly bookmarks: readonly Bookmark[];
@@ -90,51 +85,18 @@ export interface BookmarksSyncEnvelope extends BookmarksSnapshot {
   readonly skipped: number;
 }
 
-/**
- * Manual UUID v4 (8-4-4-4-12 lowercase hex, version 4 + variant bits set) for
- * insecure origins where crypto.randomUUID is missing: the server validator
- * only accepts dashed-hex UUIDs, so a non-UUID fallback id would 422 every
- * sync round forever. Entropy source: crypto.getRandomValues when present,
- * else Math.random (best available there).
- */
-function fallbackUuidV4(): string {
-  const bytes = new Uint8Array(16);
-  if ("getRandomValues" in crypto) crypto.getRandomValues(bytes);
-  else for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
-  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40; // version 4
-  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80; // variant 10xx
-  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
-  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
-}
-
-/** Entity id (bookmark/folder row). Distinct from the engine's queue-entry mutation id. */
-export function newBookmarkEntityId(): string {
-  // `in` (not typeof): randomUUID is missing on insecure origins (LAN http dev).
-  if ("randomUUID" in crypto) return crypto.randomUUID();
-  return fallbackUuidV4();
-}
-
-/**
- * Legacy reader VerseKey format: `${surah}:${ayah}` (see verseKey() in
- * #lib/data/quran.js and Record<VerseKey, boolean> in reader-core).
- */
 export function verseKeyOf(surah: number, ayah: number): VerseKey {
   return `${surah}:${ayah}`;
 }
 
-/** Strict parse of the legacy VerseKey; null for anything not `${digits}:${digits}`. */
+/** Strict parse of a VerseKey; null for anything not `${digits}:${digits}`. */
 export function parseVerseKey(key: string): { surah: number; ayah: number } | null {
-  const match = /^(\d+):(\d+)$/.exec(key);
+  const match = /^(\d+):(\d+)$/u.exec(key);
   if (!match) return null;
-  const surah = Number(match[1]);
-  const ayah = Number(match[2]);
-  return { surah, ayah };
+  return { surah: Number(match[1]), ayah: Number(match[2]) };
 }
 
-/**
- * True when the row covers exactly one ayah: no range end, or the §9.1
- * `end = start` sentinel. Per-verse marks match single rows only (EC-51).
- */
+/** True when the row covers exactly one ayah. Per-verse marks match single rows only. */
 export function isSingleVerseBookmark(
   bookmark: Pick<Bookmark, "surah" | "ayah" | "endSurah" | "endAyah">,
 ): boolean {
@@ -144,11 +106,8 @@ export function isSingleVerseBookmark(
   );
 }
 
-/**
- * Collapse/pending-delete key: start verse plus range end, so a `2:285–286`
- * range and a `2:285` single never overwrite each other (EC-51).
- */
-export function bookmarkRangeKeyOf(
+/** Live key within a folder: start verse plus range end. */
+export function rangeKeyOf(
   bookmark: Pick<Bookmark, "surah" | "ayah" | "endSurah" | "endAyah">,
 ): string {
   return `${verseKeyOf(bookmark.surah, bookmark.ayah)}-${verseKeyOf(
@@ -157,46 +116,58 @@ export function bookmarkRangeKeyOf(
   )}`;
 }
 
-// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed field from the sync response; this decoder is its boundary parser.
+/** Server-identical live key: folder + range. */
+export function liveKeyOf(
+  bookmark: Pick<Bookmark, "folderId" | "surah" | "ayah" | "endSurah" | "endAyah">,
+): string {
+  return `${bookmark.folderId}/${rangeKeyOf(bookmark)}`;
+}
+
+/** Default first, then manual position (unpositioned last), then name. */
+export function compareFolders(a: BookmarkFolder, b: BookmarkFolder): number {
+  if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+  const positions =
+    (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER);
+  if (positions !== 0) return positions;
+  return a.name.localeCompare(b.name);
+}
+
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed timestamp field; this decoder is its boundary parser.
 function decodeTimestamp(raw: unknown): string | undefined {
   const value = asString(raw);
   return value !== undefined && value.length > 0 ? value : undefined;
 }
 
-// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed folder row from the sync response; this decoder is its boundary parser.
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed folder row (wire or storage); this decoder is its boundary parser.
 export function decodeBookmarkFolder(raw: unknown): BookmarkFolder | null {
   const obj = asObject(raw);
   if (!obj) return null;
   const id = asString(obj.id);
   const name = asString(obj.name);
-  if (id === undefined || id.length === 0) return null;
+  if (id === undefined || id.length !== 36) return null;
   if (name === undefined || name.length === 0 || name.length > FOLDER_NAME_MAX) return null;
   const createdAt = decodeTimestamp(obj.createdAt);
   const updatedAt = decodeTimestamp(obj.updatedAt);
   if (createdAt === undefined || updatedAt === undefined) return null;
-  // Absent kind = pre-kind server snapshot → "generic"; an UNKNOWN kind is a
-  // malformed row → dropped, not silently re-labelled.
-  const rawKind = asString(obj.kind);
-  // SAFETY: FOLDER_KINDS is the complete BookmarkFolderKind union, so this membership test is the runtime check; the assertion only satisfies includes()'s element-type signature.
-  if (rawKind !== undefined && !FOLDER_KINDS.includes(rawKind as BookmarkFolderKind)) return null;
-  const position = asNumber(obj.position, -1_000_000, 1_000_000);
-  // SAFETY: the guard above rejected every rawKind outside FOLDER_KINDS, so rawKind here is a BookmarkFolderKind or undefined; undefined falls back to "generic".
   return {
     id,
     name,
-    kind: (rawKind as BookmarkFolderKind | undefined) ?? "generic",
-    position: position ?? null,
+    isDefault: obj.isDefault === true,
+    position: asNumber(obj.position, -1_000_000, 1_000_000) ?? null,
     createdAt,
     updatedAt,
   };
 }
 
-// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed bookmark row from the sync response; this decoder is its boundary parser.
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed bookmark row (wire or storage); this decoder is its boundary parser.
 export function decodeBookmark(raw: unknown): Bookmark | null {
   const obj = asObject(raw);
   if (!obj) return null;
   const id = asString(obj.id);
-  if (id === undefined || id.length === 0) return null;
+  const folderId = asString(obj.folderId);
+  if (id === undefined || id.length !== 36 || folderId === undefined || folderId.length !== 36) {
+    return null;
+  }
   const surah = asNumber(obj.surah, SURAH_MIN, SURAH_MAX);
   const ayah = asNumber(obj.ayah, 1, AYAH_MAX);
   if (
@@ -210,56 +181,43 @@ export function decodeBookmark(raw: unknown): Bookmark | null {
   const createdAt = decodeTimestamp(obj.createdAt);
   const updatedAt = decodeTimestamp(obj.updatedAt);
   if (createdAt === undefined || updatedAt === undefined) return null;
-  let folderId: string | null | undefined;
-  if (obj.folderId === null) folderId = null;
-  else {
-    const value = asString(obj.folderId);
-    folderId = value !== undefined && value.length > 0 ? value : undefined;
-  }
-  if (folderId === undefined) return null;
-  // Wire `sourceId`: absent on servers without the column.
-  const sourceId = asString(obj.sourceId);
-  // Wire range end (Feature 7.4): absent = single ayah. The server emits both
-  // keys together or neither; exactly one is a corrupt row → dropped.
+  // Range ends travel together or not at all; exactly one is a corrupt row.
   const endSurah = asNumber(obj.endSurah, SURAH_MIN, SURAH_MAX);
   const endAyah = asNumber(obj.endAyah, 1, AYAH_MAX);
   if ((endSurah === undefined) !== (endAyah === undefined)) return null;
-  // Optional keys ride along only when present, matching the sourceId pattern:
-  // a plain single row keeps its legacy shape. Named contract: the Bookmark
-  // fields are readonly, so the decoder builds a mutable row and returns it.
-  const row: DecodedBookmark = { id, folderId, surah, ayah, createdAt, updatedAt };
-  if (sourceId !== undefined && sourceId.length > 0) row.sourceId = sourceId;
-  if (endSurah !== undefined && endAyah !== undefined) {
-    row.endSurah = endSurah;
-    row.endAyah = endAyah;
-  }
-  return row;
+  const sourceId = asString(obj.sourceId);
+  return {
+    id,
+    folderId,
+    surah,
+    ayah,
+    createdAt,
+    updatedAt,
+    sourceId: sourceId !== undefined && sourceId.length > 0 ? sourceId : null,
+    endSurah: endSurah ?? null,
+    endAyah: endAyah ?? null,
+  };
 }
 
-/**
- * Decode the `{ applied, skipped, folders, bookmarks }` sync envelope. Counts
- * fall back to the mutation-batch size when the server omits or mangles them —
- * they are status bookkeeping, never data.
- */
-// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the unparsed JSON body of POST /bookmark/v1/sync; this decoder is its boundary parser.
-export function decodeBookmarksEnvelope(raw: unknown): BookmarksSyncEnvelope | null {
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is a folders + bookmarks pair (wire snapshot or device envelope); this decoder is its boundary parser.
+export function decodeBookmarksSnapshot(raw: unknown): BookmarksSnapshot | null {
   const obj = asObject(raw);
-  if (!obj) return null;
-  if (!Array.isArray(obj.folders) || !Array.isArray(obj.bookmarks)) return null;
-  const applied = asNumber(obj.applied, 0, Number.POSITIVE_INFINITY);
-  const skipped = asNumber(obj.skipped, 0, Number.POSITIVE_INFINITY);
+  if (!obj || !Array.isArray(obj.folders) || !Array.isArray(obj.bookmarks)) return null;
   return {
-    applied: applied ?? 0,
-    skipped: skipped ?? 0,
     folders: asArray(obj.folders, (item) => decodeBookmarkFolder(item) ?? undefined),
     bookmarks: asArray(obj.bookmarks, (item) => decodeBookmark(item) ?? undefined),
   };
 }
 
-/** Decode a bare snapshot (no counts), e.g. for tests and future pull shapes. */
-// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is an unparsed snapshot payload; this decoder is its boundary parser.
-export function decodeBookmarksSnapshot(raw: unknown): BookmarksSnapshot | null {
-  const envelope = decodeBookmarksEnvelope(raw);
-  if (envelope === null) return null;
-  return { folders: envelope.folders, bookmarks: envelope.bookmarks };
+/** Decode the `{ applied, skipped, folders, bookmarks }` sync response. */
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the unparsed JSON body of POST /bookmark/v1/sync; this decoder is its boundary parser.
+export function decodeBookmarksEnvelope(raw: unknown): BookmarksSyncEnvelope | null {
+  const snapshot = decodeBookmarksSnapshot(raw);
+  if (snapshot === null) return null;
+  const obj = asObject(raw);
+  return {
+    ...snapshot,
+    applied: asNumber(obj?.applied, 0, Number.POSITIVE_INFINITY) ?? 0,
+    skipped: asNumber(obj?.skipped, 0, Number.POSITIVE_INFINITY) ?? 0,
+  };
 }

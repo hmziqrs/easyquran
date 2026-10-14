@@ -1,6 +1,6 @@
 # Reading model — sessions, bookmarks, reading insights
 
-Status: **in progress** (2026-10-14). Supersedes next-features Features 2, 3, 4, 6 and §9's
+Status: **implemented, awaiting owner QA** (2026-10-14). Supersedes next-features Features 2, 3, 4, 6 and §9's
 bookmark/session parts. Breaking change by design: nothing here is deployed, so the
 `m000012`–`m000014` migrations are rewritten in place and no legacy client shape is kept.
 

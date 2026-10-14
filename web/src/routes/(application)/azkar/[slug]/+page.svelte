@@ -15,6 +15,7 @@
   import { publicHref } from "#lib/i18n/public-href.js";
   import { reader } from "#lib/stores/reader.svelte.js";
   import type { ShareVerse } from "#lib/stores/reader-share.svelte.js";
+  import { revealVerseMarker, trackReaderThread } from "#lib/sessions/reader-thread.svelte.js";
   import ReaderShell from "../../_reader/ReaderShell.svelte";
   import type { SnippetRefGroup } from "./+page.server";
 
@@ -48,9 +49,27 @@
   const description = $derived(localized(data.description));
   const canonicalPath = $derived(snippetPath(data.slug));
 
-  // Feature 7.5: files every snippet ref as its own range row (never singles,
-  // EC-51); anon hides it — the legacy local store has no ranges.
-  const rangeBookmarkable = $derived(bookmarks.authed && data.refs.length > 0);
+  // Every snippet ref files as its own range row in the default folder.
+  const rangeBookmarkable = $derived(data.refs.length > 0);
+
+  // A snippet is a bounded reading thread: reading its last verse completes it.
+  trackReaderThread({
+    key: () => data.slug,
+    target: () => {
+      const first = data.refs[0];
+      const last = data.refs.at(-1);
+      if (first === undefined || last === undefined) return null;
+      return {
+        scope: `snippet:${data.slug}`,
+        surah: first.surah,
+        ayah: first.ayahStart,
+        exact: false,
+        boundEnd: `${last.surah}:${last.ayahEnd}`,
+        sourceId: null,
+      };
+    },
+    onResume: (thread) => void revealVerseMarker(thread.surah, thread.ayah),
+  });
   const allRefsMarked = $derived(
     data.refs.every((group) =>
       bookmarks.isRangeMarked(group.surah, group.ayahStart, group.surah, group.ayahEnd),
@@ -164,6 +183,7 @@
           <p
             dir="rtl"
             lang="ar"
+            data-verse-anchor={row.key}
             class="font-arabic text-[1.6rem] leading-[2.15] text-quran-foreground"
           >
             {row.text}<span

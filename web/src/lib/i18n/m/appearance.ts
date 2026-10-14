@@ -2,7 +2,7 @@
 //
 // Marketing appearance panel. Lazy: only downloaded once the panel is opened.
 //
-// 46 messages. Import this barrel, never
+// 44 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { accent_azure_label } from "#lib/paraglide/messages/accent_azure_label.js";
@@ -45,8 +45,6 @@ export { tweaks_palette_sepia_note } from "#lib/paraglide/messages/tweaks_palett
 export { tweaks_performance } from "#lib/paraglide/messages/tweaks_performance.js";
 export { tweaks_performance_reload } from "#lib/paraglide/messages/tweaks_performance_reload.js";
 export { tweaks_pop } from "#lib/paraglide/messages/tweaks_pop.js";
-export { tweaks_reading_analytics } from "#lib/paraglide/messages/tweaks_reading_analytics.js";
-export { tweaks_reading_analytics_hint } from "#lib/paraglide/messages/tweaks_reading_analytics_hint.js";
 export { tweaks_reset } from "#lib/paraglide/messages/tweaks_reset.js";
 export { tweaks_settings } from "#lib/paraglide/messages/tweaks_settings.js";
 export { tweaks_surface } from "#lib/paraglide/messages/tweaks_surface.js";

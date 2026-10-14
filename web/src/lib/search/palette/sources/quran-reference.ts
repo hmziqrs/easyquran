@@ -49,7 +49,7 @@ function ayahEntry(query: PaletteQuery, num: number, ayah: number): PaletteEntry
     icon: "book",
     score: 1,
     href,
-    run: openVerse(num, ayah),
+    run: openVerse(num),
     dedupeKey: `ayah:${num}:${ayah}`,
   };
 }

@@ -12,4 +12,4 @@
   const copy = getBookmarksCopy(appLocale());
 </script>
 
-<p data-locale={copy.locale} data-direction={copy.direction}>{copy.title} · {copy.unfiled} · {copy.foldersHeading}</p>
+<p data-locale={copy.locale} data-direction={copy.direction}>{copy.title} · {copy.defaultBadge} · {copy.foldersHeading}</p>

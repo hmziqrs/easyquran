@@ -6,53 +6,86 @@ import type { UiLocale } from "#lib/i18n/locales.js";
 import { publicHref } from "#lib/i18n/public-href.js";
 import { readerHrefFor } from "#lib/i18n/reader.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
-import type { LastReadAnchor } from "#lib/stores/reader-core.svelte.js";
+import { markEntry, type EntryOrigin } from "#lib/sessions/entry.js";
+import type { ReadingThread } from "#lib/sessions/schema.js";
+import { sessions } from "#lib/sessions/store.svelte.js";
 import { reader } from "#lib/stores/reader.svelte.js";
 
-export type ResumeOptions = { replaceState?: boolean; anchor?: LastReadAnchor | null };
+import { threadPath } from "./thread-path";
 
-export async function resumeToVerse(
-  num: number,
-  n: number,
-  sourceId: string | undefined,
+export { threadPath } from "./thread-path";
+
+export type ResumeOptions = { replaceState?: boolean };
+
+async function go(path: `/${string}`, options: ResumeOptions): Promise<void> {
+  // kit 3 merged keepFocus/noScroll into `reset`: it stays true so the reader's
+  // own anchor scroll runs; only `replace` varies.
+  // SAFETY: paraglide getLocale() returns the active locale, and this app defines exactly the UI_LOCALE_IDS union (en/ar); readerHrefFor re-validates via assertUiLocale.
+  await goto(publicHref(readerHrefFor(getLocale() as UiLocale, path)), {
+    reset: true,
+    replace: options.replaceState,
+  });
+}
+
+/** Continue a reading thread exactly where it was left (Continue cards, handoff, hotkey). */
+export async function resumeThread(
+  thread: ReadingThread,
   currentCtx: SurahRouteContext,
   options: ResumeOptions = {},
 ): Promise<boolean> {
   try {
     const quranData = await loadQuranData();
-    const surah = quranData.surahByNum(num);
-    if (!surah || !quranData.surahLocalPageForAyah(num, n)) return false;
-    const resumeCtx = resumeCtxFor(sourceId !== undefined ? { sourceId } : null, currentCtx);
-    reader.openVerse(num, n, sourceId);
-    if (options.anchor) reader.setPendingAnchor(options.anchor);
-    // SAFETY: paraglide getLocale() returns the active locale, and this app defines exactly the UI_LOCALE_IDS union (en/ar); readerHrefFor re-validates via assertUiLocale.
-    // kit 3 merged keepFocus/noScroll into one `reset` flag. Kit 2 passed
-    // keepFocus: !replaceState, and every live caller omits options — so focus
-    // was always KEPT while scroll still reset to the pending anchor. Kit 3
-    // cannot express that split (reset: false would also skip the anchor
-    // scroll), so reset stays true: anchor scrolling is preserved and the
-    // focus reset is an accepted, documented drift; only `replace` varies.
-    await goto(
-      publicHref(readerHrefFor(getLocale() as UiLocale, surahAyahPathFor(resumeCtx, surah, n))),
-      {
-        reset: true,
-        replace: options.replaceState,
-      },
+    const ctx = resumeCtxFor(
+      thread.sourceId !== null ? { sourceId: thread.sourceId } : null,
+      currentCtx,
     );
+    const path = threadPath(thread, ctx, quranData);
+    if (path === null) return false;
+    sessions.markResume(thread.id);
+    reader.openVerse(thread.surah);
+    if (thread.localPage !== null && thread.ratio !== null) {
+      reader.setPendingAnchor({
+        verseKey: `${thread.surah}:${thread.ayah}`,
+        localPage: thread.localPage,
+        ratio: thread.ratio,
+      });
+    }
+    await go(path, options);
     return true;
   } catch {
     return false;
   }
 }
 
+/** Open one verse as a new thread (notes, bookmarks, search hits). */
+export async function openVerseAt(
+  num: number,
+  n: number,
+  sourceId: string | undefined,
+  currentCtx: SurahRouteContext,
+  origin: Exclude<EntryOrigin, "resume"> = "bookmark",
+  options: ResumeOptions = {},
+): Promise<boolean> {
+  try {
+    const quranData = await loadQuranData();
+    const surah = quranData.surahByNum(num);
+    if (!surah || !quranData.surahLocalPageForAyah(num, n)) return false;
+    const ctx = resumeCtxFor(sourceId !== undefined ? { sourceId } : null, currentCtx);
+    markEntry({ origin, exact: true });
+    reader.openVerse(num);
+    await go(surahAyahPathFor(ctx, surah, n), options);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** "Continue reading": this tab's thread, else the newest open one. */
 export async function resumeToLastRead(
   currentCtx: SurahRouteContext,
   options: ResumeOptions = {},
 ): Promise<boolean> {
-  const lastRead = reader.lastRead;
-  if (!lastRead) return false;
-  return resumeToVerse(lastRead.num, lastRead.n, lastRead.sourceId, currentCtx, {
-    ...options,
-    anchor: reader.lastReadAnchor,
-  });
+  const thread = sessions.current ?? sessions.latest;
+  if (thread === null) return false;
+  return resumeThread(thread, currentCtx, options);
 }

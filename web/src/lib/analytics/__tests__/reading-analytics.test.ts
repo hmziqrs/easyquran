@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("$app/env", () => ({ browser: true }));
 vi.mock("$app/env/public", () => ({ PUBLIC_API_BASE_URL: "/api", PUBLIC_FCM_VAPID_KEY: "" }));
@@ -22,9 +22,8 @@ vi.mock("#lib/auth/auth-client.js", async (importOriginal) => {
   return { ...actual, authClient: transport };
 });
 
-import { todayLocal } from "#lib/quran/engagement-state.js";
-import { consent, decodeConsent } from "#lib/stores/consent.svelte.js";
 import { scrubReaderPath } from "#lib/firebase/analytics.js";
+import { todayLocal } from "#lib/quran/engagement-state.js";
 import {
   decodeLocalRollup,
   decodeSummary,
@@ -33,212 +32,103 @@ import {
 } from "../reading-analytics";
 
 const ROLLUP_KEY = "easyquran.analytics.local";
-const QUEUE_KEY = "easyquran.analytics.queue.7";
+const LOCAL_QUEUE = "easyquran.analytics.queue.local";
+const ACCOUNT_QUEUE = "easyquran.analytics.queue.7";
 
 // SAFETY: readKey parses whatever is under the key; tests only ever write valid envelopes.
 const readKey = (key: string) => JSON.parse(window.localStorage.getItem(key) ?? "null");
 
-describe("reading analytics consent gate (§11.4: opt-in, OFF by default)", () => {
-  it("decodes readingAnalytics as explicit-true only", () => {
-    expect(decodeConsent(undefined).readingAnalytics).toBe(false);
-    expect(decodeConsent({ analytics: true }).readingAnalytics).toBe(false);
-    expect(decodeConsent({ readingAnalytics: true }).readingAnalytics).toBe(true);
-  });
-
-  it("emit writes nothing while opted out, regardless of auth", () => {
-    auth.status = "authenticated";
-    auth.user = { id: 7 };
-    readingAnalytics.emit({
-      kind: "ayah.read",
-      surah: 2,
-      ayah: 255,
-      sourceId: null,
-      seconds: null,
-    });
-    expect(readKey(ROLLUP_KEY)).toBeNull();
-    expect(readKey(QUEUE_KEY)).toBeNull();
-    auth.status = "anonymous";
-    auth.user = null;
-  });
+const read = (surah: number, ayah: number, ms = 1000) => ({
+  sessionId: "c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1",
+  surah,
+  ayah,
+  sourceId: null,
+  ms,
 });
 
-describe("reading analytics anonymous local rollup", () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-    consent.setReadingAnalytics(true);
-  });
+function signIn(): void {
+  auth.status = "authenticated";
+  auth.user = { id: 7 };
+}
 
-  it("counts per day/surah/ayah and re-reads increment", () => {
-    readingAnalytics.emit({
-      kind: "ayah.read",
-      surah: 2,
-      ayah: 255,
-      sourceId: "en.sahih",
-      seconds: null,
-    });
-    readingAnalytics.emit({
-      kind: "ayah.read",
-      surah: 2,
-      ayah: 255,
-      sourceId: "en.sahih",
-      seconds: null,
-    });
-    readingAnalytics.emit({ kind: "ayah.read", surah: 3, ayah: 1, sourceId: null, seconds: null });
-    const day = todayLocal();
-    expect(readKey(ROLLUP_KEY)).toEqual({
-      v: 1,
-      days: { [day]: { "2": { "255": 2 }, "3": { "1": 1 } } },
-    });
-    expect(summarizeRollup(decodeLocalRollup(readKey(ROLLUP_KEY))).topSurahs).toEqual([
-      { surah: 2, reads: 2 },
-      { surah: 3, reads: 1 },
-    ]);
-  });
+function signOut(): void {
+  auth.status = "anonymous";
+  auth.user = null;
+}
 
-  it("rejects out-of-range verses and bad source ids without writing", () => {
-    readingAnalytics.emit({ kind: "ayah.read", surah: 0, ayah: 1, sourceId: null, seconds: null });
-    readingAnalytics.emit({
-      kind: "ayah.read",
-      surah: 1,
-      ayah: 999,
-      sourceId: null,
-      seconds: null,
-    });
-    readingAnalytics.emit({
-      kind: "ayah.read",
-      surah: 1,
-      ayah: 1,
-      sourceId: "BAD ID",
-      seconds: null,
-    });
-    expect(readKey(ROLLUP_KEY)).toBeNull();
-  });
+beforeEach(() => {
+  window.localStorage.clear();
+  transport.unsafeRequest.mockReset();
+  transport.get.mockReset();
+  signOut();
 });
 
-describe("reading analytics signed-in queue + flush", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    window.localStorage.clear();
-    consent.setReadingAnalytics(true);
-    auth.status = "authenticated";
-    auth.user = { id: 7 };
-    transport.unsafeRequest.mockReset();
-  });
-  afterEach(() => vi.useRealTimers());
-
-  it("queues per-owner and flushes a camelCase batch with expectedUserId", async () => {
-    readingAnalytics.emit({
-      kind: "ayah.read",
-      surah: 2,
-      ayah: 255,
-      sourceId: "en.sahih",
-      seconds: 12,
-    });
-    transport.unsafeRequest.mockResolvedValue({
-      ok: true,
-      status: 200,
-      data: { accepted: 1 },
-      error: null,
-      rotated: false,
-    });
-    await vi.advanceTimersByTimeAsync(4_100);
-    expect(transport.unsafeRequest).toHaveBeenCalledWith("/user/analytics/v1/events", {
-      method: "POST",
-      body: {
-        expectedUserId: 7,
-        events: [
-          expect.objectContaining({
-            kind: "ayah.read",
-            surah: 2,
-            ayah: 255,
-            sourceId: "en.sahih",
-            seconds: 12,
-            localDay: todayLocal(),
-          }),
-        ],
-      },
-    });
-    expect(readKey(QUEUE_KEY)).toBeNull();
+describe("reading insights are always on", () => {
+  it("signed out: every read queues and rolls up locally with its time", () => {
+    readingAnalytics.emit(read(2, 255, 4000));
+    readingAnalytics.emit(read(2, 255, 2000));
+    readingAnalytics.emit(read(1, 1, 500));
+    expect(readKey(LOCAL_QUEUE).events).toHaveLength(3);
+    const summary = summarizeRollup(decodeLocalRollup(readKey(ROLLUP_KEY)));
+    expect(summary.totals).toEqual({ ayahs: 3, ms: 6500, days: 1 });
+    expect(summary.topAyahs[0]).toEqual({ surah: 2, ayah: 255, reads: 2, ms: 6000 });
+    expect(summary.days[0]).toEqual({ localDay: todayLocal(), ayahsRead: 3, ms: 6500 });
   });
 
-  it("keeps the queue on network failure, drops a 400 batch (EC-29 rule)", async () => {
-    readingAnalytics.emit({ kind: "ayah.read", surah: 2, ayah: 1, sourceId: null, seconds: null });
-    transport.unsafeRequest.mockRejectedValueOnce(new Error("offline"));
-    await vi.advanceTimersByTimeAsync(4_100);
-    expect(readKey(QUEUE_KEY)).not.toBeNull();
-    transport.unsafeRequest.mockResolvedValue({
-      ok: false,
-      status: 400,
-      data: null,
-      error: {},
-      rotated: false,
-    });
+  it("drops out-of-range verses and clamps durations", () => {
+    readingAnalytics.emit(read(115, 1));
+    readingAnalytics.emit(read(1, 0));
+    readingAnalytics.emit(read(1, 1, 99_999_999));
+    const events = readKey(LOCAL_QUEUE).events;
+    expect(events).toHaveLength(1);
+    expect(events[0].ms).toBe(3_600_000);
+    expect(events[0].id).toMatch(/^[0-9a-f-]{36}$/u);
+  });
+
+  it("signed in: the device queue joins the account and uploads in one idempotent batch", async () => {
+    readingAnalytics.emit(read(36, 1));
+    signIn();
+    transport.unsafeRequest.mockResolvedValue({ ok: true, status: 200, data: { accepted: 2 } });
+    readingAnalytics.emit(read(36, 2));
     await readingAnalytics.flushNow();
-    expect(readKey(QUEUE_KEY)).toBeNull();
-  });
-
-  it("opting out drops the queued events and the local rollup", () => {
-    readingAnalytics.emit({ kind: "ayah.read", surah: 2, ayah: 1, sourceId: null, seconds: null });
-    expect(readKey(QUEUE_KEY)).not.toBeNull();
-    consent.setReadingAnalytics(false);
-    expect(readKey(QUEUE_KEY)).toBeNull();
+    expect(transport.unsafeRequest).toHaveBeenCalledTimes(1);
+    const [path, init] = transport.unsafeRequest.mock.calls[0] ?? [];
+    expect(path).toBe("/user/analytics/v1/events");
+    expect(init.body.expectedUserId).toBe(7);
+    expect(init.body.events.map((e: { ayah: number }) => e.ayah).sort()).toEqual([1, 2]);
+    expect(readKey(LOCAL_QUEUE)).toBeNull();
     expect(readKey(ROLLUP_KEY)).toBeNull();
-    auth.status = "anonymous";
-    auth.user = null;
+    expect(readKey(ACCOUNT_QUEUE)).toBeNull();
   });
 
-  it("a signed-out opt-out also drops another owner's queued batch (device-global revocation)", () => {
-    window.localStorage.setItem(
-      "easyquran.analytics.queue.42",
-      JSON.stringify({ v: 1, events: [] }),
-    );
-    window.localStorage.setItem("easyquran.bookmarks", JSON.stringify({ untouched: true }));
-    auth.status = "anonymous";
-    auth.user = null;
-    consent.setReadingAnalytics(false);
-    expect(window.localStorage.getItem("easyquran.analytics.queue.42")).toBeNull();
-    expect(window.localStorage.getItem("easyquran.bookmarks")).not.toBeNull();
+  it("keeps the queue on network failure, drops a rejected (400) batch", async () => {
+    signIn();
+    readingAnalytics.emit(read(2, 1));
+    transport.unsafeRequest.mockRejectedValueOnce(new Error("offline"));
+    await readingAnalytics.flushNow();
+    expect(readKey(ACCOUNT_QUEUE).events).toHaveLength(1);
+    transport.unsafeRequest.mockResolvedValueOnce({ ok: false, status: 400 });
+    await readingAnalytics.flushNow();
+    expect(readKey(ACCOUNT_QUEUE)).toBeNull();
   });
 
-  it("a cross-tab opt-out storage event drops this tab's queue off the stored flag", () => {
-    readingAnalytics.emit({ kind: "ayah.read", surah: 2, ayah: 1, sourceId: null, seconds: null });
-    expect(readKey(QUEUE_KEY)).not.toBeNull();
-    // Other tab writes the shared consent key; this tab's in-memory flag stays
-    // stale-true, so the drop must decode the stored value, not read `consent`.
-    window.localStorage.setItem(
-      "easyquran.consent",
-      JSON.stringify({
-        analytics: true,
-        performance: true,
-        advertising: false,
-        readingAnalytics: false,
-      }),
-    );
-    window.dispatchEvent(new StorageEvent("storage", { key: "easyquran.consent" }));
-    expect(readKey(QUEUE_KEY)).toBeNull();
-    auth.status = "anonymous";
-    auth.user = null;
-  });
-});
-
-describe("reading analytics summary + GA4 scrub", () => {
   it("decodes the server summary shape", () => {
     expect(
       decodeSummary({
-        totals: { events: 3, seconds: 30 },
-        topSurahs: [{ surah: 2, reads: 3 }],
-        topAyahs: [{ surah: 2, ayah: 255, reads: 2 }],
-        days: [{ localDay: "2026-10-12", ayahsRead: 3, seconds: 30 }],
+        totals: { ayahs: 3, ms: 9000, days: 2 },
+        topSurahs: [{ surah: 2, reads: 3, ms: 9000 }, { surah: 999 }],
+        topAyahs: [{ surah: 2, ayah: 255, reads: 2, ms: 6000 }],
+        days: [{ localDay: "2026-10-12", ayahsRead: 3, ms: 9000 }],
       }),
     ).toEqual({
-      totals: { events: 3, seconds: 30 },
-      topSurahs: [{ surah: 2, reads: 3 }],
-      topAyahs: [{ surah: 2, ayah: 255, reads: 2 }],
-      days: [{ localDay: "2026-10-12", ayahsRead: 3, seconds: 30 }],
+      totals: { ayahs: 3, ms: 9000, days: 2 },
+      topSurahs: [{ surah: 2, reads: 3, ms: 9000 }],
+      topAyahs: [{ surah: 2, ayah: 255, reads: 2, ms: 6000 }],
+      days: [{ localDay: "2026-10-12", ayahsRead: 3, ms: 9000 }],
     });
   });
 
-  it("GA4 never sees surah paths (SCR-05): reader surfaces report as /reader", () => {
+  it("GA4 never sees surah paths: reader surfaces report as /reader", () => {
     for (const path of [
       "/al-baqarah",
       "/page/5",
@@ -254,8 +144,6 @@ describe("reading analytics summary + GA4 scrub", () => {
     for (const path of ["/", "/bookmarks", "/settings", "/yours", "/ar/settings", "/search"]) {
       expect(scrubReaderPath(path)).toBe(path);
     }
-    // Card detail (§11.3): the device-local uuid never ships — both locale
-    // forms collapse to the bare prefix.
     expect(scrubReaderPath("/yours/cards/abc")).toBe("/yours/cards");
     expect(scrubReaderPath("/ar/yours/cards/abc")).toBe("/yours/cards");
   });

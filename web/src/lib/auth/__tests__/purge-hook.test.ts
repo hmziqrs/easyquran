@@ -13,7 +13,7 @@ vi.mock("$app/env/public", () => ({
 import type { AuthTransitionContext } from "#lib/auth/auth-state.svelte.js";
 import { installPurgeHook, makePurgeHook } from "#lib/auth/purge-hook.js";
 import { purgeUserCaches } from "#lib/offline/messages.js";
-import { reader } from "#lib/stores/reader.svelte.js";
+import { sessions } from "#lib/sessions/store.svelte.js";
 
 function fakeState() {
   return { setOnAuthTransition: vi.fn() };
@@ -49,27 +49,20 @@ describe("installPurgeHook", () => {
   });
 });
 
-describe("makePurgeHook reading-position policy (§9.5)", () => {
-  it("keeps the reader's reading position on logout — device-local data survives (EC-14)", async () => {
-    reader.openVerse(2, 255, "uthmani");
-    expect(reader.hasLastRead).toBe(true);
-    const hook = makePurgeHook();
-    await hook({ kind: "logout" });
-    expect(reader.hasLastRead).toBe(true);
-  });
-
-  it("keeps the reading position on session expiry/terminate too (EC-16)", async () => {
-    reader.openVerse(2, 255, "uthmani");
-    const hook = makePurgeHook();
-    await hook({ kind: "current-session-terminated" });
-    expect(reader.hasLastRead).toBe(true);
-  });
-
-  it("leaves the reader's reading position intact on login", async () => {
-    reader.openVerse(2, 255, "uthmani");
-    const hook = makePurgeHook();
-    await hook({ kind: "login" });
-    expect(reader.hasLastRead).toBe(true);
-    reader.clearReadingPosition();
+describe("makePurgeHook reading-thread policy", () => {
+  it("keeps device reading threads across logout, expiry and login (never destroyed)", async () => {
+    const first = sessions.enter({
+      scope: "surah:2",
+      surah: 2,
+      ayah: 1,
+      exact: false,
+      sourceId: null,
+    });
+    sessions.cursor(2, 255, null);
+    expect(sessions.current?.id).toBe(first.thread.id);
+    for (const kind of ["logout", "current-session-terminated", "login"] as const) {
+      await makePurgeHook()({ kind });
+      expect(sessions.open.some((thread) => thread.id === first.thread.id)).toBe(true);
+    }
   });
 });

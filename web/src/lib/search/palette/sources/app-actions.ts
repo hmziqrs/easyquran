@@ -1,9 +1,10 @@
 import { resumeCtxFor } from "#lib/data/quran.js";
+import { threadPath } from "#lib/reader/thread-path.js";
+import { sessions } from "#lib/sessions/store.svelte.js";
 import { prefs } from "#lib/stores/prefs.svelte.js";
 import { reader } from "#lib/stores/reader.svelte.js";
 
 import { PaletteGroups } from "../groups";
-import { ayahHref, openVerse } from "../quran-nav";
 import { byScore, scoreFields } from "../scoring";
 import type { PaletteEntry, PaletteQuery, PaletteSource } from "../types";
 
@@ -37,16 +38,15 @@ const CONTINUE_KEYWORDS = ["continue reading", "resume", "last read", "where i l
  * opening the palette always has somewhere useful to go.
  */
 function continueReading(query: PaletteQuery): PaletteEntry | null {
-  const lastRead = reader.lastRead;
-  if (!lastRead) return null;
-  const surah = query.quranData.surahByNum(lastRead.num);
+  const thread = sessions.current ?? sessions.latest;
+  if (thread === null) return null;
+  const surah = query.quranData.surahByNum(thread.surah);
   if (!surah) return null;
-  const href = ayahHref(
-    resumeCtxFor(lastRead, query.routeContext),
-    query.quranData,
-    lastRead.num,
-    lastRead.n,
+  const ctx = resumeCtxFor(
+    thread.sourceId !== null ? { sourceId: thread.sourceId } : null,
+    query.routeContext,
   );
+  const href = threadPath(thread, ctx, query.quranData);
   if (!href) return null;
 
   const score = query.parsed.isEmpty ? 0 : scoreFields(CONTINUE_KEYWORDS, query.parsed.text);
@@ -57,12 +57,15 @@ function continueReading(query: PaletteQuery): PaletteEntry | null {
     sourceId: SOURCE_ID,
     groupId: PaletteGroups.JumpTo.id,
     label: "Continue reading",
-    detail: `${surah.name} ${lastRead.num}:${lastRead.n}`,
+    detail: `${surah.name} ${thread.surah}:${thread.ayah}`,
     icon: "continuous",
     score,
     href,
-    run: openVerse(lastRead.num, lastRead.n, lastRead.sourceId),
-    dedupeKey: `ayah:${lastRead.num}:${lastRead.n}`,
+    run: () => {
+      sessions.markResume(thread.id);
+      reader.openVerse(thread.surah);
+    },
+    dedupeKey: `ayah:${thread.surah}:${thread.ayah}`,
   };
 }
 

@@ -1,12 +1,19 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { Seo } from "#lib/components/index.js";
-  import { snippetPathFor, surahAyahPathFor, toArabicDigits, type SurahRouteContext } from "#lib/data/quran.js";
+  import {
+    snippetPathFor,
+    surahAyahPathFor,
+    toArabicDigits,
+    translationIdFromSegments,
+    type SurahRouteContext,
+  } from "#lib/data/quran.js";
   import { SNIPPET_KIND_LABELS, type SnippetText } from "#lib/data/snippets.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
   import { readerHrefFor } from "#lib/i18n/reader.js";
   import { publicHref } from "#lib/i18n/public-href.js";
   import ReaderShell from "../../../../../_reader/ReaderShell.svelte";
+  import { revealVerseMarker, trackReaderThread } from "#lib/sessions/reader-thread.svelte.js";
   import type { TranslatedSnippetRefGroup } from "./+page.server";
 
   let { data } = $props();
@@ -45,6 +52,27 @@
   const canonicalPath = $derived(snippetPathFor(ctx, data.snippet.slug));
   const canonicalPublicPath = $derived(readerHrefFor("en", canonicalPath));
   const currentPublicPath = $derived(readerHrefFor(copy.locale, canonicalPath));
+
+  // A snippet is a bounded reading thread: reading its last verse completes it.
+  trackReaderThread({
+    key: () => `${data.snippet.slug}:${page.params.lang}:${page.params.translator}`,
+    target: () => {
+      const first = data.groups[0];
+      const last = data.groups.at(-1);
+      if (first === undefined || last === undefined) return null;
+      const lang = page.params.lang;
+      const translator = page.params.translator;
+      return {
+        scope: `snippet:${data.snippet.slug}`,
+        surah: first.surah,
+        ayah: first.ayahStart,
+        exact: false,
+        boundEnd: `${last.surah}:${last.ayahEnd}`,
+        sourceId: lang && translator ? translationIdFromSegments(lang, translator) : null,
+      };
+    },
+    onResume: (thread) => void revealVerseMarker(thread.surah, thread.ayah),
+  });
 </script>
 
 <Seo
@@ -91,7 +119,7 @@
         </div>
 
         {#each group.rows as row (row.key)}
-          <div class="flex flex-col gap-1.5">
+          <div class="flex flex-col gap-1.5" data-verse-anchor={row.key}>
             <p dir="rtl" lang="ar" class="font-arabic text-[1.6rem] leading-[2.15] text-quran-foreground">
               {row.arabic}<span
                 class="ms-2 align-middle font-sans text-[0.62em] text-foreground-secondary"

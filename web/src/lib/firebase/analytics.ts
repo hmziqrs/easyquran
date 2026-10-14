@@ -62,9 +62,8 @@ export function track(
  * Surah-level paths never reach GA4 (SCR-05/SET-04, §11.4): every reader route
  * — surah slugs, range routes (`/page/N` …), translated `/t/**` twins and azkar
  * snippets, including their localized `/ar` forms — is reported as the coarse
- * screen "reader". The app-level copy ("nothing tracks your reading") stays
- * true; first-party reading insights are a separate, OFF-by-default opt-in
- * (`consent.readingAnalytics`) that never rides GA.
+ * screen "reader". First-party reading insights (#lib/analytics) are
+ * personal and never ride GA.
  */
 export function scrubReaderPath(path: string): string {
   const sansLocale = path === "/ar" || path.startsWith("/ar/") ? path.slice(3) || "/" : path;

@@ -64,7 +64,7 @@ export const quranTextSource: PaletteSource = {
         icon: "search",
         score: 0.7,
         href,
-        run: openVerse(num, ayah),
+        run: openVerse(num),
         dedupeKey: opener ? `opener:${num}` : `ayah:${num}:${ayah}`,
       });
     }

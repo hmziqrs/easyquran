@@ -26,6 +26,7 @@ import {
   type SurahRouteContext,
 } from "#lib/data/quran.js";
 import type { QuranData } from "#lib/data/quran-data.js";
+import { entryAttrs, type EntryLinkAttrs } from "#lib/sessions/entry.js";
 import type { CollectionCard, CollectionItem, HomeCard } from "./cards.svelte.js";
 import type { SlotState } from "./schedule.js";
 
@@ -303,4 +304,49 @@ export function tileCopyFor(
     ]),
     href: surahAyahPathFor(ctx, surah, card.ayahStart),
   };
+}
+
+interface ItemScope {
+  readonly scope: string;
+  readonly boundEnd: string | null;
+}
+
+/** Reading-thread scope for one collection item (docs/reading-model.md §2). */
+function itemScope(item: CollectionItem): ItemScope {
+  if ("slug" in item) return { scope: `snippet:${item.slug}`, boundEnd: null };
+  if (item.ayahStart !== undefined && item.ayahEnd !== undefined) {
+    return {
+      scope: `range:${item.surah}:${item.ayahStart}-${item.surah}:${item.ayahEnd}`,
+      boundEnd: `${item.surah}:${item.ayahEnd}`,
+    };
+  }
+  return { scope: `surah:${item.surah}`, boundEnd: null };
+}
+
+/**
+ * Entry tag for a link that opens a card: every open starts its own thread
+ * (`origin=card`, the card id as ref), scoped to what the card holds so a
+ * range or ayah card completes when its last verse is read.
+ */
+export function cardEntryAttrs(card: HomeCard, item?: CollectionItem): EntryLinkAttrs {
+  const base = { origin: "card" as const, ref: card.id };
+  if (item !== undefined) return entryAttrs({ ...base, ...itemScope(item) });
+  if (card.kind === "collection") {
+    const first = card.items[0];
+    return first === undefined ? entryAttrs(base) : entryAttrs({ ...base, ...itemScope(first) });
+  }
+  if (card.kind === "snippet") return entryAttrs({ ...base, scope: `snippet:${card.slug}` });
+  if (card.kind === "surah") return entryAttrs({ ...base, scope: `surah:${card.surah}` });
+  if (card.kind === "ayah") {
+    const key = `${card.surah}:${card.ayah}`;
+    return entryAttrs({ ...base, scope: `range:${key}-${key}`, boundEnd: key });
+  }
+  if (card.kind === "range") {
+    return entryAttrs({
+      ...base,
+      scope: `range:${card.surah}:${card.ayahStart}-${card.surah}:${card.ayahEnd}`,
+      boundEnd: `${card.surah}:${card.ayahEnd}`,
+    });
+  }
+  return entryAttrs(base);
 }

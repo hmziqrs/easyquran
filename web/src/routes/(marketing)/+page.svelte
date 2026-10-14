@@ -155,6 +155,7 @@
     <span class="me-1 text-caption text-muted">{landing.oftenOpened}</span>
     {#each oftenOpened as s (s.num)}
       <a
+        data-session-origin="index"
         href={publicHref(readerHrefFor(locale, surahPathFor(arabicCtx, s)))}
         class="rounded-pill border border-border px-3.5 py-1.5 text-[14px] font-medium text-foreground-secondary transition-colors duration-150 hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >{#if locale === "ar"}<span lang="ar" dir="rtl" class="font-arabic">{s.arabic}</span>{:else}{s.name}{/if}</a
@@ -196,6 +197,7 @@
       {@const hue = hueAt(i)}
       <li>
         <a
+          data-session-origin="index"
           href={publicHref(readerHrefFor(locale, surahPathFor(arabicCtx, s)))}
           class="group flex items-center gap-3.5 rounded-md border border-border p-4 transition-colors duration-150 hover:border-border-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >

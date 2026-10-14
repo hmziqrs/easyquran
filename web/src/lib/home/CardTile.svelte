@@ -22,6 +22,7 @@
     cardDetailHref,
     passesCountLabel,
     scheduleBadgeCopy,
+    cardEntryAttrs,
     tileCopyFor,
   } from "#lib/home/card-copy.js";
   import { armCardUndo } from "#lib/home/card-undo.svelte.js";
@@ -129,6 +130,7 @@
     <span class="min-w-0 flex-1">
       {#if view.href !== null}
         <a
+          {...cardEntryAttrs(card)}
           href={publicHref(view.href)}
           data-sveltekit-preload-data="hover"
           class="block truncate rounded-sm text-sm font-medium text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
@@ -184,6 +186,7 @@
       </DropdownMenu.Root>
     {:else if view.href !== null}
       <a
+        {...cardEntryAttrs(card)}
         href={publicHref(view.href)}
         data-sveltekit-preload-data="hover"
         class="flex h-7 flex-none items-center rounded-pill border border-border px-2.5 text-[11.5px] text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"

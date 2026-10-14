@@ -8,6 +8,7 @@ import {
   surahPathFor,
   type SurahRouteContext,
 } from "#lib/data/quran.js";
+import { markEntry } from "#lib/sessions/entry.js";
 import { reader } from "#lib/stores/reader.svelte.js";
 
 export const JUZ_COUNT = 30;
@@ -50,9 +51,12 @@ export function ayahHref(
  * "continue reading" and for revealing the row it lands on.
  */
 export const openVerse =
-  (surah: number, ayah: number, sourceId?: string): (() => void) =>
-  () =>
-    reader.openVerse(surah, ayah, sourceId);
+  (surah: number): (() => void) =>
+  () => {
+    // A verse jump is an entry with an exact target: it starts a new thread.
+    markEntry({ origin: "search", exact: true });
+    reader.openVerse(surah);
+  };
 
 export const surahDetail = (surah: {
   transliteration: string;

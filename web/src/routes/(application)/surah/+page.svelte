@@ -59,6 +59,7 @@
       {@const hue = hueSlotFor(surah.num)}
       <li>
         <a
+          data-session-origin="index"
           href={publicHref(surahHref(surah.slug))}
           data-sveltekit-preload-data="hover"
           class="flex items-center gap-3.5 rounded-lg border border-border p-4 transition-colors hover:bg-surface-hover"

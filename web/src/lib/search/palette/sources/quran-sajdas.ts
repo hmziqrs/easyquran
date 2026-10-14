@@ -51,7 +51,7 @@ export const quranSajdasSource: PaletteSource = {
         icon: "bookmark",
         score: match.score,
         href,
-        run: openVerse(match.target.surah, match.target.ayah),
+        run: openVerse(match.target.surah),
         dedupeKey: `sajda:${match.target.surah}:${match.target.ayah}`,
       });
     }

@@ -67,6 +67,7 @@
         class="flex flex-col overflow-hidden rounded-lg border border-border transition-colors hover:border-border-strong"
       >
         <a
+          data-session-origin="index"
           href={publicHref(juzHref(juz.index))}
           data-sveltekit-preload-data="hover"
           class="flex min-w-0 flex-1 items-center gap-3.5 px-4 py-3.5 transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
@@ -101,6 +102,7 @@
         <div class="grid grid-cols-2 border-t border-border">
           {#each juz.hizbs as hizb, hi (hizb.index)}
             <a
+              data-session-origin="index"
               href={publicHref(hizbHref(hizb.index))}
               data-sveltekit-preload-data="hover"
               class={[

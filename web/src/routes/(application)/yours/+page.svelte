@@ -5,7 +5,6 @@
   import {
     surahAyahPathFor,
     surahRouteContext,
-    surahPathFor,
     type SurahRouteContext,
   } from "#lib/data/quran.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
@@ -16,18 +15,16 @@
   import { Seo, Icon } from "#lib/components/index.js";
   import { Button } from "#lib/components/ui/button/index.js";
   import { Skeleton } from "#lib/components/ui/skeleton/index.js";
-  import * as Select from "#lib/components/ui/select/index.js";
   import { reader } from "#lib/stores/reader.svelte.js";
   import { bookmarks } from "#lib/bookmarks/store.svelte.js";
-  import type { BookmarkFolder } from "#lib/bookmarks/schema.js";
-  import { parseVerseKey, verseKeyOf } from "#lib/bookmarks/schema.js";
+  import { verseKeyOf, type Bookmark } from "#lib/bookmarks/schema.js";
   import BookmarkRow from "../bookmarks/_components/BookmarkRow.svelte";
-  import { resumeToLastRead, resumeToVerse } from "#lib/reader/resume.js";
-  import {
-    RECENTS_COUNT_CHOICES,
-    homeLayout,
-    type HomeWidgetId,
-  } from "#lib/home/layout.svelte.js";
+  import { openVerseAt } from "#lib/reader/resume.js";
+  import { homeLayout, type HomeWidgetId } from "#lib/home/layout.svelte.js";
+  import { entryAttrs } from "#lib/sessions/entry.js";
+  import ContinueThreads from "./_components/ContinueThreads.svelte";
+  import ThreadHistory from "./_components/ThreadHistory.svelte";
+  import ReadingInsights from "./_components/ReadingInsights.svelte";
   import { homeCards, type HomeCard } from "#lib/home/cards.svelte.js";
   import CardTile from "#lib/home/CardTile.svelte";
   import CardForm from "#lib/home/CardForm.svelte";
@@ -41,11 +38,8 @@
     translationForLanguage,
     type ReadingChoice,
   } from "#lib/home/reading-choice.svelte.js";
-  import { readingAnalytics } from "#lib/analytics/reading-analytics.js";
   import { authState } from "#lib/auth/auth-state.svelte.js";
   import { peekTranslationName } from "#lib/quran/catalogue.js";
-  import { consent } from "#lib/stores/consent.svelte.js";
-  import { sessions } from "#lib/sessions/store.svelte.js";
   import {
     reader_bookmarks_ayah,
     reader_bookmarks_empty_page,
@@ -58,22 +52,14 @@
     reader_home_read_in,
     reader_home_read_in_arabic,
     reader_home_read_in_with,
-    reader_home_reading_in,
-    reader_sessions_label,
-    reader_sessions_new_add,
-    reader_sessions_new_placeholder,
-    reader_sessions_sync_error,
     reader_widget_daily_ayah_open,
     reader_widget_daily_ayah_title,
     reader_widget_daily_ayah_unavailable,
-    reader_widget_most_read_empty,
-    reader_widget_most_read_off,
     reader_widget_most_read_title,
     reader_widget_notes_empty,
     reader_widget_notes_title,
-    reader_widget_recents_count,
-    reader_widget_recents_empty,
     reader_cards_title,
+    reader_threads_history,
     reader_cards_empty,
     reader_cards_add,
     reader_cards_full,
@@ -108,26 +94,18 @@
     moveUp: reader_home_move_up(undefined, msgOptions),
     moveDown: reader_home_move_down(undefined, msgOptions),
     hidden: reader_home_hidden(undefined, msgOptions),
-    recentsEmpty: reader_widget_recents_empty(undefined, msgOptions),
-    recentsCount: reader_widget_recents_count(undefined, msgOptions),
     bookmarksEmpty: reader_bookmarks_empty_page(undefined, msgOptions),
-    sessionsLabel: reader_sessions_label(undefined, msgOptions),
-    sessionsNewPlaceholder: reader_sessions_new_placeholder(undefined, msgOptions),
-    sessionsNewAdd: reader_sessions_new_add(undefined, msgOptions),
-    sessionsSyncError: reader_sessions_sync_error(undefined, msgOptions),
     notesTitle: reader_widget_notes_title(undefined, msgOptions),
     notesEmpty: reader_widget_notes_empty(undefined, msgOptions),
     mostReadTitle: reader_widget_most_read_title(undefined, msgOptions),
-    mostReadOff: reader_widget_most_read_off(undefined, msgOptions),
-    mostReadEmpty: reader_widget_most_read_empty(undefined, msgOptions),
     dailyAyahTitle: reader_widget_daily_ayah_title(undefined, msgOptions),
     dailyAyahUnavailable: reader_widget_daily_ayah_unavailable(undefined, msgOptions),
     dailyAyahOpen: reader_widget_daily_ayah_open(undefined, msgOptions),
     readIn: reader_home_read_in(undefined, msgOptions),
     readInArabic: reader_home_read_in_arabic(undefined, msgOptions),
-    readingInName: (name: string): string => reader_home_reading_in({ name }, msgOptions),
     readInWith: (language: string): string =>
       reader_home_read_in_with({ language }, msgOptions),
+    historyTitle: reader_threads_history(undefined, msgOptions),
     cards: {
       title: reader_cards_title(undefined, msgOptions),
       empty: reader_cards_empty(undefined, msgOptions),
@@ -135,22 +113,6 @@
       full: reader_cards_full(undefined, msgOptions),
     },
   };
-
-  // Session switcher (Feature 4.5): the continue card, recents and progress
-  // below all read the live mirror, which tracks the active session.
-  const sessionOptions = $derived(sessions.list.filter((session) => session.archivedAt === null));
-  const activeSessionId = $derived(sessions.activeId ?? "");
-  // shadcn Select label persistence: the trigger reads the picked row's name
-  // from `items`, which stays available after the menu closes.
-  const sessionItems = $derived(
-    sessionOptions.map((session) => ({ value: session.id, label: session.name })),
-  );
-  let newSessionName = $state("");
-
-  function addSession(): void {
-    const created = sessions.create(newSessionName);
-    if (created !== null) newSessionName = "";
-  }
 
   // The widget column renders only after mount: SSR would paint the default
   // layout and reorder on hydrate (the stored layout is device-local).
@@ -161,7 +123,7 @@
 
   function widgetTitle(id: HomeWidgetId): string {
     if (id === "continue-reading") return copy.index.yoursContinue;
-    if (id === "recents") return copy.index.yoursRecent;
+    if (id === "recents") return h.historyTitle;
     if (id === "notes") return h.notesTitle;
     if (id === "most-read") return h.mostReadTitle;
     if (id === "daily-ayah") return h.dailyAyahTitle;
@@ -219,27 +181,6 @@
   });
   const notesRows = $derived(notesSource.rows.slice(0, 5));
 
-  // Most-read consumes the opt-in first-party analytics surface (Feature 6):
-  // consent off = never fetched, local rollup when signed out, server summary
-  // when signed in (fetchSummary already picks).
-  interface MostReadState {
-    readonly status: "idle" | "ready" | "empty";
-    readonly top: readonly { readonly surah: number; readonly reads: number }[];
-  }
-  let mostRead = $state.raw<MostReadState>({ status: "idle", top: [] });
-
-  async function loadMostRead(): Promise<void> {
-    const summary = await readingAnalytics.fetchSummary();
-    if (summary === null) {
-      mostRead = { status: "empty", top: [] };
-      return;
-    }
-    mostRead =
-      summary.topSurahs.length > 0
-        ? { status: "ready", top: summary.topSurahs.slice(0, 5) }
-        : { status: "empty", top: [] };
-  }
-
   // Daily ayah (D07): deterministic per UTC date server-side; one fetch, cached
   // by the browser until UTC midnight.
   let dailyAyah = $state<DailyAyah | null>(null);
@@ -271,14 +212,8 @@
     choiceOptions = options;
   }
 
-  // The Continue card labels the chosen translation (HOME-04) and seeds its
-  // resume hrefs with it; an explicit last-read translation still wins
-  // (resumeCtxFor prefers the stored sourceId).
-  const chosenTranslationName = $derived.by<string | null>(() => {
-    const chosen = readingChoice.chosen;
-    if (chosen === null || chosen.mode !== "translation") return null;
-    return peekTranslationName(chosen.sourceId);
-  });
+  // Continue / History resume in the reader's chosen translation unless a
+  // thread carries its own (resumeCtxFor prefers the thread's sourceId).
   const continueCtx = $derived.by<SurahRouteContext>(() => {
     const chosen = readingChoice.chosen;
     if (chosen !== null && chosen.mode === "translation") {
@@ -292,9 +227,6 @@
   }
 
   const recentsLimit = $derived(homeLayout.entries[widgetIndex("recents")]?.settings.count ?? 5);
-  const recentsCountItems = $derived(
-    RECENTS_COUNT_CHOICES.map((n) => ({ value: String(n), label: String(n) })),
-  );
 
   const indexLinks = $derived([
     { label: copy.index.surahsTitle, href: publicHref(readerHrefFor(copy.locale, "/surah")) },
@@ -309,122 +241,36 @@
   let quranData = $state<QuranData | undefined>(peekQuranData());
 
   interface BookmarkPreviewRow {
-    /** Authed bookmark id, or the verse key on an anonymous row. */
-    key: string;
-    surah: number;
-    ayah: number;
-    name: string;
-    href: string;
-    updatedAt: string;
-    hasNote: boolean;
-    /** Authed folder membership; anonymous rows are always unfiled. */
-    folderId: string | null;
+    readonly bookmark: Bookmark;
+    readonly name: string;
+    readonly href: string;
+    readonly hasNote: boolean;
   }
 
-  const bookmarkCount = $derived(
-    bookmarks.authed ? bookmarks.bookmarks.length : reader.bookmarkedKeys.length,
-  );
+  // Opening a saved verse starts a reading thread there.
+  const BOOKMARK_ENTRY = entryAttrs({ origin: "bookmark", exact: true });
+
+  const bookmarkCount = $derived(bookmarks.bookmarks.length);
 
   const bookmarkRows = $derived.by<BookmarkPreviewRow[]>(() => {
     const data = quranData;
     if (!data) return [];
-    interface Coords {
-      key: string;
-      surah: number;
-      ayah: number;
-      at: string;
-      sourceId: string | null;
-      folderId: string | null;
-    }
-    const coords: Coords[] = bookmarks.authed
-      ? bookmarks.bookmarks.map((bookmark) => ({
-          key: bookmark.id,
-          surah: bookmark.surah,
-          ayah: bookmark.ayah,
-          at: bookmark.updatedAt,
-          sourceId: bookmark.sourceId ?? null,
-          folderId: bookmark.folderId ?? null,
-        }))
-      : reader.bookmarkedKeys.flatMap((key) => {
-          const parsed = parseVerseKey(key);
-          if (!parsed) return [];
-          // v5 stamp (EC-46): legacy rows without one sort last via "".
-          const stamp = reader.bookmarkSavedAt[key] ?? 0;
-          return [
-            {
-              key,
-              surah: parsed.surah,
-              ayah: parsed.ayah,
-              at: stamp > 0 ? new Date(stamp).toISOString() : "",
-              sourceId: null,
-              folderId: null,
-            },
-          ];
-        });
-    const sorted = [...coords].sort((a, b) => b.at.localeCompare(a.at));
-    return sorted.slice(0, 5).flatMap((entry) => {
-      const surah = data.surahByNum(entry.surah);
+    return bookmarks.bookmarks.slice(0, 5).flatMap((bookmark) => {
+      const surah = data.surahByNum(bookmark.surah);
       if (!surah) return [];
       return [
         {
-          key: entry.key,
-          surah: entry.surah,
-          ayah: entry.ayah,
+          bookmark,
           name: surah.name,
-          href: surahAyahPathFor(ctxForSavedSource(entry.sourceId), surah, entry.ayah),
-          updatedAt: entry.at,
-          hasNote: reader.getNote(verseKeyOf(entry.surah, entry.ayah)).trim().length > 0,
-          folderId: entry.folderId,
+          href: surahAyahPathFor(ctxForSavedSource(bookmark.sourceId), surah, bookmark.ayah),
+          hasNote: reader.getNote(verseKeyOf(bookmark.surah, bookmark.ayah)).trim().length > 0,
         },
       ];
     });
   });
 
-  // Folder chrome mirrors /bookmarks (Feature 2.3 order: manual position first,
-  // NULL last, then name) so the widget's rows and move menu match the page.
-  const sortedFolders = $derived(
-    [...bookmarks.folders].sort((a, b) => {
-      const positions =
-        (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER);
-      return positions !== 0 ? positions : a.name.localeCompare(b.name);
-    }),
-  );
-
-  function folderOf(folderId: string | null): BookmarkFolder | null {
-    if (folderId === null) return null;
-    return bookmarks.folderById(folderId) ?? null;
-  }
-
-  function moveBookmarkRow(bookmarkId: string, folderId: string | null): void {
-    bookmarks.moveToFolder(bookmarkId, folderId);
-  }
-
-  const lastRead = $derived(reader.lastRead);
-  const lastReadSurah = $derived(lastRead ? quranData?.surahByNum(lastRead.num) : undefined);
-  const allRecents = $derived(
-    lastRead
-      ? reader.recentReads.filter((r) => r.num !== lastRead.num || r.sourceId !== lastRead.sourceId)
-      : reader.recentReads,
-  );
-  const recents = $derived(allRecents.slice(0, recentsLimit));
-
-  function surahHref(num: number): string | null {
-    const surah = quranData?.surahByNum(num);
-    if (!surah) return null;
-    return publicHref(readerHrefFor(copy.locale, surahPathFor(ARABIC_CTX, surah)));
-  }
-
-  function openRecent(num: number, n: number, sourceId: string | undefined): void {
-    void resumeToVerse(num, n, sourceId, ARABIC_CTX);
-  }
-
-  function removeBookmarkRow(row: BookmarkPreviewRow): void {
-    if (bookmarks.authed) bookmarks.remove(row.key);
-    else reader.toggleBookmark(verseKeyOf(row.surah, row.ayah));
-  }
-
   function openNote(note: { surah: number; ayah: number }): void {
-    void resumeToVerse(note.surah, note.ayah, undefined, ARABIC_CTX);
+    void openVerseAt(note.surah, note.ayah, undefined, ARABIC_CTX);
   }
 
   /** BM-03 rows show the note's first line; notes are plain strings (no dates). */
@@ -439,7 +285,6 @@
     readingChoice.hydrate();
     if (readingChoice.chosen === null) buildChoiceOptions();
     reader.hydrate();
-    if (consent.readingAnalytics) void loadMostRead();
     void fetchDailyAyah().then((ayah) => {
       dailyAyah = ayah;
       dailyAyahLoaded = true;
@@ -530,59 +375,6 @@
     </div>
   {/if}
 
-  {#if mounted}
-    <!-- EC-27 surface: the last durable-enqueue failure of the session sync
-         outbox, never a silent drop. Cleared by the next successful enqueue. -->
-    {#if sessions.enqueueError !== null}
-      <p role="status" class="mt-5 text-[13px] text-danger">{h.sessionsSyncError}</p>
-    {/if}
-    <div class="mt-5 flex flex-wrap items-end gap-3">
-      <div class="flex min-w-0 flex-1 flex-col gap-1 sm:max-w-[260px]">
-        <span class="eyebrow">{h.sessionsLabel}</span>
-        <Select.Root
-          type="single"
-          value={activeSessionId}
-          onValueChange={(value) => sessions.switchTo(value)}
-          items={sessionItems}
-        >
-          <Select.Trigger aria-label={h.sessionsLabel} class="w-full">
-            <Select.Value placeholder={h.sessionsLabel} />
-          </Select.Trigger>
-          <Select.Content>
-            {#each sessionOptions as session (session.id)}
-              <Select.Item value={session.id} label={session.name}>{session.name}</Select.Item>
-            {/each}
-          </Select.Content>
-        </Select.Root>
-      </div>
-      <form
-        class="flex min-w-0 flex-1 items-end gap-2"
-        onsubmit={(event) => {
-          event.preventDefault();
-          addSession();
-        }}
-      >
-        <label class="flex min-w-0 flex-1 flex-col gap-1">
-          <span class="sr-only">{h.sessionsNewPlaceholder}</span>
-          <input
-            type="text"
-            placeholder={h.sessionsNewPlaceholder}
-            bind:value={newSessionName}
-            maxlength="100"
-            class="h-9 w-full rounded-pill border border-border bg-transparent px-3 text-sm text-foreground placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={newSessionName.trim().length === 0}
-          class="h-9 flex-none rounded-pill border border-border px-3 text-[12.5px] font-medium text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        >
-          {h.sessionsNewAdd}
-        </button>
-      </form>
-    </div>
-  {/if}
-
   {#if editing}
     <div class="mt-5">
       <p class="eyebrow">{h.hidden}</p>
@@ -604,121 +396,21 @@
 
   {#if mounted}
   {#each widgets as widget (widget.id)}
-  {#if widget.visible && widget.id === "continue-reading" && lastRead}
-    {@const total = lastReadSurah?.ayahCount ?? 0}
-    {@const fraction =
-      reader.progressFor(lastRead.num) ?? (total > 0 ? Math.min(1, lastRead.n / total) : 0)}
-    <section
-      aria-labelledby="yours-continue"
-      class="mt-5 overflow-hidden rounded-md border border-border bg-surface"
-    >
-      <h2
-        id="yours-continue"
-        class="eyebrow flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5"
-      >
-        {copy.index.yoursContinue}
+  {#if widget.visible && widget.id === "continue-reading"}
+    <section aria-labelledby="yours-continue" class="mt-5">
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="yours-continue" class="eyebrow">{copy.index.yoursContinue}</h2>
         {@render editControls(widget.id)}
-      </h2>
-      <div class="px-4 py-4 sm:px-5">
-        <p class="text-xl font-medium text-foreground">
-          {lastReadSurah?.name ?? `Surah ${lastRead.num}`}
-        </p>
-        <p class="mt-1 text-sm text-foreground-secondary">
-          <span class="font-medium text-foreground">{lastRead.num}:{lastRead.n}</span>
-          {#if lastReadSurah?.meaning}
-            · {lastReadSurah.meaning}
-          {/if}
-          {#if chosenTranslationName}
-            · {h.readingInName(chosenTranslationName)}
-          {/if}
-        </p>
-        {#if total > 0}
-          <div
-            class="mt-4 h-1.5 w-full overflow-hidden rounded-pill bg-surface-hover"
-            role="progressbar"
-            aria-valuenow={lastRead.n}
-            aria-valuemax={total}
-          >
-            <div
-              class="h-full rounded-pill bg-primary"
-              style:width="{Math.round(fraction * 100)}%"
-            ></div>
-          </div>
-        {/if}
-        <div class="mt-4">
-          <Button onclick={() => resumeToLastRead(continueCtx)} arrow>
-            {copy.shell.jump}
-          </Button>
-        </div>
       </div>
+      <ContinueThreads {quranData} ctx={continueCtx} {locale} continueLabel={copy.shell.jump} />
     </section>
-  {:else if widget.visible && widget.id === "continue-reading"}
-    <div class="mt-5 flex items-center gap-3.5 rounded-md border border-border bg-surface px-4 py-4 sm:px-5">
-      <span
-        class="flex size-11 flex-none items-center justify-center rounded-sm text-[var(--hue-2-legible)]"
-        style:background="var(--hue-2-soft)"
-        aria-hidden="true"
-      >
-        <Icon name="book" size={20} />
-      </span>
-      <p class="text-[14.5px] leading-relaxed text-foreground-secondary">{copy.index.yoursEmpty}</p>
-    </div>
   {:else if widget.visible && widget.id === "recents"}
     <section aria-labelledby="yours-recent" class="mt-6">
       <div class="flex items-center justify-between gap-3">
-        <h2 id="yours-recent" class="eyebrow">{copy.index.yoursRecent}</h2>
-        {#if editing}
-          <span class="flex items-center gap-1.5 text-[12px] text-muted">
-            {h.recentsCount}
-            <Select.Root
-              type="single"
-              value={String(recentsLimit)}
-              onValueChange={(value) => homeLayout.setCount("recents", Number(value))}
-              items={recentsCountItems}
-            >
-              <Select.Trigger size="sm" aria-label={h.recentsCount}>
-                <Select.Value />
-              </Select.Trigger>
-              <Select.Content>
-                {#each RECENTS_COUNT_CHOICES as n (n)}
-                  <Select.Item value={String(n)} label={String(n)}>{n}</Select.Item>
-                {/each}
-              </Select.Content>
-            </Select.Root>
-          </span>
-        {/if}
+        <h2 id="yours-recent" class="eyebrow">{h.historyTitle}</h2>
         {@render editControls(widget.id)}
       </div>
-      {#if recents.length === 0}
-        <p class="mt-2 text-[13px] text-muted">{h.recentsEmpty}</p>
-      {:else}
-      <ul class="mt-2 divide-y divide-border overflow-hidden rounded-md border border-border bg-surface">
-        {#each recents as recent (`${recent.num}:${recent.n}:${recent.sourceId ?? ""}`)}
-          {@const href = surahHref(recent.num)}
-          <li class="flex items-center gap-3 px-4 py-3">
-            <button
-              type="button"
-              class="min-w-0 flex-1 text-start transition-colors hover:text-foreground-secondary"
-              onclick={() => openRecent(recent.num, recent.n, recent.sourceId)}
-            >
-              <span class="block truncate text-sm font-medium text-foreground">
-                {quranData?.surahByNum(recent.num)?.name ?? `Surah ${recent.num}`}
-              </span>
-              <span class="text-[12.5px] text-muted">{recent.num}:{recent.n}</span>
-            </button>
-            {#if href}
-              <a
-                href={href}
-                data-sveltekit-preload-data="hover"
-                class="flex h-7 flex-none items-center rounded-pill border border-border px-2.5 text-[11.5px] text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-              >
-                {copy.range.fullSurah}
-              </a>
-            {/if}
-          </li>
-        {/each}
-      </ul>
-      {/if}
+      <ThreadHistory {quranData} ctx={continueCtx} {locale} limit={recentsLimit} />
     </section>
   {:else if widget.visible && widget.id === "bookmarks"}
     <section aria-labelledby="yours-bookmarks" class="mt-6">
@@ -741,25 +433,17 @@
         </div>
       {:else if bookmarkRows.length > 0}
         <ul class="mt-2 divide-y divide-border overflow-hidden rounded-md border border-border bg-surface">
-          {#each bookmarkRows as row (row.key)}
-            <!-- Shared row (BM-01): same component as /bookmarks — authed rows
-                 carry their folder badge + move menu; anon rows stay bare. -->
+          {#each bookmarkRows as row (row.bookmark.id)}
+            <!-- Shared row: same component as /bookmarks, folder badge included. -->
             <BookmarkRow
               copy={rowCopy}
-              bookmark={{
-                id: row.key,
-                folderId: row.folderId,
-                surah: row.surah,
-                ayah: row.ayah,
-                updatedAt: row.updatedAt,
-              }}
+              bookmark={{ ...row.bookmark, updatedAt: row.bookmark.createdAt }}
               surahName={row.name}
               href={row.href}
-              folder={folderOf(row.folderId)}
-              folders={sortedFolders}
-              onMove={bookmarks.authed ? moveBookmarkRow : undefined}
+              linkAttrs={BOOKMARK_ENTRY}
+              folder={bookmarks.folderById(row.bookmark.folderId) ?? null}
               noteIcon={row.hasNote}
-              onRemove={() => removeBookmarkRow(row)}
+              onRemove={() => bookmarks.remove(row.bookmark.id)}
             />
           {/each}
         </ul>
@@ -826,23 +510,7 @@
         <h2 id="yours-most-read" class="eyebrow">{h.mostReadTitle}</h2>
         {@render editControls(widget.id)}
       </div>
-      {#if !consent.readingAnalytics}
-        <p class="mt-2 text-[13px] text-muted">{h.mostReadOff}</p>
-      {:else if mostRead.status === "ready"}
-        <ul class="mt-2 divide-y divide-border overflow-hidden rounded-md border border-border bg-surface">
-          {#each mostRead.top as entry (`${entry.surah}`)}
-            {@const surah = quranData?.surahByNum(entry.surah)}
-            {#if surah}
-              <li class="flex items-center gap-3 px-4 py-3">
-                <span class="truncate text-sm font-medium text-foreground">{surah.name}</span>
-                <span class="ms-auto flex-none text-[12px] text-muted">{entry.reads}</span>
-              </li>
-            {/if}
-          {/each}
-        </ul>
-      {:else}
-        <p class="mt-2 text-[13px] text-muted">{h.mostReadEmpty}</p>
-      {/if}
+      <ReadingInsights {quranData} {locale} />
     </section>
   {:else if widget.visible && widget.id === "daily-ayah"}
     <section aria-labelledby="yours-daily-ayah" class="mt-6">

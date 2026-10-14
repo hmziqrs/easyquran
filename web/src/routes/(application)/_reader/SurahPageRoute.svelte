@@ -21,6 +21,9 @@
   import { reader } from "#lib/stores/reader.svelte.js";
   import { withModeParam } from "#lib/reader/mode-param.js";
   import { locationMatchesVisibleUrl } from "#lib/reader/visible-url.js";
+  import { resumeThread } from "#lib/reader/resume.js";
+  import { trackReaderThread } from "#lib/sessions/reader-thread.svelte.js";
+  import ResumePill from "./ResumePill.svelte";
   import ReaderShell from "./ReaderShell.svelte";
   import Results from "./Results.svelte";
   import SurahReader from "./SurahReader.svelte";
@@ -177,6 +180,31 @@
   const viewKey = $derived(`${normalization.sourceId}:${surah.num}`);
   trackReaderView({ key: () => viewKey, sourceId: () => normalization.sourceId });
 
+  // Reading thread for this surah view (docs/reading-model.md §2.1). A resumed
+  // thread whose cursor sits in this surah reveals in place; one that moved on
+  // to another surah reopens there.
+  trackReaderThread({
+    key: () => viewKey,
+    target: () => {
+      const ayah = requestedAyah();
+      return {
+        scope: `surah:${surah.num}`,
+        surah: surah.num,
+        ayah: ayah ?? 1,
+        exact: ayah !== null,
+        sourceId: normalization.sourceId,
+      };
+    },
+    onResume: (thread) => {
+      if (thread.surah === surah.num) {
+        revealedAyah = thread.ayah;
+        void revealRequestedAyah(thread.ayah);
+        return;
+      }
+      void resumeThread(thread, routeContext, { replaceState: true });
+    },
+  });
+
   $effect(() => {
     const ayah = requestedAyah();
     if (ayah === null) {
@@ -212,6 +240,7 @@
     </span>
   {/snippet}
 
+  <ResumePill />
   {#if reader.hasQuery}
     <Results />
   {:else}

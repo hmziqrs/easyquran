@@ -105,7 +105,7 @@ export const translationTextSource: PaletteSource = {
         icon: "search",
         score: 0.7,
         href,
-        run: openVerse(num, ayah, scope.id),
+        run: openVerse(num),
         dedupeKey: `tayah:${scope.id}:${num}:${ayah}`,
       });
     }

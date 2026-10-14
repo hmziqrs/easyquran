@@ -1,23 +1,21 @@
 <script lang="ts">
   import { Icon } from "#lib/components/icon/index.js";
+  import { Checkbox } from "#lib/components/ui/checkbox/index.js";
   import * as Select from "#lib/components/ui/select/index.js";
   import type { BookmarksCopy } from "#lib/i18n/bookmarks-copy.js";
   import type { BookmarkFolder } from "#lib/bookmarks/schema.js";
+  import type { EntryLinkAttrs } from "#lib/sessions/entry.js";
 
-  /**
-   * One row component for signed-in AND anonymous bookmarks (Feature 2.4):
-   * anonymous rows pass a pseudo-row (id = verse key, no timestamps) and omit
-   * `onMove`/`onSelect`, so the sync-only controls never render offline.
-   */
+  /** One row component for every bookmark surface (/bookmarks, /yours). */
   interface RowBookmark {
     readonly id: string;
-    readonly folderId: string | null;
+    readonly folderId: string;
     readonly surah: number;
     readonly ayah: number;
     /** Range end (Feature 7.4): absent/null = single ayah. */
     readonly endSurah?: number | null;
     readonly endAyah?: number | null;
-    /** ISO timestamp; "" (anonymous legacy rows) hides the saved-date line. */
+    /** ISO timestamp; "" hides the saved-date line. */
     readonly updatedAt: string;
   }
 
@@ -26,6 +24,7 @@
     bookmark,
     surahName,
     href,
+    linkAttrs,
     folder = null,
     folders = [],
     onMove,
@@ -35,14 +34,15 @@
     noteIcon = false,
   }: {
     copy: BookmarksCopy;
-    /** A full `Bookmark` or an anonymous pseudo-row. */
     bookmark: RowBookmark;
     surahName: string;
     href: string | null;
+    /** Reading-thread entry tag for the verse link. */
+    linkAttrs?: EntryLinkAttrs;
     folder?: BookmarkFolder | null;
     folders?: readonly BookmarkFolder[];
-    /** Present only on the signed-in surface — hides the move control otherwise. */
-    onMove?: (bookmarkId: string, folderId: string | null) => void;
+    /** Omit to hide the move control (compact previews). */
+    onMove?: (bookmarkId: string, folderId: string) => void;
     onRemove: (bookmarkId: string) => void;
     /** Present only when bulk selection is active (P05). */
     onSelect?: (bookmarkId: string, next: boolean) => void;
@@ -65,21 +65,11 @@
   const reference = $derived(`${surahName} ${bookmark.surah}:${bookmark.ayah}${rangeSuffix()}`);
   const ayahLabel = $derived(`${copy.ayah(bookmark.ayah)}${rangeSuffix()}`);
 
-  // Orphan folderId (folder deleted server-side, snapshot raced): fall back to
-  // the root option so the select matches the "Unfiled" grouping instead of
-  // showing nothing selected.
-  const moveValue = $derived.by<string>(() => {
-    const id = bookmark.folderId;
-    if (id === null) return "";
-    return folders.some((folderOption) => folderOption.id === id) ? id : "";
-  });
-
   // shadcn Select label persistence: the trigger keeps naming the destination
   // folder from `items` after the menu closes.
-  const moveItems = $derived([
-    { value: "", label: copy.unfiled },
-    ...folders.map((folderOption) => ({ value: folderOption.id, label: folderOption.name })),
-  ]);
+  const moveItems = $derived(
+    folders.map((folderOption) => ({ value: folderOption.id, label: folderOption.name })),
+  );
 
   // "Saved 3 days ago" (BM-02): relative day in the page locale; legacy
   // anonymous rows (updatedAt "") and unparsable stamps show nothing.
@@ -101,18 +91,17 @@
 
 <li class="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5">
   {#if onSelect}
-    <input
-      type="checkbox"
+    <Checkbox
       checked={selected}
-      onchange={(event) => onSelect?.(bookmark.id, event.currentTarget.checked)}
+      onCheckedChange={(checked) => onSelect?.(bookmark.id, checked)}
       aria-label={copy.selectLabel(reference)}
-      class="size-4 flex-none accent-[var(--focus-ring)]"
     />
   {/if}
   <Icon name="bookmark" size={15} class="shrink-0 text-primary" />
   <span class="flex min-w-0 flex-1 flex-col gap-0.5">
     {#if href}
       <a
+        {...linkAttrs}
         href={href}
         class="truncate text-[14px] font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >{surahName}
@@ -149,15 +138,14 @@
       </span>
       <Select.Root
         type="single"
-        value={moveValue}
-        onValueChange={(value) => onMove?.(bookmark.id, value === "" ? null : value)}
+        value={bookmark.folderId}
+        onValueChange={(value) => onMove?.(bookmark.id, value)}
         items={moveItems}
       >
         <Select.Trigger size="sm" aria-label={copy.moveLabel(reference)}>
           <Select.Value />
         </Select.Trigger>
         <Select.Content>
-          <Select.Item value="" label={copy.unfiled}>{copy.unfiled}</Select.Item>
           {#each folders as folderOption (folderOption.id)}
             <Select.Item value={folderOption.id} label={folderOption.name}>
               {folderOption.name}

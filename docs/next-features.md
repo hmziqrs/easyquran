@@ -126,189 +126,10 @@ empty verse + tafsir block), tafsir route 308 (`web/src/lib/server/reader-route.
 
 ---
 
-## Feature 2 — Bookmark folders → named study sets (daily reading / surah-ayah learning)
+## Features 2–4 — Bookmark folders, bookmark context, reading sessions
 
-**Current state**
-
-- Flat single-level folders, **authed only**: `BookmarkFolder {id, name, createdAt, updatedAt}`,
-  `Bookmark {id, folderId|null, surah, ayah, createdAt, updatedAt}`
-  (`web/src/lib/bookmarks/schema.ts:16-48`); backend `bookmark_folders` + `bookmarks`
-  (`migration/src/m000007_bookmarks.rs`), unique `(user_id, surah, ayah)` (`m000008`). No tags, order,
-  bulk, nesting (P05 remaining).
-- Anon users only get a local boolean map (`reader-core.svelte.ts:46`) — no folders at all.
-
-**Build**
-
-1. Folder metadata: `kind: "generic" | "daily" | "learning"`, optional `position` (manual order,
-   integer, LWW), optional plan metadata `{targetAyahsPerDay?}` for `kind:"daily"` (only if §11.7
-   picks goal metadata). A folder `kind:"daily"` is a **set of verses** to study; it is unrelated to
-   a reading session `kind:"daily"` (a position bucket, Feature 4) — copy must not conflate them.
-2. Backend: the folder columns `kind`, `position`, `deleted_at` already land in phase 2's bookmarks
-   migration (§9.1, `m000011`); this feature only wires them in `bookmark_folder/slice.rs` +
-   validator (`bookmark_v1/validator.rs`, mutation cap 200 stays). `target_ayahs_per_day` gets its
-   own migration (next free number) only if §11.7 adopts it. Folder delete is a tombstone (§9.3):
-   the delete action must **still detach children explicitly** — the schema's
-   `ON DELETE SET NULL` FK never fires on a tombstone `UPDATE` — and `resolve_folder_id` must treat
-   tombstoned folders as missing (`deleted_at IS NULL`), so a stale offline move lands at root
-   (EC-07).
-3. UI: folder sections sorted by `position` then name; per-folder count (exists); bulk move/delete
-   (P05); folder kind picker in `FoldersPanel.svelte`; for `kind:"daily"`, a progress bar = share
-   of the folder's bookmarked verses at or below the **active session's** `furthestAyah` for their
-   surah (Feature 4).
-4. Folder UI polish (ACCT-04): full-width "New folder" field + pill **Add** button; per-row selects
-   replaced with a "Move to…" menu (folder icon + chevron); one row component shared between
-   signed-in and anonymous bookmarks.
-5. Bookmark rows (BM-01/BM-02): single row component on Yours / Bookmarks / Home; one verse format
-   everywhere — **"Al-Baqarah · verse 1"**; row shows the first ~80 characters of the verse (Arabic,
-   plus translation if the reader uses one), the saved date ("Saved 3 days ago"), and a note icon when
-   a note exists.
-6. Remove flow (BM-04): optimistic remove + toast "Bookmark removed · Undo" for 5 seconds; applies to
-   signed-in and offline removals alike.
-7. List controls (FLOW-08): sort by date / folder / surah; filter by folder; group headers.
-8. Sync status line (ACCT-05): `text-caption` (13.5 px) instead of 12 px grey; offline banner above
-   the list.
-9. Anon: decide either "folders require sign-in" (keep) or a local-only folder mode; don't silently
-   degrade.
-
-**Acceptance**: manual order survives sync; `kind` round-trips LWW; tombstone deletion (EC-07); one
-row component reused across surfaces; undo restores the row; anon sort-by-date works once Feature 4's
-v5 gives legacy anon bookmarks timestamps (EC-46).
-
-**Touch**: `web/src/lib/bookmarks/schema.ts`, `store.svelte.ts`, `domain.ts`, `FoldersPanel.svelte`,
-`BookmarkRow.svelte`, `bookmarks/+page.svelte`, `db/sea_models/bookmark_folder/*`, `bookmark_v1/*`,
-toast/undo primitive; a Rust migration only for `target_ayahs_per_day` (§11.7).
-
----
-
-## Feature 3 — Fine-grained bookmarks: translation + session context
-
-**Current state**
-
-- Toggle captures only `verseKey` (`VerseTools.svelte:80` → `bookmarks.toggleVerse`); `Bookmark` has no
-  `sourceId`, note, page, or anchor. Bookmarks list opens **Arabic-only**
-  (`ARABIC_CTX = surahRouteContext("uthmani")` at `bookmarks/+page.svelte:23`, `yours/+page.svelte:112`),
-  even though the route context exists (`surahRouteContext(sourceId)`, `quran.ts:87-91`).
-- Unique index `(user_id, surah, ayah)` = one row per verse, ever.
-
-**Build**
-
-1. Extend `Bookmark` with `sourceId?: string|null` (translation context), optional `page` +
-   `anchorRatio` (P03 reading bookmark), `sessionId?: string` (Feature 4; `''` = global), nullable
-   `endSurah`/`endAyah` on the wire (Feature 7 ranges; the columns land here, Feature 7 populates
-   them). **No `note` field**: notes stay local (§11, decided); `BookmarkRow` looks up the local
-   note by verse key at render time.
-2. **Resolved uniqueness** (§9.1): one live row per
-   `(user_id, session_id, surah, ayah, end_surah, end_ayah)`. Sentinel `session_id = ''` for
-   global/legacy rows and `end = start` for single-ayah rows — SQLite treats NULLs as distinct in
-   unique indexes, so never bare NULL in the key. The range end is part of the key so a range
-   bookmark (2:285–286) and a single-ayah bookmark (2:285) coexist instead of verse-collapsing into
-   each other (EC-51). `sourceId` is context metadata, not a key part (row-level LWW, §9.3).
-3. Migration `m000011`: add the columns, backfill `end_surah = surah, end_ayah = ayah`, drop
-   `idx_bookmarks_user_verse` and create the new partial unique index (§9.1). No dedupe pass —
-   m000008 already guarantees one row per verse, and adding `session_id = ''` + `end = start`
-   keeps that unique. Update wire slices, `bookmark_v1/validator.rs`, client `schema.ts` decoders
-   (wire `null` end ⇄ stored `end = start`). Deletes become tombstones (§9.3). The client collapse
-   in `applyServer` (today `newestPerVerse`) re-keys on the full unique key.
-4. Capture at toggle time: read current `sourceId` from route context (`routeContextFromParams` /
-   `SurahReader` initial). New bookmarks are **global by default** (`sessionId = ''`); a bookmark is
-   session-scoped only when created with an explicit "this session only" choice — otherwise every
-   bookmark would vanish from view whenever the reader switches sessions. Capture surface = verse
-   mode (VerseTools); reading mode does not instantiate verse actions (accepted, EC-47).
-5. List/resume: build hrefs with `surahAyahPathFor(surahRouteContext(bookmark.sourceId ?? "uthmani"), …)`
-   so bookmarks reopen in their saved translation; show source badge on `BookmarkRow`.
-6. Count + sync label (ACCT-03): home/bookmarks card shows the real count and "3 saved · synced" once
-   sync is live.
-7. Share seam: keep `reader-share.svelte.ts` untouched here; range/copy work is Feature 7.
-
-**Acceptance**: bookmark created on a `/t/…` route reopens in that translation; lists show global
-bookmarks plus the active session's scoped ones; deletions are tombstones so stale queued upserts
-cannot resurrect (EC-02); range and single-ayah bookmarks on the same verse coexist (EC-51); anon
-path unchanged; saved translation missing from catalogue falls back to Arabic (EC-38).
-
-**Touch**: `schema.ts`, `store.svelte.ts`, `domain.ts`, `VerseTools.svelte`, `BookmarkRow.svelte`,
-`bookmarks/+page.svelte`, `yours/+page.svelte`, Rust `migration/src/m000011_*.rs` + `bookmark_v1` +
-`db/sea_models/bookmark/*` (`upsert_lww`/`delete_lww` rewritten for tombstones + the new key), tests
-`rust/backend/api/tests/bookmarks_v1.rs`.
-
----
-
-## Feature 4 — Multiple reading sessions (daily / weekly / shared seam)
-
-**Current state**
-
-- One global slot: `lastRead {num,n,sourceId?}` + `lastReadAnchor {verseKey,localPage,ratio}`
-  (`reader-core.svelte.ts:21-31`); `recents` cap 8 keyed `${sourceId ?? "ar"}:${num}`
-  (`reader-session.svelte.ts:11-17`); `progress: Record<surah, {furthestAyah, ts}>` — surah-only, no
-  source/session dimension (`:19-25`).
-- Writers: `openVerse`/`markRead` (`reader-session.svelte.ts:88-108`) unconditionally overwrite. Range
-  readers (`/page`, `/juz`, `/hizb` → `RangeReader.svelte:105,113`) call only `setPosition` —
-  **never `markRead`** → reading by page/juz never updates continue-reading (FIX, EC-42).
-- Logout wipes position (`web/src/lib/auth/purge-hook.ts` `CLEAR_POSITION_KINDS`). No backend
-  module/tables.
-  P03/P04/P08 gaps.
-
-**Build**
-
-1. Model (local-first, then synced):
-   `ReadingSession {id, name, kind: "daily"|"weekly"|"free"|"shared", translationId?: string|null, createdAt, archivedAt?: number|null, sharedWith?: string[]}`
-   — `shared` is a **seam only**; no social feature, no invites, no server sharing.
-2. Session storage gets **its own per-owner key**, not the reader blob:
-   `easyquran.sessions.{owner}` v1 (owner = user id when signed in, `local` otherwise) =
-   `{v, activeId, sessions:[…], state:{[sessionId]: {lastRead, lastReadAnchor, recents, progress}}}`.
-   Why not a reader-blob v5 field: `writeBlob` writes an explicit field list
-   (`reader-persistence.svelte.ts:176-210`), so a tab still running the previous build across a
-   deploy rewrites the v4 shape and would wipe sessions embedded in the blob (EC-54); per-owner keys
-   also keep one account's sessions out of another account's view (§9.5).
-   - One-time migration: the v4 blob's `lastRead`/`lastReadAnchor`/`recents`/`progress` move into a
-     default `free` session named "Reading" owned by `local`, with the fixed constant id
-     `LOCAL_DEFAULT_SESSION_ID` (never uploaded). A marker makes it run once; the v4 fields become
-     migration input only (new code stops writing them; an old tab still writing them is harmless).
-   - The user id cannot seed this id: the reader hydrates before auth resolves, and anonymous users
-     have none. On first login the merge review (§9.4) maps the local default session onto the
-     **account default session** whose id is UUIDv5(fixed namespace, user id) — every device of the
-     account derives the same id, so they converge instead of duplicating "Reading" (EC-22).
-     Positions merge LWW, progress MAX (§9.3).
-3. Reader blob v5 (bump `READER_SCHEMA_VERSION`, extend `decodeReader` + `writeBlob` +
-   `applyPersisted`) absorbs the small pending items, **additive fields only**:
-   - persist `translationFamily` (TRX-10; today session-only per `settings-system.md` §4), and add
-     it to `SettingsReadingDoc` (`settings-document.ts`) so settings export/import carries it;
-   - anonymous bookmark timestamps as a new `bookmarkSavedAt: Record<VerseKey, number>` beside the
-     boolean map (BM-02 second pass) — an old tab dropping it only makes those entries sort as
-     legacy (EC-46);
-   - notes move to a per-owner key `easyquran.notes.{owner}` (privacy fix, EC-17). Legacy blob
-     notes attach to the owner signed in at the first post-auth hydrate, else to `local`.
-4. Writers take/derive `sessionId` (active session of the current owner): `openVerse`, `markRead`,
-   `recordProgress`, `pushRecent`, `clearReadingPosition`; range readers start calling `markRead`
-   with the range's first/last visible verse.
-5. Surfaces: session switcher (in `/yours` header + settings), `/yours` continue card reads active
-   session; palette `continueReading` (`app-actions.ts:39-67`), global hotkey,
-   `resumeToVerse/resumeToLastRead` (`web/src/lib/reader/resume.ts`) become session-aware;
-   `resumeCtxFor` call sites on index pages.
-6. Position preservation on context switch (FLOW-07): switching translation/language from the reader
-   keeps the current position (`translation-nav.ts` `hrefFor` path), never resets to surah top.
-7. **Sync (committed, not optional)**: new `reading-session` domain → `reading_session_v1` module +
-   tables (§9.1–9.2). Sessions, positions, and per-surah progress all sync; **recents stay
-   device-local** (navigation convenience, no sync value). Client store modeled on `BookmarksStore`
-   including the R2-08 owner/generation guards; per-owner outbox partition `sessions.user:{id}`;
-   register via `registerDomain`. Logout/expiry follows the quarantine policy (§9.5).
-   `ReadingSession.sharedWith` is a local-only seam — never a column, never sent.
-8. Daily/weekly semantics: `kind:"daily"` = day buckets derived per **device-local day** (reuse
-   `todayLocal()` from `engagement-state.ts:41-46` — module-private today, export it);
-   `kind:"weekly"` = week bucket; buckets stay derived, never stored computed state (EC-36).
-9. Per-script typography (TRX-12): per-script size ×1.25 and Nastaliq for `ur` — reader settings
-   surface, rides the v5 bump.
-
-**Acceptance**: switching sessions never clobbers another session's position/recents/progress;
-page/juz/hizb reading updates the active session (EC-42); sync round-trips sessions/positions/progress;
-progress never regresses across devices (EC-05); translation switch keeps position (FLOW-07); a tab
-on the previous build never wipes sessions (EC-54); anon fully functional; gates green.
-
-**Touch**: `reader-core.svelte.ts`, `reader-persistence.svelte.ts`, `reader-session.svelte.ts`,
-`annotations.svelte.ts` (notes key), `settings-document.ts` (`translationFamily`),
-`engagement-state.ts` (export `todayLocal`), `resume.ts`, `RangeReader.svelte`, `translation-nav.ts`,
-`/yours`, palette sources, `purge-hook.ts`; new `web/src/lib/sessions/{schema,store,domain}.svelte.ts`
-
-- Rust `reading_session_v1` module + migration `m000012`.
+> **Superseded** by [`reading-model.md`](reading-model.md) (2026-10-14): folder-based bookmarks,
+> reading threads, always-on personal reading insights. The original brief was removed.
 
 ---
 
@@ -375,57 +196,10 @@ primitives under `web/src/lib/components/card/*`.
 
 ---
 
-## Feature 6 — Personal analytics API (most-read surah/ayah)
+## Feature 6 — Personal analytics API
 
-**Current state**
-
-- Zero per-user analytics. `analytics_v1` is ADMIN-only, post-centric
-  (`rust/backend/api/src/modules/analytics_v1/`). No reading-time measurement anywhere.
-  `translation_popularity` = API demand only (do not touch). GA4 gets reader paths (audit SCR-05) — no
-  consent-gated product analytics.
-
-**Build**
-
-1. New module `rust/backend/api/src/modules/user_analytics_v1/` (copy `device_v1`/`bookmark_v1`
-   shape): `auth_guard::verified` as the module's own `route_layer` (as in `bookmark_v1/mod.rs`),
-   nested in `router.rs` with a rate limit (~100/60 like bookmarks). Register in `modules/mod.rs`.
-2. Migration (app SQLite only — Quran DBs untouched; next free number after `m000012`):
-   `reading_events(id, user_id, surah, ayah, source_id NULL, kind, seconds NULL, local_day, created_at)`
-   with index `(user_id, created_at)`, and/or rollup
-   `reading_daily(user_id, local_day, surah, ayahs_read, seconds)`. `local_day` is the
-   **client-supplied** device-local `YYYY-MM-DD` — the server never derives day boundaries (EC-36).
-   `user_id` FK `ON DELETE CASCADE` so account deletion purges history. Most-read =
-   `GROUP BY surah[,ayah] ORDER BY COUNT(*) DESC` (SQL pattern lives in
-   `analytics_v1/controller.rs:582-628`; bucket helper in its validator).
-3. Endpoints: `POST /user/analytics/v1/events` (batched, capped, RFC3339; verses validated against
-   **per-surah ayah counts**, not the flat `1..286` the bookmark validator uses),
-   `GET /user/analytics/v1/summary` (top surahs, top ayahs, totals, streak-adjacent day counts).
-   Never expose other users' data. Retention: raw events kept a bounded window (initial: 90 days),
-   then only the rollup; both included in account export/delete.
-4. Web emit: from Feature 4 writers (`markRead`/`openVerse`/`recordProgress`), gated by an
-   **explicit opt-in** that is separate from the GA `analytics` consent flag. A per-ayah reading
-   history reveals religious practice — GDPR Art. 9 special-category data — so it is never on by
-   default, regardless of how §11.4 settles the GA default. Transport: the sync engine outbox
-   (domain `analytics`, per-owner partition) or `AuthClient` with CSRF (do not miss `csrf-token` —
-   see the existing FCM registration bug for what happens when you do). If it rides the engine, its
-   `sync` pull must return an empty state — the engine's periodic 30s round pulls every registered
-   domain, so the summary is fetched separately via `GET`. Queued events follow §9.5 on logout;
-   opt-out drops queued events. Update privacy copy (`web/messages/en.json`, settings privacy
-   section) and resolve SCR-05 contradiction.
-5. GA4 honesty (SCR-05 + SET-04): either scrub surah paths from `page_view` or make product analytics
-   opt-in, so the landing copy ("nothing tracks your reading") is true. Consent default is an open
-   decision (§11.4); current defaults are analytics ON (`consent.svelte.ts:16`).
-6. Local fallback: the reader blob cannot answer "most read" (it holds only `furthestAyah` per surah
-   and 8 recents, no counts). Anon users get a capped device-local rollup
-   `easyquran.analytics.local` (per-surah/ayah counts by local day) written by the same emit points
-   under the same opt-in; server summary takes over when signed in.
-
-**Acceptance**: summary returns real most-read surah/ayah for a test user; opt-in off = no events
-leave device and no local rollup is written; account deletion purges events + rollup; admin
-analytics untouched; no sha/Quran DB writes; rate limits + per-surah validation tested; GA4 paths
-scrubbed or consent default flipped.
-
-**Touch**: Rust module + migration + sea-models + tests; web store/emit + consent + copy.
+> **Superseded** by [`reading-model.md`](reading-model.md) (2026-10-14): folder-based bookmarks,
+> reading threads, always-on personal reading insights. The original brief was removed.
 
 ---
 
@@ -649,81 +423,10 @@ root layout mount, messages, tests per plan §8.
 reading sessions (sessions, positions, per-surah progress). The existing engine/outbox/registry are
 reused as-is; one backend module per domain; migrations `m000011`+.
 
-### 9.1 Data model (backend, app SQLite only — Quran DBs untouched)
+### 9.1–9.2 Data model + modules
 
-Migrations: `m000011` = bookmarks + bookmark_folders changes; `m000012` = the three reading-session
-tables. Feature 6 and the optional `target_ayahs_per_day` column take the next free numbers when they
-land.
-
-**`bookmarks` (extend m000007, in `m000011`):**
-
-- add `session_id TEXT NOT NULL DEFAULT ''`, `source_id TEXT NULL`,
-  `end_surah INTEGER NOT NULL DEFAULT 0` + `end_ayah INTEGER NOT NULL DEFAULT 0` (backfilled to
-  `surah`/`ayah`; single ayah = `end = start`), `deleted_at TEXT NULL`. **No `note` column** —
-  notes stay local (§11).
-- replace `idx_bookmarks_user_verse` with a **partial** unique index
-  `(user_id, session_id, surah, ayah, end_surah, end_ayah) WHERE deleted_at IS NULL`. Sentinels
-  (`''`, `end = start`) — never bare NULL (SQLite NULL-distinct in unique indexes). Partial so
-  tombstones keep protecting their ids against stale replays while a newer live row takes the key.
-- `list_for_user` filters `deleted_at IS NULL`.
-- Delete = tombstone `UPDATE` (`deleted_at` = `updated_at` = the mutation's clamped `updatedAt`,
-  §9.3), never row removal; refused when the stored row is strictly newer (LWW).
-- `upsert_lww` changes: the newer-rival check (step 2) also counts **tombstoned** rivals on the key —
-  a newer delete of that verse is the verse's latest state; the collapse step (3b) turns older live
-  rivals into tombstones instead of `DELETE`, so their ids stay protected.
-
-**`bookmark_folders` (in `m000011`):** add `kind TEXT NOT NULL DEFAULT 'generic'`,
-`position INTEGER NULL`, `deleted_at TEXT NULL`; delete = tombstone that still detaches children
-explicitly (the `ON DELETE SET NULL` FK never fires on an `UPDATE`); `resolve_folder_id` and
-`list_for_user` filter `deleted_at IS NULL`.
-
-**`reading_sessions`** (new, `m000012`): `id TEXT, user_id, name, kind TEXT,
-translation_id TEXT NULL, created_at, updated_at, archived_at TEXT NULL, deleted_at TEXT NULL,
-PRIMARY KEY(user_id, id)`.
-
-**`reading_session_positions`** (new): `user_id, session_id TEXT, verse_key TEXT, surah INTEGER,
-ayah INTEGER, local_page INTEGER NULL, ratio REAL NULL, source_id TEXT NULL, updated_at,
-PRIMARY KEY(user_id, session_id)`.
-
-**`reading_session_progress`** (new): `user_id, session_id, surah, furthest_ayah, updated_at,
-PRIMARY KEY(user_id, session_id, surah)`.
-
-- `user_id` leads every reading-session key: ids are client-minted, so a key without it lets one
-  account write into another's row with a crafted id. Every `position.upsert`/`progress.upsert`
-  first checks that a live (non-tombstoned) session with that id exists **for this user**; otherwise
-  it is skipped and counted in `skipped` (EC-52).
-- Session delete (tombstone): drop its position + progress rows in the same transaction; its
-  session-scoped bookmarks re-home to global (`session_id = ''`), and one that would collide with a
-  live global rival on the same key becomes a tombstone instead (EC-53).
-- `user_id` FK `ON DELETE CASCADE` on every new table (account deletion purges them).
-
-**Validation and caps** (all new string fields are bounded): session `name` 1..100 chars;
-`kind` literal enum; `source_id`/`translation_id` ≤ 64 chars in the catalogue-id charset
-`[a-z0-9._-]`; `ratio` 0..1; `local_page` ≥ 1; verses checked against per-surah ayah counts.
-Per-user quotas (initial: 50 sessions, 10 000 live bookmarks); an over-quota upsert is skipped with a
-surfaced error, never silently.
-
-All ids are client-minted 36-char dashed-hex UUIDs (existing `newBookmarkEntityId` pattern and
-`valid_client_uuid` validator; the UUIDv5 account default session id passes the same check). Every
-query user-scoped.
-
-### 9.2 Modules + client domains
-
-- `POST /bookmark/v1/sync` — extended mutation fields; same envelope + verified guard + 100/60
-  limiter; batch ≤ 200; same LWW helpers (`db/sea_models/bookmark/actions.rs` pattern). Adopt the
-  in-flight R2-08 hardening: `expectedUserId` on the request, server rejects cookie-owner mismatch
-  before reads or writes (`bookmark_v1/controller.rs` `sync`). It stays `Option` there only for
-  tabs still running a pre-R2-08 build.
-- New `reading_session_v1`: `POST /reading-session/v1/sync` — mutations `session.upsert`,
-  `session.delete`, `position.upsert`, `progress.upsert`; response
-  `{applied, skipped, sessions, positions, progress}` (full snapshot per user, same as bookmarks);
-  `auth_guard::verified`; 100/60 limiter; batch ≤ 200; `expectedUserId` **required** (no legacy
-  clients exist for this module).
-- Client: `web/src/lib/sessions/{schema,store,domain}.svelte.ts` modeled on
-  `web/src/lib/bookmarks/*`, per-owner outbox domain `sessions.user:{id}` (mirrors
-  `bookmarksDomainFor`); register via `registerDomain`. `SyncPausedError` before any request when
-  signed out or the owner changed (contract: `sync/types.ts:52-63`). An account-mismatch rejection
-  pauses the domain; it never counts toward dead-lettering (§9.7).
+> **Superseded** by [`reading-model.md`](reading-model.md) (2026-10-14): folder-based bookmarks,
+> reading threads, always-on personal reading insights. The original brief was removed.
 
 ### 9.3 Conflict policy (multi-device) — **no realtime handling**
 
@@ -756,41 +459,10 @@ query user-scoped.
   the purge silently off. Accepted window: a device offline for more than 90 days can replay a stale
   upsert after its tombstone was purged and resurrect that row.
 
-### 9.4 Merge on login — non-silent, reviewable
+### 9.4 Merge on login
 
-Replaces today's silent `#migrateLegacy` (`bookmarks/store.svelte.ts`, `:438` in the R2-08 tree).
-
-- **Detection** after auth status → authenticated: mergeable local data exists if (a) legacy blob
-  bookmarks non-empty AND marker absent, (b) the `local` owner's sessions (Feature 4.2) are
-  non-empty, or (c) the legacy **unowned** outbox (pre-R2-08 `bookmarks` domain, EC-48) is
-  non-empty. This account's own pending mutations are never a merge trigger — they auto-resume
-  (§9.5).
-- **UI**: `MergeReviewDialog.svelte` (bits-ui Dialog, `AuthModal.svelte` pattern — no AlertDialog
-  primitive exists). Step 1 summary: "You have N bookmarks, M folders, K reading sessions on this
-  device. Merge into your account?" Actions: **Merge** / **Review changes** / **Not now** /
-  **Don't ask again**. Legacy unowned entries get their own line ("N changes from an earlier
-  version of the app") with apply / discard — applying is the user's explicit choice of account.
-- Step 2 review: tabs Bookmarks / Folders / Sessions; rows with include checkboxes; conflict labels
-  ("Account has a newer version — account wins" / "Device version is newer — device wins"); counts of
-  new vs conflicting vs duplicate.
-- Merge executes: enqueue local items as upserts **with their existing timestamps** (LWW decides);
-  flush; result toast "Merged X, skipped Y (newer account versions kept)" (ACCT-09 wording: promise
-  "Keep your bookmarks and reading sessions safe and on all your devices" — notes stay local).
-  - Legacy anonymous bookmarks have no timestamp (boolean map). Use `bookmarkSavedAt` when present
-    (Feature 4.3), else the epoch `1970-01-01T00:00:00.000000Z`, so an account copy of the same
-    verse always wins while new verses are still added (EC-10). Today's `#migrateLegacy` stamps
-    `nowIso()`, so the device always wins — FIX.
-  - The `local` default session (`LOCAL_DEFAULT_SESSION_ID`) is re-keyed to the account default
-    session id UUIDv5(namespace, user id) before upload; positions LWW, progress MAX (EC-22).
-    Other local sessions upload under their own UUIDs.
-- **Not now**: nothing enqueued; marker `eq.merge.deferred.{userId}` in **sessionStorage**, so the
-  prompt returns in the next browser session but not on every reload. **Don't ask again** sets
-  `eq.merge.reviewed.{userId}` in localStorage. Markers are per-account.
-- Failure handling: markers are written only after enqueues resolve (EC-11). The R2-08 working tree
-  already does this for the legacy bookmark migration (`#migratedKeys.add` after a successful
-  enqueue, marker after the loop); the merge dialog keeps that rule for every item kind.
-- Legacy blob is never deleted (current behavior kept); the legacy boolean path migrates only through
-  this review.
+> **Superseded** by [`reading-model.md`](reading-model.md): signing in folds the device's
+> bookmarks, threads and insights into the account silently (no review dialog).
 
 ### 9.5 Logout, expiry, cache policy — **never destroy unsynced user data silently**
 

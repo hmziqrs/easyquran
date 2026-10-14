@@ -28,7 +28,7 @@ describe("app-locale hand-off", () => {
       expect(attributes.locale).toBe("ar");
       expect(attributes.direction).toBe("rtl");
       expect(harnessText(target)).toContain("العلامات المرجعية");
-      expect(harnessText(target)).toContain("غير مصنّفة");
+      expect(harnessText(target)).toContain("الافتراضي");
       expect(harnessText(target)).toContain("المجلدات");
     } finally {
       void unmount(harness);
@@ -45,7 +45,7 @@ describe("app-locale hand-off", () => {
       expect(attributes.locale).toBe("en");
       expect(attributes.direction).toBe("ltr");
       expect(harnessText(target)).toContain("Bookmarks");
-      expect(harnessText(target)).toContain("Unfiled");
+      expect(harnessText(target)).toContain("Default");
       expect(harnessText(target)).toContain("Folders");
     } finally {
       void unmount(harness);

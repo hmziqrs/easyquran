@@ -147,7 +147,7 @@ describe("decodeSettingsDoc", () => {
         translationSize: 15,
         translationFamily: "serif",
       },
-      privacy: { analytics: false, performance: true, advertising: true, readingAnalytics: false },
+      privacy: { analytics: false, performance: true, advertising: true },
     };
     expect(decodeSettingsDoc(doc)).toEqual(doc);
   });
@@ -165,7 +165,7 @@ describe("decodeSettingsDoc", () => {
         translationSize: 17,
         translationFamily: "sans",
       },
-      privacy: { analytics: true, performance: true, advertising: false, readingAnalytics: false },
+      privacy: { analytics: true, performance: true, advertising: false },
     });
     const out = decodeSettingsDoc({
       v: 1,
@@ -198,7 +198,6 @@ describe("decodeSettingsDoc", () => {
       analytics: true,
       performance: true,
       advertising: false,
-      readingAnalytics: false,
     });
   });
 
@@ -258,7 +257,7 @@ describe("toSettingsDoc / applySettingsDoc", () => {
         translationSize: 15,
         translationFamily: "serif",
       },
-      privacy: { analytics: false, performance: true, advertising: true, readingAnalytics: false },
+      privacy: { analytics: false, performance: true, advertising: true },
     });
 
     const targetPrefs = fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} });
@@ -293,7 +292,6 @@ describe("toSettingsDoc / applySettingsDoc", () => {
           analytics: true,
           performance: true,
           advertising: false,
-          readingAnalytics: false,
         },
       },
       {
@@ -329,7 +327,6 @@ describe("toSettingsDoc / applySettingsDoc", () => {
           analytics: true,
           performance: true,
           advertising: false,
-          readingAnalytics: false,
         },
       },
       {
@@ -366,7 +363,6 @@ describe("toSettingsDoc / applySettingsDoc", () => {
           analytics: true,
           performance: true,
           advertising: false,
-          readingAnalytics: false,
         },
       },
       {
@@ -406,7 +402,6 @@ describe("toSettingsDoc / applySettingsDoc", () => {
           analytics: true,
           performance: true,
           advertising: false,
-          readingAnalytics: false,
         },
       },
       {

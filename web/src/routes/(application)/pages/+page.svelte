@@ -99,6 +99,7 @@
             {@const lead = leadSurah(page)}
             <li>
               <a
+                data-session-origin="index"
                 href={publicHref(pageHref(page.index))}
                 data-sveltekit-preload-data="hover"
                 title={pageMeta(page)}

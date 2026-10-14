@@ -48,16 +48,17 @@ function okBody() {
     skipped: 1,
     folders: [
       {
-        id: "f1",
+        id: "f1f1f1f1-f1f1-4f1f-8f1f-f1f1f1f1f1f1",
         name: "Tafsir",
+        isDefault: true,
         createdAt: "2026-01-01T00:00:00Z",
         updatedAt: "2026-01-02T00:00:00Z",
       },
     ],
     bookmarks: [
       {
-        id: "b1",
-        folderId: null,
+        id: "b1b1b1b1-b1b1-4b1b-8b1b-b1b1b1b1b1b1",
+        folderId: "f1f1f1f1-f1f1-4f1f-8f1f-f1f1f1f1f1f1",
         surah: 1,
         ayah: 1,
         createdAt: "2026-01-01T00:00:00Z",
@@ -89,10 +90,13 @@ describe("createBookmarksDomain.sync", () => {
       mutation(
         {
           kind: "bookmark.upsert",
-          id: "b1",
-          folderId: null,
+          id: "b1b1b1b1-b1b1-4b1b-8b1b-b1b1b1b1b1b1",
+          folderId: "f1f1f1f1-f1f1-4f1f-8f1f-f1f1f1f1f1f1",
           surah: 1,
           ayah: 1,
+          endSurah: null,
+          endAyah: null,
+          sourceId: null,
           updatedAt: "2026-01-01T00:00:00Z",
         },
         1,
@@ -110,10 +114,13 @@ describe("createBookmarksDomain.sync", () => {
       mutations: [
         {
           kind: "bookmark.upsert",
-          id: "b1",
-          folderId: null,
+          id: "b1b1b1b1-b1b1-4b1b-8b1b-b1b1b1b1b1b1",
+          folderId: "f1f1f1f1-f1f1-4f1f-8f1f-f1f1f1f1f1f1",
           surah: 1,
           ayah: 1,
+          endSurah: null,
+          endAyah: null,
+          sourceId: null,
           updatedAt: "2026-01-01T00:00:00Z",
         },
         { kind: "folder.delete", id: "f9", updatedAt: "2026-01-01T00:00:01Z" },
@@ -123,9 +130,9 @@ describe("createBookmarksDomain.sync", () => {
     expect(result.skipped).toBe(1);
     expect(result.state.folders).toEqual([
       {
-        id: "f1",
+        id: "f1f1f1f1-f1f1-4f1f-8f1f-f1f1f1f1f1f1",
         name: "Tafsir",
-        kind: "generic",
+        isDefault: true,
         position: null,
         createdAt: "2026-01-01T00:00:00Z",
         updatedAt: "2026-01-02T00:00:00Z",
@@ -133,10 +140,13 @@ describe("createBookmarksDomain.sync", () => {
     ]);
     expect(result.state.bookmarks).toEqual([
       {
-        id: "b1",
-        folderId: null,
+        id: "b1b1b1b1-b1b1-4b1b-8b1b-b1b1b1b1b1b1",
+        folderId: "f1f1f1f1-f1f1-4f1f-8f1f-f1f1f1f1f1f1",
         surah: 1,
         ayah: 1,
+        sourceId: null,
+        endSurah: null,
+        endAyah: null,
         createdAt: "2026-01-01T00:00:00Z",
         updatedAt: "2026-01-02T00:00:00Z",
       },

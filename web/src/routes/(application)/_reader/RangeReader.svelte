@@ -48,6 +48,10 @@
   } from "#lib/quran/worker-client.js";
   import { ReadChainError } from "#lib/quran/fetch.js";
   import { ayahIndexValidator } from "./range-validate";
+  import { resumeThread } from "#lib/reader/resume.js";
+  import { parseVerseKey } from "#lib/sessions/schema.js";
+  import { revealVerseMarker, trackReaderThread } from "#lib/sessions/reader-thread.svelte.js";
+  import ResumePill from "./ResumePill.svelte";
 
   let { data }: { data: RangePageData } = $props();
   const copy = getReaderUiCopy();
@@ -112,15 +116,9 @@
     const quranData = peekQuranData();
     if (quranData) reader.setPosition(positionForGlobal(quranData, startGlobal));
   });
-  // EC-42 (FIX): range readers used to call only setPosition, so reading by
-  // page/juz/hizb never updated continue-reading. The first rendered verse of
-  // the range feeds markRead; scrolling advances it (topmost verse row still
-  // on screen wins, mirroring the surah reader's anchor capture).
-  $effect(() => {
-    const first = displayed.ayahs[0];
-    if (!first) return;
-    reader.markRead(first.surah, first.ayah, rangeSourceId ?? undefined);
-  });
+  // Continue-reading for page/juz/hizb: scrolling moves the thread cursor
+  // (topmost verse still on screen); verses read in place advance it through
+  // the read tracker, so a page read without scrolling still counts.
   function markVisibleRead(): void {
     const navBottom = (stickyNav.collapsed ? 0 : stickyNav.height) + READER_BAR_HEIGHT;
     const rows = document.querySelectorAll<HTMLElement>("[data-verse-anchor]");
@@ -184,6 +182,29 @@
   const readSourceId = $derived(rangeSourceId ?? reader.arabicScript);
   const viewKey = $derived(`${readSourceId}:${data.kind}:${data.index}`);
   trackReaderView({ key: () => viewKey, sourceId: () => rangeSourceId });
+  trackReaderThread({
+    key: () => `${data.kind}:${data.index}`,
+    target: () => {
+      const first = parseVerseKey(data.first);
+      if (first === null) return null;
+      return {
+        scope: `${data.kind}:${data.index}`,
+        surah: first.surah,
+        ayah: first.ayah,
+        exact: false,
+        sourceId: readSourceId,
+      };
+    },
+    onResume: (thread) => {
+      // Cursor on this range → bring it into view; moved on → reopen there.
+      const global = peekQuranData()?.globalIndexOf(thread.surah, thread.ayah);
+      if (global !== undefined && global >= data.startGlobal && global <= data.endGlobal) {
+        void revealVerseMarker(thread.surah, thread.ayah);
+        return;
+      }
+      void resumeThread(thread, ctx, { replaceState: true });
+    },
+  });
 
   function openSurah(surah: SurahLink): void {
     void goto(publicHref(readerHrefFor(copy.locale, surahPathFor(ctx, surah))));
@@ -301,6 +322,7 @@
   aria-busy={readStatus === "loading"}
 >
   <div class="sr-only" aria-live="polite">{stackedAnnouncement}</div>
+  <ResumePill />
   {#each groups as g (g.surah.num)}
     <!-- No card: each surah in the range is a section divided by rules, like the Surah reader. -->
     <div>

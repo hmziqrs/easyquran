@@ -7,7 +7,7 @@ import {
   type SyncRoundResult,
 } from "#lib/sync/index.js";
 
-import { decodeSessionSnapshot, type SessionMutation, type SessionSnapshot } from "./schema.svelte";
+import { decodeSessionSnapshot, type SessionMutation, type SessionSnapshot } from "./schema";
 
 export interface SessionsAuthLike {
   unsafeRequest<T>(path: string, init: UnsafeRequestInit): Promise<AuthRequestResult<T>>;
@@ -27,9 +27,9 @@ export function sessionsDomainFor(userId: number): string {
 }
 
 /**
- * Per-owner reading-session domain (§9.2): pushes queued mutations to
- * `POST /reading-session/v1/sync` and returns the account's full snapshot.
- * `expectedUserId` is required — no legacy clients exist for this module.
+ * Per-owner reading-thread domain: pushes queued mutations to
+ * `POST /reading-session/v1/sync` and returns the account's open threads +
+ * progress. `expectedUserId` is required by the server.
  */
 export function createSessionsDomain(
   auth: SessionsAuthLike,
@@ -68,8 +68,8 @@ export function createSessionsDomain(
           onAccountMismatch?.();
           throw new SyncPausedError("reading-session sync paused: cookie account changed");
         }
-        // Same ledger split as bookmarks (EC-29): a 400 is the server's
-        // durable validation verdict on the batch; 401/429/5xx stay generic.
+        // A 400 is the server's durable validation verdict on the batch
+        // (dead-lettered by the engine); 401/429/5xx stay retryable.
         if (res.status === 400) {
           throw new SyncRejectedError(`reading-session sync rejected (${res.status})`);
         }

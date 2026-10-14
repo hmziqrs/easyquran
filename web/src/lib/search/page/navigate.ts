@@ -7,6 +7,7 @@ import {
   surahRouteContext,
   type SurahRouteContext,
 } from "#lib/data/quran.js";
+import { markEntry } from "#lib/sessions/entry.js";
 import { reader } from "#lib/stores/reader.svelte.js";
 
 function contextFor(sectionId: string): SurahRouteContext {
@@ -55,6 +56,9 @@ export function pageHrefFor(sectionId: string, n: number): string {
  * and row reveal. Pass a sourceId only for translated sections.
  */
 export const openVerse =
-  (surah: number, ayah: number, sourceId?: string): (() => void) =>
-  () =>
-    reader.openVerse(surah, ayah, sourceId);
+  (surah: number): (() => void) =>
+  () => {
+    // A verse jump is an entry with an exact target: it starts a new thread.
+    markEntry({ origin: "search", exact: true });
+    reader.openVerse(surah);
+  };

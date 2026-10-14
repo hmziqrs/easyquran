@@ -35,8 +35,6 @@ describe("createReader — preserved public API", () => {
     expect(r.bigger).toBeTypeOf("function");
     expect(r.smaller).toBeTypeOf("function");
     expect(r.setMode).toBeTypeOf("function");
-    expect(r.isBookmarked).toBeTypeOf("function");
-    expect(r.toggleBookmark).toBeTypeOf("function");
     expect(r.getNote).toBeTypeOf("function");
     expect(r.setNote).toBeTypeOf("function");
     expect(r.versesFor).toBeTypeOf("function");
@@ -97,15 +95,6 @@ describe("createReader — behaviour", () => {
     obs.dispose();
   });
 
-  it("bookmarks toggle and persist-reactive", () => {
-    const r = createReader();
-    expect(r.isBookmarked("1:1")).toBe(false);
-    r.toggleBookmark("1:1");
-    expect(r.isBookmarked("1:1")).toBe(true);
-    r.toggleBookmark("1:1");
-    expect(r.isBookmarked("1:1")).toBe(false);
-  });
-
   it("notes set/get round-trip", () => {
     const r = createReader();
     expect(r.getNote("2:2")).toBe("");
@@ -141,35 +130,26 @@ describe("createReader — behaviour", () => {
     expect(r.hasQuery).toBe(false);
   });
 
-  it("openNote toggles and lastRead updates on openVerse", () => {
+  it("openNote toggles; markRead moves the tab's reading thread", () => {
     const r = createReader();
     expect(r.openNote).toBeNull();
     r.toggleNote("1:1");
     expect(r.openNote).toBe("1:1");
     r.toggleNote("1:1");
     expect(r.openNote).toBeNull();
-    r.openVerse(2, 255);
+    r.markRead(2, 256, "ms.basmeih");
     expect(r.hasLastRead).toBe(true);
-    expect(r.lastRead).toEqual({ num: 2, n: 255 });
-    r.markRead(2, 256);
-    expect(r.lastRead).toEqual({ num: 2, n: 256 });
+    expect(r.lastRead).toEqual({ num: 2, n: 256, sourceId: "ms.basmeih" });
+    r.markRead(2, 257);
+    expect(r.lastRead).toEqual({ num: 2, n: 257 });
   });
 
-  it("markRead / openVerse thread sourceId for cross-surface resume", () => {
+  it("setLastReadAnchor rides the thread; a cursor move clears it; pendingAnchor round-trips", () => {
     const r = createReader();
-    r.markRead(31, 5, "ms.basmeih");
-    expect(r.lastRead).toEqual({ num: 31, n: 5, sourceId: "ms.basmeih" });
-    r.openVerse(31, 5, "ms.basmeih");
-    expect(r.lastRead).toEqual({ num: 31, n: 5, sourceId: "ms.basmeih" });
-    r.markRead(31, 5);
-    expect(r.lastRead).toEqual({ num: 31, n: 5 });
-  });
-
-  it("setLastReadAnchor / pendingAnchor / openVerse clears the anchor", () => {
-    const r = createReader();
+    r.markRead(2, 255);
     r.setLastReadAnchor({ verseKey: "2:255", localPage: 3, ratio: 0.5 });
     expect(r.lastReadAnchor).toEqual({ verseKey: "2:255", localPage: 3, ratio: 0.5 });
-    r.openVerse(2, 255);
+    r.markRead(2, 256);
     expect(r.lastReadAnchor).toBeNull();
     r.setPendingAnchor({ verseKey: "1:1", localPage: 1, ratio: 0 });
     expect(r.pendingAnchor).toEqual({ verseKey: "1:1", localPage: 1, ratio: 0 });
@@ -177,31 +157,10 @@ describe("createReader — behaviour", () => {
     expect(r.pendingAnchor).toBeNull();
   });
 
-  it("openVerse/markRead push per-surah recents (dedup, move-to-front, clear)", () => {
-    const r = createReader();
-    r.openVerse(2, 5);
-    r.openVerse(2, 255);
-    r.openVerse(36, 1);
-    expect(r.recentReads[0]).toEqual({ num: 36, n: 1, ts: expect.any(Number) });
-    expect(r.recentReads.find((x) => x.num === 2)?.n).toBe(255);
-    expect(r.recentReads.length).toBe(2);
-    r.clearReadingPosition();
-    expect(r.recentReads).toEqual([]);
-  });
-
-  it("openVerse caps recents at the limit", () => {
-    const r = createReader();
-    for (let i = 1; i <= 10; i++) r.openVerse(i, 1);
-    expect(r.recentReads.length).toBeLessThanOrEqual(8);
-    expect(r.recentReads[0]?.num).toBe(10);
-  });
-
   it("two createReader() instances are isolated", () => {
     const a = createReader();
     const b = createReader();
     a.setNote("1:1", "in-a");
     expect(b.getNote("1:1")).toBe("");
-    a.toggleBookmark("5:1");
-    expect(b.isBookmarked("5:1")).toBe(false);
   });
 });

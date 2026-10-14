@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import { page } from "$app/state";
-  import { goto } from "$app/navigation";
+  import { beforeNavigate, goto } from "$app/navigation";
+  import { installReadTracker } from "#lib/analytics/read-tracker.js";
+  import SaveToSheet from "#lib/components/bookmarks/SaveToSheet.svelte";
   import amiriArabic from "@fontsource/amiri/files/amiri-arabic-400-normal.woff2?url";
   import { Nav } from "#lib/components/nav/index.js";
   import { Footer } from "#lib/components/footer/index.js";
@@ -113,8 +115,19 @@
     syncMenu();
     const observer = new MutationObserver(syncMenu);
     observer.observe(document.body, { childList: true, subtree: true });
+    readTracker = installReadTracker();
 
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      readTracker?.dispose();
+      readTracker = null;
+    };
+  });
+
+  // Reading insights: verses still on screen get counted before the page goes.
+  let readTracker: ReturnType<typeof installReadTracker> | null = null;
+  beforeNavigate(({ willUnload }) => {
+    if (!willUnload) readTracker?.beforeNavigate();
   });
 
   $effect(() => {
@@ -232,6 +245,7 @@
   >{@render children()}</main>
   <Footer year={data.year} copy={copy.footer} links={footerLinks} />
 </div>
+<SaveToSheet />
 <Tweaks
   locale={copy.locale}
   triggerLabel={copy.appearanceTrigger}

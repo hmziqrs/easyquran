@@ -7,13 +7,11 @@ import {
   reader_bookmarks_create_folder,
   reader_bookmarks_delete_folder,
   reader_bookmarks_delete_folder_confirm,
+  reader_bookmarks_delete_folder_confirm_empty,
+  reader_bookmarks_delete_folder_confirm_one,
   reader_bookmarks_empty,
   reader_bookmarks_empty_page,
   reader_bookmarks_folder_empty,
-  reader_bookmarks_folder_kind_daily,
-  reader_bookmarks_folder_kind_generic,
-  reader_bookmarks_folder_kind_label,
-  reader_bookmarks_folder_kind_learning,
   reader_bookmarks_folder_progress,
   reader_bookmarks_folders_heading,
   reader_bookmarks_filter_all,
@@ -52,22 +50,18 @@ import {
   reader_bookmarks_synced,
   reader_bookmarks_syncing,
   reader_bookmarks_title,
-  reader_bookmarks_uncategorized,
   reader_bookmarks_undo,
+  reader_bookmarks_change,
+  reader_bookmarks_default_badge,
+  reader_bookmarks_delete_folder_body,
+  reader_bookmarks_folder_deleted,
+  reader_bookmarks_merged,
+  reader_bookmarks_new_folder,
+  reader_bookmarks_save_to,
+  reader_bookmarks_saved_to,
 } from "#lib/i18n/m/reader.js";
 
-import type { BookmarkFolderKind } from "#lib/bookmarks/schema.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
-
-/** Kind → message fn; a lookup table, not a ternary chain (AGENTS.MD rule). */
-const FOLDER_KIND_MESSAGES = {
-  generic: reader_bookmarks_folder_kind_generic,
-  daily: reader_bookmarks_folder_kind_daily,
-  learning: reader_bookmarks_folder_kind_learning,
-} as const satisfies Record<
-  BookmarkFolderKind,
-  (inputs?: undefined, options?: { locale?: UiLocale }) => string
->;
 
 export interface BookmarksCopy {
   readonly locale: UiLocale;
@@ -77,7 +71,6 @@ export interface BookmarksCopy {
   readonly emptyPage: string;
   readonly empty: string;
   readonly folderEmpty: string;
-  readonly unfiled: string;
   readonly foldersHeading: string;
   readonly newFolderLabel: string;
   readonly newFolderPlaceholder: string;
@@ -87,10 +80,17 @@ export interface BookmarksCopy {
   readonly save: string;
   readonly cancel: string;
   readonly deleteFolder: string;
-  readonly deleteFolderConfirm: (name: string) => string;
-  /** Study-set label (§11.7: name-only — never conflated with reading sessions). */
-  readonly folderKind: (kind: BookmarkFolderKind) => string;
-  readonly folderKindLabel: string;
+  readonly deleteFolderConfirm: (name: string, count: number) => string;
+  readonly deleteFolderBody: string;
+  readonly folderDeleted: string;
+  readonly defaultBadge: string;
+  /** Reader feedback: "Saved to {folder}" toast + its "Change" action + the picker title. */
+  readonly savedTo: (folder: string) => string;
+  readonly change: string;
+  readonly saveTo: string;
+  readonly newFolder: string;
+  /** Sign-in merge notice. */
+  readonly merged: (count: number) => string;
   readonly moveTo: string;
   readonly moveUpLabel: (name: string) => string;
   readonly moveDownLabel: (name: string) => string;
@@ -151,7 +151,6 @@ export function getBookmarksCopy(locale: UiLocale = getLocale() as UiLocale): Bo
     emptyPage: noArgs(reader_bookmarks_empty_page),
     empty: noArgs(reader_bookmarks_empty),
     folderEmpty: noArgs(reader_bookmarks_folder_empty),
-    unfiled: noArgs(reader_bookmarks_uncategorized),
     foldersHeading: noArgs(reader_bookmarks_folders_heading),
     newFolderLabel: noArgs(reader_bookmarks_new_folder_label),
     newFolderPlaceholder: noArgs(reader_bookmarks_new_folder_placeholder),
@@ -161,9 +160,19 @@ export function getBookmarksCopy(locale: UiLocale = getLocale() as UiLocale): Bo
     save: noArgs(reader_bookmarks_save),
     cancel: noArgs(reader_bookmarks_cancel),
     deleteFolder: noArgs(reader_bookmarks_delete_folder),
-    deleteFolderConfirm: (name) => reader_bookmarks_delete_folder_confirm({ name }, options),
-    folderKind: (kind) => noArgs(FOLDER_KIND_MESSAGES[kind]),
-    folderKindLabel: noArgs(reader_bookmarks_folder_kind_label),
+    deleteFolderConfirm: (name, count) => {
+      if (count === 0) return reader_bookmarks_delete_folder_confirm_empty({ name }, options);
+      if (count === 1) return reader_bookmarks_delete_folder_confirm_one({ name }, options);
+      return reader_bookmarks_delete_folder_confirm({ name, count }, options);
+    },
+    deleteFolderBody: noArgs(reader_bookmarks_delete_folder_body),
+    folderDeleted: noArgs(reader_bookmarks_folder_deleted),
+    defaultBadge: noArgs(reader_bookmarks_default_badge),
+    savedTo: (folder) => reader_bookmarks_saved_to({ folder }, options),
+    change: noArgs(reader_bookmarks_change),
+    saveTo: noArgs(reader_bookmarks_save_to),
+    newFolder: noArgs(reader_bookmarks_new_folder),
+    merged: (count) => reader_bookmarks_merged({ count }, options),
     moveTo: noArgs(reader_bookmarks_move_to),
     moveUpLabel: (name) => reader_bookmarks_move_up({ name }, options),
     moveDownLabel: (name) => reader_bookmarks_move_down({ name }, options),

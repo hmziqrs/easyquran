@@ -7,6 +7,8 @@
     reader_cards_schedule_full,
     reader_cards_schedule_name,
     reader_cards_schedule_remove,
+    reader_cards_schedule_hour,
+    reader_cards_schedule_minute,
     reader_cards_schedule_time,
     reader_cards_slot_asr,
     reader_cards_slot_dhuhr,
@@ -22,6 +24,7 @@
   import { IconButton } from "#lib/components/ui/icon-button/index.js";
   import { Input } from "#lib/components/ui/input/index.js";
   import { Icon } from "#lib/components/index.js";
+  import TimeSelect from "./TimeSelect.svelte";
 
   /**
    * Fixed-clock schedule editor (no geolocation, no astronomy): named
@@ -111,11 +114,11 @@
         placeholder={reader_cards_schedule_name(undefined, msgOptions)}
         class="h-9 min-w-0 flex-1 rounded-pill px-3 text-sm"
       />
-      <Input
-        type="time"
+      <TimeSelect
         bind:value={slot.time}
-        aria-label={reader_cards_schedule_time(undefined, msgOptions)}
-        class="h-9 w-auto rounded-pill px-3 text-sm"
+        label={reader_cards_schedule_time(undefined, msgOptions)}
+        hourLabel={reader_cards_schedule_hour(undefined, msgOptions)}
+        minuteLabel={reader_cards_schedule_minute(undefined, msgOptions)}
       />
       <IconButton
         label={reader_cards_schedule_remove(undefined, msgOptions)}

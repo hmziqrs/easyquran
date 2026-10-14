@@ -28,6 +28,7 @@ vi.mock("#lib/quran/worker-client.js", async (importOriginal) => ({
 import { createQuranData, type QuranData } from "#lib/data/quran-data.js";
 import { surahRouteContext, type SurahRouteContext } from "#lib/data/quran.js";
 import type { TranslationSearchResponse } from "#lib/quran/search/types.js";
+import { sessions } from "#lib/sessions/store.svelte.js";
 import { reader } from "#lib/stores/reader.svelte.js";
 
 import { PaletteGroups } from "../groups";
@@ -411,7 +412,8 @@ describe("translation.text source", () => {
       expect(entry?.href).toBe("/al-baqarah/t/en/sahih#ayah-2-255");
       expect(entry?.dedupeKey).toBe("tayah:en.sahih:2:255");
     } finally {
-      reader.clearReadingPosition();
+      const thread = sessions.current;
+      if (thread !== null) sessions.remove(thread.id);
     }
   });
 

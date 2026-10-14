@@ -1,6 +1,10 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
+  import { page } from "$app/state";
   import { bookmarks } from "#lib/bookmarks/store.svelte.js";
+  import { toggleBookmark } from "#lib/bookmarks/feedback.svelte.js";
+  import { parseVerseKey } from "#lib/bookmarks/schema.js";
+  import { routeContextFromParams, translationIdFromSegments } from "#lib/data/quran.js";
   import { reader } from "#lib/stores/reader.svelte.js";
   import { Icon, type IconName } from "#lib/components/icon/index.js";
   import { Tooltip, TooltipTrigger, TooltipContent } from "#lib/components/ui/tooltip/index.js";
@@ -12,8 +16,18 @@
   let { text, vKey }: { text: string; vKey: string } = $props();
 
   const copy = getReaderUiCopy();
-  // Unified view: authed sessions read the synced bookmarks store, anonymous ones the legacy local map.
+  // One store for everyone (device-local signed out, synced signed in).
   const bookmarked = $derived(bookmarks.isMarkedKey(vKey));
+
+  // Bookmarks reopen in the translation they were saved from.
+  function onBookmark(): void {
+    const coords = parseVerseKey(vKey);
+    if (coords === null) return;
+    const ctx = routeContextFromParams(page.params);
+    const sourceId =
+      ctx.kind === "translation" ? translationIdFromSegments(ctx.lang, ctx.translator) : null;
+    toggleBookmark({ ...coords, sourceId });
+  }
 
   let copied = $state(false);
   let sharedCopied = $state(false);
@@ -103,7 +117,7 @@
       <span role="status" class="share-note">{shareNote}</span>
     {/if}
     {@render verseAction({
-      onclick: () => bookmarks.toggleVerse(vKey),
+      onclick: onBookmark,
       label: bookmarked ? copy.verse.removeBookmark : copy.verse.bookmark,
       ariaLabel: bookmarked ? copy.verse.removeBookmark : copy.verse.bookmarkVerse,
       icon: bookmarked ? "bookmark-fill" : "bookmark",

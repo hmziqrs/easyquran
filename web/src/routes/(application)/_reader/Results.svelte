@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
+  import { markEntry } from "#lib/sessions/entry.js";
   import { reader } from "#lib/stores/reader.svelte.js";
   import { routeContextFromParams, surahAyahPathFor } from "#lib/data/quran.js";
   import { loadQuranData } from "#lib/data/quran-data-client.js";
@@ -81,7 +82,8 @@
     const entry = quranData.surahByNum(surah);
     if (!entry) return;
     if (!quranData.surahLocalPageForAyah(surah, ayah)) return;
-    reader.openVerse(surah, ayah);
+    markEntry({ origin: "search", exact: true });
+    reader.openVerse(surah);
     void goto(
       publicHref(
         readerHrefFor(
