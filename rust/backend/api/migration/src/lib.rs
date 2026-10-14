@@ -14,6 +14,7 @@ mod m000011_device_token_ownership;
 mod m000012_bookmark_context;
 mod m000013_reading_sessions;
 mod m000014_user_analytics;
+mod m000015_newsletter_subscribers;
 
 pub struct Migrator;
 
@@ -68,6 +69,9 @@ impl MigratorTrait for Migrator {
             // idempotent raw reading_events plus the reading_daily and
             // reading_ayah_totals rollups that survive the retention purge.
             Box::new(m000014_user_analytics::Migration),
+            // m000015 restores newsletter_subscribers, dropped from the chain by
+            // the m000001 squash (4876e8e1); the seeder and newsletter_v1 need it.
+            Box::new(m000015_newsletter_subscribers::Migration),
         ]
     }
 }
