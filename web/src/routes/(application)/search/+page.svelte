@@ -106,6 +106,11 @@
     // kit 3: shallow writes land in page.shallow.url, never page.url — compare
     // against the visible URL or this effect loops on its own write forever.
     const url = visibleUrl(page);
+    // Back-traversal flips the page store to the destination route while this
+    // page is still mounted; syncing then would shallow-write the destination
+    // path with a stale ?q= (kit 3's update_state does no pathname check).
+    // Same endsWith guard style as isNonReaderAppRoute in (application)/+layout.svelte.
+    if (!url.pathname.endsWith("/search")) return;
     const next = serializeSearchState(engine.committedQuery, searchSelection.ids);
     if (next === url.search) return;
     // Shallow replace-goto: kit 3's replacement for the deprecated replaceState.

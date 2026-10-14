@@ -12,3 +12,16 @@ import type { Page, ReadonlyURL } from "$app/state";
 export function visibleUrl(page: Page): ReadonlyURL {
   return page.shallow?.url ?? page.url;
 }
+
+/**
+ * True while the address bar still shows the rendered page's path. Kit 3's
+ * shallow `goto` (update_state) replaces the history entry the browser sits on
+ * with no pathname check, and during a popstate traversal `window.location` is
+ * already the destination while `page` still describes the rendered route —
+ * the exact window in which a URL-sync write would clobber the traversed-to
+ * entry's URL and pageUrl metadata. Client-only: reads `window.location`, so
+ * every caller must run browser-side.
+ */
+export function locationMatchesVisibleUrl(page: Page): boolean {
+  return window.location.pathname === visibleUrl(page).pathname;
+}

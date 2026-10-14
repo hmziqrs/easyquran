@@ -257,6 +257,9 @@ beforeEach(() => {
   });
   headerProps.current = null;
   nav.url = new URL("https://example.test/al-fatihah");
+  // writeHistoryState only writes while the address bar still shows the reader
+  // path; happy-dom defaults to "/", which would skip every write.
+  window.history.replaceState({}, "", "/al-fatihah");
   localStorage.clear();
 
   // happy-dom lacks ResizeObserver; the reader attaches one in two places.
@@ -335,6 +338,38 @@ describe("SurahReader anchor history", () => {
       await unmount(view);
     },
   );
+
+  // Kit 3's shallow goto replaces whatever entry the address bar sits on, with
+  // no pathname check — these pin the guard that keeps reader writes off
+  // entries the browser has already traversed to.
+  it("writes no history entry once the address bar has left the reader path", async () => {
+    // Back-traversal state: popstate moved the address bar, the reader is still mounted.
+    window.history.replaceState({}, "", "/settings");
+    mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 1 })) });
+    for (let frame = 0; frame < 5; frame += 1) {
+      await flushMicrotasks(20);
+      flushRaf();
+    }
+    await flushMicrotasks(20);
+    expect(historyWriteGotos()).toHaveLength(0);
+  });
+
+  it("builds the written URL from the page store, not the live address bar", async () => {
+    // A foreign query parked in the address bar must not ride along: the base
+    // is visibleUrl(appPage) (page.shallow in kit 3), never window.location.
+    window.history.replaceState({}, "", "/al-fatihah?foreign=1");
+    mount(SurahReader, { target, props: propsFor(pageData({ ayahs: 7, pageCount: 1 })) });
+    for (let frame = 0; frame < 5; frame += 1) {
+      await flushMicrotasks(20);
+      flushRaf();
+    }
+    await flushMicrotasks(20);
+    const writes = historyWriteGotos();
+    expect(writes.length).toBeGreaterThan(0);
+    const href = String(writes[0]?.[0]);
+    expect(href).toContain("/al-fatihah");
+    expect(href).not.toContain("foreign=1");
+  });
 });
 
 describe("SurahReader W7 single-page empty recovery", () => {

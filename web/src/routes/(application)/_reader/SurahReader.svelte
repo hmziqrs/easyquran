@@ -34,6 +34,7 @@
   import { reader } from "#lib/stores/reader.svelte.js";
   import { stickyNav } from "#lib/stores/sticky-nav.svelte.js";
   import { withModeParam } from "#lib/reader/mode-param.js";
+  import { locationMatchesVisibleUrl, visibleUrl } from "#lib/reader/visible-url.js";
   import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
   import { readingText } from "#lib/stores/reading-text.svelte.js";
   import { PREPARE_RELOAD, PREPARE_RELOAD_EVENT, UPDATE_BROADCAST_CHANNEL } from "#lib/offline/messages.js";
@@ -581,11 +582,17 @@
 
   function writeHistoryState(localPage = visibleLocalPage): void {
     if (!initial || anchorScrolling) return;
+    // Kit 3's shallow goto replaces the entry the address bar sits on with no
+    // pathname check: a popstate traversal can move the bar to another route
+    // before this reader tears down, and a write then would clobber that
+    // entry's URL and pageUrl metadata. Only write while the bar still shows
+    // the rendered reader path.
+    if (!locationMatchesVisibleUrl(appPage)) return;
     const snapshot = historySnapshot(localPage);
     // One URL per surah: the path never moves, so the restore snapshot rides in
     // history.state on the current path and the settled verse position rides in
     // the ?v={surah}:{ayah} query (share/reload parity, quran.com's startingVerse).
-    const base = new URL(window.location.href);
+    const base = visibleUrl(appPage);
     const params = new URLSearchParams(base.search);
     params.delete("v");
     params.delete("verse");
@@ -593,18 +600,18 @@
     if (anchor !== null && anchor.kind === "verse") params.set("v", anchor.verseKey);
     const query = params.toString();
     const bare = `${base.pathname}${query === "" ? "" : `?${query}`}`;
-    const next = withModeParam(bare, reader.mode, window.location.href);
+    const next = withModeParam(bare, reader.mode, base);
     const target = next.href;
     if (target !== lastWrittenUrl || localPage !== lastWrittenPage) {
       // Shallow replace-goto: kit 3's replacement for the deprecated replaceState.
-      void goto(next, {
+      goto(next, {
         state: {
           ...appPage.state,
           surahReader: snapshot,
         },
         shallow: true,
         replace: true,
-      });
+      }).catch(() => {});
       lastWrittenUrl = target;
       lastWrittenPage = localPage;
     }
@@ -955,12 +962,15 @@
   }
 
   beforeNavigate(() => {
+    // Stop the pending debounce but never flush it: a shallow goto issued
+    // between nav start and history commit lands on a foreign entry (kit 3's
+    // update_state does no pathname check), and persistReaderPosition already
+    // runs on every scroll write, so the flush buys nothing.
     if (!clientMounted) return;
     if (historyWriteTimer) {
       clearTimeout(historyWriteTimer);
       historyWriteTimer = null;
     }
-    writeHistoryState();
   });
 
   $effect(() => {

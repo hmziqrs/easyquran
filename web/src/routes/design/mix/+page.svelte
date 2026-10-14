@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { goto } from "$app/navigation";
+  import { beforeNavigate, goto } from "$app/navigation";
   import { page } from "$app/state";
   import { Icon } from "#lib/components/icon/index.js";
   import { loadArabicFont } from "#lib/fonts/arabic-fonts.js";
+  import { locationMatchesVisibleUrl } from "#lib/reader/visible-url.js";
   import { trailingDebounce } from "#lib/storage/index.js";
   import { BG_COLORS, readMix, translationsSearch } from "../_variants/mix/axes";
   import Browse from "../_variants/mix/Browse.svelte";
@@ -54,6 +55,9 @@
   });
 
   const writeUrl = trailingDebounce(() => {
+    // Never shallow-write once the address bar has left this page's path (kit
+    // 3's update_state does no pathname check).
+    if (!locationMatchesVisibleUrl(page)) return;
     const url = new URL(window.location.href);
     writeTweaks(url.searchParams, tweaks);
     if (!browseOpen) url.searchParams.delete("drawer");
@@ -69,6 +73,12 @@
     browseOpen = false;
     writeUrl.schedule();
   }
+
+  // A traversal (link or popstate) can commit while the 250ms trailing write
+  // is still pending; cancel it or it shallow-writes onto the new entry.
+  beforeNavigate(() => {
+    writeUrl.cancel();
+  });
 
   const ground = $derived(BG_COLORS[mix.bg]);
   const rootStyle = $derived(
