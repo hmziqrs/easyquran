@@ -11,19 +11,6 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
   // Reading position lives on the tab's thread (#lib/sessions): position
   // writes go straight to the sessions store, never into the reader blob.
   return {
-    get query(): string {
-      return core.s.query;
-    },
-    get hasQuery(): boolean {
-      return core.s.query.trim().length > 0;
-    },
-    setQuery(v: string): void {
-      core.s.query = v;
-    },
-    clearQuery(): void {
-      core.s.query = "";
-    },
-
     get browseMode(): BrowseMode {
       return core.s.browse;
     },
@@ -66,7 +53,6 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
     setCurrent(num: number): void {
       core.s.current = num;
       core.nav.bump();
-      core.s.query = "";
       core.s.openNote = null;
       persistence.writeNow();
     },
@@ -74,7 +60,6 @@ export function createReaderSession(core: ReaderCore, persistence: ReaderPersist
     openVerse(num: number): void {
       core.s.current = num;
       core.nav.bump();
-      core.s.query = "";
       core.s.browse = "surah";
       core.s.openNote = null;
       persistence.writeNow();

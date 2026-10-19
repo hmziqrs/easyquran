@@ -22,10 +22,6 @@ export type { ReaderMode } from "./reader-core.svelte";
 export interface ReaderApi {
   hydrate(modeOverride?: ReaderMode): void;
   dispose(): void;
-  readonly query: string;
-  readonly hasQuery: boolean;
-  setQuery(v: string): void;
-  clearQuery(): void;
   readonly browseMode: BrowseMode;
   readonly browseSurah: boolean;
   readonly browseAyah: boolean;
@@ -90,15 +86,6 @@ export function createReader(): ReaderApi {
   return {
     hydrate: (modeOverride?: ReaderMode) => persistence.hydrate(modeOverride),
     dispose: () => persistence.dispose(),
-
-    get query() {
-      return session.query;
-    },
-    get hasQuery() {
-      return session.hasQuery;
-    },
-    setQuery: (v: string) => session.setQuery(v),
-    clearQuery: () => session.clearQuery(),
 
     get browseMode() {
       return session.browseMode;

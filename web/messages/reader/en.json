@@ -39,8 +39,6 @@
   "reader_hizb_item": "Hizb {index}",
   "reader_juz_count": "{count} ajzāʼ",
   "reader_range_translation_unavailable": "This translation couldn't be loaded right now.",
-  "reader_search_placeholder": "Search surah, number or Arabic…",
-  "reader_search_label": "Search surahs and ayahs",
   "reader_clear_search": "Clear search",
   "reader_browse": "Browse",
   "reader_browse_surah": "Surah",
@@ -49,42 +47,7 @@
   "reader_browse_page": "Page",
   "reader_navigation_loading": "Loading Quran navigation…",
   "reader_navigation_error": "Quran navigation could not be loaded.",
-  "reader_search_tip": "Tip: press Ctrl+K to search",
   "reader_navigation_description": "Quran navigation — search and browse by surah, verse, juz, or page.",
-  "reader_searching": "Searching…",
-  "reader_no_verse_matches": "No verses match “{query}”.",
-  "reader_search_open_surah": "Open surah →",
-  "reader_search_unavailable": "Search is temporarily unavailable.",
-  "reader_search_surah_opener": "{name} · Surah opener",
-  "reader_search_ayah": "{name} {surah}:{ayah}",
-  "reader_search_surah_matches": [
-    {
-      "declarations": ["input count", "input query", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
-      "match": {
-        "countPlural=zero": "No surahs matching “{query}”",
-        "countPlural=one": "{count} surah matching “{query}”",
-        "countPlural=two": "{count} surahs matching “{query}”",
-        "countPlural=few": "{count} surahs matching “{query}”",
-        "countPlural=many": "{count} surahs matching “{query}”",
-        "countPlural=other": "{count} surahs matching “{query}”"
-      }
-    }
-  ],
-  "reader_search_text_matches": [
-    {
-      "declarations": ["input count", "input query", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
-      "match": {
-        "countPlural=zero": "No Quran text results matching “{query}”",
-        "countPlural=one": "{count} Quran text result matching “{query}”",
-        "countPlural=two": "{count} Quran text results matching “{query}”",
-        "countPlural=few": "{count} Quran text results matching “{query}”",
-        "countPlural=many": "{count} Quran text results matching “{query}”",
-        "countPlural=other": "{count} Quran text results matching “{query}”"
-      }
-    }
-  ],
   "reader_source": "Source",
   "reader_arabic": "Arabic",
   "reader_original": "Original",

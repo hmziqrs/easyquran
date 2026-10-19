@@ -44,7 +44,6 @@ export interface Persisted {
 }
 
 export interface ReaderState extends Persisted {
-  query: string;
   browse: BrowseMode;
   openNote: VerseKey | null;
   pendingAnchor: LastReadAnchor | null;
@@ -89,7 +88,6 @@ export const READER_DEFAULTS: ReaderState = {
   mode: "verse",
   notes: {},
   pendingAnchor: null,
-  query: "",
   browse: BrowseMode.Surah,
   openNote: null,
   position: null,

@@ -18,6 +18,10 @@ type RemovedReaderMembers = {
   fontSize?: undefined;
   bookmarkList?: undefined;
   bookmarkCount?: undefined;
+  query?: undefined;
+  hasQuery?: undefined;
+  setQuery?: undefined;
+  clearQuery?: undefined;
 };
 
 describe("createReader — preserved public API", () => {
@@ -25,8 +29,6 @@ describe("createReader — preserved public API", () => {
 
   it("exposes every USED member consumers depend on", () => {
     expect(r.hydrate).toBeTypeOf("function");
-    expect(r.setQuery).toBeTypeOf("function");
-    expect(r.clearQuery).toBeTypeOf("function");
     expect(r.setBrowse).toBeTypeOf("function");
     expect(r.toggleNote).toBeTypeOf("function");
     expect(r.setCurrent).toBeTypeOf("function");
@@ -52,14 +54,17 @@ describe("createReader — preserved public API", () => {
     expect(dead.fontSize).toBeUndefined();
     expect(dead.bookmarkList).toBeUndefined();
     expect(dead.bookmarkCount).toBeUndefined();
+    // Query state died with the sidebar search (palette owns search now).
+    expect(dead.query).toBeUndefined();
+    expect(dead.hasQuery).toBeUndefined();
+    expect(dead.setQuery).toBeUndefined();
+    expect(dead.clearQuery).toBeUndefined();
   });
 });
 
 describe("createReader — behaviour", () => {
   it("defaults match the expected starting state", () => {
     const r = createReader();
-    expect(r.query).toBe("");
-    expect(r.hasQuery).toBe(false);
     expect(r.browseMode).toBe("surah");
     expect(r.mode).toBe("verse");
     expect(r.isVerseMode).toBe(true);
@@ -120,14 +125,6 @@ describe("createReader — behaviour", () => {
     r.setBrowse("juz");
     expect(r.browseJuz).toBe(true);
     expect(r.browseMode).toBe("juz");
-  });
-
-  it("query mutators update hasQuery", () => {
-    const r = createReader();
-    r.setQuery("baqarah");
-    expect(r.hasQuery).toBe(true);
-    r.clearQuery();
-    expect(r.hasQuery).toBe(false);
   });
 
   it("openNote toggles; markRead moves the tab's reading thread", () => {

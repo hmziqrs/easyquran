@@ -88,7 +88,6 @@ import {
   reader_network_unavailable,
   reader_new_version_ready,
   reader_no_translations,
-  reader_no_verse_matches,
   reader_note_placeholder,
   reader_note_saved,
   reader_note_tafsir,
@@ -131,17 +130,7 @@ import {
   reader_remove_offline,
   reader_retry,
   reader_saved_on,
-  reader_search_ayah,
-  reader_search_label,
-  reader_search_open_surah,
-  reader_search_placeholder,
   reader_search_quran,
-  reader_search_surah_matches,
-  reader_search_surah_opener,
-  reader_search_text_matches,
-  reader_search_tip,
-  reader_search_unavailable,
-  reader_searching,
   reader_seo_breadcrumb_surah,
   reader_seo_home,
   reader_seo_hizb_description,
@@ -267,28 +256,15 @@ export interface ReaderUiCopy {
     readonly moreAyahsUnavailable: string;
   };
   readonly sidebar: {
-    readonly searchPlaceholder: string;
-    readonly searchLabel: string;
     readonly clearSearch: string;
     readonly browseLabel: string;
     readonly mode: (mode: BrowseMode) => string;
     readonly loadingNavigation: string;
     readonly navigationError: string;
     readonly navigationDescription: string;
-    readonly tip: string;
     readonly pageAbbreviation: string;
     readonly juzLabel: string;
     readonly rangeItem: (kind: RangeKind, index: number) => string;
-  };
-  readonly search: {
-    readonly searching: string;
-    readonly noVerseMatches: (query: string) => string;
-    readonly surahMatches: (count: number, query: string) => string;
-    readonly textMatches: (count: number, query: string) => string;
-    readonly openSurah: string;
-    readonly unavailable: string;
-    readonly surahOpener: (name: string) => string;
-    readonly ayah: (name: string, surah: number, ayah: number) => string;
   };
   readonly range: {
     readonly juz: string;
@@ -504,28 +480,15 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       moreAyahsUnavailable: noArgs(reader_more_ayahs_unavailable),
     },
     sidebar: {
-      searchPlaceholder: noArgs(reader_search_placeholder),
-      searchLabel: noArgs(reader_search_label),
       clearSearch: noArgs(reader_clear_search),
       browseLabel: noArgs(reader_browse),
       mode,
       loadingNavigation: noArgs(reader_navigation_loading),
       navigationError: noArgs(reader_navigation_error),
       navigationDescription: noArgs(reader_navigation_description),
-      tip: noArgs(reader_search_tip),
       pageAbbreviation: noArgs(reader_page_abbreviation),
       juzLabel: noArgs(reader_juz),
       rangeItem,
-    },
-    search: {
-      searching: noArgs(reader_searching),
-      noVerseMatches: (query) => reader_no_verse_matches({ query }, options),
-      surahMatches: (count, query) => reader_search_surah_matches({ count, query }, options),
-      textMatches: (count, query) => reader_search_text_matches({ count, query }, options),
-      openSurah: noArgs(reader_search_open_surah),
-      unavailable: noArgs(reader_search_unavailable),
-      surahOpener: (name) => reader_search_surah_opener({ name }, options),
-      ayah: (name, surah, ayah) => reader_search_ayah({ name, surah, ayah }, options),
     },
     range: {
       juz: noArgs(reader_juz),

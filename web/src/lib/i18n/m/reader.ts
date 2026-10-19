@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 391 messages. Import this barrel, never
+// 380 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "#lib/paraglide/messages/reader_account.js";
@@ -230,7 +230,6 @@ export { reader_network_unavailable } from "#lib/paraglide/messages/reader_netwo
 export { reader_new_version_ready } from "#lib/paraglide/messages/reader_new_version_ready.js";
 export { reader_next_surah } from "#lib/paraglide/messages/reader_next_surah.js";
 export { reader_no_translations } from "#lib/paraglide/messages/reader_no_translations.js";
-export { reader_no_verse_matches } from "#lib/paraglide/messages/reader_no_verse_matches.js";
 export { reader_note_placeholder } from "#lib/paraglide/messages/reader_note_placeholder.js";
 export { reader_note_saved } from "#lib/paraglide/messages/reader_note_saved.js";
 export { reader_note_tafsir } from "#lib/paraglide/messages/reader_note_tafsir.js";
@@ -277,17 +276,7 @@ export { reader_remove_bookmark } from "#lib/paraglide/messages/reader_remove_bo
 export { reader_remove_offline } from "#lib/paraglide/messages/reader_remove_offline.js";
 export { reader_retry } from "#lib/paraglide/messages/reader_retry.js";
 export { reader_saved_on } from "#lib/paraglide/messages/reader_saved_on.js";
-export { reader_search_ayah } from "#lib/paraglide/messages/reader_search_ayah.js";
-export { reader_search_label } from "#lib/paraglide/messages/reader_search_label.js";
-export { reader_search_open_surah } from "#lib/paraglide/messages/reader_search_open_surah.js";
-export { reader_search_placeholder } from "#lib/paraglide/messages/reader_search_placeholder.js";
 export { reader_search_quran } from "#lib/paraglide/messages/reader_search_quran.js";
-export { reader_search_surah_matches } from "#lib/paraglide/messages/reader_search_surah_matches.js";
-export { reader_search_surah_opener } from "#lib/paraglide/messages/reader_search_surah_opener.js";
-export { reader_search_text_matches } from "#lib/paraglide/messages/reader_search_text_matches.js";
-export { reader_search_tip } from "#lib/paraglide/messages/reader_search_tip.js";
-export { reader_search_unavailable } from "#lib/paraglide/messages/reader_search_unavailable.js";
-export { reader_searching } from "#lib/paraglide/messages/reader_searching.js";
 export { reader_seo_breadcrumb_surah } from "#lib/paraglide/messages/reader_seo_breadcrumb_surah.js";
 export { reader_seo_hizb_description } from "#lib/paraglide/messages/reader_seo_hizb_description.js";
 export { reader_seo_hizb_title } from "#lib/paraglide/messages/reader_seo_hizb_title.js";

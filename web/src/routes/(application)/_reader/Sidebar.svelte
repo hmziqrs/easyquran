@@ -15,8 +15,6 @@
   import { RangeKind, type QuranData } from "#lib/data/quran-data.js";
   import { hizbRange, juzOfPage } from "#lib/data/mushaf-divisions.js";
   import type { CatalogEntry, RangeEntry } from "#lib/data/quran-types.js";
-  import { Icon } from "#lib/components/icon/index.js";
-  import { Input } from "#lib/components/ui/input/index.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
   import { readerHrefFor } from "#lib/i18n/reader.js";
   import { publicHref } from "#lib/i18n/public-href.js";
@@ -44,12 +42,7 @@
 
   let contentEl: HTMLDivElement | null = $state(null);
 
-  function oninput(e: Event) {
-    // SAFETY: oninput is bound only to the search Input's oninput below; currentTarget is that input element.
-    reader.setQuery((e.currentTarget as HTMLInputElement).value);
-  }
   function onItemClick() {
-    reader.clearQuery();
     sidebar.setOpenMobile(false);
   }
 
@@ -205,34 +198,6 @@
 
 <Sidebar collapsible="offcanvas">
   <SidebarHeader>
-    <!-- shadcn icon-input pattern: the Input keeps its own border/background/focus ring;
-         the search glyph and clear button overlay it, so the 44px field stays the hit target. -->
-    <div class="relative">
-      <Icon
-        name="search"
-        size={15}
-        class="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-muted-foreground"
-      />
-      <Input
-        type="text"
-        value={reader.query}
-        {oninput}
-        placeholder={copy.sidebar.searchPlaceholder}
-        aria-label={copy.sidebar.searchLabel}
-        class="ps-11 pe-11"
-      />
-      {#if reader.hasQuery}
-        <button
-          type="button"
-          onclick={() => reader.clearQuery()}
-          aria-label={copy.sidebar.clearSearch}
-          class="absolute end-3 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <Icon name="x" size={15} />
-        </button>
-      {/if}
-    </div>
-
     <div
       class="grid grid-cols-4 gap-1 rounded-md bg-background-subtle p-1"
       role="group"

@@ -39,8 +39,6 @@
   "reader_hizb_item": "الحزب {index}",
   "reader_juz_count": "{count} جزءًا",
   "reader_range_translation_unavailable": "تعذر تحميل هذه الترجمة الآن.",
-  "reader_search_placeholder": "ابحث عن سورة أو رقم أو نص عربي…",
-  "reader_search_label": "البحث في السور والآيات",
   "reader_clear_search": "مسح البحث",
   "reader_browse": "تصفح",
   "reader_browse_surah": "السور",
@@ -49,42 +47,7 @@
   "reader_browse_page": "الصفحات",
   "reader_navigation_loading": "جارٍ تحميل تنقل القرآن…",
   "reader_navigation_error": "تعذر تحميل تنقل القرآن.",
-  "reader_search_tip": "تلميح: اضغط Ctrl+K للبحث",
   "reader_navigation_description": "تنقل القرآن — ابحث وتصفح حسب السورة أو الآية أو الجزء أو الصفحة.",
-  "reader_searching": "جارٍ البحث…",
-  "reader_no_verse_matches": "لا توجد آيات تطابق «{query}».",
-  "reader_search_open_surah": "فتح السورة ←",
-  "reader_search_unavailable": "البحث غير متاح مؤقتًا.",
-  "reader_search_surah_opener": "{name} · بداية السورة",
-  "reader_search_ayah": "{name} {surah}:{ayah}",
-  "reader_search_surah_matches": [
-    {
-      "declarations": ["input count", "input query", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
-      "match": {
-        "countPlural=zero": "لا توجد سورة تطابق «{query}»",
-        "countPlural=one": "سورة واحدة تطابق «{query}»",
-        "countPlural=two": "سورتان تطابقان «{query}»",
-        "countPlural=few": "{count} سور تطابق «{query}»",
-        "countPlural=many": "{count} سورة تطابق «{query}»",
-        "countPlural=other": "{count} سورة تطابق «{query}»"
-      }
-    }
-  ],
-  "reader_search_text_matches": [
-    {
-      "declarations": ["input count", "input query", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
-      "match": {
-        "countPlural=zero": "لا توجد نتائج نصية تطابق «{query}»",
-        "countPlural=one": "نتيجة نصية واحدة تطابق «{query}»",
-        "countPlural=two": "نتيجتان نصيتان تطابقان «{query}»",
-        "countPlural=few": "{count} نتائج نصية تطابق «{query}»",
-        "countPlural=many": "{count} نتيجة نصية تطابق «{query}»",
-        "countPlural=other": "{count} نتيجة نصية تطابق «{query}»"
-      }
-    }
-  ],
   "reader_source": "المصدر",
   "reader_arabic": "العربية",
   "reader_original": "الأصل",

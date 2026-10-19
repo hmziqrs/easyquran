@@ -25,7 +25,6 @@
   import { trackReaderThread } from "#lib/sessions/reader-thread.svelte.js";
   import ResumePill from "./ResumePill.svelte";
   import ReaderShell from "./ReaderShell.svelte";
-  import Results from "./Results.svelte";
   import SurahReader from "./SurahReader.svelte";
 
   let { data }: { data: SurahRouteData } = $props();
@@ -241,18 +240,14 @@
   {/snippet}
 
   <ResumePill />
-  {#if reader.hasQuery}
-    <Results />
-  {:else}
-    <SurahReader
-      bind:this={readerView}
-      initial={data.pageData}
-      previousPage={data.previousPage}
-      nextPage={data.nextPage}
-      previousSurah={data.previousSurah}
-      nextSurah={data.nextSurah}
-      {anchorScrolling}
-      onVisiblePage={(pageData) => (scrolledPage = pageData)}
-    />
-  {/if}
+  <SurahReader
+    bind:this={readerView}
+    initial={data.pageData}
+    previousPage={data.previousPage}
+    nextPage={data.nextPage}
+    previousSurah={data.previousSurah}
+    nextSurah={data.nextSurah}
+    {anchorScrolling}
+    onVisiblePage={(pageData) => (scrolledPage = pageData)}
+  />
 </ReaderShell>
