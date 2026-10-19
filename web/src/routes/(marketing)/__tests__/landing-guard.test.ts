@@ -90,7 +90,6 @@ describe("landing i18n keys", () => {
     "landing_iqra_meaning",
     "landing_search_label",
     "landing_search_placeholder",
-    "landing_search_button",
     "landing_often_opened",
     "landing_index_label",
     "landing_index_surahs",
@@ -120,6 +119,7 @@ describe("landing i18n keys", () => {
     const en = catalog("en");
     for (const key of [
       "landing_hero_intro",
+      "landing_search_button",
       "landing_metric_surahs_note",
       "landing_index_see_all",
       "landing_why_title",

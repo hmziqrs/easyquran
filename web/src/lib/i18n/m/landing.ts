@@ -2,7 +2,7 @@
 //
 // Marketing home page, including its SEO metadata.
 //
-// 18 messages. Import this barrel, never
+// 17 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { landing_bismillah } from "#lib/paraglide/messages/landing_bismillah.js";
@@ -16,7 +16,6 @@ export { landing_index_yours } from "#lib/paraglide/messages/landing_index_yours
 export { landing_iqra } from "#lib/paraglide/messages/landing_iqra.js";
 export { landing_iqra_meaning } from "#lib/paraglide/messages/landing_iqra_meaning.js";
 export { landing_often_opened } from "#lib/paraglide/messages/landing_often_opened.js";
-export { landing_search_button } from "#lib/paraglide/messages/landing_search_button.js";
 export { landing_search_label } from "#lib/paraglide/messages/landing_search_label.js";
 export { landing_search_placeholder } from "#lib/paraglide/messages/landing_search_placeholder.js";
 export { landing_surah_ayahs } from "#lib/paraglide/messages/landing_surah_ayahs.js";

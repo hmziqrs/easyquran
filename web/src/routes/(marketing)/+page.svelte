@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { Bismillah, Button, Container, Icon } from "#lib/components/index.js";
+  import { Bismillah, Container } from "#lib/components/index.js";
+  import { SearchTrigger } from "#lib/components/search/index.js";
   import { resolveLandingCopy } from "#lib/i18n/landing-copy.js";
   import { marketingLocaleFromPath } from "#lib/i18n/marketing-copy.js";
   import MarketingSeo from "./_components/MarketingSeo.svelte";
@@ -11,12 +12,12 @@
   import type { LandingHue } from "#lib/i18n/marketing-copy.js";
 
   /**
-   * The home page is the index, not a pitch: bismillah, one search field, a few
-   * shortcuts and every surah. It shares the header's frame (Container: 1200px,
-   * 24px gutter) so the logo, the search and the first card line up. The search
-   * is a real form submitting to /search; ⌘K stays owned by GlobalSearch (the
-   * shared TanStack registry), this page adds only an Escape-clear chord for the
-   * field itself through the same registerHotkey path.
+   * The home page is the index, not a pitch: bismillah, one search affordance,
+   * a few shortcuts and every surah. It shares the header's frame (Container:
+   * 1200px, 24px gutter) so the logo, the search and the first card line up.
+   * The hero search is the shared SearchTrigger pill — clicking it opens the
+   * global command palette, so this page itself registers no hotkeys and owns
+   * no query state.
    */
   let { data } = $props();
 
@@ -70,45 +71,6 @@
       (s): s is (typeof surahs)[number] => s !== undefined,
     ),
   );
-
-  /* ── Search ──────────────────────────────────────────────────────────────── */
-  const SEARCH_ACTION = publicHref("/search");
-  let query = $state("");
-  let searchInput = $state<HTMLInputElement | undefined>();
-
-  // Escape clears the field (then blurs it) while it holds focus. Registered
-  // through the shared TanStack wrapper, dynamically imported so the hotkeys
-  // chunk stays out of the initial bundle; IME composition is never hijacked.
-  $effect(() => {
-    let destroyed = false;
-    let cleanup: (() => void) | undefined;
-
-    void import("#lib/hotkeys.svelte.js").then(({ registerHotkey }) => {
-      if (destroyed) return;
-      const escape = registerHotkey(
-        "Escape",
-        (event) => {
-          if (event.isComposing) return;
-          const el = searchInput;
-          if (!el || document.activeElement !== el) return;
-          if (el.value.length > 0) {
-            query = "";
-            return;
-          }
-          el.blur();
-        },
-        { meta: { name: "Clear landing search field" } },
-      );
-      cleanup = () => {
-        escape.unregister();
-      };
-    });
-
-    return () => {
-      destroyed = true;
-      cleanup?.();
-    };
-  });
 </script>
 
 <MarketingSeo {locale} />
@@ -126,30 +88,15 @@
   </p>
   <p class="mt-2 text-caption text-muted">{landing.iqraMeaning}</p>
 
-  <form
-    method="GET"
-    action={SEARCH_ACTION}
-    role="search"
-    class="mt-6 flex h-14 w-full max-w-[720px] items-center gap-3 rounded-pill border border-border bg-surface ps-5 pe-1.5 transition-colors focus-within:border-border-strong sm:h-16 sm:ps-6 sm:pe-2"
-  >
-    <Icon name="search" size={20} class="flex-none text-muted" />
-    <label class="sr-only" for="hero-search">{landing.searchLabel}</label>
-    <input
-      id="hero-search"
-      bind:this={searchInput}
-      bind:value={query}
-      type="search"
-      name="q"
-      placeholder={landing.searchPlaceholder}
-      autocomplete="off"
-      class="min-w-0 flex-grow bg-transparent text-[16px] font-medium text-foreground outline-none placeholder:text-muted sm:text-[17px] [&::-webkit-search-cancel-button]:hidden"
-    />
-    <Button
-      type="submit"
-      variant="primary"
-      class="h-11 flex-none px-5 text-[15px] font-medium sm:h-12 sm:px-6"
-    >{landing.searchButton}</Button>
-  </form>
+  <!-- The hero search opens the global command palette (SearchTrigger owns the
+       open + preload-on-intent wiring); the example queries are the visible
+       hint, the label stays the accessible name. -->
+  <SearchTrigger
+    variant="pill"
+    label={landing.searchLabel}
+    text={landing.searchPlaceholder}
+    class="mt-6 h-14 w-full max-w-[720px] grow-0 px-5 sm:h-16 sm:px-6"
+  />
 
   <div class="mt-4 flex flex-wrap items-center justify-center gap-2">
     <span class="me-1 text-caption text-muted">{landing.oftenOpened}</span>

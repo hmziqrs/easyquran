@@ -123,7 +123,6 @@ export interface LandingResolvedCopy {
   iqraMeaning: string;
   searchLabel: string;
   searchPlaceholder: string;
-  searchButton: string;
   oftenOpened: string;
   indexLabel: string;
   indexSurahs: string;

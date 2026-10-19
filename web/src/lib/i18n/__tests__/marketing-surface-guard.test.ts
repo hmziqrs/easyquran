@@ -90,7 +90,6 @@ describe("landing surface (index-first home)", () => {
       copy.bismillah,
       copy.searchLabel,
       copy.searchPlaceholder,
-      copy.searchButton,
       copy.oftenOpened,
       copy.indexLabel,
       copy.indexSurahs,
@@ -121,18 +120,19 @@ describe("landing surface (index-first home)", () => {
     }
   });
 
-  it("keeps the hero search a real control on the TanStack hotkey path", () => {
+  it("routes the hero search through the shared command palette trigger", () => {
     const landing = source("../../../routes/(marketing)/+page.svelte");
+    const trigger = source("../../components/search/SearchTrigger.svelte");
 
-    // Real form submitting to the search route.
-    expect(landing).toContain('method="GET"');
-    expect(landing).toContain('name="q"');
-    expect(landing).toContain('for="hero-search"');
-    // Hotkeys: dynamic import of the shared wrapper, register + unregister, IME guard.
-    expect(landing).toContain('import("#lib/hotkeys.svelte.js")');
-    expect(landing).toContain("registerHotkey");
-    expect(landing).toContain(".unregister()");
-    expect(landing).toContain("event.isComposing");
+    // The hero affordance is the shared pill that opens the palette, not an
+    // inline form; the page owns no query state of its own.
+    expect(landing).toContain("<SearchTrigger");
+    expect(landing).toContain('variant="pill"');
+    expect(landing).not.toContain('method="GET"');
+    expect(landing).not.toContain('name="q"');
+    // The trigger opens the global palette store and preloads on hover/focus.
+    expect(trigger).toContain("commandPalette.show()");
+    expect(trigger).toContain("loadPalette()");
     // No hand-rolled key listeners for app shortcuts.
     expect(landing).not.toContain("onkeydown");
     expect(landing).not.toContain("addEventListener");

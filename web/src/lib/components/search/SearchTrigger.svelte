@@ -4,13 +4,24 @@
   import { Icon } from "#lib/components/icon/index.js";
   import { cn } from "#lib/utils.js";
 
-  /** `pill` renders the marketing header's wide search affordance (label + ⌘K). */
+  /**
+   * `pill` renders the marketing header's wide search affordance (label + ⌘K).
+   * `text` overrides the pill's visible line while `label` stays the accessible
+   * name — the landing hero shows example queries but announces "Search the Qur'an".
+   */
   let {
     class: className,
     label = "Search",
+    text,
     inert: isInert = false,
     variant = "icon",
-  }: { class?: string; label?: string; inert?: boolean; variant?: "icon" | "pill" } = $props();
+  }: {
+    class?: string;
+    label?: string;
+    text?: string;
+    inert?: boolean;
+    variant?: "icon" | "pill";
+  } = $props();
 </script>
 
 {#if variant === "pill"}
@@ -30,7 +41,7 @@
     )}
   >
     <Icon name="search" size={17} class="flex-none text-muted" title={label} />
-    <span class="min-w-0 flex-grow truncate text-body text-muted">{label}</span>
+    <span class="min-w-0 flex-grow truncate text-body text-muted">{text ?? label}</span>
     <span
       class="hidden flex-none items-center gap-[3px] rounded-pill bg-background-subtle px-[9px] py-[5px] text-[13px] font-medium text-muted sm:flex"
       aria-hidden="true"
