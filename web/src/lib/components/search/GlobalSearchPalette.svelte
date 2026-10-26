@@ -209,7 +209,7 @@
                    on the inner span for text shaping, where it would otherwise reverse
                    the logical margin's resolution. -->
               <span class="ms-auto flex-none">
-                <span dir="rtl" class="font-arabic text-[16px] leading-none">
+                <span dir="rtl" class="font-arabic text-[16px] leading-[1.9]">
                   {entry.arabic}
                 </span>
               </span>

@@ -100,8 +100,8 @@
     return row.kind === "text" ? row.t.sourceId : row.sourceId;
   }
   // Lanes keep the reader's stacked order (and so their hue) while sources load, instead of
-  // loading rows jumping ahead of ready ones.
-  const order = $derived(stackedTranslations.ids);
+  // loading rows jumping ahead of ready ones. activeIds: a paused stack renders no lanes.
+  const order = $derived(stackedTranslations.activeIds);
   function rank(id: string): number {
     if (id === leadId) return -1;
     const i = order.indexOf(id);

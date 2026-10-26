@@ -472,7 +472,12 @@
     const wasSelected = selectedIds.includes(id);
     stackedTranslations.toggle(id);
     // Stacking a translation is an explicit choice; unstacking one is not.
-    if (!wasSelected) recordUse(id);
+    if (!wasSelected) {
+      // An explicit add while the stack is paused resumes the flow — checking a
+      // box and seeing nothing appear would read as breakage.
+      stackedTranslations.setEnabled(true);
+      recordUse(id);
+    }
     syncUrl();
   }
   function reorder(id: string, delta: -1 | 1): void {
@@ -646,6 +651,23 @@
             </div>
           {/if}
         {:else if selectedRows.length > 0}
+          <!-- Master switch: pause the whole stack without touching the selection.
+               Same aria-pressed pill idiom as the settings privacy rows; the chips
+               below stay live so the reader can curate while translations are off. -->
+          <div data-stack-toggle class="flex items-center justify-between gap-3">
+            <span class="text-[13px] font-medium text-foreground">{copy.stacked.show}</span>
+            <button
+              type="button"
+              data-show-toggle
+              aria-pressed={stackedTranslations.enabled}
+              onclick={() => stackedTranslations.toggleEnabled()}
+              class="flex h-11 flex-none cursor-pointer touch-manipulation items-center rounded-pill border px-3.5 text-caption transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring md:h-8 {stackedTranslations.enabled
+                ? 'border-primary bg-primary-soft text-foreground'
+                : 'border-border-strong text-foreground-secondary hover:border-border hover:text-foreground'}"
+            >
+              {stackedTranslations.enabled ? copy.stacked.on : copy.stacked.off}
+            </button>
+          </div>
           <div data-selected-chips class="flex items-center justify-between gap-3">
             <!-- S14 (stress B1): a single horizontal scroll row, never a wrapped
                  chip wall — the strip costs one row max and keeps touch
@@ -1133,6 +1155,8 @@
             {copy.shell.readingPickNote}
           {:else if isFull}
             {copy.stacked.full(STACKED_MAX_EXTRAS)}
+          {:else if !stackedTranslations.enabled}
+            {copy.stacked.hiddenNote}
           {:else}
             {copy.translations.capNote(STACKED_MAX_EXTRAS)}
           {/if}

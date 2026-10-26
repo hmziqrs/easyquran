@@ -85,7 +85,7 @@
   $effect(() => stackedController.sync());
   // Urdu and other Arabic-script lanes read in Naskh; load it once one is stacked.
   $effect(() => {
-    const rtl = stackedTranslations.ids.some(
+    const rtl = stackedTranslations.activeIds.some(
       (id) => TRANSLATION_CATALOGUE_BY_ID.get(id)?.direction === "rtl",
     );
     if (rtl) void loadArabicFont("noto-naskh-arabic");

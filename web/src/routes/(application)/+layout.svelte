@@ -178,7 +178,8 @@
   });
 
   $effect(() => {
-    const ids = stackedTranslations.ids;
+    // activeIds (not ids): a paused stack keeps its selections but pins nothing.
+    const ids = stackedTranslations.activeIds;
     const lang = page.params.lang;
     const translator = page.params.translator;
     const routeTranslationId = lang && translator ? translationIdFromSegments(lang, translator) : null;

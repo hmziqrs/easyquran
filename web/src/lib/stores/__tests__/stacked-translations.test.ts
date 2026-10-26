@@ -21,7 +21,7 @@ describe("StackedTranslationsStore", () => {
   });
   afterEach(() => store.dispose());
 
-  const read = (): { v: number; ids: string[] } | null =>
+  const read = (): { v: number; ids: string[]; enabled?: boolean } | null =>
     JSON.parse(window.localStorage.getItem(KEY) ?? "null");
 
   it("starts empty and persists nothing until written", () => {
@@ -31,7 +31,7 @@ describe("StackedTranslationsStore", () => {
 
   it("setIds persists {v:1,ids} and is readable by a fresh instance", () => {
     store.setIds(["en.sahih", "ur.jalandhry"]);
-    expect(read()).toEqual({ v: 1, ids: ["en.sahih", "ur.jalandhry"] });
+    expect(read()).toEqual({ v: 1, ids: ["en.sahih", "ur.jalandhry"], enabled: true });
     const fresh = new StackedTranslationsStore();
     expect(fresh.ids).toEqual(["en.sahih", "ur.jalandhry"]);
     fresh.dispose();
@@ -89,7 +89,7 @@ describe("StackedTranslationsStore", () => {
     store.setIds(["a", "b"]);
     store.clear();
     expect(store.ids).toEqual([]);
-    expect(read()).toEqual({ v: 1, ids: [] });
+    expect(read()).toEqual({ v: 1, ids: [], enabled: true });
   });
 
   it("decodes a future-schema blob to []", () => {
@@ -121,6 +121,68 @@ describe("StackedTranslationsStore", () => {
     const fresh = new StackedTranslationsStore();
     expect(fresh.ids).toEqual(["en.sahih"]);
     fresh.dispose();
+  });
+
+  it("starts enabled with activeIds mirroring ids", () => {
+    store.setIds(["en.sahih"]);
+    expect(store.enabled).toBe(true);
+    expect(store.activeIds).toEqual(["en.sahih"]);
+  });
+
+  it("setEnabled(false) pauses the flow but keeps every selection", () => {
+    store.setIds(["en.sahih", "ur.jalandhry"]);
+    store.setEnabled(false);
+    expect(store.enabled).toBe(false);
+    expect(store.ids).toEqual(["en.sahih", "ur.jalandhry"]);
+    expect(store.activeIds).toEqual([]);
+    expect(read()).toEqual({
+      v: 1,
+      ids: ["en.sahih", "ur.jalandhry"],
+      enabled: false,
+    });
+  });
+
+  it("toggleEnabled flips the pause back on", () => {
+    store.setIds(["en.sahih"]);
+    store.toggleEnabled();
+    expect(store.activeIds).toEqual([]);
+    store.toggleEnabled();
+    expect(store.activeIds).toEqual(["en.sahih"]);
+  });
+
+  it("a paused store keeps curating: reorder/remove persist while activeIds stays empty", () => {
+    store.setIds(["a", "b"]);
+    store.setEnabled(false);
+    store.reorder("b", -1);
+    store.remove("a");
+    expect(store.ids).toEqual(["b"]);
+    expect(store.activeIds).toEqual([]);
+  });
+
+  it("a fresh instance restores the paused state and its selections", () => {
+    store.setIds(["en.sahih"]);
+    store.setEnabled(false);
+    const fresh = new StackedTranslationsStore();
+    expect(fresh.enabled).toBe(false);
+    expect(fresh.ids).toEqual(["en.sahih"]);
+    expect(fresh.activeIds).toEqual([]);
+    fresh.dispose();
+  });
+
+  it("a v1 blob without the enabled field reads as enabled", () => {
+    window.localStorage.setItem(KEY, JSON.stringify({ v: 1, ids: ["en.sahih"] }));
+    const fresh = new StackedTranslationsStore();
+    expect(fresh.enabled).toBe(true);
+    expect(fresh.activeIds).toEqual(["en.sahih"]);
+    fresh.dispose();
+  });
+
+  it("reconciles an enabled flip from a foreign-tab storage event", () => {
+    store.setIds(["en.sahih"]);
+    window.localStorage.setItem(KEY, JSON.stringify({ v: 1, ids: ["en.sahih"], enabled: false }));
+    window.dispatchEvent(new StorageEvent("storage", { key: KEY }));
+    expect(store.enabled).toBe(false);
+    expect(store.activeIds).toEqual([]);
   });
 
   it("reconciles from a foreign-tab storage event", () => {

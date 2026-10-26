@@ -215,7 +215,10 @@ export function createStackedTranslations(
     const fromVal = opts.from();
     const toVal = opts.to();
     const routeSourceId = opts.routeSourceId();
-    const extras = (opts.ids?.() ?? stackedTranslations.ids).filter((id) => id !== routeSourceId);
+    // activeIds (not ids): a paused stack keeps its selections but fetches nothing.
+    const extras = (opts.ids?.() ?? stackedTranslations.activeIds).filter(
+      (id) => id !== routeSourceId,
+    );
 
     const prevOrder = untrack(() => order);
     const sameOrder =

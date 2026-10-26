@@ -166,7 +166,9 @@
     catalogue: () => TRANSLATION_CATALOGUE,
     routeKey: () => `${sourceId}:${initial.surah.num}`,
     ids: () => {
-      if (reader.isVerseMode) return stackedTranslations.ids;
+      // Verse mode flows the paused-aware selection; Reading's flow logic stays
+      // on ids — the picker manages its own choice, the switch never hides it.
+      if (reader.isVerseMode) return stackedTranslations.activeIds;
       if (flowFromStack && flowId !== null && stackedTranslations.ids.includes(flowId)) return [flowId];
       return [];
     },
@@ -373,7 +375,7 @@
         )
       : null,
   );
-  const renderLayoutKey = $derived(`${reader.mode}:${readerWidth}:${reader.arabicFont}:${reader.arabicSizePx}:${reader.arabicScript}:${reader.translationSizePx}:${reader.translationFamily}:${sourceId}:${flowId}:${stackedTranslations.ids.join(",")}`);
+  const renderLayoutKey = $derived(`${reader.mode}:${readerWidth}:${reader.arabicFont}:${reader.arabicSizePx}:${reader.arabicScript}:${reader.translationSizePx}:${reader.translationFamily}:${sourceId}:${flowId}:${stackedTranslations.enabled}:${stackedTranslations.ids.join(",")}`);
   // The route's own translation is the page text itself; any other flows from stacked data.
   const flowFromStack = $derived(flowId !== null && flowId !== routeTranslationId);
   const flowLanguage = $derived(
@@ -536,7 +538,9 @@
   }
 
   // Urdu and other Arabic-script translations read in Naskh; load it once one is on screen.
-  const visibleTranslationIds = $derived(reader.isVerseMode ? [...stackedTranslations.ids, routeTranslationId] : [flowId]);
+  const visibleTranslationIds = $derived(
+    reader.isVerseMode ? [...stackedTranslations.activeIds, routeTranslationId] : [flowId],
+  );
   const needsNaskh = $derived(
     visibleTranslationIds.some(
       (id) => id !== null && TRANSLATION_CATALOGUE_BY_ID.get(id)?.direction === "rtl",

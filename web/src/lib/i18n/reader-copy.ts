@@ -171,14 +171,18 @@ import {
   reader_stacked_count,
   reader_stacked_error,
   reader_stacked_full,
+  reader_stacked_hidden_note,
   reader_stacked_loading,
   reader_stacked_move_down,
   reader_stacked_move_up,
   reader_stacked_none_selected,
+  reader_stacked_off,
+  reader_stacked_on,
   reader_stacked_open,
   reader_stacked_remove,
   reader_stacked_search_placeholder,
   reader_stacked_selected,
+  reader_stacked_show,
   reader_stacked_title,
   reader_staging_offline_pack,
   reader_storage,
@@ -377,6 +381,9 @@ export interface ReaderUiCopy {
     readonly title: string;
     readonly searchPlaceholder: string;
     readonly selected: string;
+    readonly show: string;
+    readonly on: string;
+    readonly off: string;
     readonly clear: string;
     readonly count: (n: number, max: number) => string;
     readonly full: (max: number) => string;
@@ -387,6 +394,7 @@ export interface ReaderUiCopy {
     readonly loading: string;
     readonly error: string;
     readonly noneSelected: string;
+    readonly hiddenNote: string;
   };
   readonly translations: {
     readonly open: string;
@@ -647,6 +655,9 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       title: noArgs(reader_stacked_title),
       searchPlaceholder: noArgs(reader_stacked_search_placeholder),
       selected: noArgs(reader_stacked_selected),
+      show: noArgs(reader_stacked_show),
+      on: noArgs(reader_stacked_on),
+      off: noArgs(reader_stacked_off),
       clear: noArgs(reader_stacked_clear),
       count: (n, max) => reader_stacked_count({ n, max }, options),
       full: (max) => reader_stacked_full({ max }, options),
@@ -657,6 +668,7 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       loading: noArgs(reader_stacked_loading),
       error: noArgs(reader_stacked_error),
       noneSelected: noArgs(reader_stacked_none_selected),
+      hiddenNote: noArgs(reader_stacked_hidden_note),
     },
     translations: {
       open: noArgs(reader_translations_open),

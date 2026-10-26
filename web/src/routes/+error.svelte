@@ -187,7 +187,7 @@
                     <span
                       lang="ar"
                       dir="rtl"
-                      class="shrink-0 font-arabic text-[22px] leading-none text-foreground-secondary transition-colors group-hover:text-foreground"
+                      class="shrink-0 font-arabic text-[22px] leading-[2.1] text-foreground-secondary transition-colors group-hover:text-foreground"
                       >{s.arabic}</span
                     >
                   </span>

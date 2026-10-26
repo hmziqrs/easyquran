@@ -161,10 +161,14 @@
             >
             <span class="flex min-w-0 items-baseline justify-between gap-3">
               <span class="truncate text-caption leading-none text-muted">{s.meaning}</span>
+              <!-- line-height carries the harakat headroom: iOS renders this in
+                   Scheherazade New (the bundled Amiri subset is latin-only), whose
+                   diacritic ink rides far above the baseline — leading-none let it
+                   paint over the name row on Safari. -->
               <span
                 lang="ar"
                 dir="rtl"
-                class="shrink-0 font-arabic text-[22px] leading-none text-foreground-secondary transition-colors group-hover:text-foreground"
+                class="shrink-0 font-arabic text-[22px] leading-[2.1] text-foreground-secondary transition-colors group-hover:text-foreground"
                 >{s.arabic}</span
               >
             </span>

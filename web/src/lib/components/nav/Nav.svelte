@@ -220,7 +220,11 @@
           <span class="hidden sm:inline">{copy.offlineLabel}</span>
         </span>
       {/if}
-      <SearchTrigger label={copy.searchQuran} inert={open} class="lg:hidden" />
+      <!-- Icon search collapses out under 360px: the tightest phones (320/375 SE
+           class) cannot fit brand + four controls, and the site panel's Search
+           row carries the same destination — without this the header overflows
+           and the page scrolls sideways. -->
+      <SearchTrigger label={copy.searchQuran} inert={open} class="hidden min-[360px]:inline-flex lg:hidden" />
       <button
         type="button"
         onclick={() => prefs.toggleTheme()}

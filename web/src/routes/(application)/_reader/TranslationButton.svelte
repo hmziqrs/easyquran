@@ -10,9 +10,10 @@
   let open = $state(false);
 
   // The route's own translation is already on screen, so the badge counts the
-  // stacked texts that are not.
+  // stacked texts that are not — and a paused stack counts nothing (the switch
+  // in the modal owns that state).
   const hiddenCount = $derived(
-    stackedTranslations.ids.filter((id) => id !== routeTranslationId).length,
+    stackedTranslations.activeIds.filter((id) => id !== routeTranslationId).length,
   );
 
   // Registered asynchronously so `@tanstack/hotkeys` stays out of the initial
