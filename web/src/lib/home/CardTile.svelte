@@ -2,9 +2,8 @@
   import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
   import { goto } from "$app/navigation";
 
-  import { appLocale } from "#lib/i18n/app-locale.js";  import {
-    reader_cards_count_of,
-    reader_cards_count_plain,
+  import { appLocale } from "#lib/i18n/app-locale.js";
+  import {
     reader_cards_duplicate,
     reader_cards_edit_title,
     reader_cards_full,
@@ -14,22 +13,16 @@
     reader_cards_remove,
     reader_cards_reset,
     reader_cards_target_done,
+    reader_cards_kind_surah,
     reader_widget_daily_ayah_open,
   } from "#lib/i18n/m/reader.js";
   import { publicHref } from "#lib/i18n/public-href.js";
   import { homeCards, type HomeCard } from "#lib/home/cards.svelte.js";
-  import {
-    cardDetailHref,
-    passesCountLabel,
-    scheduleBadgeCopy,
-    cardEntryAttrs,
-    tileCopyFor,
-  } from "#lib/home/card-copy.js";
+  import { cardDetailHref, scheduleBadgeCopy, cardEntryAttrs, tileCopyFor } from "#lib/home/card-copy.js";
   import { armCardUndo } from "#lib/home/card-undo.svelte.js";
   import { slotStateFor } from "#lib/home/schedule.js";
   import type { QuranData } from "#lib/data/quran-data.js";
   import { Icon } from "#lib/components/index.js";
-  import { Button } from "#lib/components/ui/button/index.js";
   import { iconButtonVariants } from "#lib/components/ui/icon-button/icon-button-variants.js";
 
   /**
@@ -38,14 +31,18 @@
    * schedule hint and — on manager surfaces — the shadcn dropdown-menu of
    * per-card actions (detail / edit / duplicate / reset / remove). Shared by
    * the /yours grid and the landing strip: the strip passes neither `menu`
-   * nor `onEdit`, so it keeps its plain Open pill and the card carries its
-   * own translation context (pinned sourceId, else Arabic), never the
+   * nor `onEdit`, so it keeps a quiet arrow affordance and the card carries
+   * its own translation context (pinned sourceId, else Arabic), never the
    * reader's live state.
+   *
+   * Anatomy (one rhythm for every kind): title row, meta + schedule line,
+   * the count as the visual hero, a hairline progress mark, then one honest
+   * labeled recite action — no unlabeled submit slab, no duplicated count.
    */
   interface Props {
     card: HomeCard;
     quranData: QuranData | undefined;
-    /** Manager surface: the actions menu replaces the Open pill. */
+    /** Manager surface: the actions menu replaces the arrow affordance. */
     menu?: boolean;
     /** Edit-card handoff; the menu hides the item when absent. */
     onEdit?: (card: HomeCard) => void;
@@ -59,14 +56,13 @@
   const view = $derived(tileCopyFor(card, quranData, locale));
   const done = $derived(card.target !== undefined && card.count >= card.target);
 
-  const countText = $derived.by<string>(() => {
-    if (card.kind === "collection") return passesCountLabel(card.count, locale);
-    if (card.target === undefined) {
-      return reader_cards_count_plain({ count: card.count }, msgOptions);
-    }
-    return reader_cards_count_of({ count: card.count, target: card.target }, msgOptions);
-  });
-  const plusLabel = $derived(`${reader_cards_plus_one(undefined, msgOptions)}: ${view.title}`);
+  // A surah card whose meta is just the word "Surah" restates the title; hide
+  // it. Kind labels stay for zikr ("Zikr" names an Arabic phrase) and for
+  // cards whose meta carries coordinates or a pinned translation.
+  const metaVisible = $derived(
+    view.meta.length > 0 &&
+      !(card.kind === "surah" && view.meta === reader_cards_kind_surah(undefined, msgOptions)),
+  );
 
   interface ScheduleBadge {
     readonly due: boolean;
@@ -120,12 +116,17 @@
     armCardUndo(card);
     homeCards.remove(card.id);
   }
+
+  const plusLabel = $derived(`${reader_cards_plus_one(undefined, msgOptions)}: ${view.title}`);
 </script>
 
 <div
-  class="relative flex flex-col gap-2 rounded-md border border-border bg-surface p-4 transition-colors"
+  class="relative flex flex-col rounded-md border bg-surface p-4 transition-colors"
   class:border-border-strong={done}
+  class:border-border={done === false}
 >
+  <!-- Title row. The trailing control is one quiet arrow (strip) or the actions
+       menu (/yours) — never a second link duplicating the title's. -->
   <div class="flex items-start gap-2">
     <span class="min-w-0 flex-1">
       {#if view.href !== null}
@@ -133,16 +134,24 @@
           {...cardEntryAttrs(card)}
           href={publicHref(view.href)}
           data-sveltekit-preload-data="hover"
-          class="block truncate rounded-sm text-sm font-medium text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          class="block truncate rounded-sm text-[15px] font-medium leading-6 text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           {view.title}
         </a>
       {:else if view.arabicTitle}
-        <span lang="ar" dir="rtl" class="block truncate font-arabic text-[17px] text-foreground"
+        <!-- The phrase is the card's content: Arabic display size, with the
+             reader-grade 2.1 headroom so Scheherazade's harakat ink stays
+             inside the line on iOS. -->
+        <span
+          lang="ar"
+          dir="rtl"
+          class="block truncate font-arabic text-[21px] leading-[2.1] text-foreground"
           >{view.title}</span
         >
       {:else}
-        <span class="block truncate text-sm font-medium text-foreground">{view.title}</span>
+        <span class="block truncate text-[15px] font-medium leading-6 text-foreground"
+          >{view.title}</span
+        >
       {/if}
     </span>
 
@@ -189,64 +198,83 @@
         {...cardEntryAttrs(card)}
         href={publicHref(view.href)}
         data-sveltekit-preload-data="hover"
-        class="flex h-7 flex-none items-center rounded-pill border border-border px-2.5 text-[11.5px] text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        aria-label={`${reader_widget_daily_ayah_open(undefined, msgOptions)}: ${view.title}`}
+        title={reader_widget_daily_ayah_open(undefined, msgOptions)}
+        class="-me-1.5 -mt-1 flex size-9 flex-none items-center justify-center rounded-pill text-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring rtl:[&>svg]:-scale-x-100"
       >
-        {reader_widget_daily_ayah_open(undefined, msgOptions)}
-        <span aria-hidden="true" class="ms-1">→</span>
+        <Icon name="arrow-right" size={16} />
       </a>
     {/if}
   </div>
 
-  {#if view.meta.length > 0}
-    <span class="truncate text-[12.5px] text-muted">{view.meta}</span>
+  <!-- Meta + schedule hint on one line; both quiet, badge right-aligned. -->
+  {#if metaVisible || badge !== null}
+    <div class="mt-0.5 flex min-h-6 items-center justify-between gap-2">
+      {#if metaVisible}
+        <span class="min-w-0 truncate text-[12.5px] text-muted">{view.meta}</span>
+      {:else}
+        <span class="min-w-0 flex-1"></span>
+      {/if}
+      {#if badge !== null}
+        <span
+          class="flex h-6 flex-none items-center rounded-pill border px-2 text-[11.5px] font-medium"
+          class:border-border-strong={badge.due}
+          class:text-primary={badge.due}
+          class:border-border={badge.due === false}
+          class:text-muted={badge.due === false}
+        >
+          {badge.label}
+        </span>
+      {/if}
+    </div>
   {/if}
 
-  {#if badge !== null}
-    <span class="flex">
+  <!-- The count is the payoff of a counter card: set it large. Past-target
+       reads "40 · ✓ Target reached" — never the broken "40 of 33". -->
+  <div class="mt-1 flex min-h-7 items-baseline justify-between gap-2">
+    <span class="flex items-baseline gap-1.5">
       <span
-        class="flex h-6 items-center rounded-pill border px-2 text-[11.5px] font-medium"
-        class:border-border-strong={badge.due}
-        class:text-primary={badge.due}
-        class:border-border={badge.due === false}
-        class:text-muted={badge.due === false}
+        class="text-[26px] font-medium leading-none tracking-[-0.01em] text-foreground tabular-nums"
+        >{card.count}</span
       >
-        {badge.label}
-      </span>
+      {#if card.target !== undefined && done === false}
+        <span class="text-[13px] text-muted">of {card.target}</span>
+      {/if}
     </span>
-  {/if}
-
-  <span class="flex flex-wrap items-center gap-2 text-[12.5px]">
-    <span class="truncate text-foreground-secondary">{countText}</span>
     {#if done}
-      <span class="flex-none font-medium text-primary"
-        >{reader_cards_target_done(undefined, msgOptions)}</span
-      >
+      <span class="flex flex-none items-center gap-1 text-[12.5px] font-medium text-primary">
+        <Icon name="check" size={14} />
+        {reader_cards_target_done(undefined, msgOptions)}
+      </span>
     {/if}
-  </span>
+  </div>
+
   {#if card.target !== undefined}
     {@const fraction = Math.min(1, card.count / card.target)}
+    <!-- Hairline mark, not a slab: one pixel of fill reads as progress without
+         turning the card into a dashboard. -->
     <div
-      class="h-1.5 w-full overflow-hidden rounded-pill bg-surface-hover"
+      class="mt-2.5 h-px w-full overflow-hidden rounded-pill bg-surface-hover"
       role="progressbar"
       aria-valuenow={card.count}
       aria-valuemax={card.target}
     >
-      <div class="h-full rounded-pill bg-primary" style:width="{Math.round(fraction * 100)}%"></div>
+      <div class="h-full bg-primary" style:width="{Math.round(fraction * 100)}%"></div>
     </div>
   {/if}
 
-  <Button
+  <!-- One honest action: labeled, single-line, quiet ghost until the target is
+       met, then a soft primary wash. Still tappable past the target — dhikr
+       keeps counting — so it never poses as a terminal "submit" state. -->
+  <button
     type="button"
-    variant={done ? "primary" : "secondary"}
-    class="w-full flex-col gap-0.5 py-2"
     aria-label={plusLabel}
     onclick={() => homeCards.increment(card.id)}
+    class="mt-3 flex h-11 w-full cursor-pointer touch-manipulation items-center justify-center gap-1.5 rounded-pill border text-[13.5px] font-medium transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring active:translate-y-px {done
+      ? 'border-transparent bg-primary-soft text-primary hover:bg-primary-hover/10'
+      : 'border-border bg-transparent text-foreground-secondary hover:border-border-strong hover:text-foreground'}"
   >
-    {#if done}
-      <Icon name="check" size={18} />
-    {:else}
-      <span class="text-[15px] leading-none">+</span>
-      <span class="text-[11px] leading-none font-normal">{card.count}</span>
-    {/if}
-  </Button>
+    <Icon name="plus" size={14} />
+    {reader_cards_plus_one(undefined, msgOptions)}
+  </button>
 </div>
