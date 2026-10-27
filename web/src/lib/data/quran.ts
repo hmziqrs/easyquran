@@ -134,6 +134,21 @@ export const surahAyahPathFor = (
   ayah: number,
 ): `/${string}` => `${surahPathFor(ctx, surah)}#ayah-${surah.num}-${ayah}`;
 
+/**
+ * The same deep link via the reader's `?v={s}:{a}` scroll mirror — the form to
+ * emit from PRERENDERED pages. Ayah rows mount client-side, so `#ayah-…`
+ * fragment targets do not exist in prerendered HTML and kit's missing-id check
+ * fails the build; the surah page reveals from `?v=` on load (FLOW-07).
+ */
+export const surahAyahRevealPathFor = (
+  ctx: SurahRouteContext,
+  surah: Pick<CatalogEntry, "slug" | "num">,
+  ayah: number,
+): `/${string}` =>
+  // SAFETY: appending a query to the guarded builder's absolute path keeps the
+  // leading `/`, so the template result still satisfies `/${string}`.
+  `${surahPathFor(ctx, surah)}?v=${surah.num}:${ayah}` as `/${string}`;
+
 export const globalPagePathFor = (ctx: SurahRouteContext, globalPage: number): `/${string}` =>
   ctx.kind === "arabic"
     ? `/page/${globalPage}`

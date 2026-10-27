@@ -130,9 +130,23 @@ export default defineConfig({
         precompress: true,
       }),
       prerender: {
-        // /azkar has no inbound crawl link yet (reader chrome lands later) —
-        // seed it so the static editorial index is emitted.
-        entries: ["/", "/azkar"],
+        // Seed the crawl graph: /azkar had no inbound link when it landed, and
+        // sitemap/llms/auth/account/firebase-config are marked prerenderable
+        // but nothing in crawlable HTML links them (robots.txt and script srcs
+        // are not crawled). Without these seeds kit fails prerender_unseen_routes.
+        entries: [
+          "/",
+          "/azkar",
+          "/sitemap.xml",
+          "/llms.txt",
+          "/llms-full.txt",
+          "/account",
+          "/login",
+          "/register",
+          "/forgot-password",
+          "/verify-email",
+          "/firebase-config.js",
+        ],
         handleMissingId: "fail",
       },
     }),

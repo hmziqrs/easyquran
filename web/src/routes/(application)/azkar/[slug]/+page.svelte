@@ -8,7 +8,7 @@
   import {
     resumeCtxFor,
     snippetPath,
-    surahAyahPathFor,
+    surahAyahRevealPathFor,
   } from "#lib/data/quran.js";
   import { QuranScript } from "#lib/data/quran-types.js";
   import type { QuranData } from "#lib/data/quran-data.js";
@@ -68,7 +68,9 @@
 
   function readerHref(group: SnippetRefGroup): string {
     const surah = { slug: group.slug, num: group.surah };
-    return publicHref(readerHrefFor(locale, surahAyahPathFor(ctx, surah, group.ayahStart)));
+    // Reveal-mirror form: this page prerenders, so the ayah fragment link
+    // (whose target rows only exist after hydration) would fail the build.
+    return publicHref(readerHrefFor(locale, surahAyahRevealPathFor(ctx, surah, group.ayahStart)));
   }
 
   function extentLabel(group: SnippetRefGroup): string {
