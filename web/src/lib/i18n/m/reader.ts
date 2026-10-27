@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 389 messages. Import this barrel, never
+// 397 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "#lib/paraglide/messages/reader_account.js";
@@ -394,3 +394,11 @@ export { reader_widget_most_read_title } from "#lib/paraglide/messages/reader_wi
 export { reader_widget_notes_empty } from "#lib/paraglide/messages/reader_widget_notes_empty.js";
 export { reader_widget_notes_title } from "#lib/paraglide/messages/reader_widget_notes_title.js";
 export { reader_your_note } from "#lib/paraglide/messages/reader_your_note.js";
+export { reader_zikr_add_confirm } from "#lib/paraglide/messages/reader_zikr_add_confirm.js";
+export { reader_zikr_all_done } from "#lib/paraglide/messages/reader_zikr_all_done.js";
+export { reader_zikr_next } from "#lib/paraglide/messages/reader_zikr_next.js";
+export { reader_zikr_of_target } from "#lib/paraglide/messages/reader_zikr_of_target.js";
+export { reader_zikr_progress_label } from "#lib/paraglide/messages/reader_zikr_progress_label.js";
+export { reader_zikr_target_announced } from "#lib/paraglide/messages/reader_zikr_target_announced.js";
+export { reader_zikr_target_down } from "#lib/paraglide/messages/reader_zikr_target_down.js";
+export { reader_zikr_target_up } from "#lib/paraglide/messages/reader_zikr_target_up.js";

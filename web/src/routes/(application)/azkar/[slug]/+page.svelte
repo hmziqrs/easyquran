@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { goto } from "$app/navigation";
   import { toast } from "svelte-sonner";
   import { Seo } from "#lib/components/index.js";
   import { Icon } from "#lib/components/icon/index.js";
@@ -23,18 +22,15 @@
   import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
   import { readingFlowId } from "#lib/reader/reading-flow.js";
   import {
-    reader_cards_add,
-    reader_cards_added,
-    reader_cards_full,
-    reader_cards_set_target,
     reader_cards_translation_offer,
     reader_cards_translation_update,
     reader_cards_updated,
   } from "#lib/i18n/m/reader.js";
-  import { cardDetailHref } from "#lib/home/card-copy.js";
-  import { homeCards, newCardId, nowStamp, type SnippetCard } from "#lib/home/cards.svelte.js";
+  import { homeCards, type SnippetCard } from "#lib/home/cards.svelte.js";
+  import { boundCardFor } from "#lib/home/next-zikr.js";
   import type { ShareVerse } from "#lib/stores/reader-share.svelte.js";
   import { revealVerseMarker, trackReaderThread } from "#lib/sessions/reader-thread.svelte.js";
+  import type { ReadingThread } from "#lib/sessions/schema.js";
   import ReaderShell from "../../_reader/ReaderShell.svelte";
   import VerseRow from "../../_reader/VerseRow.svelte";
   import {
@@ -45,6 +41,7 @@
     type StackedController,
   } from "../../_reader/stacked-translations.svelte.js";
   import { ayahIndexValidator } from "../../_reader/range-validate.js";
+  import AddCardInline from "./AddCardInline.svelte";
   import RecitePanel from "./RecitePanel.svelte";
   import type { SnippetRefGroup } from "./+page.server";
 
@@ -83,16 +80,41 @@
   const canonicalPath = $derived(snippetPath(data.slug));
 
   /* ── Zikr card hook ────────────────────────────────────────────────────────
-     The snippet page is a card surface: a matching snippet card turns the page
-     into a live counter (recite panel), and translation changes here can
-     re-pin the card's translation. All personal state is client-only — the
-     prerendered HTML never carries a card, a count, or a translation. */
+     The snippet page is a zikr session surface: a matching snippet card turns
+     the page into a live counter (recite panel), and translation changes here
+     can re-pin the card's translation. A visit opened FROM a card binds to
+     that exact card (the entered thread's originRef), not just the first
+     same-slug match; every other visit falls back to the first match. All
+     personal state is client-only — the prerendered HTML never carries a
+     card, a count, or a translation. */
   let mounted = $state(false);
+  // Set in the same effect run that calls sessions.enter (trackReaderThread's
+  // onEnter), so no intermediate wrong-card binding is possible — the first
+  // non-null value is already the final thread for this visit.
+  let enteredThread = $state<ReadingThread | null>(null);
+  // The card this page's inline form created — bound explicitly, not by
+  // first-slug-match, so a same-slug sibling added from another tab can never
+  // steal the panel after the reader just created one here.
+  let createdCardId = $state<string | null>(null);
+  const boundCard = $derived(
+    mounted ? boundCardFor(enteredThread, homeCards.list, data.slug) : null,
+  );
+  const createdCard = $derived(
+    mounted && createdCardId !== null
+      ? (homeCards.list.find(
+          (card): card is SnippetCard =>
+            card.id === createdCardId && card.kind === "snippet" && card.slug === data.slug,
+        ) ?? null)
+      : null,
+  );
   const matchedCard = $derived(
     mounted
-      ? (homeCards.list.find(
+      ? (boundCard ??
+        createdCard ??
+        homeCards.list.find(
           (card): card is SnippetCard => card.kind === "snippet" && card.slug === data.slug,
-        ) ?? null)
+        ) ??
+        null)
       : null,
   );
 
@@ -119,28 +141,6 @@
           homeCards.setSource(card.id, effective);
           toast(reader_cards_updated(undefined, msgOptions), { duration: 4000 });
         },
-      },
-    });
-  }
-
-  function pinCard(): void {
-    const card: SnippetCard = {
-      id: newCardId(),
-      kind: "snippet",
-      slug: data.slug,
-      sourceId: effectiveSourceId(),
-      count: 0,
-      createdAt: nowStamp(),
-    };
-    if (homeCards.add(card) === false) {
-      toast(reader_cards_full(undefined, msgOptions), { duration: 6000 });
-      return;
-    }
-    toast(reader_cards_added(undefined, msgOptions), {
-      duration: 8000,
-      action: {
-        label: reader_cards_set_target(undefined, msgOptions),
-        onClick: () => void goto(publicHref(cardDetailHref(card.id))),
       },
     });
   }
@@ -288,6 +288,9 @@
         sourceId: null,
       };
     },
+    onEnter: (thread) => {
+      enteredThread = thread;
+    },
     onResume: (thread) => void revealVerseMarker(thread.surah, thread.ayah),
   });
   const allRefsMarked = $derived(
@@ -388,19 +391,24 @@
 
     {#if mounted}
       {#if matchedCard !== null}
-        <RecitePanel card={matchedCard} />
+        <!-- Keyed by card id: a re-bind (card-origin thread resolving after
+             mount, or a cross-tab removal falling back to a sibling) becomes a
+             fresh panel instance, so the arrival-count snapshot and the reach
+             pulse stay per-card. -->
+        {#key matchedCard.id}
+          <RecitePanel card={matchedCard} {quranData} />
+        {/key}
       {:else}
-        <!-- No zikr card for this set yet: pin one, carrying whatever
-             translation the reader is currently on. -->
-        <button
-          type="button"
-          data-pin-card
-          onclick={pinCard}
-          class="flex h-11 w-full cursor-pointer touch-manipulation items-center justify-center gap-1.5 rounded-pill border border-border text-[13.5px] font-medium text-foreground-secondary transition-colors duration-150 hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring active:translate-y-px"
-        >
-          <Icon name="plus" size={14} />
-          {reader_cards_add(undefined, msgOptions)}
-        </button>
+        <!-- No zikr card for this set yet: the inline mini-form creates one
+             right here, pinned to whatever translation the reader is on, and
+             reports it back so the panel binds to that exact card. -->
+        <AddCardInline
+          slug={data.slug}
+          getSourceId={effectiveSourceId}
+          onAdded={(id) => {
+            createdCardId = id;
+          }}
+        />
       {/if}
     {/if}
 

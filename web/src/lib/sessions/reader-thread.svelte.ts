@@ -13,6 +13,8 @@ export function trackReaderThread(opts: {
   readonly key: () => string;
   readonly target: () => ReaderTarget | null;
   readonly onResume: (thread: ReadingThread) => void;
+  /** Fires with the resolved thread (entered, kept or resumed) each key change. */
+  readonly onEnter?: (thread: ReadingThread) => void;
 }): void {
   $effect(() => {
     opts.key();
@@ -20,6 +22,7 @@ export function trackReaderThread(opts: {
       const target = opts.target();
       if (target === null) return;
       const result = sessions.enter(target);
+      opts.onEnter?.(result.thread);
       if (result.resumed) opts.onResume(result.thread);
     });
   });
