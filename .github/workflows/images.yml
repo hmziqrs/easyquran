@@ -78,10 +78,10 @@ jobs:
 
       # adapter-bun calls Bun.build during adapt(), so the web build itself must
       # run under bun (`bun run --bun vite build` in the build script). Pinned to the
-      # runtime the image ships (oven/bun:1.4.3-slim).
+      # runtime the image ships (oven/bun:1.4.4-slim).
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
-          bun-version: 1.4.3
+          bun-version: 1.4.4
 
       # The Quran corpus is immutable and unversioned, so the cache key tracks the baked
       # maps that name the artifacts, not the bytes.

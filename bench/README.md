@@ -82,7 +82,7 @@ not made here.
 
 | slot    | binary                                             | source            |
 | ------- | -------------------------------------------------- | ----------------- |
-| `bun14` | `bun` ≥ 1.4 (deployed image `oven/bun:1.4.3-slim`) | already installed |
+| `bun14` | `bun` ≥ 1.4 (deployed image `oven/bun:1.4.4-slim`) | already installed |
 
 What survives unchanged: the build is produced once by one `bun run build` (which runs
 `bun run --bun vp build` under `PUBLIC_ENV=prod`), its build-id recorded, and never rebuilt
