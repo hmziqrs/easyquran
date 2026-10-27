@@ -9,17 +9,19 @@
     resumeCtxFor,
     snippetPath,
     surahAyahPathFor,
-    toArabicDigits,
   } from "#lib/data/quran.js";
+  import { QuranScript } from "#lib/data/quran-types.js";
   import type { QuranData } from "#lib/data/quran-data.js";
   import { loadQuranData, peekQuranData } from "#lib/data/quran-data-client.js";
-  import { TRANSLATION_CATALOGUE } from "#lib/quran/catalogue.js";
+  import { TRANSLATION_CATALOGUE, TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
   import { SNIPPET_KIND_LABELS, type SnippetText } from "#lib/data/snippets.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
   import { readerHrefFor } from "#lib/i18n/reader.js";
   import { publicHref } from "#lib/i18n/public-href.js";
   import { reader } from "#lib/stores/reader.svelte.js";
+  import { readingText } from "#lib/stores/reading-text.svelte.js";
   import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
+  import { readingFlowId } from "#lib/reader/reading-flow.js";
   import {
     reader_cards_add,
     reader_cards_added,
@@ -34,7 +36,7 @@
   import type { ShareVerse } from "#lib/stores/reader-share.svelte.js";
   import { revealVerseMarker, trackReaderThread } from "#lib/sessions/reader-thread.svelte.js";
   import ReaderShell from "../../_reader/ReaderShell.svelte";
-  import StackedLanes from "../../_reader/StackedLanes.svelte";
+  import VerseRow from "../../_reader/VerseRow.svelte";
   import {
     createStackedTranslations,
     erroredFor,
@@ -188,6 +190,79 @@
     for (const controller of controllers) controller.sync();
   });
 
+  /* ── Reading mode ──────────────────────────────────────────────────────────
+     The real reader's Reading flow, ported: the flowed translation is the
+     reading preference, else the stack head (readingFlowId). A flow outside
+     the stack gets its own one-id fetcher, exactly like SurahReader's
+     readingController. */
+  const flowId = $derived(
+    reader.isReadingMode
+      ? readingFlowId(readingText.text, readingText.translationId, null, null, stackedTranslations.ids)
+      : null,
+  );
+  const flowFromStack = $derived(flowId !== null && stackedTranslations.ids.includes(flowId));
+  const readingFetchIds = $derived(flowId !== null && flowFromStack === false ? [flowId] : []);
+  // The flow read spans the whole snippet: min..max across refs (multi-ref
+  // snippets over-fetch the gap verses — one small read, same trade the
+  // reader's whole-range makes).
+  interface FlowRange {
+    from: number;
+    to: number;
+  }
+
+  function flowRange(): FlowRange {
+    const loaded = quranData;
+    if (loaded === undefined) return { from: 0, to: 0 };
+    let from = Number.MAX_SAFE_INTEGER;
+    let to = 0;
+    for (const group of data.refs) {
+      const start = loaded.globalIndexOf(group.surah, group.ayahStart);
+      const end = loaded.globalIndexOf(group.surah, group.ayahEnd);
+      if (start !== undefined && start < from) from = start;
+      if (end !== undefined && end > to) to = end;
+    }
+    return to > 0 ? { from, to } : { from: 0, to: 0 };
+  }
+  const readingController = createStackedTranslations({
+    from: () => flowRange().from,
+    to: () => flowRange().to,
+    validator: () => (quranData ? ayahIndexValidator(quranData) : null),
+    routeSourceId: () => null,
+    catalogue: () => TRANSLATION_CATALOGUE,
+    routeKey: () => data.slug,
+    ids: () => readingFetchIds,
+  });
+  $effect(() => readingController.sync());
+  onDestroy(() => readingController.dispose());
+
+  const flowEntry = $derived(
+    flowId === null ? undefined : TRANSLATION_CATALOGUE_BY_ID.get(flowId),
+  );
+
+  /** What one verse row shows: Arabic + lanes (Ayah-by-Ayah), or the flowed
+   * translation inline (Reading) — the SurahReader rowView split. */
+  interface RowView {
+    text: string;
+    isTranslation: boolean | undefined;
+    pending: boolean;
+  }
+
+  function rowView(row: SnippetRefGroup["ayahs"][number]): RowView {
+    if (reader.isReadingMode && flowId !== null) {
+      const flowed = flowText(row.key);
+      return { text: flowed ?? "", isTranslation: true, pending: flowed === null };
+    }
+    return { text: row.text, isTranslation: undefined, pending: false };
+  }
+
+  function flowText(key: string): string | null {
+    for (const controller of controllers) {
+      const fromStack = stackedFor(controller.state, key).find((t) => t.sourceId === flowId);
+      if (fromStack) return fromStack.text;
+    }
+    return stackedFor(readingController.state, key).find((t) => t.sourceId === flowId)?.text ?? null;
+  }
+
   onDestroy(() => {
     for (const controller of controllers) controller.dispose();
   });
@@ -273,7 +348,7 @@
 
 <Seo path={canonicalPath} title={title} description={description} includeTextVariants={false} />
 
-<ReaderShell textTools={false} translationsTool {onStackChanged}>
+<ReaderShell textTools {onStackChanged}>
   {#snippet header()}
     <h1 class="sr-only">{title}</h1>
     <span class="ms-auto rounded-pill border border-border-strong px-2 py-0.5 text-[11.5px] text-muted"
@@ -281,7 +356,9 @@
     >
   {/snippet}
 
-  <div class="mx-auto flex max-w-3xl flex-col gap-8 py-8">
+  <!-- Same frame as the reader column: full Container width, so the rows,
+       sizes and lanes match a surah page exactly. -->
+  <div class="flex flex-col gap-8 py-8">
     <header class="flex flex-col gap-2">
       <h2 class="text-xl font-semibold text-foreground">{title}</h2>
       <p class="text-[14px] leading-relaxed text-foreground-secondary">{description}</p>
@@ -327,43 +404,58 @@
 
     {#each data.refs as group, gi (group.surah)}
       {@const controller = controllers[gi]}
-      <section class="flex flex-col gap-4" aria-labelledby="snippet-ref-{group.surah}">
-        <div class="flex flex-wrap items-baseline justify-between gap-2 border-b border-reader-divider pb-2">
-          <h3 id="snippet-ref-{group.surah}" class="text-[15px] font-medium text-foreground">
+      <section aria-labelledby="snippet-ref-{group.surah}">
+        <!-- Same section frame as the range reader: surah rule, Arabic name,
+             jump to the full surah — the azkar set reads like its surahs. -->
+        <div class="flex items-center justify-between gap-3 border-b border-reader-divider py-3">
+          <h3
+            id="snippet-ref-{group.surah}"
+            class="text-sm font-medium text-foreground"
+          >
             {group.name}
-            <span lang="ar" dir="rtl" class="ms-2 text-foreground-secondary">{group.arabicName}</span>
+            <span lang="ar" dir="rtl" class="ms-2 font-arabic text-base text-foreground-secondary"
+              >{group.arabicName}</span
+            >
           </h3>
           <a
             href={readerHref(group)}
-            class="text-[12.5px] text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            class="flex flex-none items-center gap-2 text-[12.5px] text-primary transition-colors hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
           >
-            {extentLabel(group)} →
+            <span>{extentLabel(group)}</span>
+            <span aria-hidden="true">→</span>
           </a>
         </div>
 
-        {#each group.ayahs as row (row.key)}
-          <div class="flex flex-col">
-            <p
-              dir="rtl"
-              lang="ar"
-              data-verse-anchor={row.key}
-              class="font-arabic text-[1.6rem] leading-[2.15] text-quran-foreground"
-            >
-              {row.text}<span
-                class="ms-2 align-middle font-sans text-[0.62em] text-foreground-secondary"
-                >﴿{toArabicDigits(row.ayah)}﴾</span
-              >
-            </p>
-            {#if controller !== undefined}
-              <StackedLanes
-                stacked={stackedFor(controller.state, row.key)}
-                stackedPending={loadingFor(controller.state, row.key)}
-                stackedErrored={erroredFor(controller.state, row.key)}
-                errorLabel={copy.stacked.error}
+        <!-- The reader's own list and rows: reader typography, script, sizing,
+             per-verse tools, stacked lanes, Reading flow. -->
+        <div data-source-kind={reader.isReadingMode && flowId !== null ? "translation" : "arabic"}>
+          <ol class="ayah-list flex list-none flex-col p-0">
+            {#each group.ayahs as row (row.key)}
+              {@const view = rowView(row)}
+              <VerseRow
+                text={view.text}
+                n={row.ayah}
+                vKey={row.key}
+                isTranslation={view.isTranslation}
+                translationLang={flowEntry?.languageCode}
+                translationDirection={flowEntry?.direction}
+                translationName={flowEntry?.name ?? undefined}
+                pending={view.pending}
+                script={QuranScript.Uthmani}
+                stacked={controller === undefined
+                  ? []
+                  : stackedFor(controller.state, row.key)}
+                stackedPending={controller === undefined
+                  ? []
+                  : loadingFor(controller.state, row.key)}
+                stackedErrored={controller === undefined
+                  ? []
+                  : erroredFor(controller.state, row.key)}
+                stackedErrorLabel={copy.stacked.error}
               />
-            {/if}
-          </div>
-        {/each}
+            {/each}
+          </ol>
+        </div>
       </section>
     {/each}
   </div>
