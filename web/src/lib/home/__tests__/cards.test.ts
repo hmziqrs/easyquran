@@ -285,6 +285,8 @@ describe("homeCards store — hydrate, mutate, persist", () => {
   });
 
   afterEach(() => {
+    // Fresh instances per test install their own cross-tab listener.
+    store.dispose();
     vi.useRealTimers();
   });
 
@@ -510,5 +512,50 @@ describe("homeCards store — hydrate, mutate, persist", () => {
     expect(store.duplicate("bulk-0")).toBe(false);
     expect(store.list).toHaveLength(MAX_CARDS);
     expect(store.duplicate("ghost")).toBe(false);
+  });
+
+  it("reconciles a foreign-tab write — add, tally and removal land", () => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(
+        envelope([
+          {
+            id: "z1",
+            kind: "zikr",
+            text: "SubhanAllah",
+            count: 4,
+            createdAt: "2026-10-27T00:00:00.000Z",
+          },
+        ]),
+      ),
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY }));
+    expect(store.list.map((entry) => entry.id)).toEqual(["z1"]);
+    expect(store.list[0]?.count).toBe(4);
+  });
+
+  it("ignores storage events for other keys", () => {
+    window.dispatchEvent(new StorageEvent("storage", { key: "easyquran.prefs" }));
+    expect(store.list.map((entry) => entry.id)).toEqual(["card-1", "card-2"]);
+  });
+
+  it("dispose detaches the cross-tab listener", () => {
+    store.dispose();
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(
+        envelope([
+          {
+            id: "z9",
+            kind: "zikr",
+            text: "AllahuAkbar",
+            count: 0,
+            createdAt: "2026-10-27T00:00:00.000Z",
+          },
+        ]),
+      ),
+    );
+    window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY }));
+    expect(store.list.map((entry) => entry.id)).toEqual(["card-1", "card-2"]);
   });
 });

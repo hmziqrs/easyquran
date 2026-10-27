@@ -9,6 +9,7 @@ import {
   asNumber,
   asObject,
   asString,
+  onStorageKey,
   onPageHide,
   readJSON,
   trailingDebounce,
@@ -346,7 +347,22 @@ export function decodeCards(raw: unknown): readonly HomeCard[] {
 class HomeCardsStore {
   #cards = $state.raw<readonly HomeCard[]>([]);
   #hydrated = false;
+  #teardown: (() => void) | null = null;
   #persist = trailingDebounce(() => this.#writeNow(), PERSIST_WAIT_MS);
+
+  constructor() {
+    if (!browser) return;
+    // Cross-tab reconciliation: another tab's add/recite/edit lands here on
+    // its write — the same seam the stacked-translations store uses, so the
+    // azkar page's zikr panel and every tile stay current in every tab.
+    this.#teardown = onStorageKey(STORAGE_KEY, () => {
+      const next = decodeCards(readJSON(STORAGE_KEY));
+      // Serialized compare: cheap at card-cap size and exact across every
+      // field (count, target, schedule, items), so debounced writes that
+      // change nothing visible never re-render.
+      if (JSON.stringify(next) !== JSON.stringify(this.#cards)) this.#cards = next;
+    });
+  }
 
   hydrate(): void {
     if (this.#hydrated || !browser) return;
@@ -354,6 +370,11 @@ class HomeCardsStore {
     this.#cards = decodeCards(readJSON(STORAGE_KEY));
     // A tab close must not eat the last taps of a session.
     onPageHide(() => this.#persist.flush());
+  }
+
+  dispose(): void {
+    this.#teardown?.();
+    this.#teardown = null;
   }
 
   get list(): readonly HomeCard[] {
