@@ -4,7 +4,15 @@
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
   import { TranslationModal } from "#lib/components/translation/index.js";
 
-  let { routeTranslationId = null }: { routeTranslationId?: string | null } = $props();
+  let {
+    routeTranslationId = null,
+    onStackChanged = null,
+  }: {
+    routeTranslationId?: string | null;
+    /** Forwarded to the modal: fires after every user-driven stack mutation
+     * (the azkar page's card-translation offer hooks here). */
+    onStackChanged?: (() => void) | null;
+  } = $props();
 
   const copy = getReaderUiCopy();
   let open = $state(false);
@@ -92,5 +100,5 @@
     <ChevronDownIcon class="hidden size-4 flex-none text-foreground-secondary sm:block" />
   </button>
 
-  <TranslationModal bind:open />
+  <TranslationModal bind:open {onStackChanged} />
 </div>

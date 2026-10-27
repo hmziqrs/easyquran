@@ -5,6 +5,7 @@ import {
   globalPagePathFor,
   hizbPathFor,
   juzPathFor,
+  snippetPathFor,
   surahPathFor,
   type SurahRouteContext,
 } from "#lib/data/quran.js";
@@ -13,17 +14,19 @@ import { deLocalizeUrl } from "#lib/paraglide/runtime.js";
 /**
  * Position-preserving translation navigation, ported from the sidebar
  * TranslationPicker. Given the current reader pathname it extracts where the
- * reader is (surah / global page / juz / hizb), and hrefFor rebuilds the
- * same position for any target translation via the ctx-aware path helpers —
- * never a hand-built /app/ string (machine-guarded by nav-guard.test.ts).
- * A surah position also carries the `?v={s}:{a}` scroll mirror so a switch
- * lands on the same verse instead of the surah top (FLOW-07).
+ * reader is (surah / global page / juz / hizb / azkar snippet), and hrefFor
+ * rebuilds the same position for any target translation via the ctx-aware
+ * path helpers — never a hand-built /app/ string (machine-guarded by
+ * nav-guard.test.ts). A surah position also carries the `?v={s}:{a}` scroll
+ * mirror so a switch lands on the same verse instead of the surah top
+ * (FLOW-07).
  */
 export type ReaderPosition =
   | { kind: "surah"; slug: string; lang?: string; translator?: string; v?: string }
   | { kind: "globalPage"; n: number; lang?: string; translator?: string }
   | { kind: "juz"; n: number; lang?: string; translator?: string }
   | { kind: "hizb"; n: number; lang?: string; translator?: string }
+  | { kind: "snippet"; slug: string; lang?: string; translator?: string }
   | null;
 
 export type TranslationTarget = { id: string; lang: string; translator: string };
@@ -47,6 +50,7 @@ const RESERVED_SINGLE_SEGMENTS = new Set([
   "search",
   "settings",
   "bookmarks",
+  "azkar",
 ]);
 
 export function positionOf(pathname: string): ReaderPosition {
@@ -64,6 +68,8 @@ export function positionOf(pathname: string): ReaderPosition {
     if (segs[0] === "page") return segs[1] ? { kind: "globalPage", n: toNum(segs[1]) } : null;
     if (segs[0] === "juz") return segs[1] ? { kind: "juz", n: toNum(segs[1]) } : null;
     if (segs[0] === "hizb") return segs[1] ? { kind: "hizb", n: toNum(segs[1]) } : null;
+    // The azkar snippet tree: /azkar/{slug} — never a surah named "azkar".
+    if (segs[0] === "azkar") return segs[1] ? { kind: "snippet", slug: segs[1] } : null;
     const slug = segs[0];
     if (!slug) return null;
     // Reserved words are indexes/product pages/the dead /app marker — never a
@@ -82,6 +88,7 @@ export function positionOf(pathname: string): ReaderPosition {
     if (!slug) return null;
     return { kind: "surah", slug, lang, translator };
   }
+  if (rest[0] === "azkar" && rest[1]) return { kind: "snippet", slug: rest[1], lang, translator };
   if (rest[0] === "page" && rest[1])
     return { kind: "globalPage", n: toNum(rest[1]), lang, translator };
   if (rest[0] === "juz" && rest[1]) return { kind: "juz", n: toNum(rest[1]), lang, translator };
@@ -135,6 +142,7 @@ export function arabicHrefFor(pos: ReaderPosition): `/${string}` | null {
   if (pos.kind === "surah") return withMirrorSearch(surahPathFor(ctx, pos.slug), pos.v);
   if (pos.kind === "globalPage") return globalPagePathFor(ctx, pos.n);
   if (pos.kind === "juz") return juzPathFor(ctx, pos.n);
+  if (pos.kind === "snippet") return snippetPathFor(ctx, pos.slug);
   return hizbPathFor(ctx, pos.n);
 }
 
@@ -154,5 +162,6 @@ export function hrefFor(pos: ReaderPosition, target: TranslationTarget): `/${str
   if (pos.kind === "surah") return withMirrorSearch(surahPathFor(ctx, pos.slug), pos.v);
   if (pos.kind === "globalPage") return globalPagePathFor(ctx, pos.n);
   if (pos.kind === "juz") return juzPathFor(ctx, pos.n);
+  if (pos.kind === "snippet") return snippetPathFor(ctx, pos.slug);
   return hizbPathFor(ctx, pos.n);
 }

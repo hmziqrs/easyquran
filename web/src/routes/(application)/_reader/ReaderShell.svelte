@@ -18,6 +18,8 @@
     header,
     position = null,
     textTools = true,
+    translationsTool = false,
+    onStackChanged = null,
     children,
   }: {
     header: Snippet;
@@ -25,6 +27,11 @@
     position?: { globalPage: number; juz?: number | null; hizb?: number | null } | null;
     /** Translations, Ayah-by-Ayah/Reading and A−/A+: off on index pages, which show no text. */
     textTools?: boolean;
+    /** Translations button alone — for editorial text pages (azkar) that render
+     * no reader-managed Arabic sizing or mode, but do take stacked translations. */
+    translationsTool?: boolean;
+    /** Forwarded to the translation modal via its button (azkar's card offer). */
+    onStackChanged?: (() => void) | null;
     children: Snippet;
   } = $props();
   let mounted = $state(false);
@@ -57,8 +64,8 @@
       <div class="mx-auto flex h-14 w-full max-w-[1200px] items-center gap-2 px-6 sm:gap-3">
         {#if mounted}
           <SidebarTrigger aria-label={copy.nav.sidebarToggle} title={copy.nav.sidebarToggle} />
-          {#if textTools}
-            <TranslationButton {routeTranslationId} />
+          {#if textTools || translationsTool}
+            <TranslationButton {routeTranslationId} {onStackChanged} />
           {/if}
         {/if}
         <!-- Title + live position may clip and truncate, never push the text-size

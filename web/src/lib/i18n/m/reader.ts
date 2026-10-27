@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 384 messages. Import this barrel, never
+// 389 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "#lib/paraglide/messages/reader_account.js";
@@ -81,6 +81,7 @@ export { reader_browse_surah } from "#lib/paraglide/messages/reader_browse_surah
 export { reader_cards_activity } from "#lib/paraglide/messages/reader_cards_activity.js";
 export { reader_cards_add } from "#lib/paraglide/messages/reader_cards_add.js";
 export { reader_cards_add_title } from "#lib/paraglide/messages/reader_cards_add_title.js";
+export { reader_cards_added } from "#lib/paraglide/messages/reader_cards_added.js";
 export { reader_cards_ayah_number } from "#lib/paraglide/messages/reader_cards_ayah_number.js";
 export { reader_cards_back } from "#lib/paraglide/messages/reader_cards_back.js";
 export { reader_cards_cancel } from "#lib/paraglide/messages/reader_cards_cancel.js";
@@ -142,6 +143,7 @@ export { reader_cards_schedule_minute } from "#lib/paraglide/messages/reader_car
 export { reader_cards_schedule_name } from "#lib/paraglide/messages/reader_cards_schedule_name.js";
 export { reader_cards_schedule_remove } from "#lib/paraglide/messages/reader_cards_schedule_remove.js";
 export { reader_cards_schedule_time } from "#lib/paraglide/messages/reader_cards_schedule_time.js";
+export { reader_cards_set_target } from "#lib/paraglide/messages/reader_cards_set_target.js";
 export { reader_cards_slot_asr } from "#lib/paraglide/messages/reader_cards_slot_asr.js";
 export { reader_cards_slot_dhuhr } from "#lib/paraglide/messages/reader_cards_slot_dhuhr.js";
 export { reader_cards_slot_evening } from "#lib/paraglide/messages/reader_cards_slot_evening.js";
@@ -164,6 +166,9 @@ export { reader_cards_target_label } from "#lib/paraglide/messages/reader_cards_
 export { reader_cards_title } from "#lib/paraglide/messages/reader_cards_title.js";
 export { reader_cards_translation } from "#lib/paraglide/messages/reader_cards_translation.js";
 export { reader_cards_translation_arabic } from "#lib/paraglide/messages/reader_cards_translation_arabic.js";
+export { reader_cards_translation_offer } from "#lib/paraglide/messages/reader_cards_translation_offer.js";
+export { reader_cards_translation_update } from "#lib/paraglide/messages/reader_cards_translation_update.js";
+export { reader_cards_updated } from "#lib/paraglide/messages/reader_cards_updated.js";
 export { reader_cards_zikr_custom } from "#lib/paraglide/messages/reader_cards_zikr_custom.js";
 export { reader_cards_zikr_text } from "#lib/paraglide/messages/reader_cards_zikr_text.js";
 export { reader_clear_search } from "#lib/paraglide/messages/reader_clear_search.js";

@@ -328,6 +328,30 @@ describe("homeCards store — hydrate, mutate, persist", () => {
     expect(storedIds()).toEqual(["card-1"]);
   });
 
+  it("setSource re-pins a translation and preserves the tally", () => {
+    const before = store.list[0]?.count;
+    store.setSource("card-1", VALID_TRANSLATION_ID);
+    // SAFETY: card-1 seeds as a surah card, which carries sourceId.
+    const surah = store.list[0] as SurahCard;
+    expect(surah.sourceId).toBe(VALID_TRANSLATION_ID);
+    expect(surah.count).toBe(before);
+    flush();
+    // SAFETY: the store only ever writes its own { v, cards } envelope under this key.
+    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '{"cards":[]}') as {
+      cards: Array<{ sourceId?: string | null }>;
+    };
+    expect(parsed.cards[0]?.sourceId).toBe(VALID_TRANSLATION_ID);
+  });
+
+  it("setSource degrades unknown ids to Arabic and tolerates zikr cards", () => {
+    store.setSource("card-1", "xx.unknown");
+    // SAFETY: card-1 seeds as a surah card, which carries sourceId.
+    expect((store.list[0] as SurahCard).sourceId).toBeNull();
+    // Zikr cards carry no sourceId — the call must be a silent no-op.
+    expect(() => store.setSource("card-2", VALID_TRANSLATION_ID)).not.toThrow();
+    expect(store.list[1]?.kind).toBe("zikr");
+  });
+
   it("refuses to add past the cap", () => {
     store.remove("card-1");
     store.remove("card-2");

@@ -6,22 +6,19 @@
   import { QuranScript, type QuranScript as QuranScriptValue } from "#lib/data/quran-types.js";
   import { parseTajweedSegments, tajweedRuleColor } from "#lib/quran/view/tajweed.js";
   import {
-    isTafsirTranslation,
     parseTransliterationSegments,
     stripTransliterationMarkup,
-    type TransliterationSegment,
   } from "#lib/quran/text-marks.js";
   import type { UiLocale } from "#lib/i18n/locales.js";
   import { translationIdFromSegments } from "#lib/data/quran.js";
   import { TRANSLATION_BY_ID } from "#lib/data/translations.js";
   import { getLocale } from "#lib/paraglide/runtime.js";
   import {
-    reader_commentary_label,
     reader_translation_empty_verse,
     reader_transliteration_legend,
   } from "#lib/i18n/m/reader.js";
-  import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
   import type { StackedTranslation, TranslationDirection } from "#lib/data/quran-types.js";
+  import StackedLanes from "./StackedLanes.svelte";
   import AyahOrnament from "./AyahOrnament.svelte";
   import IndoPakAyah from "./IndoPakAyah.svelte";
 
@@ -88,43 +85,9 @@
     isTranslation ?? ("lang" in page.params && "translator" in page.params),
   );
 
-  type ExtraRow =
-    | { kind: "skeleton"; sourceId: string }
-    | { kind: "error"; sourceId: string }
-    | { kind: "text"; t: StackedTranslation };
-  function extraRowKey(row: ExtraRow): string {
-    if (row.kind === "text") return `text-${row.t.sourceId}`;
-    return `${row.kind}-${row.sourceId}`;
-  }
-  function rowSourceId(row: ExtraRow): string {
-    return row.kind === "text" ? row.t.sourceId : row.sourceId;
-  }
-  // Lanes keep the reader's stacked order (and so their hue) while sources load, instead of
-  // loading rows jumping ahead of ready ones. activeIds: a paused stack renders no lanes.
-  const order = $derived(stackedTranslations.activeIds);
-  function rank(id: string): number {
-    if (id === leadId) return -1;
-    const i = order.indexOf(id);
-    return i === -1 ? order.length : i;
-  }
-  const extraRows = $derived<ExtraRow[]>(
-    [
-      ...stackedPending.map((sourceId): ExtraRow => ({ kind: "skeleton", sourceId })),
-      ...stackedErrored.map((sourceId): ExtraRow => ({ kind: "error", sourceId })),
-      ...stacked.map((t): ExtraRow => ({ kind: "text", t })),
-    ].sort((a, b) => rank(rowSourceId(a)) - rank(rowSourceId(b))),
+  const hasLanes = $derived(
+    stacked.length + stackedPending.length + stackedErrored.length > 0,
   );
-
-  /**
-   * quran.com-style credit after the text: the translator, then the work in parentheses when
-   * it is named differently ("Dr. Israr Ahmad (Bayan-ul-Quran)"); one name when they match.
-   */
-  function laneCredit(t: StackedTranslation): string {
-    const who = t.translator ?? t.name ?? t.language;
-    const work = t.name;
-    if (!work || work.trim().toLowerCase() === who.trim().toLowerCase()) return who;
-    return `${who} (${work})`;
-  }
 
   // The route's own translation entry, when the reader sits on /t/** segments
   // (TRX-11): direction and name come from the catalogue, never guessed.
@@ -161,25 +124,10 @@
     return routeTranslationEntry?.name ?? translationName ?? translationLang ?? page.params.lang ?? "";
   }
 
-  function laneEmpty(t: StackedTranslation): boolean {
-    return t.text.trim() === "";
-  }
-
-  function laneTranslit(t: StackedTranslation): readonly TransliterationSegment[] | null {
-    if (laneEmpty(t) || !t.text.includes("<")) return null;
-    return parseTransliterationSegments(t.text);
-  }
-
   // Legend shows once per row, only when a rendered line carries transliteration marks.
   const showsTranslitLegend = $derived(
-    mainTranslit !== null || extraRows.some((row) => row.kind === "text" && row.t.text.includes("<")),
+    mainTranslit !== null || stacked.some((t) => t.text.includes("<")),
   );
-
-  function commentaryWord(): string {
-    // SAFETY: paraglide is compiled for exactly the UI locales (en/ar), so
-    // getLocale() only ever returns a UiLocale at runtime.
-    return reader_commentary_label(undefined, { locale: getLocale() as UiLocale });
-  }
 
   function translitLegend(): string {
     // SAFETY: paraglide is compiled for exactly the UI locales (en/ar), so
@@ -259,45 +207,8 @@
     </span>
   {/if}
 
-  {#if reader.isVerseMode && extraRows.length > 0}
-    <!-- Lanes (user pick, /design/mix stack=c): one accent edge per translation and its name
-         inline, all in one colour — per-lane hues and grey text read as noise (user, 2026-10-02). -->
-    <div class="verse-lanes">
-      {#each extraRows as row (extraRowKey(row))}
-        {#if row.kind === "skeleton"}
-          <div class="verse-extra verse-extra--skeleton" aria-hidden="true">
-            <span class="verse-lane-skeleton"></span>
-          </div>
-        {:else if row.kind === "error"}
-          <span class="verse-extra verse-extra--error">{stackedErrorLabel}</span>
-        {:else}
-          {@const tafsir = isTafsirTranslation(row.t.sourceId)}
-          {@const translit = laneTranslit(row.t)}
-          <!-- dir is the lane's declared direction (TRX-11), never auto. Tafsir
-               lanes render as commentary (TRX-01): a distinct muted block whose
-               credit line carries the word "commentary" in the UI font. -->
-          <span
-            class="verse-extra"
-            class:verse-extra--tafsir={tafsir}
-            dir={row.t.direction}
-            lang={row.t.languageCode}
-          >
-            {#if laneEmpty(row.t)}
-              <span class="verse-missing">{verseEmptyNote(row.t.name ?? row.t.language)}</span>
-            {:else if translit}
-              {#each translit as segment, index (index)}
-                {#if segment.underline}<u class="translit-long">{segment.text}</u>
-                {:else if segment.strong}<b class="translit-assimilated">{segment.text}</b>
-                {:else}{segment.text}{/if}
-              {/each}
-            {:else}{row.t.text}{/if}
-            <!-- The credit takes the lane's direction (the dash leads on the lane's own side);
-                 the bdi keeps a Latin name readable inside an Urdu lane. -->
-            <span class="verse-extra-credit" dir={row.t.direction}>— <bdi>{laneCredit(row.t)}{#if tafsir} ({commentaryWord()}){/if}</bdi></span>
-          </span>
-        {/if}
-      {/each}
-    </div>
+  {#if reader.isVerseMode && hasLanes}
+    <StackedLanes {stacked} {stackedPending} {stackedErrored} errorLabel={stackedErrorLabel} {leadId} />
   {/if}
 
   {#if showsTranslitLegend}
@@ -368,64 +279,6 @@
     margin-inline-end: 0.55em;
   }
 
-  .verse-lanes {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 12px;
-  }
-
-  .verse-extra {
-    border-end-end-radius: 6px;
-    border-inline-start: 2px solid var(--primary);
-    border-start-end-radius: 6px;
-    color: var(--foreground);
-    display: block;
-    font-family: var(--reader-translation-family, var(--font-sans));
-    font-size: var(--reader-translation-size, 1.0625rem);
-    line-height: 1.75;
-    max-width: 72ch;
-    padding-inline: 14px 10px;
-    text-align: start;
-    text-wrap: pretty;
-  }
-
-  /* Urdu and other Arabic-script translations: Naskh, larger, looser, on the right edge.
-     The Latin UI face has no Arabic glyphs, so they used to fall back to a cramped system font. */
-  .verse-extra:dir(rtl) {
-    font-family: "Noto Naskh Arabic", var(--font-arabic-ui);
-    font-size: calc(var(--reader-translation-size, 1.0625rem) * 1.2);
-    line-height: 2.05;
-    margin-left: auto;
-  }
-
-  /* Credit after the text, grey and small (user pick, quran.com's pattern): it reads as
-     "this is a translation, by this translator", not as part of the text. */
-  .verse-extra-credit {
-    color: var(--foreground-secondary);
-    display: block;
-    font-family: "Onest Variable", "Onest", "Noto Naskh Arabic", system-ui, sans-serif;
-    font-size: 13px;
-    font-weight: 400;
-    line-height: 1.5;
-    margin-top: 4px;
-  }
-
-  .verse-extra--error {
-    color: var(--muted);
-    font-size: 0.95rem;
-  }
-
-  /* Commentary (tafsir) lane (TRX-01): visually distinct from translation
-     lanes — a soft surface with a neutral edge instead of the accent edge — so
-     it never reads as a second translation. The Arabic text keeps the Naskh
-     face from .verse-extra:dir(rtl); the credit line (UI font) carries the
-     word "commentary". */
-  .verse-extra--tafsir {
-    background: var(--background-subtle);
-    border-inline-start: 2px solid var(--foreground-secondary);
-  }
-
   /* Empty translation verse (TRX-11): the placeholder reads as an editorial
      note, not as verse text. */
   .verse-missing {
@@ -453,14 +306,6 @@
   .translit-assimilated {
     /* Silent/assimilated letter (TRX-02). */
     font-weight: 600;
-  }
-
-  .verse-lane-skeleton {
-    background: var(--background-subtle);
-    border-radius: 0.25rem;
-    display: block;
-    height: 1.2rem;
-    width: min(24rem, 70%);
   }
 
   .verse-text--translation {

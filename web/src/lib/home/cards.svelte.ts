@@ -427,6 +427,23 @@ class HomeCardsStore {
     this.#persist.schedule();
   }
 
+  /**
+   * Re-pin a card's translation (null = Arabic mushaf). Unknown catalogue ids
+   * degrade to null, matching decodeSourceId; count, events and schedule are
+   * untouched. This is the "follow what the reader just switched to" path —
+   * the azkar page's translation-change offer.
+   */
+  setSource(id: string, sourceId: string | null): void {
+    const next = sourceId === null ? null : decodeSourceId(sourceId);
+    if (sourceId !== null && next === null) return;
+    this.#cards = this.#cards.map((card) => {
+      // Zikr cards carry no sourceId (always the Arabic phrase) — a no-op there.
+      if (card.id !== id || !("sourceId" in card) || card.sourceId === next) return card;
+      return { ...card, sourceId: next };
+    });
+    this.#persist.schedule();
+  }
+
   #writeNow(): void {
     if (!browser) return;
     writeJSON(STORAGE_KEY, { v: SCHEMA_VERSION, cards: this.#cards });

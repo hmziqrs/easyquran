@@ -82,11 +82,19 @@
   let {
     open = $bindable(false),
     readPick = null,
+    onStackChanged = null,
   }: {
     open?: boolean;
     /** Reading's picker: one tap picks the text Reading flows instead of toggling the stack. */
     readPick?: ReadPick | null;
+    /** Fired once when the dialog closes after ≥1 user-driven stack mutation
+     * (add/remove/reorder/clear/pause). Deferred to close so hosts' follow-ups
+     * — the azkar page's card offer toast — never land behind the open modal;
+     * and initial hydration from localStorage never reads as a user change. */
+    onStackChanged?: (() => void) | null;
   } = $props();
+
+  let stackDirty = false;
 
   const picking = $derived(readPick !== null);
   // Tafsir works are commentary, not translations (TRX-01): they are offered
@@ -172,6 +180,14 @@
       mobilePane = false;
       expandedAuthors.clear();
     }
+  });
+
+  // Hosts learn about stack changes on close, once per editing session, so
+  // follow-up offers (azkar's card translation) are clickable and un-duplicated.
+  $effect(() => {
+    if (open || !stackDirty) return;
+    stackDirty = false;
+    onStackChanged?.();
   });
 
   // Client-only reader signals for the rail's priority sort (see
@@ -479,18 +495,22 @@
       recordUse(id);
     }
     syncUrl();
+    stackDirty = true;
   }
   function reorder(id: string, delta: -1 | 1): void {
     stackedTranslations.reorder(id, delta);
     syncUrl();
+    stackDirty = true;
   }
   function remove(id: string): void {
     stackedTranslations.remove(id);
     syncUrl();
+    stackDirty = true;
   }
   function clear(): void {
     stackedTranslations.clear();
     syncUrl();
+    stackDirty = true;
   }
 
   function rowLabel(t: TranslationCatalogueEntry): string {
@@ -660,7 +680,10 @@
               type="button"
               data-show-toggle
               aria-pressed={stackedTranslations.enabled}
-              onclick={() => stackedTranslations.toggleEnabled()}
+              onclick={() => {
+                stackedTranslations.toggleEnabled();
+                stackDirty = true;
+              }}
               class="flex h-11 flex-none cursor-pointer touch-manipulation items-center rounded-pill border px-3.5 text-caption transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring md:h-8 {stackedTranslations.enabled
                 ? 'border-primary bg-primary-soft text-foreground'
                 : 'border-border-strong text-foreground-secondary hover:border-border hover:text-foreground'}"
