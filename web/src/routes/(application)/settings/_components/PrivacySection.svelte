@@ -1,13 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { updated } from "$app/state";
   import { Button } from "#lib/components/ui/button/index.js";
   import { authState } from "#lib/auth/auth-state.svelte.js";
   import { createLogoutFlow } from "#lib/auth/flows.svelte.js";
   import { installPurgeHook } from "#lib/auth/purge-hook.js";
   import { isMessagingConfigured } from "#lib/firebase/index.js";
   import { notificationsStatus } from "#lib/components/notifications/notifications-copy.js";
-  import { update } from "#lib/offline/update.svelte.js";
   import { consent } from "#lib/stores/consent.svelte.js";
   import { notifications } from "#lib/stores/notifications.svelte.js";
   import { cn } from "#lib/utils.js";
@@ -25,7 +23,6 @@
 
   const logout = createLogoutFlow();
   const signedIn = $derived(authState.status === "authenticated");
-  let checking = $state(false);
 
   onMount(() => {
     installPurgeHook(authState);
@@ -42,20 +39,6 @@
   function togglePerformance(): void {
     consent.setPerformance(!consent.performance);
     location.reload();
-  }
-
-  async function onCheckUpdates(): Promise<void> {
-    if (update.available) {
-      update.apply();
-      return;
-    }
-    if (checking) return;
-    checking = true;
-    try {
-      await updated.check();
-    } finally {
-      checking = false;
-    }
   }
 
   async function onSignOut(): Promise<void> {
@@ -111,27 +94,6 @@
       <span class="shrink-0 text-end text-caption leading-tight text-muted">
         {notificationsLabel}
       </span>
-    </div>
-
-    <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5" role="status">
-      <span class="text-[14.5px] font-medium text-foreground">{copy.version}</span>
-      <div class="flex shrink-0 flex-wrap items-center gap-2.5">
-        {#if update.available}
-          <span class="text-caption leading-tight text-muted">{copy.updateAvailable}</span>
-        {:else if checking}
-          <span class="text-caption leading-tight text-muted">{copy.notificationsStatus.checking}</span>
-        {:else}
-          <span class="text-caption leading-tight text-muted">{copy.upToDate}</span>
-        {/if}
-        <button
-          type="button"
-          disabled={checking}
-          onclick={onCheckUpdates}
-          class={cn(toggle, update.available ? on : off, checking && "cursor-not-allowed opacity-50")}
-        >
-          {update.available ? copy.reloadUpdate : copy.checkUpdates}
-        </button>
-      </div>
     </div>
 
     {#if signedIn}

@@ -1,4 +1,4 @@
-import { browser } from "$app/env";
+import { browser, version as buildVersion } from "$app/env";
 import { updated } from "$app/state";
 
 import { registerServiceWorker } from "#lib/boot/service-worker.js";
@@ -62,6 +62,10 @@ class UpdateStore {
   // dismissal key — the banner's derived visibility must invalidate when the
   // fallback wires up (I8: the fallback path keeps full dismissal UX).
   #fallbackMode = $state(false);
+  // Explicit user-initiated check in flight (settings App section's
+  // "Check for updates"). Reactive so the button can disable itself and the
+  // status row can flip to its checking label.
+  #checking = $state(false);
 
   get waiting(): boolean {
     return this.#waiting;
@@ -71,11 +75,58 @@ class UpdateStore {
     return this.#computeAvailable();
   }
 
+  // Settings App section surface: the controller's build identity as answered
+  // by the VERSION_QUERY handshake (N14). Null while the handshake is pending,
+  // timed out, or when no SW controls this tab at all.
+  get installedVersion(): string | null {
+    return this.#controllerVersion;
+  }
+
+  // The waiting worker's identity; null until ITS handshake answers (R4).
+  get waitingVersion(): string | null {
+    return this.#waitingVersion;
+  }
+
+  // The current build's own version (config.version.name): what a fresh tab
+  // or an applied update will report as the controller version.
+  get latestVersion(): string {
+    return buildVersion;
+  }
+
+  get checking(): boolean {
+    return this.#checking;
+  }
+
+  // Explicit user-initiated check: registration.update() plus a waiting sync
+  // with NO throttle consult and NO throttle write — the five-minute gate only
+  // governs the visibility-driven background path (#checkServiceWorkerUpdate).
+  async checkNow(): Promise<void> {
+    if (!browser || this.#checking) return;
+    this.#checking = true;
+    try {
+      if (!("serviceWorker" in navigator)) {
+        await updated.check().catch(() => {});
+        return;
+      }
+      const reg = await this.#getRegistration();
+      if (!reg) {
+        await updated.check().catch(() => {});
+        return;
+      }
+      try {
+        await reg.update();
+      } catch {}
+      this.#syncWaiting(reg);
+    } finally {
+      this.#checking = false;
+    }
+  }
+
   // True when the CURRENT waiting worker's dismissal record matches: either
   // `v:<version>` for a known waiting version or the `*` sentinel when the
   // version is unknown (I3). In no-SW fallback mode the dismissal is keyed to
-  // the SvelteKit build version (`updated.version`) — a different version
-  // after the next deploy re-prompts (I3 reset-on-new-deploy).
+  // this bundle's own baked build version (#fallbackDismissalKey) — a
+  // different version after the next deploy re-prompts (I3 reset-on-new-deploy).
   get dismissed(): boolean {
     if (this.#fallbackMode) return this.#dismissalRecord === this.#fallbackDismissalKey();
     if (!this.#waiting) return false;
@@ -84,18 +135,14 @@ class UpdateStore {
     return this.#dismissalRecord === DISMISS_UNKNOWN;
   }
 
-  // I3 key for the no-SW fallback: the current SvelteKit build id when
-  // accessible, else the unknown-version sentinel. Newer SvelteKit exposes
-  // `updated.version` at runtime; the pinned type does not declare it, so
-  // widen structurally and treat any absent/empty value as unknown.
+  // I3 key for the no-SW fallback: this bundle's own baked build version
+  // (`config.version.name` via $app/env). Kit 3's `updated` object exposes
+  // only `current`/`check()` — no runtime version — so the bundle constant is
+  // the only truthful source. Write and read both run in the tab's current
+  // bundle: a new deploy's bundle carries a different key, so the persisted
+  // sessionStorage record stops matching and the banner re-prompts (I3).
   #fallbackDismissalKey(): string {
-    // SAFETY: optional-property widening only — every field read afterwards
-    // re-checks for absent/empty, so a missing or non-string runtime value
-    // degrades to the `*` sentinel instead of trusting the assertion.
-    const withVersion = updated as { readonly version?: string };
-    const version = withVersion.version;
-    if (version !== undefined && version.length > 0) return `v:${version}`;
-    return DISMISS_UNKNOWN;
+    return `v:${buildVersion}`;
   }
 
   // Availability is live-derived only (I1): persisted flags can never set it.
@@ -404,9 +451,8 @@ class UpdateStore {
 
   dismiss(): void {
     // No-SW fallback (I8): the banner must be dismissable there too. Record
-    // per I3 under the SvelteKit build version (or the `*` sentinel when it
-    // is not accessible) so a new deploy re-prompts while the same build
-    // stays dismissed for this tab session.
+    // per I3 under this bundle's baked build version so a new deploy
+    // re-prompts while the same build stays dismissed for this tab session.
     if (this.#fallbackMode) {
       const fallbackRecord = this.#fallbackDismissalKey();
       this.#dismissalRecord = fallbackRecord;
@@ -454,6 +500,7 @@ class UpdateStore {
     this.#updateCheckInFlight = null;
     this.#versionFallbackWired = false;
     this.#fallbackMode = false;
+    this.#checking = false;
     this.#waitingWorker = null;
     this.#waitingVersion = null;
     this.#controllerVersion = null;

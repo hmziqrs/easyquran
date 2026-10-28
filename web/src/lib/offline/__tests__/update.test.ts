@@ -26,18 +26,19 @@ const RELOAD_GUARD = "easyquran.reload-guard";
 const PAINT_KEY = "easyquran.update.waiting";
 const DISMISS_KEY = "easyquran.update.dismissed";
 
-const { updatedMock, registerSwMock } = vi.hoisted(() => ({
+const { envMock, updatedMock, registerSwMock } = vi.hoisted(() => ({
+  // Mirrors $app/env's build `version` (config.version.name): the value the
+  // UpdateStore's latestVersion getter reports and the no-SW fallback
+  // dismissal key source per I3/I8 (kit 3's `updated` exposes no version).
+  envMock: { browser: true, version: "build-1" },
   updatedMock: {
     current: false,
-    // Mirrors $app/state's `updated.version` (current SvelteKit build id),
-    // the no-SW dismissal key per I3/I8.
-    version: "build-1",
     check: vi.fn<() => Promise<void>>(),
   },
   registerSwMock: vi.fn<() => Promise<ServiceWorkerRegistration | null>>(),
 }));
 
-vi.mock("$app/env", () => ({ browser: true }));
+vi.mock("$app/env", () => envMock);
 vi.mock("$app/state", () => ({ updated: updatedMock }));
 vi.mock("#lib/boot/service-worker.js", () => ({
   registerServiceWorker: registerSwMock,
@@ -236,8 +237,8 @@ beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
   MockBC.byName.clear();
+  envMock.version = "build-1";
   updatedMock.current = false;
-  updatedMock.version = "build-1";
   updatedMock.check.mockReset();
   updatedMock.check.mockResolvedValue(undefined);
   registerSwMock.mockReset();
@@ -522,6 +523,112 @@ describe("UpdateStore version handshake", () => {
   });
 });
 
+describe("UpdateStore version surface (settings App section)", () => {
+  it("exposes the controller, waiting, and build versions once handshakes answer", async () => {
+    installHarness(new FakeWorker("app-1"), new FakeWorker("app-2"));
+    const store = createUpdate();
+    expect(store.installedVersion).toBeNull();
+    expect(store.waitingVersion).toBeNull();
+    expect(store.latestVersion).toBe("build-1");
+
+    store.hydrate();
+    // Interacted tab: banner-flow test, not the silent path.
+    interact();
+    await flush();
+    expect(store.installedVersion).toBe("app-1");
+    expect(store.waitingVersion).toBe("app-2");
+    store.dispose();
+  });
+
+  it("keeps installedVersion null when no controller claims the tab", async () => {
+    // Neither a controlling nor an active worker: nothing to handshake with,
+    // so the controller identity stays unknown for this tab (I1).
+    const reg = new FakeRegistration();
+    registerSwMock.mockResolvedValue(reg.toRegistration());
+    setServiceWorker(new FakeServiceWorkerContainer(null).toContainer());
+
+    const store = createUpdate();
+    store.hydrate();
+    interact();
+    await flush();
+    expect(store.installedVersion).toBeNull();
+    expect(store.latestVersion).toBe("build-1");
+    store.dispose();
+  });
+});
+
+describe("UpdateStore.checkNow", () => {
+  it("bypasses the five-minute throttle and runs registration.update()", async () => {
+    let now = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const { reg } = await startHarness(new FakeWorker("app-1"), null);
+    const store = createUpdate();
+    store.hydrate();
+    interact();
+    await flush();
+    // Inside the throttle window: the background path would refuse here.
+    expect(reg.update).not.toHaveBeenCalled();
+    await store.checkNow();
+    expect(reg.update).toHaveBeenCalledTimes(1);
+    expect(store.checking).toBe(false);
+    store.dispose();
+  });
+
+  it("surfaces a waiting worker (and its version) that landed before the explicit check", async () => {
+    const { reg } = await startHarness(new FakeWorker("app-1"), null);
+    const store = createUpdate();
+    store.hydrate();
+    interact();
+    await flush();
+    expect(store.waitingVersion).toBeNull();
+
+    reg.waiting = new FakeWorker("app-2");
+    await store.checkNow();
+    expect(store.waiting).toBe(true);
+    expect(store.waitingVersion).toBe("app-2");
+    expect(store.available).toBe(true);
+    store.dispose();
+  });
+
+  it("falls back to the SvelteKit check when service workers are unavailable", async () => {
+    setServiceWorker(null);
+    const store = createUpdate();
+    store.hydrate();
+    await flush();
+    updatedMock.check.mockClear();
+    await store.checkNow();
+    expect(updatedMock.check).toHaveBeenCalledTimes(1);
+    expect(store.checking).toBe(false);
+    store.dispose();
+  });
+
+  it("keeps the reactive checking flag true for the in-flight window", async () => {
+    const { reg } = await startHarness(new FakeWorker("app-1"), null);
+    let release = (): void => {};
+    reg.update = vi.fn<() => Promise<void>>(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const store = createUpdate();
+    store.hydrate();
+    interact();
+    await flush();
+    expect(store.checking).toBe(false);
+
+    const pending = store.checkNow();
+    expect(store.checking).toBe(true);
+    // Yield the microtasks that get checkNow into reg.update() before the
+    // in-flight promise is released.
+    await flush();
+    release();
+    await pending;
+    expect(store.checking).toBe(false);
+    store.dispose();
+  });
+});
+
 describe("UpdateStore fresh-tab silent adoption", () => {
   function noBroadcastReceiver() {
     const received: unknown[] = [];
@@ -688,9 +795,9 @@ describe("UpdateStore fresh-tab silent adoption", () => {
 });
 
 describe("UpdateStore no-SW dismissal (I8 fallback keeps full UX)", () => {
-  it("dismisses the fallback banner per SvelteKit build version", async () => {
+  it("dismisses the fallback banner per the bundle's baked build version", async () => {
     setServiceWorker(null);
-    updatedMock.version = "build-1";
+    envMock.version = "build-1";
     updatedMock.current = true;
     const store = createUpdate();
     // Interacted tab: keep the fresh-tab silent reload (F6) out of the way.
@@ -708,9 +815,9 @@ describe("UpdateStore no-SW dismissal (I8 fallback keeps full UX)", () => {
     store.dispose();
   });
 
-  it("re-prompts when a new deploy changes updated.version", async () => {
+  it("re-prompts when a new deploy changes the baked build version", async () => {
     setServiceWorker(null);
-    updatedMock.version = "build-1";
+    envMock.version = "build-1";
     updatedMock.current = true;
     const first = createUpdate();
     interact();
@@ -720,9 +827,9 @@ describe("UpdateStore no-SW dismissal (I8 fallback keeps full UX)", () => {
     expect(first.dismissed).toBe(true);
     first.dispose();
 
-    // Next load lands on the new build: updated.version differs, so the old
-    // dismissal record must not suppress the new deploy's prompt.
-    updatedMock.version = "build-2";
+    // Next load lands on the new build: the bundle's baked version differs,
+    // so the old dismissal record must not suppress the new deploy's prompt.
+    envMock.version = "build-2";
     updatedMock.current = true;
     const second = createUpdate();
     interact();
@@ -735,7 +842,7 @@ describe("UpdateStore no-SW dismissal (I8 fallback keeps full UX)", () => {
 
   it("stays dismissed across a fresh store for the same build version", async () => {
     setServiceWorker(null);
-    updatedMock.version = "build-1";
+    envMock.version = "build-1";
     updatedMock.current = true;
     // Seeded session key (prior tab dismissed this exact build).
     sessionStorage.setItem(DISMISS_KEY, "v:build-1");

@@ -23,7 +23,6 @@ import {
   reader_performance,
   reader_performance_reload,
 } from "#lib/i18n/m/reader-settings.js";
-import { reader_new_version_ready, reader_reload_open_tabs } from "#lib/i18n/m/reader.js";
 import {
   reader_arabic_text_size,
   reader_ayah_by_ayah,
@@ -37,6 +36,19 @@ import {
   settings_account_signed_in_as,
   settings_account_signed_in_heading,
   settings_account_signed_out_note,
+  settings_app_check_updates,
+  settings_app_install,
+  settings_app_install_browser_note,
+  settings_app_install_standalone_note,
+  settings_app_installed,
+  settings_app_intro,
+  settings_app_latest,
+  settings_app_reload_update,
+  settings_app_status_checking,
+  settings_app_status_unknown,
+  settings_app_status_update_ready,
+  settings_app_status_up_to_date,
+  settings_app_version_not_controlling,
   settings_appearance_intro,
   settings_language,
   settings_palette,
@@ -48,13 +60,10 @@ import {
   settings_palette_sapphire_note,
   settings_palette_sepia_label,
   settings_palette_sepia_note,
-  settings_privacy_check_updates,
   settings_privacy_intro,
   settings_privacy_sign_out,
   settings_privacy_sign_out_error,
   settings_privacy_sync_note,
-  settings_privacy_up_to_date,
-  settings_privacy_version,
   settings_reading_arabic_font,
   settings_reading_script,
   settings_reading_script_uthmani,
@@ -80,6 +89,7 @@ import {
   settings_reading_translation_font,
   settings_reading_translation_size,
   settings_section_account,
+  settings_section_app,
   settings_section_appearance,
   settings_section_privacy,
   settings_section_reading,
@@ -182,6 +192,7 @@ export interface SettingsCopy {
     readonly storage: string;
     readonly appearance: string;
     readonly reading: string;
+    readonly app: string;
     readonly privacy: string;
     readonly account: string;
   };
@@ -296,6 +307,21 @@ export interface SettingsCopy {
     readonly on: string;
     readonly off: string;
   };
+  readonly app: {
+    readonly intro: string;
+    readonly installed: string;
+    readonly latest: string;
+    readonly statusUpToDate: string;
+    readonly statusUpdateReady: string;
+    readonly statusChecking: string;
+    readonly statusUnknown: string;
+    readonly checkUpdates: string;
+    readonly reloadUpdate: string;
+    readonly install: string;
+    readonly installStandaloneNote: string;
+    readonly installBrowserNote: string;
+    readonly versionNotControlling: string;
+  };
   readonly privacy: {
     readonly intro: string;
     readonly analytics: string;
@@ -314,11 +340,6 @@ export interface SettingsCopy {
       readonly offUpdates: string;
       readonly off: string;
     };
-    readonly version: string;
-    readonly checkUpdates: string;
-    readonly upToDate: string;
-    readonly updateAvailable: string;
-    readonly reloadUpdate: string;
     readonly syncNote: string;
     readonly signOut: string;
     readonly signOutError: string;
@@ -354,6 +375,7 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
       storage: noArgs(settings_section_storage),
       appearance: noArgs(settings_section_appearance),
       reading: noArgs(settings_section_reading),
+      app: noArgs(settings_section_app),
       privacy: noArgs(settings_section_privacy),
       account: noArgs(settings_section_account),
     },
@@ -514,6 +536,21 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
       on: noArgs(reader_on),
       off: noArgs(reader_off),
     },
+    app: {
+      intro: noArgs(settings_app_intro),
+      installed: noArgs(settings_app_installed),
+      latest: noArgs(settings_app_latest),
+      statusUpToDate: noArgs(settings_app_status_up_to_date),
+      statusUpdateReady: noArgs(settings_app_status_update_ready),
+      statusChecking: noArgs(settings_app_status_checking),
+      statusUnknown: noArgs(settings_app_status_unknown),
+      checkUpdates: noArgs(settings_app_check_updates),
+      reloadUpdate: noArgs(settings_app_reload_update),
+      install: noArgs(settings_app_install),
+      installStandaloneNote: noArgs(settings_app_install_standalone_note),
+      installBrowserNote: noArgs(settings_app_install_browser_note),
+      versionNotControlling: noArgs(settings_app_version_not_controlling),
+    },
     privacy: {
       intro: noArgs(settings_privacy_intro),
       analytics: noArgs(reader_analytics),
@@ -532,11 +569,6 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
         offUpdates: noArgs(reader_notifications_off_updates),
         off: noArgs(reader_notifications_off),
       },
-      version: noArgs(settings_privacy_version),
-      checkUpdates: noArgs(settings_privacy_check_updates),
-      upToDate: noArgs(settings_privacy_up_to_date),
-      updateAvailable: noArgs(reader_new_version_ready),
-      reloadUpdate: noArgs(reader_reload_open_tabs),
       syncNote: noArgs(settings_privacy_sync_note),
       signOut: noArgs(settings_privacy_sign_out),
       signOutError: noArgs(settings_privacy_sign_out_error),

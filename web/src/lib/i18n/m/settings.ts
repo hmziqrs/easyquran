@@ -2,7 +2,7 @@
 //
 // Settings page: storage, reading, privacy and account sections. Lazy: downloaded whole when the settings route loads or the reader appearance panel opens (offline-pack + notification toggle copy). The marketing appearance panel and the settings privacy section reuse reader_* notifications strings instead and never pull this namespace.
 //
-// 132 messages. Import this barrel, never
+// 143 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { settings_account_device_note } from "#lib/paraglide/messages/settings_account_device_note.js";
@@ -12,6 +12,19 @@ export { settings_account_sign_in } from "#lib/paraglide/messages/settings_accou
 export { settings_account_signed_in_as } from "#lib/paraglide/messages/settings_account_signed_in_as.js";
 export { settings_account_signed_in_heading } from "#lib/paraglide/messages/settings_account_signed_in_heading.js";
 export { settings_account_signed_out_note } from "#lib/paraglide/messages/settings_account_signed_out_note.js";
+export { settings_app_check_updates } from "#lib/paraglide/messages/settings_app_check_updates.js";
+export { settings_app_install } from "#lib/paraglide/messages/settings_app_install.js";
+export { settings_app_install_browser_note } from "#lib/paraglide/messages/settings_app_install_browser_note.js";
+export { settings_app_install_standalone_note } from "#lib/paraglide/messages/settings_app_install_standalone_note.js";
+export { settings_app_installed } from "#lib/paraglide/messages/settings_app_installed.js";
+export { settings_app_intro } from "#lib/paraglide/messages/settings_app_intro.js";
+export { settings_app_latest } from "#lib/paraglide/messages/settings_app_latest.js";
+export { settings_app_reload_update } from "#lib/paraglide/messages/settings_app_reload_update.js";
+export { settings_app_status_checking } from "#lib/paraglide/messages/settings_app_status_checking.js";
+export { settings_app_status_unknown } from "#lib/paraglide/messages/settings_app_status_unknown.js";
+export { settings_app_status_up_to_date } from "#lib/paraglide/messages/settings_app_status_up_to_date.js";
+export { settings_app_status_update_ready } from "#lib/paraglide/messages/settings_app_status_update_ready.js";
+export { settings_app_version_not_controlling } from "#lib/paraglide/messages/settings_app_version_not_controlling.js";
 export { settings_appearance_intro } from "#lib/paraglide/messages/settings_appearance_intro.js";
 export { settings_language } from "#lib/paraglide/messages/settings_language.js";
 export { settings_notifications_blocked } from "#lib/paraglide/messages/settings_notifications_blocked.js";
@@ -28,13 +41,10 @@ export { settings_palette_sapphire_label } from "#lib/paraglide/messages/setting
 export { settings_palette_sapphire_note } from "#lib/paraglide/messages/settings_palette_sapphire_note.js";
 export { settings_palette_sepia_label } from "#lib/paraglide/messages/settings_palette_sepia_label.js";
 export { settings_palette_sepia_note } from "#lib/paraglide/messages/settings_palette_sepia_note.js";
-export { settings_privacy_check_updates } from "#lib/paraglide/messages/settings_privacy_check_updates.js";
 export { settings_privacy_intro } from "#lib/paraglide/messages/settings_privacy_intro.js";
 export { settings_privacy_sign_out } from "#lib/paraglide/messages/settings_privacy_sign_out.js";
 export { settings_privacy_sign_out_error } from "#lib/paraglide/messages/settings_privacy_sign_out_error.js";
 export { settings_privacy_sync_note } from "#lib/paraglide/messages/settings_privacy_sync_note.js";
-export { settings_privacy_up_to_date } from "#lib/paraglide/messages/settings_privacy_up_to_date.js";
-export { settings_privacy_version } from "#lib/paraglide/messages/settings_privacy_version.js";
 export { settings_reading_arabic_font } from "#lib/paraglide/messages/settings_reading_arabic_font.js";
 export { settings_reading_font_amiri } from "#lib/paraglide/messages/settings_reading_font_amiri.js";
 export { settings_reading_font_hafs } from "#lib/paraglide/messages/settings_reading_font_hafs.js";
@@ -60,6 +70,7 @@ export { settings_reading_script_uthmani_annotated } from "#lib/paraglide/messag
 export { settings_reading_translation_font } from "#lib/paraglide/messages/settings_reading_translation_font.js";
 export { settings_reading_translation_size } from "#lib/paraglide/messages/settings_reading_translation_size.js";
 export { settings_section_account } from "#lib/paraglide/messages/settings_section_account.js";
+export { settings_section_app } from "#lib/paraglide/messages/settings_section_app.js";
 export { settings_section_appearance } from "#lib/paraglide/messages/settings_section_appearance.js";
 export { settings_section_privacy } from "#lib/paraglide/messages/settings_section_privacy.js";
 export { settings_section_reading } from "#lib/paraglide/messages/settings_section_reading.js";

@@ -18,11 +18,9 @@ function tileSvg(radius: number, inset: number): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" rx="${radius}" fill="${cobalt}"/><g fill="#fff" transform="translate(${inset} ${inset}) scale(${scale})">${artwork}</g></svg>\n`;
 }
 
-async function writePng(svg: string, size: number, filename: string): Promise<Buffer> {
+async function renderPng(svg: string, size: number): Promise<Buffer> {
   const density = Math.max(72, (size / 512) * 72);
-  const png = await sharp(Buffer.from(svg), { density }).resize(size, size).png().toBuffer();
-  await writeFile(new URL(filename, staticRoot), png);
-  return png;
+  return sharp(Buffer.from(svg), { density }).resize(size, size).png().toBuffer();
 }
 
 function faviconIco(images: { size: number; png: Buffer }[]): Buffer {
@@ -48,35 +46,72 @@ await mkdir(new URL("icons/oauth/", staticRoot), { recursive: true });
 const regular = tileSvg(112, 32);
 const maskable = tileSvg(0, 80);
 const logo = markSvg(cobalt);
-const vectorFiles = [
+
+// Collect every artifact in memory first, then compare against disk: a byte
+// difference (or missing file) is what bumps the manifest ?v= cache-buster,
+// so an artwork change can never silently re-trigger stale icons under the
+// immutable /icons/* cache rule.
+const outputs = new Map<string, Buffer>();
+for (const [filename, svg] of [
   ["favicon.svg", regular],
   ["icons/icon.svg", regular],
   ["icons/maskable.svg", maskable],
   ["icons/safari-pinned-tab.svg", markSvg("#000")],
   ["logo.svg", logo],
-] as const;
-for (const [filename, svg] of vectorFiles) {
-  await writeFile(new URL(filename, staticRoot), svg);
+] as const) {
+  outputs.set(filename, Buffer.from(svg, "utf8"));
 }
 
 const faviconImages: { size: number; png: Buffer }[] = [];
 for (const size of [16, 32, 48, 192, 512]) {
-  const png = await writePng(regular, size, `icons/icon-${size}.png`);
+  const png = await renderPng(regular, size);
+  outputs.set(`icons/icon-${size}.png`, png);
   if (size <= 48) faviconImages.push({ size, png });
 }
 for (const size of [192, 512]) {
-  await writePng(maskable, size, `icons/maskable-${size}.png`);
+  outputs.set(`icons/maskable-${size}.png`, await renderPng(maskable, size));
 }
-await writePng(tileSvg(0, 32), 180, "apple-touch-icon.png");
-await writePng(markSvg("#fff"), 96, "icons/badge-96.png");
-await writePng(logo, 512, "logo.png");
-await writeFile(new URL("favicon.ico", staticRoot), faviconIco(faviconImages));
+outputs.set("icons/monochrome-512.png", await renderPng(markSvg("#000"), 512));
+outputs.set("apple-touch-icon.png", await renderPng(tileSvg(0, 32), 180));
+outputs.set("icons/badge-96.png", await renderPng(markSvg("#fff"), 96));
+outputs.set("logo.png", await renderPng(logo, 512));
+outputs.set("favicon.ico", faviconIco(faviconImages));
 const oauthTile = tileSvg(0, 80);
 for (const [provider, size] of [
   ["github", 512],
   ["google", 120],
   ["discord", 1024],
 ] as const) {
-  await writePng(oauthTile, size, `icons/oauth/easyquran-${provider}.png`);
+  outputs.set(`icons/oauth/easyquran-${provider}.png`, await renderPng(oauthTile, size));
+}
+
+async function readExisting(url: URL): Promise<Buffer | null> {
+  try {
+    return await readFile(url);
+  } catch (error) {
+    // SAFETY: node:fs readFile rejects with ErrnoException, and `code` is the
+    // only field inspected here; any other rejection is rethrown untouched.
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    return null;
+  }
+}
+
+const changed: string[] = [];
+for (const [filename, buffer] of outputs) {
+  const existing = await readExisting(new URL(filename, staticRoot));
+  if (existing && existing.equals(buffer)) continue;
+  changed.push(filename);
+  await writeFile(new URL(filename, staticRoot), buffer);
+}
+
+if (changed.length > 0) {
+  const manifestPath = new URL("manifest.webmanifest", staticRoot);
+  const manifestText = await readFile(manifestPath, "utf8");
+  const versions = [...manifestText.matchAll(/\?v=(\d+)/gu)].map((match) => Number(match[1]));
+  const next = Math.max(...versions, 0) + 1;
+  await writeFile(manifestPath, manifestText.replace(/\?v=\d+/gu, `?v=${next}`));
+  console.log(
+    `Icon bytes changed (${changed.join(", ")}); bumped manifest icon version to ?v=${next}`,
+  );
 }
 console.log("Generated web icons from src/lib/assets/open-pages.svg");

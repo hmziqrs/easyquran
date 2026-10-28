@@ -5,11 +5,12 @@
 // Vite-generated file list (`build`) is `$app/manifest`'s `immutable`, the
 // static-dir file list (`files`) is its `assets`, and `base`-prefixed paths
 // are built with `resolve()` from `$app/paths`.
-import { dev, version } from "$app/env";
+import { version } from "$app/env";
 import { assets, immutable } from "$app/manifest";
 import { resolve } from "$app/paths";
 
 import { PUSH_TITLE, PUSH_BODY, PUSH_TAG } from "./lib/firebase/push-privacy";
+import { normalizeDataKey } from "./lib/offline/keys";
 import {
   SKIP_WAITING,
   APP_READY,
@@ -53,13 +54,19 @@ export const PRUNE_DEADLINE_KEY = "pruneDeadline";
 
 // SAFETY: kit 3 `$app/paths` has no `base` export; resolve()'s pathname branch
 // (non-leading-slash argument) prefixes the base path without a route lookup.
-// `404.html` and `quran-meta/…` are build artifacts outside the generated `Path`
-// union, so resolve is re-branded to the plain pathname signature.
+// `quran-meta/…` is a build artifact outside the generated `Path` union, so
+// resolve is re-branded to the plain pathname signature.
 const resolveAny = resolve as unknown;
 // SAFETY: carried over from `resolveAny` above — same function value, only
 // re-branded to the string-pathname signature the precache lists need.
 const resolvePath = resolveAny as (pathname: string) => string;
-const SHELL_ROUTE = resolvePath("404.html");
+// Offline navigation fallback: the prerendered start surface (the manifest's
+// start_url). Kit 3 emits no `404.html` artifact — the server renders errors
+// dynamically with a 404 status plus `Vary: Accept`, so that spelling can
+// never serve as a precached shell (`shell.ok` is false, and a Vary'd entry
+// would miss every navigation match). `/surah` is precached unconditionally
+// below (install fails without it), so the fallback always resolves offline.
+const SHELL_ROUTE = resolvePath("surah");
 const NAV_TIMEOUT_MS = 3500;
 export const PAGES_MAX = 300;
 export const DATA_MAX = 400;
@@ -103,18 +110,10 @@ const PRECACHE = Array.from(
 
 const IMMUTABLE = new Set(PRECACHE_FILES);
 
-export function normalizeDataKey(url: string | URL): string {
-  const u = url instanceof URL ? url : new URL(url, sw.location.origin);
-  const params = new URLSearchParams();
-  for (const [key, value] of u.searchParams) {
-    if (key.startsWith("x-sveltekit-")) continue;
-    if (key === "mode") continue;
-    if (key === "more") continue;
-    params.append(key, value);
-  }
-  const search = params.size > 0 ? `?${params.toString()}` : "";
-  return `${u.pathname}${search}`;
-}
+// Single home for the cache-key normalizer is #lib/offline/keys (with its own
+// test); re-exported so the route-level service-worker tests keep pinning the
+// SW's key contract through this module.
+export { normalizeDataKey };
 
 export function isPending(res: Response): boolean {
   return res.headers.get("x-eq-translation-pending") === "1";
@@ -408,17 +407,6 @@ async function precache(): Promise<void> {
         await cache.put(url, res);
       }),
     );
-    // 404.html is a prerender build artifact; in dev it doesn't exist, so the
-    // probe can only log a failed fetch. Nothing to warm there.
-    if (dev) return;
-    const shellCtrl = new AbortController();
-    const shellTimer = setTimeout(() => shellCtrl.abort(), 4000);
-    const shell = await fetch(SHELL_ROUTE, {
-      cache: "no-cache",
-      signal: shellCtrl.signal,
-    }).catch(() => null);
-    clearTimeout(shellTimer);
-    if (shell && shell.ok) await cache.put(SHELL_ROUTE, shell);
   } catch (err) {
     await caches.delete(APP_CACHE).catch(() => {});
     throw err;

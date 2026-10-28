@@ -26,6 +26,7 @@ const SECTION_COMPONENTS = [
   "StorageSection.svelte",
   "AppearanceSection.svelte",
   "ReadingSection.svelte",
+  "AppSection.svelte",
   "PrivacySection.svelte",
   "AccountSection.svelte",
 ] as const;
