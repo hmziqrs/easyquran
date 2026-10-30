@@ -1,0 +1,368 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @font-face {
+        font-family: "Amiri";
+        src: url("../../gpui-kit-sample/fonts/amiri.ttf");
+      }
+      @font-face {
+        font-family: "Scheherazade New";
+        src: url("../../gpui-kit-sample/fonts/scheherazade-new.ttf");
+      }
+      @font-face {
+        font-family: "Noto Naskh Arabic";
+        src: url("../../gpui-kit-sample/fonts/noto-naskh-arabic.ttf");
+      }
+      @font-face {
+        font-family: "KFGQPC Uthmanic Hafs";
+        src: url("../../gpui-kit-sample/fonts/kfgqpc-hafs.ttf");
+      }
+      @font-face {
+        font-family: "KFGQPC Uthman Taha Naskh";
+        src: url("../../gpui-kit-sample/fonts/kfgqpc-taha-v1.ttf");
+        font-weight: 400;
+      }
+      @font-face {
+        font-family: "KFGQPC Uthman Taha Naskh";
+        src: url("../../gpui-kit-sample/fonts/kfgqpc-taha-v1-bold.ttf");
+        font-weight: 700;
+      }
+      @font-face {
+        font-family: "Mehr Nastaliq Web";
+        src: url("../../gpui-kit-sample/fonts/mehr-nastaliq.ttf");
+      }
+      body {
+        font-family: -apple-system, sans-serif;
+        margin: 0;
+        background: #fff;
+      }
+      .toolbar {
+        padding: 12px 16px;
+        border-bottom: 1px solid #ddd;
+        font-size: 14px;
+        color: #444;
+      }
+      .surah-header {
+        text-align: center;
+        padding: 20px 0;
+        background: #f5f5f5;
+        border-bottom: 1px solid #ddd;
+      }
+      .surah-header .en {
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .surah-header .ar {
+        font-family: "KFGQPC Uthmanic Hafs";
+        font-size: 28px;
+        color: #00695c;
+        margin-top: 4px;
+      }
+      .ayah {
+        padding: 16px 32px;
+        border-bottom: 1px solid #ddd;
+      }
+      .ayah .ar {
+        font-size: 30px;
+        line-height: 1.9;
+        direction: rtl;
+        text-align: right;
+        color: #111;
+      }
+      .ayah .ur {
+        font-family: "Mehr Nastaliq Web";
+        font-size: 20px;
+        line-height: 2.9;
+        direction: rtl;
+        text-align: right;
+        color: #666;
+        margin-top: 8px;
+      }
+      .ayah .marker {
+        font-family: "KFGQPC Uthmanic Hafs";
+        font-size: 16px;
+        color: #00695c;
+        margin-top: 8px;
+        direction: rtl;
+        text-align: right;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar" id="toolbar"></div>
+    <div id="content"></div>
+    <script>
+      const DATA = {
+        translations: {
+          ur: {
+            1: [
+              { n: 1, text: "شروع کرتا ہوں اللہ تعالیٰ کے نام سے جو بڑا مہربان نہایت رحم واﻻ ہے" },
+              { n: 2, text: "سب تعریف اللہ تعالیٰ کے لئے ہے جو تمام جہانوں کا پالنے واﻻ ہے" },
+              { n: 3, text: "بڑا مہربان نہایت رحم کرنے واﻻ" },
+              { n: 4, text: "بدلے کے دن (یعنی قیامت) کا مالک ہے" },
+              { n: 5, text: "ہم صرف تیری ہی عبادت کرتے ہیں اور صرف تجھ ہی سے مدد چاہتے ہیں" },
+              { n: 6, text: "ہمیں سیدھی (اور سچی) راه دکھا" },
+              {
+                n: 7,
+                text: "ان لوگوں کی راه جن پر تو نے انعام کیا ان کی نہیں جن پر غضب کیا گیا (یعنی وه لوگ جنہوں نے حق کو پہچانا، مگر اس پر عمل پیرا نہیں ہوئے) اور نہ گمراہوں کی (یعنی وه لوگ جو جہالت کے سبب راه حق سے برگشتہ ہوگئے)",
+              },
+            ],
+            2: [
+              { n: 1, text: "الم" },
+              {
+                n: 2,
+                text: "اس کتاب (کے اللہ کی کتاب ہونے) میں کوئی شک نہیں پرہیزگاروں کو راه دکھانے والی ہے",
+              },
+              {
+                n: 3,
+                text: "جو لوگ غیب پر ایمان ﻻتے ہیں اور نماز کو قائم رکھتے ہیں اور ہمارے دیئے ہوئے (مال) میں سے خرچ کرتے ہیں",
+              },
+              {
+                n: 4,
+                text: "اور جو لوگ ایمان ﻻتے ہیں اس پر جو آپ کی طرف اتارا گیا اور جو آپ سے پہلے اتارا گیا، اور وه آخرت پر بھی یقین رکھتے ہیں",
+              },
+              {
+                n: 5,
+                text: "یہی لوگ اپنے رب کی طرف سے ہدایت پر ہیں اور یہی لوگ فلاح اور نجات پانے والے ہیں",
+              },
+              {
+                n: 6,
+                text: "کافروں کو آپ کا ڈرانا، یا نہ ڈرانا برابر ہے، یہ لوگ ایمان نہ ﻻئیں گے",
+              },
+              {
+                n: 7,
+                text: "اللہ تعالیٰ نے ان کے دلوں پر اور ان کے کانوں پر مہر کر دی ہے اور ان کی آنکھوں پر پرده ہے اور ان کے لئے بڑا عذاب ہے",
+              },
+              {
+                n: 8,
+                text: "بعض لوگ کہتے ہیں کہ ہم اللہ تعالیٰ پر اور قیامت کے دن پر ایمان رکھتے ہیں، لیکن درحقیقت وه ایمان والے نہیں ہیں",
+              },
+              {
+                n: 9,
+                text: "وه اللہ تعالیٰ کو اور ایمان والوں کو دھوکا دیتے ہیں، لیکن دراصل وه خود اپنے آپ کو دھوکا دے رہے ہیں، مگر سمجھتے نہیں",
+              },
+              {
+                n: 10,
+                text: "ان کے دلوں میں بیماری تھی اللہ تعالیٰ نے انہیں بیماری میں مزید بڑھا دیا اور ان کے جھوٹ کی وجہ سے ان کے لئے دردناک عذاب ہے",
+              },
+            ],
+          },
+        },
+        arabic: {
+          uthmani: {
+            label: "uthmani",
+            surahs: [
+              {
+                number: 1,
+                name_en: "Al-Fatihah",
+                name_ar: "الفاتحة",
+                ayahs: [
+                  { n: 1, text: "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ" },
+                  { n: 2, text: "ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَـٰلَمِينَ" },
+                  { n: 3, text: "ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ" },
+                  { n: 4, text: "مَـٰلِكِ يَوْمِ ٱلدِّينِ" },
+                  { n: 5, text: "إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ" },
+                  { n: 6, text: "ٱهْدِنَا ٱلصِّرَٰطَ ٱلْمُسْتَقِيمَ" },
+                  {
+                    n: 7,
+                    text: "صِرَٰطَ ٱلَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ ٱلْمَغْضُوبِ عَلَيْهِمْ وَلَا ٱلضَّآلِّينَ",
+                  },
+                ],
+              },
+              {
+                number: 2,
+                name_en: "Al-Baqarah",
+                name_ar: "البقرة",
+                ayahs: [
+                  { n: 1, text: "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ الٓمٓ" },
+                  { n: 2, text: "ذَٰلِكَ ٱلْكِتَـٰبُ لَا رَيْبَ ۛ فِيهِ ۛ هُدًى لِّلْمُتَّقِينَ" },
+                  {
+                    n: 3,
+                    text: "ٱلَّذِينَ يُؤْمِنُونَ بِٱلْغَيْبِ وَيُقِيمُونَ ٱلصَّلَوٰةَ وَمِمَّا رَزَقْنَـٰهُمْ يُنفِقُونَ",
+                  },
+                  {
+                    n: 4,
+                    text: "وَٱلَّذِينَ يُؤْمِنُونَ بِمَآ أُنزِلَ إِلَيْكَ وَمَآ أُنزِلَ مِن قَبْلِكَ وَبِٱلْـَٔاخِرَةِ هُمْ يُوقِنُونَ",
+                  },
+                  {
+                    n: 5,
+                    text: "أُو۟لَـٰٓئِكَ عَلَىٰ هُدًى مِّن رَّبِّهِمْ ۖ وَأُو۟لَـٰٓئِكَ هُمُ ٱلْمُفْلِحُونَ",
+                  },
+                  {
+                    n: 6,
+                    text: "إِنَّ ٱلَّذِينَ كَفَرُوا۟ سَوَآءٌ عَلَيْهِمْ ءَأَنذَرْتَهُمْ أَمْ لَمْ تُنذِرْهُمْ لَا يُؤْمِنُونَ",
+                  },
+                  {
+                    n: 7,
+                    text: "خَتَمَ ٱللَّهُ عَلَىٰ قُلُوبِهِمْ وَعَلَىٰ سَمْعِهِمْ ۖ وَعَلَىٰٓ أَبْصَـٰرِهِمْ غِشَـٰوَةٌ ۖ وَلَهُمْ عَذَابٌ عَظِيمٌ",
+                  },
+                  {
+                    n: 8,
+                    text: "وَمِنَ ٱلنَّاسِ مَن يَقُولُ ءَامَنَّا بِٱللَّهِ وَبِٱلْيَوْمِ ٱلْـَٔاخِرِ وَمَا هُم بِمُؤْمِنِينَ",
+                  },
+                  {
+                    n: 9,
+                    text: "يُخَـٰدِعُونَ ٱللَّهَ وَٱلَّذِينَ ءَامَنُوا۟ وَمَا يَخْدَعُونَ إِلَّآ أَنفُسَهُمْ وَمَا يَشْعُرُونَ",
+                  },
+                  {
+                    n: 10,
+                    text: "فِى قُلُوبِهِم مَّرَضٌ فَزَادَهُمُ ٱللَّهُ مَرَضًا ۖ وَلَهُمْ عَذَابٌ أَلِيمٌۢ بِمَا كَانُوا۟ يَكْذِبُونَ",
+                  },
+                ],
+              },
+            ],
+          },
+          simple: {
+            label: "simple",
+            surahs: [
+              {
+                number: 1,
+                name_en: "Al-Fatihah",
+                name_ar: "الفاتحة",
+                ayahs: [
+                  { n: 1, text: "بسم الله الرحمن الرحيم" },
+                  { n: 2, text: "الحمد لله رب العالمين" },
+                  { n: 3, text: "الرحمن الرحيم" },
+                  { n: 4, text: "مالك يوم الدين" },
+                  { n: 5, text: "إياك نعبد وإياك نستعين" },
+                  { n: 6, text: "اهدنا الصراط المستقيم" },
+                  { n: 7, text: "صراط الذين أنعمت عليهم غير المغضوب عليهم ولا الضالين" },
+                ],
+              },
+              {
+                number: 2,
+                name_en: "Al-Baqarah",
+                name_ar: "البقرة",
+                ayahs: [
+                  { n: 1, text: "بسم الله الرحمن الرحيم الم" },
+                  { n: 2, text: "ذلك الكتاب لا ريب فيه هدى للمتقين" },
+                  { n: 3, text: "الذين يؤمنون بالغيب ويقيمون الصلاة ومما رزقناهم ينفقون" },
+                  { n: 4, text: "والذين يؤمنون بما أنزل إليك وما أنزل من قبلك وبالآخرة هم يوقنون" },
+                  { n: 5, text: "أولئك على هدى من ربهم وأولئك هم المفلحون" },
+                  { n: 6, text: "إن الذين كفروا سواء عليهم أأنذرتهم أم لم تنذرهم لا يؤمنون" },
+                  {
+                    n: 7,
+                    text: "ختم الله على قلوبهم وعلى سمعهم وعلى أبصارهم غشاوة ولهم عذاب عظيم",
+                  },
+                  { n: 8, text: "ومن الناس من يقول آمنا بالله وباليوم الآخر وما هم بمؤمنين" },
+                  { n: 9, text: "يخادعون الله والذين آمنوا وما يخدعون إلا أنفسهم وما يشعرون" },
+                  { n: 10, text: "في قلوبهم مرض فزادهم الله مرضا ولهم عذاب أليم بما كانوا يكذبون" },
+                ],
+              },
+            ],
+          },
+          indopak: {
+            label: "indopak",
+            surahs: [
+              {
+                number: 1,
+                name_en: "Al-Fatihah",
+                name_ar: "الفاتحة",
+                ayahs: [
+                  { n: 1, text: "بِسۡمِ اللهِ الرَّحۡمٰنِ الرَّحِيۡمِ" },
+                  { n: 2, text: "اَلۡحَمۡدُ لِلّٰهِ رَبِّ الۡعٰلَمِيۡنَۙ" },
+                  { n: 3, text: "الرَّحۡمٰنِ الرَّحِيۡمِۙ" },
+                  { n: 4, text: "مٰلِكِ يَوۡمِ الدِّيۡنِؕ" },
+                  { n: 5, text: "اِيَّاكَ نَعۡبُدُ وَاِيَّاكَ نَسۡتَعِيۡنُؕ" },
+                  { n: 6, text: "اِهۡدِنَا الصِّرَاطَ الۡمُسۡتَقِيۡمَۙ" },
+                  {
+                    n: 7,
+                    text: "صِرَاطَ الَّذِيۡنَ اَنۡعَمۡتَ عَلَيۡهِمۡ ۙ غَيۡرِ الۡمَغۡضُوۡبِ عَلَيۡهِمۡ وَلَا الضَّآلِّيۡنَ",
+                  },
+                ],
+              },
+              {
+                number: 2,
+                name_en: "Al-Baqarah",
+                name_ar: "البقرة",
+                ayahs: [
+                  { n: 1, text: "الٓمّٓۚ" },
+                  { n: 2, text: "ذٰلِكَ الۡڪِتٰبُ لَا رَيۡبَۛۚۖ فِيۡهِۛۚ هُدًى لِّلۡمُتَّقِيۡنَۙ" },
+                  {
+                    n: 3,
+                    text: "الَّذِيۡنَ يُؤۡمِنُوۡنَ بِالۡغَيۡبِ وَ يُقِيۡمُوۡنَ الصَّلٰوةَ وَمِمَّا رَزَقۡنٰهُمۡ يُنۡفِقُوۡنَۙ",
+                  },
+                  {
+                    n: 4,
+                    text: "وَالَّذِيۡنَ يُؤۡمِنُوۡنَ بِمَۤا اُنۡزِلَ اِلَيۡكَ وَمَاۤ اُنۡزِلَ مِنۡ قَبۡلِكَۚ وَبِالۡاٰخِرَةِ هُمۡ يُوۡقِنُوۡنَؕ",
+                  },
+                  {
+                    n: 5,
+                    text: "اُولٰٓٮِٕكَ عَلٰى هُدًى مِّنۡ رَّبِّهِمۡ​ وَاُولٰٓٮِٕكَ هُمُ الۡمُفۡلِحُوۡنَ",
+                  },
+                  {
+                    n: 6,
+                    text: "اِنَّ الَّذِيۡنَ كَفَرُوۡا سَوَآءٌ عَلَيۡهِمۡ ءَاَنۡذَرۡتَهُمۡ اَمۡ لَمۡ تُنۡذِرۡهُمۡ لَا يُؤۡمِنُوۡنَ",
+                  },
+                  {
+                    n: 7,
+                    text: "خَتَمَ اللّٰهُ عَلَىٰ قُلُوۡبِهِمۡ وَعَلٰى سَمۡعِهِمۡ​ؕ وَعَلٰىٓ اَبۡصَارِهِمۡ غِشَاوَةٌ  وَّلَهُمۡ عَذَابٌ عَظِيۡمٌ",
+                  },
+                  {
+                    n: 8,
+                    text: "وَمِنَ النَّاسِ مَنۡ يَّقُوۡلُ اٰمَنَّا بِاللّٰهِ وَبِالۡيَوۡمِ الۡاٰخِرِ وَمَا هُمۡ بِمُؤۡمِنِيۡنَ​ۘ",
+                  },
+                  {
+                    n: 9,
+                    text: "يُخٰدِعُوۡنَ اللّٰهَ وَالَّذِيۡنَ اٰمَنُوۡا ​ۚ وَمَا يَخۡدَعُوۡنَ اِلَّاۤ اَنۡفُسَهُمۡ وَمَا يَشۡعُرُوۡنَؕ",
+                  },
+                  {
+                    n: 10,
+                    text: "فِىۡ قُلُوۡبِهِمۡ مَّرَضٌۙ فَزَادَهُمُ اللّٰهُ مَرَضًا ​ۚ وَّلَهُمۡ عَذَابٌ اَلِيۡمٌۙۢبِمَا كَانُوۡا يَكۡذِبُوۡنَ",
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      };
+      const FONTS = [
+        { id: "amiri", family: "Amiri", weight: null },
+        { id: "scheherazade-new", family: "Scheherazade New", weight: null },
+        { id: "noto-naskh-arabic", family: "Noto Naskh Arabic", weight: null },
+        { id: "kfgqpc-hafs", family: "KFGQPC Uthmanic Hafs", weight: null },
+        { id: "kfgqpc-taha-v1", family: "KFGQPC Uthman Taha Naskh", weight: 400 },
+        { id: "kfgqpc-taha-v1-bold", family: "KFGQPC Uthman Taha Naskh", weight: 700 },
+      ];
+      const DATASETS = ["uthmani", "simple", "indopak"];
+      const params = new URLSearchParams(location.search);
+      const fontId = params.get("font") || "kfgqpc-hafs";
+      const dataset = params.get("db") || "uthmani";
+      const font = FONTS.find((f) => f.id === fontId);
+      document.getElementById("toolbar").textContent =
+        `browser reference — ${font.id} / ${font.family} × ${dataset}`;
+      const content = document.getElementById("content");
+      for (const surah of DATA.arabic[dataset].surahs) {
+        const header = document.createElement("div");
+        header.className = "surah-header";
+        header.innerHTML = `<div class="en">${surah.name_en} — Surah ${surah.number}</div><div class="ar">${surah.name_ar}</div>`;
+        content.appendChild(header);
+        const urList = DATA.translations.ur[String(surah.number)] || [];
+        for (const ayah of surah.ayahs) {
+          const urEntry = urList.find((u) => u.n === ayah.n);
+          const digits = String(ayah.n)
+            .split("")
+            .map((c) => String.fromCharCode(0x0660 + Number(c)))
+            .join("");
+          const row = document.createElement("div");
+          row.className = "ayah";
+          const ar = document.createElement("div");
+          ar.className = "ar";
+          ar.style.fontFamily = `"${font.family}"`;
+          if (font.weight) ar.style.fontWeight = font.weight;
+          ar.textContent = ayah.text;
+          const ur = document.createElement("div");
+          ur.className = "ur";
+          ur.textContent = urEntry ? urEntry.text : "";
+          const marker = document.createElement("div");
+          marker.className = "marker";
+          marker.textContent = `﴿${digits}﴾`;
+          row.append(ar, ur, marker);
+          content.appendChild(row);
+        }
+      }
+    </script>
+  </body>
+</html>
