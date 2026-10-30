@@ -21,12 +21,14 @@ Notes:
 - Urdu default is **Noto Nastaliq Urdu** (SIL OFL 1.1) — Mehr Nastaliq Web
   (kept as a dropdown option) depends on OpenType chaining contexts that
   CoreText only partially applies, which flattened it in the GPUI sample.
-  Under Flutter's HarfBuzz all five Urdu faces render correctly:
-  Noto Nastaliq Urdu, Gulzar, Awami Nastaliq, Mehr Nastaliq Web, Lateef —
-  all open-licensed (OFL except Mehr).
-- Urdu needs a per-font `height` (Noto/Gulzar 2.5, Awami 2.6, Lateef 2.2,
-  Mehr 2.9 at 20px) — Flutter does not derive leading from the font's
-  vertical metrics the way a browser does.
+  12 Urdu-capable faces are selectable, all cmap-verified for the full Urdu
+  letter set (ے ہ ٹ ڈ ڑ ں ھ): Noto Nastaliq Urdu, Gulzar, Awami Nastaliq,
+  Mehr Nastaliq Web, Katibeh, Mirza, Lateef, Scheherazade New, Amiri,
+  Aref Ruqaa, Lalezar, Noto Sans Arabic — all open-licensed (OFL except
+  Mehr).
+- Urdu needs a per-font `height` (Nastaliq 2.5–2.9, Naskh 2.2, Ruqaa/display
+  2.0, Noto Sans Arabic 2.4 at 20px) — Flutter does not derive leading from
+  the font's vertical metrics the way a browser does.
 - Fonts need **no patching** here (GPUI's latin-`m` guard does not exist in
   Flutter's text stack); the TTFs are plain copies.
 - Taha v1 / v1 Bold share the internal family `KFGQPC Uthman Taha Naskh` and

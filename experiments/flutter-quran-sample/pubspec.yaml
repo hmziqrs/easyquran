@@ -93,6 +93,21 @@ flutter:
     - family: Lateef
       fonts:
         - asset: fonts/Lateef-Regular.ttf
+    - family: Katibeh
+      fonts:
+        - asset: fonts/katibeh.ttf
+    - family: Mirza
+      fonts:
+        - asset: fonts/mirza.ttf
+    - family: Aref Ruqaa
+      fonts:
+        - asset: fonts/aref-ruqaa.ttf
+    - family: Lalezar
+      fonts:
+        - asset: fonts/lalezar.ttf
+    - family: Noto Sans Arabic
+      fonts:
+        - asset: fonts/noto-sans-arabic.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

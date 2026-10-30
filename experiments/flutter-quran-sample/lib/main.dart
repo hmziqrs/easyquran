@@ -25,12 +25,23 @@ const defaultFontIx = 3; // kfgqpc-hafs, the web reader default
 /// fully and flattens there. Leading is per font — Nastaliq needs ~2.5–3×
 /// at 20px because Flutter does not derive it from the font's vertical
 /// metrics the way a browser does.
+/// Urdu-capable faces, all full-coverage for Urdu letters (ے ہ ٹ ڈ ڑ ں ھ),
+/// all open-licensed. Noto Nastaliq Urdu is the default. Leading is per font —
+/// Nastaliq needs ~2.5–3× at 20px because Flutter does not derive it from the
+/// font's vertical metrics the way a browser does.
 const urduFonts = <({String id, String family, double height})>[
   (id: 'noto-nastaliq-urdu', family: 'Noto Nastaliq Urdu', height: 2.5),
   (id: 'gulzar', family: 'Gulzar', height: 2.5),
   (id: 'awami-nastaliq', family: 'Awami Nastaliq', height: 2.6),
   (id: 'mehr-nastaliq-web', family: 'Mehr Nastaliq Web', height: 2.9),
+  (id: 'katibeh', family: 'Katibeh', height: 2.2),
+  (id: 'mirza', family: 'Mirza', height: 2.3),
   (id: 'lateef', family: 'Lateef', height: 2.2),
+  (id: 'scheherazade-new', family: 'Scheherazade New', height: 2.2),
+  (id: 'amiri', family: 'Amiri', height: 2.2),
+  (id: 'aref-ruqaa', family: 'Aref Ruqaa', height: 2.0),
+  (id: 'lalezar', family: 'Lalezar', height: 2.0),
+  (id: 'noto-sans-arabic', family: 'Noto Sans Arabic', height: 2.4),
 ];
 
 class Ayah {

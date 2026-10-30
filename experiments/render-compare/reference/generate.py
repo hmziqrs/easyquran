@@ -22,7 +22,14 @@ URDU_FONTS = [
     ("gulzar", "Gulzar", 2.5),
     ("awami-nastaliq", "Awami Nastaliq", 2.6),
     ("mehr-nastaliq-web", "Mehr Nastaliq Web", 2.9),
+    ("katibeh", "Katibeh", 2.2),
+    ("mirza", "Mirza", 2.3),
     ("lateef", "Lateef", 2.2),
+    ("scheherazade-new", "Scheherazade New", 2.2),
+    ("amiri", "Amiri", 2.2),
+    ("aref-ruqaa", "Aref Ruqaa", 2.0),
+    ("lalezar", "Lalezar", 2.0),
+    ("noto-sans-arabic", "Noto Sans Arabic", 2.4),
 ]
 FONT_FACES = """
 @font-face { font-family: "Amiri"; src: url("../../gpui-kit-sample/fonts/amiri.ttf"); }
@@ -36,6 +43,11 @@ FONT_FACES = """
 @font-face { font-family: "Gulzar"; src: url("../../flutter-quran-sample/fonts/Gulzar-Regular.ttf"); }
 @font-face { font-family: "Awami Nastaliq"; src: url("../../flutter-quran-sample/fonts/AwamiNastaliq-Regular.ttf"); }
 @font-face { font-family: "Lateef"; src: url("../../flutter-quran-sample/fonts/Lateef-Regular.ttf"); }
+@font-face { font-family: "Katibeh"; src: url("../../flutter-quran-sample/fonts/katibeh.ttf"); }
+@font-face { font-family: "Mirza"; src: url("../../flutter-quran-sample/fonts/mirza.ttf"); }
+@font-face { font-family: "Aref Ruqaa"; src: url("../../flutter-quran-sample/fonts/aref-ruqaa.ttf"); }
+@font-face { font-family: "Lalezar"; src: url("../../flutter-quran-sample/fonts/lalezar.ttf"); }
+@font-face { font-family: "Noto Sans Arabic"; src: url("../../flutter-quran-sample/fonts/noto-sans-arabic.ttf"); }
 """
 
 TEMPLATE = """<!DOCTYPE html>
