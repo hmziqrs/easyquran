@@ -19,7 +19,10 @@ FONTS = [
 ]
 URDU_FONTS = [
     ("noto-nastaliq-urdu", "Noto Nastaliq Urdu", 2.5),
+    ("gulzar", "Gulzar", 2.5),
+    ("awami-nastaliq", "Awami Nastaliq", 2.6),
     ("mehr-nastaliq-web", "Mehr Nastaliq Web", 2.9),
+    ("lateef", "Lateef", 2.2),
 ]
 FONT_FACES = """
 @font-face { font-family: "Amiri"; src: url("../../gpui-kit-sample/fonts/amiri.ttf"); }
@@ -30,6 +33,9 @@ FONT_FACES = """
 @font-face { font-family: "KFGQPC Uthman Taha Naskh"; src: url("../../gpui-kit-sample/fonts/kfgqpc-taha-v1-bold.ttf"); font-weight: 700; }
 @font-face { font-family: "Mehr Nastaliq Web"; src: url("../../gpui-kit-sample/fonts/mehr-nastaliq.ttf"); }
 @font-face { font-family: "Noto Nastaliq Urdu"; src: url("NotoNastaliqUrdu.ttf"); }
+@font-face { font-family: "Gulzar"; src: url("../../flutter-quran-sample/fonts/Gulzar-Regular.ttf"); }
+@font-face { font-family: "Awami Nastaliq"; src: url("../../flutter-quran-sample/fonts/AwamiNastaliq-Regular.ttf"); }
+@font-face { font-family: "Lateef"; src: url("../../flutter-quran-sample/fonts/Lateef-Regular.ttf"); }
 """
 
 TEMPLATE = """<!DOCTYPE html>

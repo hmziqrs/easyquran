@@ -8,19 +8,24 @@ Nastaliq leading), macOS + Retina, captured per combo.
 - **web/** — minimal HTML page loading the identical TTFs via `@font-face` (`reference/index.html`, regenerate with `reference/generate.py`), Safari/WebKit rendering — the same stack the real web reader uses.
 - **gpui/** — gpui-kit 0.8.1 sample (`../gpui-kit-sample`), CoreText shaping + GPUI's own Metal rasterizer. **Frozen and deprecated as an approach** (see Urdu finding below); screenshots kept for the record and predate the Urdu font switch.
 
-## Urdu faces
+## Urdu faces (5, all selectable; Noto is the default)
 
-- **Noto Nastaliq Urdu** (default everywhere) — SIL OFL 1.1, shapes correctly
-  under HarfBuzz (Flutter + browser) and acceptably under CoreText.
-- **Mehr Nastaliq Web** — selectable option. Its heavy OpenType chaining
-  contexts (cursive attachment + `dist`) render correctly under HarfBuzz but
-  flatten into stretched, disconnected forms under CoreText — that is the
-  "Urdu looks horrible in the desktop app" symptom that killed the GPUI
-  path. HarfBuzz also documents CoreText mismatches for Noto Nastaliq
-  chaining rules (harfbuzz#2516), so any CoreText-based Nastaliq needs
-  visual review, not assumptions.
-- Flutter sample: `Urdu` dropdown + **F11** cycles faces. Web reference:
-  `&urdu=<id>` query param.
+| Face               | License                          | Source                                                                    | Style                 | Flutter leading (20px) |
+| ------------------ | -------------------------------- | ------------------------------------------------------------------------- | --------------------- | ---------------------- |
+| Noto Nastaliq Urdu | SIL OFL 1.1                      | [Google Fonts](https://fonts.google.com/noto/specimen/Noto+Nastaliq+Urdu) | Nastaliq              | 2.5                    |
+| Gulzar             | SIL OFL 1.1                      | [Google Fonts](https://fonts.google.com/specimen/Gulzar)                  | Nastaliq, typographic | 2.5                    |
+| Awami Nastaliq     | SIL OFL 1.1                      | [SIL (github silnrsi/font-awami)](https://github.com/silnrsi/font-awami)  | Nastaliq, wide        | 2.6                    |
+| Mehr Nastaliq Web  | free (terms less clear than OFL) | bundled web font                                                          | Nastaliq              | 2.9                    |
+| Lateef             | SIL OFL 1.1                      | [Google Fonts](https://fonts.google.com/specimen/Lateef)                  | Naskh-flavored Urdu   | 2.2                    |
+
+Render proofs: [Flutter](flutter/urdu-noto-in-flutter.png) vs
+[web](web/urdu-noto-in-web.png) for each face — see `urdu-<id>-in-*.png`
+in both folders. All five shape correctly in Flutter (HarfBuzz) and web;
+**Mehr flattens under CoreText**, which is what killed the GPUI path
+(HarfBuzz also documents CoreText chaining mismatches for Nastaliq —
+harfbuzz#2516 — so CoreText-based Nastaliq always needs visual review).
+Flutter sample: `Urdu` dropdown + **F11** cycles faces. Web reference:
+`&urdu=<id>` query param.
 
 ## Verified matrix (all vision-checked)
 

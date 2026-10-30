@@ -27,7 +27,10 @@ const defaultFontIx = 3; // kfgqpc-hafs, the web reader default
 /// metrics the way a browser does.
 const urduFonts = <({String id, String family, double height})>[
   (id: 'noto-nastaliq-urdu', family: 'Noto Nastaliq Urdu', height: 2.5),
+  (id: 'gulzar', family: 'Gulzar', height: 2.5),
+  (id: 'awami-nastaliq', family: 'Awami Nastaliq', height: 2.6),
   (id: 'mehr-nastaliq-web', family: 'Mehr Nastaliq Web', height: 2.9),
+  (id: 'lateef', family: 'Lateef', height: 2.2),
 ];
 
 class Ayah {

@@ -37,6 +37,18 @@
         font-family: "Noto Nastaliq Urdu";
         src: url("NotoNastaliqUrdu.ttf");
       }
+      @font-face {
+        font-family: "Gulzar";
+        src: url("../../flutter-quran-sample/fonts/Gulzar-Regular.ttf");
+      }
+      @font-face {
+        font-family: "Awami Nastaliq";
+        src: url("../../flutter-quran-sample/fonts/AwamiNastaliq-Regular.ttf");
+      }
+      @font-face {
+        font-family: "Lateef";
+        src: url("../../flutter-quran-sample/fonts/Lateef-Regular.ttf");
+      }
 
       body {
         font-family: -apple-system, sans-serif;
@@ -328,7 +340,10 @@
       ];
       const URDU_FONTS = [
         { id: "noto-nastaliq-urdu", family: "Noto Nastaliq Urdu", height: 2.5 },
+        { id: "gulzar", family: "Gulzar", height: 2.5 },
+        { id: "awami-nastaliq", family: "Awami Nastaliq", height: 2.6 },
         { id: "mehr-nastaliq-web", family: "Mehr Nastaliq Web", height: 2.9 },
+        { id: "lateef", family: "Lateef", height: 2.2 },
       ];
       const params = new URLSearchParams(location.search);
       const fontId = params.get("font") || "kfgqpc-hafs";

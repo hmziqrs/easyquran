@@ -84,6 +84,15 @@ flutter:
     - family: Noto Nastaliq Urdu
       fonts:
         - asset: fonts/noto-nastaliq-urdu.ttf
+    - family: Gulzar
+      fonts:
+        - asset: fonts/Gulzar-Regular.ttf
+    - family: Awami Nastaliq
+      fonts:
+        - asset: fonts/AwamiNastaliq-Regular.ttf
+    - family: Lateef
+      fonts:
+        - asset: fonts/Lateef-Regular.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:
