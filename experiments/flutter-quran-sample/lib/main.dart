@@ -19,7 +19,16 @@ const arabicFonts = <({String id, String family, FontWeight? weight})>[
 
 const datasets = ['uthmani', 'simple', 'indopak'];
 const defaultFontIx = 3; // kfgqpc-hafs, the web reader default
-const urduFamily = 'Mehr Nastaliq Web';
+
+/// Open-license Nastaliq faces. Noto is the default: Mehr Nastaliq Web relies
+/// on OpenType chaining contexts that not every desktop text stack applies
+/// fully and flattens there. Leading is per font — Nastaliq needs ~2.5–3×
+/// at 20px because Flutter does not derive it from the font's vertical
+/// metrics the way a browser does.
+const urduFonts = <({String id, String family, double height})>[
+  (id: 'noto-nastaliq-urdu', family: 'Noto Nastaliq Urdu', height: 2.5),
+  (id: 'mehr-nastaliq-web', family: 'Mehr Nastaliq Web', height: 2.9),
+];
 
 class Ayah {
   Ayah({required this.n, required this.ar, required this.ur});
@@ -93,6 +102,7 @@ class ReaderScreen extends StatefulWidget {
 class _ReaderScreenState extends State<ReaderScreen> {
   Map<String, dynamic>? sample;
   int fontIx = defaultFontIx;
+  int urduIx = 0; // noto-nastaliq-urdu
   int datasetIx = 0;
   List<Surah> surahs = [];
   final scrollController = ScrollController();
@@ -128,6 +138,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final font = arabicFonts[fontIx];
+    final urdu = urduFonts[urduIx];
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.f9): () => setState(() {
@@ -135,15 +146,20 @@ class _ReaderScreenState extends State<ReaderScreen> {
             }),
         const SingleActivator(LogicalKeyboardKey.f10): () =>
             setDataset((datasetIx + 1) % datasets.length),
+        const SingleActivator(LogicalKeyboardKey.f11): () => setState(() {
+              urduIx = (urduIx + 1) % urduFonts.length;
+            }),
       },
       child: Focus(
         autofocus: true,
-        child: Scaffold(body: buildReader(font)),
+        child: Scaffold(body: buildReader(font, urdu)),
       ),
     );
   }
 
-  Widget buildReader(({String id, String family, FontWeight? weight}) font) {
+  Widget buildReader(
+      ({String id, String family, FontWeight? weight}) font,
+      ({String id, String family, double height}) urdu) {
     return Column(
       children: [
         Material(
@@ -166,7 +182,22 @@ class _ReaderScreenState extends State<ReaderScreen> {
                     fontIx = arabicFonts.indexWhere((f) => f.id == id);
                   }),
                 ),
-                const SizedBox(width: 24),
+                const SizedBox(width: 16),
+                const Text('Urdu', style: TextStyle(fontSize: 13)),
+                const SizedBox(width: 8),
+                DropdownButton<String>(
+                  value: urdu.id,
+                  underline: const SizedBox.shrink(),
+                  items: [
+                    for (final f in urduFonts)
+                      DropdownMenuItem(
+                          value: f.id, child: Text(f.id, style: const TextStyle(fontSize: 14))),
+                  ],
+                  onChanged: (id) => setState(() {
+                    urduIx = urduFonts.indexWhere((f) => f.id == id);
+                  }),
+                ),
+                const SizedBox(width: 16),
                 const Text('Database', style: TextStyle(fontSize: 13)),
                 const SizedBox(width: 8),
                 DropdownButton<String>(
@@ -180,7 +211,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   onChanged: (id) => setDataset(datasets.indexOf(id!)),
                 ),
                 const Spacer(),
-                Text('${font.id} / ${font.family}',
+                Text('${font.id} · ${urdu.id}',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
               ],
             ),
@@ -192,7 +223,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
             children: [
               for (final surah in surahs) ...[
                 buildSurahHeader(surah),
-                for (final ayah in surah.ayahs) buildAyah(ayah, font),
+                for (final ayah in surah.ayahs) buildAyah(ayah, font, urdu),
               ],
             ],
           ),
@@ -224,7 +255,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
   }
 
-  Widget buildAyah(Ayah ayah, ({String id, String family, FontWeight? weight}) font) {
+  Widget buildAyah(Ayah ayah, ({String id, String family, FontWeight? weight}) font,
+      ({String id, String family, double height}) urdu) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -252,10 +284,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
             child: Text(
               ayah.ur,
               textAlign: TextAlign.right,
-              style: const TextStyle(
-                  fontFamily: urduFamily,
+              style: TextStyle(
+                  fontFamily: urdu.family,
                   fontSize: 20,
-                  height: 2.9,
+                  height: urdu.height,
                   color: Colors.black54),
             ),
           ),

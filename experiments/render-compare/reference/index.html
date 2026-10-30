@@ -33,6 +33,11 @@
         font-family: "Mehr Nastaliq Web";
         src: url("../../gpui-kit-sample/fonts/mehr-nastaliq.ttf");
       }
+      @font-face {
+        font-family: "Noto Nastaliq Urdu";
+        src: url("NotoNastaliqUrdu.ttf");
+      }
+
       body {
         font-family: -apple-system, sans-serif;
         margin: 0;
@@ -72,9 +77,7 @@
         color: #111;
       }
       .ayah .ur {
-        font-family: "Mehr Nastaliq Web";
         font-size: 20px;
-        line-height: 2.9;
         direction: rtl;
         text-align: right;
         color: #666;
@@ -323,12 +326,18 @@
         { id: "kfgqpc-taha-v1", family: "KFGQPC Uthman Taha Naskh", weight: 400 },
         { id: "kfgqpc-taha-v1-bold", family: "KFGQPC Uthman Taha Naskh", weight: 700 },
       ];
+      const URDU_FONTS = [
+        { id: "noto-nastaliq-urdu", family: "Noto Nastaliq Urdu", height: 2.5 },
+        { id: "mehr-nastaliq-web", family: "Mehr Nastaliq Web", height: 2.9 },
+      ];
       const params = new URLSearchParams(location.search);
       const fontId = params.get("font") || "kfgqpc-hafs";
+      const urduId = params.get("urdu") || "noto-nastaliq-urdu";
       const dataset = params.get("db") || "uthmani";
       const font = FONTS.find((f) => f.id === fontId);
+      const urdu = URDU_FONTS.find((f) => f.id === urduId);
       document.getElementById("toolbar").textContent =
-        `browser reference — ${font.id} / ${font.family} × ${dataset}`;
+        `browser reference — ${font.id} / ${font.family} × ${urdu.id} × ${dataset}`;
       const content = document.getElementById("content");
       for (const surah of DATA.arabic[dataset].surahs) {
         const header = document.createElement("div");
@@ -351,6 +360,8 @@
           ar.textContent = ayah.text;
           const ur = document.createElement("div");
           ur.className = "ur";
+          ur.style.fontFamily = `"${urdu.family}"`;
+          ur.style.lineHeight = urdu.height;
           ur.textContent = urEntry ? urEntry.text : "";
           const marker = document.createElement("div");
           marker.className = "marker";

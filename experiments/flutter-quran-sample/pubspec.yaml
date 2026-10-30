@@ -81,6 +81,9 @@ flutter:
     - family: Mehr Nastaliq Web
       fonts:
         - asset: fonts/mehr-nastaliq.ttf
+    - family: Noto Nastaliq Urdu
+      fonts:
+        - asset: fonts/noto-nastaliq-urdu.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:
