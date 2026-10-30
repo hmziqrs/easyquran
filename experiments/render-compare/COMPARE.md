@@ -30,6 +30,13 @@ Arabic.**
 
 ## What actually differs
 
+0. **Urdu data bug (found by this comparison, now fixed).** The junagarhi
+   translation source encodes lam-alef as the _isolated_ presentation form
+   `U+FEFB` (6× in the sample), which every stack renders as a broken-looking
+   mid-word ﻻ. The production web pipeline does not normalize it either.
+   `gpui-kit-sample/data/generate.py` now NFKC-normalizes Urdu (Arabic
+   datasets contain no presentation forms and are untouched); all screenshots
+   here show the normalized text with the properly joined والا.
 1. **Weight / crispness.** Browser glyphs read heaviest and most "solid"
    (subpixel AA + platform gamma). Flutter (Impeller grayscale AA) sits close
    behind. GPUI reads thinnest/lightest at identical px sizes. This is the
