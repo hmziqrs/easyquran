@@ -57,15 +57,15 @@ impl MigratorTrait for Migrator {
             // writes and the identities COUNT(*) failed on every real DB.
             Box::new(m000010_passkey_credentials::Migration),
             Box::new(m000011_device_token_ownership::Migration),
-            // m000012 rebuilds bookmarks as folder-based (docs/reading-model.md
-            // §3): every bookmark lives in a folder, a server-ensured default
+            // m000012 rebuilds bookmarks as folder-based:
+            // every bookmark lives in a folder, a server-ensured default
             // folder per user, a verse may sit in many folders.
             Box::new(m000012_bookmark_context::Migration),
-            // m000013 ships reading sessions (docs/reading-model.md §2): one
+            // m000013 ships reading sessions: one
             // row per continuous reading thread (cursor inline) plus the
             // account-level MAX-merged reading_progress.
             Box::new(m000013_reading_sessions::Migration),
-            // m000014 ships reading insights (docs/reading-model.md §4):
+            // m000014 ships reading insights:
             // idempotent raw reading_events plus the reading_daily and
             // reading_ayah_totals rollups that survive the retention purge.
             Box::new(m000014_user_analytics::Migration),

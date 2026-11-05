@@ -41,7 +41,7 @@ fn valid_client_uuid(id: &str) -> Result<(), ValidationError> {
     }
 }
 
-/// One verse read (docs/reading-model.md §4). `id` is client-minted so a
+/// One verse read. `id` is client-minted so a
 /// retried batch is idempotent. `ayah` carries a FLAT bound only — the
 /// per-surah ayah-count check runs in the controller against the Quran meta.
 /// `at` is RFC3339 (enforced by chrono's serde deserializer) and clamped

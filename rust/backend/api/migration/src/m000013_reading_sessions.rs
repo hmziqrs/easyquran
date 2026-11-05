@@ -3,7 +3,7 @@ use sea_orm_migration::prelude::*;
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
-// Reading sessions (docs/reading-model.md §2), app SQLite only — the Quran
+// Reading sessions, app SQLite only — the Quran
 // DBs are untouched. A session is one continuous reading thread: its cursor
 // lives on the row itself (one row per thread, last-writer-wins). Open =
 // `ended_at IS NULL` and touched within 30 days; ended and stale threads are

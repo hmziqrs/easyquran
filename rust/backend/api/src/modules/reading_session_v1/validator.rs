@@ -87,7 +87,7 @@ fn valid_verse_key(key: &str) -> Result<(), ValidationError> {
         .ok_or_else(|| ValidationError::new("invalid_verse_key").with_message("must be S:A".into()))
 }
 
-/// Scope shapes (docs/reading-model.md §1): `surah|page|juz|hizb:N`,
+/// Scope shapes: `surah|page|juz|hizb:N`,
 /// `snippet:slug`, `range:S:A-S:A`. Only the SHAPE is checked here; numeric
 /// bounds of verse ranges run in the controller against the Quran meta.
 pub fn valid_scope(scope: &str) -> Result<(), ValidationError> {

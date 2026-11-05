@@ -143,7 +143,7 @@ describe("searchTranslationCorpus", () => {
 describe("translation hit ranking (fixture)", () => {
   // Relevance fixture: mushaf order would put the single partial-word hit in
   // 1:1 first; ranking must promote the later verse whose phrase repeats as
-  // whole words. Proves ranked order beats mushaf order (next-features 9.2).
+  // whole words. Proves ranked order beats mushaf order.
   const RANKED_ROWS: readonly CanonicalQuranRow[] = [
     row(1, "Blessed is the mercyless guide."),
     row(2, "A verse about patience and prayer."),

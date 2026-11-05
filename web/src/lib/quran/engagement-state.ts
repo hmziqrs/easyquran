@@ -40,7 +40,7 @@ export interface ViewBump {
 
 /**
  * Device-local calendar day as `YYYY-MM-DD`. Exported for session kind:"daily"
- * day buckets (next-features Feature 4.8): buckets stay derived per device-local
+ * day buckets: buckets stay derived per device-local
  * day, never computed server-side (EC-36).
  */
 export function todayLocal(): string {

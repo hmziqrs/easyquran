@@ -179,7 +179,7 @@
   const viewKey = $derived(`${normalization.sourceId}:${surah.num}`);
   trackReaderView({ key: () => viewKey, sourceId: () => normalization.sourceId });
 
-  // Reading thread for this surah view (docs/reading-model.md §2.1). A resumed
+  // Reading thread for this surah view. A resumed
   // thread whose cursor sits in this surah reveals in place; one that moved on
   // to another surah reopens there.
   trackReaderThread({

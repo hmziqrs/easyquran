@@ -3,7 +3,7 @@ import { asArray, asNumber, asObject, asString } from "#lib/storage/index.js";
 import { uuidV5 } from "#lib/sync/ids.js";
 
 /**
- * Folder-based bookmarks (docs/reading-model.md §3). Every bookmark lives in a
+ * Folder-based bookmarks. Every bookmark lives in a
  * folder; every owner has a default folder whose id is derived (UUIDv5), so
  * offline devices converge on one default instead of minting duplicates. A
  * verse may sit in many folders. Wire JSON and the device-local envelope both

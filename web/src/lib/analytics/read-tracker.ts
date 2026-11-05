@@ -4,7 +4,7 @@ import { sessions } from "#lib/sessions/store.svelte.js";
 import { reader } from "#lib/stores/reader.svelte.js";
 
 /**
- * What counts as "read" (docs/reading-model.md §4.1) — observed from the DOM,
+ * What counts as "read" — observed from the DOM,
  * so every reader mode (verse rows, reading pages, ranges, snippets) is
  * covered by its `[data-verse-anchor]` markers with no per-reader wiring.
  *

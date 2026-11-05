@@ -1,4 +1,4 @@
-// Folder-based bookmark sync over HTTP (docs/reading-model.md §3): the
+// Folder-based bookmark sync over HTTP: the
 // server-ensured default folder, multi-folder membership, LWW upserts and
 // tombstone deletes, folder delete cascading to its bookmarks (with newer
 // rows re-homed to the default folder), the default-folder delete guard,

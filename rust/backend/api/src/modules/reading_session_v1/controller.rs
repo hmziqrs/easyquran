@@ -1,4 +1,4 @@
-//! Reading threads (docs/reading-model.md §2): one POST /sync does
+//! Reading threads: one POST /sync does
 //! push-then-pull inside a single transaction (whole-row LWW threads,
 //! MAX-merged progress), and GET /archive pages through ended + stale threads.
 

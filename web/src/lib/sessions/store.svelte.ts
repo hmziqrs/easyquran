@@ -97,7 +97,7 @@ export interface ArchiveView {
 }
 
 /**
- * Reading threads (docs/reading-model.md §2). Per-owner durable key
+ * Reading threads. Per-owner durable key
  * `easyquran.sessions.{owner}` (owner = user id when signed in, `local`
  * otherwise); the tab's current thread id lives in sessionStorage so a reload
  * continues it and two tabs read two threads. A thread the reader merely
@@ -276,7 +276,7 @@ export class SessionsStore {
   // --- reader integration ---
 
   /**
-   * Resolve the tab's thread for a reader route (docs/reading-model.md §2.1):
+   * Resolve the tab's thread for a reader route:
    * explicit resume → that thread; untagged continuation → keep; exact-ayah,
    * card and snippet entries → new; whole-scope entries → resume the open
    * thread already in that scope (with a "Start over" offer), else new.

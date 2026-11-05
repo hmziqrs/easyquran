@@ -42,7 +42,7 @@ pub mod user_oauth_identity;
 
 pub mod bookmark;
 pub mod bookmark_folder;
-// Reading threads + account progress (docs/reading-model.md §2). Reading
+// Reading threads + account progress. Reading
 // insights SQL lives in user_analytics_v1.
 pub mod reading_session;
 

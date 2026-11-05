@@ -2,7 +2,7 @@
 
 How to audit every reader-facing screen and write findings someone can fix and re-check. Run it
 after a big UI change lands (next: once the next-features UI merges). Capture tooling:
-[`scripts/ux-audit/`](../../scripts/ux-audit/README.md).
+[`scripts/ux-audit/`](../scripts/ux-audit/README.md).
 
 The one question for every screen: **would a first-time, non-technical reader — on a phone, maybe
 older, maybe Arabic-first, maybe unable to read Arabic — understand it at once?**
@@ -91,9 +91,8 @@ Fix — concrete change, with the file to edit
 Done when — a check anyone can run
 ```
 
-Output, in `docs/research/ux-audit/`: a README (scope, commit, headline themes, P0 list, finding
-index), one document per area, and one release checklist with every finding and its done-when
-check. Keep only screenshots a write-up references; scratch captures go to `.cache/ux-audit/`.
+Output: one item per finding in the build queue (`docs/README.md`), with its done-when check, P0s
+first. Scratch captures go to `.cache/ux-audit/`.
 
 ## 6. Guardrails to propose
 

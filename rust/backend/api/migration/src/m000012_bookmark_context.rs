@@ -3,7 +3,7 @@ use sea_orm_migration::prelude::*;
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
-// Folder-based bookmarks (docs/reading-model.md §3), app SQLite only — the
+// Folder-based bookmarks, app SQLite only — the
 // Quran DBs are untouched. Pre-launch rebuild: the m000007 tables are dropped
 // and recreated (no data carried over, owner decision 2026-10-14).
 //

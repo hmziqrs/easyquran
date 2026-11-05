@@ -1,4 +1,4 @@
-// Reading insights over HTTP (docs/reading-model.md §4): auth + account
+// Reading insights over HTTP: auth + account
 // check, idempotent ingest keyed by the client event id, both rollups, the
 // retention-proof summary (top surahs/ayahs read from rollups, not raw
 // events), per-account isolation, and validation.

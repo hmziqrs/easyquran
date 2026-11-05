@@ -1,7 +1,7 @@
 import { asArray, asLiteral, asNumber, asObject, asString } from "#lib/storage/index.js";
 
 /**
- * Reading threads (docs/reading-model.md §2). A thread is one continuous run
+ * Reading threads. A thread is one continuous run
  * of reading: entering from somewhere else starts (or resumes) one, continuing
  * keeps it. The cursor lives on the thread row; progress is per owner.
  * Wire JSON and the per-owner key `easyquran.sessions.{owner}` both decode

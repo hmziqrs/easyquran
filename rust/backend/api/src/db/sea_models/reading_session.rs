@@ -1,4 +1,4 @@
-//! `reading_sessions` + `reading_progress` (docs/reading-model.md §2). A
+//! `reading_sessions` + `reading_progress`. A
 //! session is one continuous reading thread with its cursor inline; one row
 //! per thread, last-writer-wins on `updated_at`. Progress is account-level and
 //! MAX-merged so it never regresses across devices.

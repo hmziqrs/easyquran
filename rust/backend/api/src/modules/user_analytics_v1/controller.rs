@@ -1,4 +1,4 @@
-//! Reading insights (docs/reading-model.md §4): per-user verse reads +
+//! Reading insights: per-user verse reads +
 //! personal summary. Ingest writes the raw event and both retention-proof
 //! rollups (day × surah, surah × ayah) in ONE transaction, idempotent on the
 //! client-minted event id; raw rows are purged past the retention window on

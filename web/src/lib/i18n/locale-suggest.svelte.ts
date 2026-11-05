@@ -18,7 +18,7 @@ import {
   writeJSON,
 } from "#lib/storage/index.js";
 
-// Locale-suggest popup state (plan 09 / next-features Feature 10). Client-side only: the URL stays the sole locale truth; accept is a full-reload link, never a redirect or cookie. One localStorage key, write-through over an in-memory `resolved` map so blocked storage degrades to per-page-load.
+// Locale-suggest popup state. Client-side only: the URL stays the sole locale truth; accept is a full-reload link, never a redirect or cookie. One localStorage key, write-through over an in-memory `resolved` map so blocked storage degrades to per-page-load.
 export const LOCALE_SUGGEST_STORAGE_KEY = "easyquran.localeSuggest";
 
 const SCHEMA_VERSION = 1;

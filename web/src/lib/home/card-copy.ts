@@ -311,7 +311,7 @@ interface ItemScope {
   readonly boundEnd: string | null;
 }
 
-/** Reading-thread scope for one collection item (docs/reading-model.md §2). */
+/** Reading-thread scope for one collection item. */
 function itemScope(item: CollectionItem): ItemScope {
   if ("slug" in item) return { scope: `snippet:${item.slug}`, boundEnd: null };
   if (item.ayahStart !== undefined && item.ayahEnd !== undefined) {

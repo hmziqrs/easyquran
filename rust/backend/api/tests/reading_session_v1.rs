@@ -1,4 +1,4 @@
-// Reading-thread sync over HTTP (docs/reading-model.md §2): whole-row LWW
+// Reading-thread sync over HTTP: whole-row LWW
 // threads with the cursor inline, ended threads leaving the open snapshot,
 // stale threads derived from updated_at, the archive keyset pagination,
 // MAX-merged account progress, cross-account isolation, the clock clamp, and

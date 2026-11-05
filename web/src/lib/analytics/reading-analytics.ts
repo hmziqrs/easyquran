@@ -17,7 +17,7 @@ import {
 import { newEntityId } from "#lib/sync/ids.js";
 
 /**
- * Reading insights (docs/reading-model.md §4) — always on, personal only. The
+ * Reading insights — always on, personal only. The
  * read tracker reports each verse actually read with the active time it got;
  * events queue durably per owner under `easyquran.analytics.queue.{owner}`
  * and flush in idempotent batches (client event id) to

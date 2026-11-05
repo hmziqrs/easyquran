@@ -82,7 +82,7 @@ export interface DeletedFolder {
 }
 
 /**
- * Bookmarks (docs/reading-model.md §3). One store, two owners:
+ * Bookmarks. One store, two owners:
  *
  * - signed out → the device owner: folders + bookmarks live in
  *   `easyquran.bookmarks.local` and every edit writes through;

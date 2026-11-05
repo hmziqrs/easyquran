@@ -3,7 +3,7 @@ import { asLiteral } from "#lib/storage/index.js";
 import { SESSION_ORIGINS, isScope, parseVerseKey, type SessionOrigin } from "./schema";
 
 /**
- * Entry tagging (docs/reading-model.md §2.1). A navigation INTO the reader
+ * Entry tagging. A navigation INTO the reader
  * from somewhere else carries an intent: links declare it with
  * `data-session-*` attributes (one capture-phase click listener reads them),
  * programmatic jumps call `markEntry()` right before their `goto`. The reader

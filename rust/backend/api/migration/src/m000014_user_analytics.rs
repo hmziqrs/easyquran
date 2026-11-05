@@ -3,7 +3,7 @@ use sea_orm_migration::prelude::*;
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
-// Reading insights (docs/reading-model.md §4), app SQLite only — the Quran
+// Reading insights, app SQLite only — the Quran
 // DBs are untouched. `reading_events` is the raw append-only stream, keyed by
 // the client-minted event id so a retried batch is idempotent; raw rows are
 // purged after 90 days by the ingest path. `reading_daily` (day × surah) and
