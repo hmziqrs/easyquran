@@ -4,6 +4,9 @@ Status: **implemented, awaiting owner QA** (2026-10-14). Supersedes next-feature
 bookmark/session parts. Breaking change by design: nothing here is deployed, so the
 `m000012`–`m000014` migrations are rewritten in place and no legacy client shape is kept.
 
+Sequenced by: phase **V** in [`master-plan.md`](master-plan.md) — owner QA. Code comments cite this
+doc by section, so repoint them before retiring it.
+
 Goal: **zero friction**. The reader never asks the user to manage anything — threads appear,
 resume and retire on their own; bookmarks save in one tap; insights collect themselves.
 

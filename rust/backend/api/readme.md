@@ -22,13 +22,13 @@ SQLite file auto-created on open (`?mode=rwc`). Point `DATABASE_URL` at writable
     rust/backend/api/
     ├─ src/
     │  ├─ main.rs            # boot, route nest, rate-limit layers
-    │  ├─ router.rs state.rs constants.rs docs.rs
+    │  ├─ router.rs state.rs docs.rs
     │  ├─ modules/           # feature routes: auth, quran_v1, device, ...
     │  ├─ services/          # auth, mail, rate-limit, acl, image, ...
     │  └─ middlewares/       # csrf, permissions, status
     ├─ crates/
     │  ├─ rux-auth rux-fcm rux-provider-core rux-request-gate rux-webhook-crypto
     │  └─ ruxlog-types
-    └─ migration/            # m000001_init (24 tables, SQLite DDL)
+    └─ migration/            # sea-orm migrations (SQLite DDL)
 
 State = `AppState` (sea-orm pool + mailer), via `State` extractor. `auth_guard` uses `Extension<AppState>` (axum 0.8 `from_fn` can't take `State`). Sessions SQLite (`SqliteSessionStore`). No cache server.

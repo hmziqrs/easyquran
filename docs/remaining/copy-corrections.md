@@ -7,23 +7,11 @@ when wording should be aligned with the features selected for launch.
 Sequenced by: this ledger is worked by phase **R** in [`master-plan.md`](../master-plan.md) — the
 pre-release copy pass. Currently open: C03, C04, C08.
 
-> **Updated 2026-10-12 (§9.8 copy pass):** copy now lives in `web/messages/*.json` (the old
-> `content.ts` links below are dead). Resolved this pass: **C01** (auth copy scoped to bookmarks +
-> reading sessions; notes stay local), **C02** (privacy/terms sync + deletion claims trimmed to the
-> real scope — notes never sync, deletion is by request, no native apps), **C06** (FAQ/about rollout
-> copy now states 378 sources / 105 languages + two Arabic tafsir sources as shipped), **C07** (FAQ
-> backup answer now describes the shipped account sync + offline queue), and the merge-review dialog
-> strings moved from a hardcoded English block into `web/messages/auth/*.json` (`auth_merge_*`).
-> C05 is resolved (landing bands retired). The §9.8 sync-UI copy landed with it: the sign-in
-> note on `/bookmarks` now carries the full BM-05 promise ("Your bookmarks are saved on this device.
-> Sign in (free) to keep them safe and see them on your other devices."), and the two §9.5 one-liners
-> shipped as `auth_session_expired_banner` ("Session expired — sign in to resume sync") and
-> `auth_sign_out_unsynced_note` ("Your unsynced changes are kept on this device for your next
-> sign-in"), rendered by `SyncNotices.svelte` behind `AuthModalShell`. ACCT-05 (caption-size sync
-> status + offline note above the list) and the ACCT-09 merge toast wording are in via the
-> `SyncIndicator`/`auth_merge_result` work. **Still open:** C03 (Terms recitation/tafsir wording),
-> C04 (FAQ offline-audio answer), and the C08 sweep of the marketing landing page and reader
-> empty/loading labels.
+> Copy lives in `web/messages/*.json`. Beyond the sections below, the §9.8 sync-UI copy shipped: the
+> `/bookmarks` sign-in note ("Your bookmarks are saved on this device. Sign in (free) to keep them
+> safe and see them on your other devices."), `auth_session_expired_banner` and
+> `auth_sign_out_unsynced_note` (rendered by `SyncNotices.svelte` behind `AuthModalShell`), and the
+> `SyncIndicator` status + offline note above the list.
 
 ## C01 — Auth sync placeholder — RESOLVED 2026-10-12
 
@@ -106,9 +94,9 @@ For every capability, use exactly one of: **available now**, **beta/preview with
 point**, or **planned**. Design mocks, backend-only primitives, enums, and legal aspirations do not
 count as available product features.
 
-Progress 2026-10-12: About, FAQ, Privacy, Terms, the auth modal/register strings, the
-merge-review dialog, and the sync surfaces (bookmark sign-in note, session-expired banner,
-sign-out unsynced notice — §9.8) now pass the truth test (C01/C02/C06/C07 + `auth_merge_*`).
+Progress 2026-10-12: About, FAQ, Privacy, Terms, the auth modal/register strings, and the sync
+surfaces (bookmark sign-in note, session-expired banner, sign-out unsynced notice — §9.8) now pass
+the truth test (C01/C02/C06/C07).
 Not yet swept: the marketing landing page (C03/C04 territory), reader empty/loading/settings
 labels, and any future store/PWA descriptions.
 

@@ -1,6 +1,7 @@
 # Write-endpoint abuse prevention — implementation slice
 
-Status: **plan, not implemented.** Baseline `38f12b44` on `next-features` (2026-10-12).
+Status: **plan; S1 cap shipped, S2–S5 not implemented.** Baseline `38f12b44` on `next-features`
+(2026-10-12); §0 rechecked against master 2026-11-05, after the `reading-model.md` rewrite.
 
 Sequenced by: phase **A1** in [`master-plan.md`](master-plan.md).
 
@@ -13,28 +14,29 @@ without renaming.
 
 ---
 
-## 0. What this branch already landed (delta vs the master audit)
+## 0. What already landed (delta vs the master audit)
 
-Measured at `38f12b44`. The master audit's W13 items already satisfied here:
+The master audit's W13 items already satisfied:
 
-| W13 item                   | Status on this branch                                                      | Evidence                                           |
-| -------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------- |
-| Per-domain quotas          | ✅ 50 sessions, 10 000 live bookmarks, new-id gating, skipped surfaced     | `reading_session.rs:18,116`, `bookmark/actions.rs` |
-| Clamp client `updated_at`  | ✅ stricter than W13 asks: `min(updatedAt, now + 60s)` (W13 proposes 24 h) | `reading_session_v1/controller.rs:23-32`           |
-| Verse-reference validation | ✅ per-surah ayah counts (not the flat 1–286 W13 found)                    | `bookmark_v1/controller.rs ensure_valid_range`     |
-| Range span cap             | ✅ 50, both endpoints checked                                              | same                                               |
-| Ownership guards           | ✅ `expectedUserId` + live-session ownership (EC-52)                       | `reading_session.rs:238-251`                       |
+| W13 item                   | Status on master                                                                                 | Evidence                                                                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Per-domain quotas          | ✅ 10 000 live threads, 200 live folders, 10 000 live bookmarks, new-id gating, skipped surfaced | `reading_session.rs` `LIVE_SESSION_QUOTA`, `bookmark_folder/actions.rs` `LIVE_FOLDER_QUOTA`, `bookmark/actions.rs` `LIVE_BOOKMARK_QUOTA` |
+| Clamp client `updated_at`  | ✅ stricter than W13 asks: `min(updatedAt, now + 60s)` (W13 proposes 24 h)                       | `reading_session_v1/controller.rs clamp_ts`                                                                                              |
+| Verse-reference validation | ✅ per-surah ayah counts (not the flat 1–286 W13 found)                                          | `bookmark_v1/controller.rs ensure_valid_range`                                                                                           |
+| Range span cap             | ✅ 50, both endpoints checked                                                                    | same                                                                                                                                     |
+| Ownership guards           | ✅ required `expectedUserId` on all three sync routes                                            | `expected_user_id` check in each `*_v1/controller.rs`                                                                                    |
 
-**Not satisfied — the gap this slice closes** (all three apply to surfaces that did not exist
-at the master audit's baseline):
+W13 asks 500 folders per account; the shipped quota is 200, and S1 below records that.
 
-| Gap                                                   | Exposure today                                                                                                                                                                      |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No per-account limiter on `/reading-session/v1/sync`  | 200 mutations × 100 IP-rounds/min per IP; a user on rotating IPs gets N× that — the exact same-user-multi-IP case. Server work per round is LWW + tombstone + re-home transactions. |
-| No per-account limiter on `/user/analytics/v1/events` | batch ≤ 100 × 100 rounds/min/IP; every batch writes rows + runs the 90-day purge. Cheapest amplification surface in the app.                                                        |
-| No folder cap                                         | W13 asks 500 folders/account; `m000012` added `kind`/`position`/tombstones but the folder upsert has no per-user ceiling (bookmarks do).                                            |
-| No snapshot-size guard                                | both sync endpoints return the full per-user snapshot; a capped account that keeps pushing gets a full replay every round.                                                          |
-| No cross-domain daily write ceiling                   | one user can stay under every per-route budget while writing ~10⁶ rows/day across bookmarks+sessions+analytics combined.                                                            |
+**Not satisfied — the gap this slice closes** (all apply to surfaces that did not exist at the
+master audit's baseline):
+
+| Gap                                                   | Exposure today                                                                                                                                                                                                               |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No per-account limiter on `/reading-session/v1/sync`  | 200 mutations × 100 IP-rounds/min per IP; a user on rotating IPs gets N× that — the exact same-user-multi-IP case. Server work per round is LWW + tombstone transactions.                                                    |
+| No per-account limiter on `/user/analytics/v1/events` | batch ≤ 100 × 100 rounds/min/IP; every batch writes rows + runs the 90-day purge. Cheapest amplification surface in the app.                                                                                                 |
+| No snapshot-size guard                                | `/bookmark/v1/sync` returns the full per-user folder + bookmark snapshot, so a capped account that keeps pushing gets a full replay every round. `/reading-session/v1/sync` caps open threads at 20 (`OPEN_SNAPSHOT_LIMIT`). |
+| No cross-domain daily write ceiling                   | one user can stay under every per-route budget while writing ~10⁶ rows/day across bookmarks+sessions+analytics combined.                                                                                                     |
 
 ## 1. Design — subject-keyed limits (the "same user, different IPs" answer)
 
@@ -95,7 +97,7 @@ W0's contract and gates every per-IP key this slice keeps.
 
 | Step | Work                                                                                                                 | Acceptance                                                                                                                                                                                             |
 | ---- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| S1   | Folder cap 500/account (`new ids only`, like the bookmark quota)                                                     | amplification test cannot exceed 500+cap-rejected counters                                                                                                                                             |
+| S1   | Folder cap: **shipped** at 200/account (`new ids only`, refused via `skipped`); amplification test still to write    | amplification test cannot exceed 200 live folders                                                                                                                                                      |
 | S2   | Subject limiters: key classes + dual-bucket min in `rate_limit.rs`; `rate_limit_layer` gains a verified-user variant | a user at 2 IPs cannot exceed the user bucket; a 429'd user's next request carries `Retry-After`; `tests/rate_limit_user.rs` proves bucket keys contain the user id, never the IP, for subject classes |
 | S3   | Daily cross-domain ceiling + one transition event                                                                    | 5 001st mutation 429s; exactly one `rate_limit_events` row per day per user                                                                                                                            |
 | S4   | `rejected`/`capped` envelope + snapshot 507 guard over cap                                                           | capped account gets 507, never a silent truncation; client store surfaces it                                                                                                                           |

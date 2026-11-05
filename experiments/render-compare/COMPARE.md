@@ -50,7 +50,7 @@ Urdu = Noto Nastaliq Urdu unless noted.
 | noto-naskh-arabic × indopak    | [08](flutter/08-noto-naskh-arabic-indopak.png)   | —                                            | [08](gpui/08-noto-naskh-arabic-indopak.png)   |
 | kfgqpc-hafs × indopak          | [09](flutter/09-kfgqpc-hafs-indopak.png)         | [08](web/08-kfgqpc-hafs-indopak.png)         | [09](gpui/09-kfgqpc-hafs-indopak.png)         |
 | kfgqpc-hafs × simple           | —                                                | [07](web/07-kfgqpc-hafs-simple.png)          | —                                             |
-| Mehr Urdu in Flutter (vs Noto) | [10](flutter/10-mehr-urdu-in-flutter.png)        | [09](web/09-mehr-urdu-in-web.png)            | —                                             |
+| Mehr Urdu in Flutter (vs Noto) | [mehr](flutter/urdu-mehr-in-flutter.png)         | [mehr](web/urdu-mehr-in-web.png)             | —                                             |
 
 Every cell: correct joining, correct harakat stacking, correct RTL alignment,
 correct uthmani hamzat-wasl (ٱ), correct IndoPak small-kashida marks, ayah

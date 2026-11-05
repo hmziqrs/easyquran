@@ -72,7 +72,7 @@ global page, Arabic or translated primary — can stack up to 5 extra translatio
 client-only by
 [`stacked-translations.svelte.ts`](<../../web/src/routes/(application)/_reader/stacked-translations.svelte.ts>)
 with selection via
-[`TranslationModal.svelte`](<../../web/src/routes/(application)/_reader/TranslationModal.svelte>).
+[`TranslationModal.svelte`](../../web/src/lib/components/translation/TranslationModal.svelte).
 The primary SSG/SSR routes and their cache keys are untouched; the `?more=<id>,<id>` client mirror
 is stripped from cache keys by the service worker; selected extras (and the primary) pin against
 OPFS eviction; each extra renders with its own language/direction and translator attribution; and
@@ -187,7 +187,7 @@ SEO, and sitemap translation alternates exist, so this is partial rather than ab
 
 **Remaining:** decide whether standalone routes improve product/SEO enough to justify route count;
 define range grammar and cap; source-aware route helpers; canonical and hreflang; previous/next;
-SSR/SSG/cache implications; share/copy integration. Do not hand-build `/app/` URLs. (Grammar decision: `docs/next-features.md` §11.5; snippets: Feature 7.)
+SSR/SSG/cache implications; share/copy integration. Do not hand-build reader URLs. (Grammar decision: `docs/next-features.md` §11.5; snippets: Feature 7.)
 
 ### R12 — Deeper navigation and context — Partial · P2
 
@@ -229,12 +229,12 @@ activity, collections, settings, and connected Quran Foundation products.
 - [Centralized accounts](https://quran.com/product-updates/centralized-accounts-across-quran-foundation)
 - [Connected Quran apps](https://quran.com/en/product-updates/connected-quran-apps-expand-your-quran-journey)
 
-**EasyQuran today:** bookmark and folder sync is shipped (2026-08-27): client sync engine
-(`web/src/lib/sync`) → `POST /bookmark/v1/sync`, backend `bookmark_v1` + migrations `m000007`/`m000008`.
-Notes, reading position, and progress stay device-local.
+**EasyQuran today:** bookmark and folder sync (client engine in `web/src/lib/sync` →
+`POST /bookmark/v1/sync`, backend `bookmark_v1`), reading threads + account-level progress
+(`POST /reading-session/v1/sync`, backend `reading_session_v1`), and silent sign-in merge of local
+data are shipped; reading insights post to `user_analytics_v1`. Notes stay device-local.
 
-**Remaining:** sync domains for notes/history/progress; sign-in merge for anonymous local data;
-settings-doc sync. (Design: `docs/next-features.md` §9.)
+**Remaining:** notes sync; settings-doc sync. (Design: [`reading-model.md`](../reading-model.md).)
 
 ### P02 — “My Quran” library — Partial · P1
 
@@ -243,11 +243,10 @@ Collections.
 
 - [My Quran](https://quran.com/my-quran)
 
-**EasyQuran today:** personal surfaces shipped: `/app/yours` (continue reading, recents, bookmark
-preview) and `/app/bookmarks` (saved verses with folders). `/app` still opens the last-read surah;
-no notes tab, no discovery home.
+**EasyQuran today:** personal surfaces shipped: `/yours` (continue reading, thread history, reading
+insights, cards) and `/bookmarks` (saved verses with folders). No notes tab.
 
-**Remaining:** notes management surface; sync for recents/history (P01). (Bundle: `docs/next-features.md` Features 3-5.)
+**Remaining:** notes management surface.
 
 ### P03 — Explicit reading bookmark — Partial · P1
 
@@ -271,11 +270,11 @@ from daily activity.
 - [My Quran](https://quran.com/my-quran)
 - [Reading sessions vs activity days](https://api-docs.quran.com/docs/user-related-apis/1.0.0/reading-sessions-vs-activity-days/)
 
-**EasyQuran today:** dated, source-aware recents and per-surah progress persist in the reader blob
-and show on `/app/yours`. No history UI, session model, or clear controls; `reader-history.ts` is
+**EasyQuran today:** reading threads are the session model: `/yours` lists open threads and a
+history of ended ones (`GET /reading-session/v1/archive`), each deletable. `reader-history.ts` is
 still reload-only viewport restoration.
 
-**Remaining:** dedicated history surface; session coalescing; clear/delete controls. (Model: `docs/next-features.md` Feature 4.)
+**Remaining:** clear-all control. (Model: [`reading-model.md`](../reading-model.md) §2.)
 
 ### P05 — Saved verse collections — Partial · P1
 
@@ -285,9 +284,9 @@ compare and contrast selected verses.
 - [Save verses to collections](https://quran.com/product-updates/save-verses-to-collections-organize-your-quran-study)
 - [My Quran](https://quran.com/my-quran)
 
-**EasyQuran today:** authed users get named bookmark folders with CRUD on `/app/bookmarks`, synced
-via P01; anonymous users keep the legacy local boolean toggle. No tags, manual ordering, or
-comparison workspace.
+**EasyQuran today:** named bookmark folders with CRUD on `/bookmarks`, for everyone: signed-out
+folders live locally and merge silently on sign-in, signed-in folders sync via P01. A verse may sit
+in many folders. No tags, manual ordering, or comparison workspace.
 
 **Remaining:** manual ordering; bulk operations; pin/compare integration (R09).
 
@@ -331,11 +330,13 @@ duration goals; time/page/range units; timezone resets; daily activity and strea
 - [Quran reading streaks](https://quran.com/en/product-updates/quran-reading-streaks)
 - [Reading sessions vs activity days](https://api-docs.quran.com/docs/user-related-apis/1.0.0/reading-sessions-vs-activity-days/)
 
-**EasyQuran today:** per-surah progress (furthest ayah) persists in the reader blob with a progress
-bar on `/app/yours`. No goals, reading duration, day boundaries, or streaks.
+**EasyQuran today:** per-surah progress (furthest ayah) with a progress bar on `/yours`. Always-on
+reading insights measure verse reads and active time (`user_analytics_v1`,
+[`reading-model.md`](../reading-model.md) §4), shown on `/yours` as total minutes and active days.
+No goals or streaks.
 
-**Remaining:** goal model/presets/custom range; active-reading measurement; daily activity rules;
-timezone and day boundary; completion/pausing; streak calendar; sync/export.
+**Remaining:** goal model/presets/custom range; timezone and day-boundary rules for goals;
+completion/pausing; streak calendar; export.
 
 ### P09 — Goal/calendar reminders — Partial · P2
 
@@ -376,29 +377,31 @@ highlights and keyboard access. Delivered in the command palette (Aug 2026): typ
 matching (fold keys + bounded edit distance), surah/juz alias nicknames (`tabarak`, `amma`), and
 offline translation full-text search over the user's cached translation DBs (worker-local) —
 see [`search-system.md`](../../documentation/search-system.md). Delivered on a dedicated
-[`/app/search`](<../../web/src/routes/(application)/search/+page.svelte>) page (Aug 2026):
+[`/search`](<../../web/src/routes/(application)/search/+page.svelte>) page (Aug 2026):
 multi-translation merged search (client-side batches of 3 concurrent worker searches), per-source
 sections with load-more pagination, shareable `?q`/`?t` URLs, and translation download management.
-The reader drawer is intentionally untouched and still calls one 20-result query.
+Relevance ranking for translation hits and recent queries are shipped. The command palette owns
+in-app search: the sidebar search is gone and the landing hero opens the palette.
 
-- [`Results.svelte`](<../../web/src/routes/(application)/_reader/Results.svelte>)
+- [`ResultSection.svelte`](<../../web/src/routes/(application)/search/_components/ResultSection.svelte>)
 - [`search.ts`](../../web/src/lib/quran/search.ts)
 - [`search/types.ts`](../../web/src/lib/quran/search/types.ts)
 - [`search-system.md`](../../documentation/search-system.md)
 
-**Remaining:** reader drawer surface for the new search; relevance ranking for translation hits;
-recent queries (privacy-gated); voice input with unsupported/permission/error states. Preserve
-existing Arabic normalization/parity contract. (Recents + ranking: `docs/next-features.md` Feature 9.)
+**Remaining:** voice input with unsupported/permission/error states. Preserve existing Arabic
+normalization/parity contract.
 
-### D02 — Discovery home/dashboard — Missing · P2
+### D02 — Discovery home/dashboard — Partial · P2
 
 **Quran.com:** home combines Continue Reading, My Quran, goals, topics, learning plans, Verse of the
 Week, Quran-in-a-Year, community/apps, daily verse, and Surah/Juz/Revelation Order browse.
 
 - [Quran.com home](https://quran.com/)
 
-**EasyQuran today:** `/app` 308s to `/surah` (the browse index); resume lives in the
-sidebar, not a home.
+**EasyQuran today:** the landing page renders the user's cards (pinned surah/ayah/range, zikr and
+azkar counters); `/yours` carries continue reading, insights, and an optional daily-ayah widget. No
+editorial discovery cards (topics, plans, seasonal). Legacy `/app` 308s to `/surah` (the browse
+index).
 
 - [`hooks.server.ts`](../../web/src/hooks.server.ts) — owns the `/app` → `/surah` 308
 
@@ -446,20 +449,22 @@ plans, reflection/community content, explainers, and notes/bookmark pointers.
 **Remaining:** seasonal landing/config; year-aware redirect/archival; selected goals/plans/challenges;
 localized editorial content; expiry behavior. Depends on goals/plans/audio if those cards are offered.
 
-### D06 — Quranic duas catalogue — Missing · P2
+### D06 — Quranic duas catalogue — Partial · P2
 
 **Quran.com:** 101 guest-visible dua/topic pages, searchable and grouped by essentials, prophets,
 worship, family, forgiveness, guidance, hardship, provision, and hereafter, with Quran references.
 
 - [Duas from the Quran](https://quran.com/duas)
 
-**EasyQuran today:** no dua routes or curated dua data.
+**EasyQuran today:** `/azkar` and `/azkar/[slug]` render a small curated set
+(`web/src/lib/data/snippets.ts`, kinds `essential`/`azkar`/`dua`) as verse references through the
+real reader. No full catalogue, categories, or search.
 
 **Remaining:** curated verse/range references rather than copied Quran text; categories/tags/search;
 index/detail SEO; Arabic + chosen translation/transliteration presentation; audio/share/save links;
 scholarly/editorial review and correction path.
 
-### D07 — Daily/weekly featured Quran — Missing · P2
+### D07 — Daily/weekly featured Quran — Partial · P2
 
 **Quran.com:** daily verse includes Arabic, translation, reference, audio, copy/link actions, and
 related plans. Home also exposes Verse of the Week with reflections and view/community links.
@@ -467,11 +472,11 @@ related plans. Home also exposes Verse of the Week with reflections and view/com
 - [Quran Verse of the Day](https://quran.com/daily)
 - [Quran.com home](https://quran.com/)
 
-**EasyQuran today:** backend `/quran/random` already produces a deterministic date-seeded ayah, but
-no web feature consumes it.
+**EasyQuran today:** backend `/quran/random` produces a deterministic date-seeded ayah, consumed by
+an optional daily-ayah widget on `/yours` (hidden by default). No dedicated route.
 
-**Remaining:** web daily route/card; server-safe date/timezone policy; source-aware link; optional
-translation/audio; share metadata; weekly/editorial selection only if content governance exists.
+**Remaining:** public daily route; source-aware link; optional translation/audio; share metadata;
+weekly/editorial selection only if content governance exists.
 
 ### D08 — Editorial topics and explainers — Missing · P2
 
