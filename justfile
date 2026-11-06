@@ -68,6 +68,10 @@ api-check:
 api-test:
     cd rust && cargo test --workspace -- --test-threads=1
 
+# Long multi-device simulator run. More seeds, same assertions.
+sync-soak seeds="2000":
+    cd rust && SYNC_SOAK_SEEDS={{seeds}} cargo test -p ruxlog --test sync_sim -- --test-threads=1
+
 api-migrate: _env
     cd rust && cargo run -p migration --bin migrate -- up
 

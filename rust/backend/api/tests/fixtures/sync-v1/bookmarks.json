@@ -1,0 +1,30 @@
+{
+  "client": { "protocol": 1, "platform": "web", "appVersion": "1" },
+  "since": 0,
+  "mutations": [
+    {
+      "kind": "folder.upsert",
+      "id": "019a0000-0000-7000-8000-0000000000f1",
+      "nameStamp": "1790000000000-0000-frozen",
+      "name": "Hifz",
+      "positionStamp": "1790000000000-0000-frozen",
+      "position": 1,
+      "deletedStamp": null,
+      "deleted": false,
+      "updatedAt": "2026-09-01T00:00:00.000Z"
+    },
+    {
+      "kind": "bookmark.upsert",
+      "id": "019a0000-0000-7000-8000-0000000000b1",
+      "stamp": "1790000000000-0000-frozen",
+      "folderId": "019a0000-0000-7000-8000-0000000000f1",
+      "surah": 2,
+      "ayah": 255,
+      "endSurah": null,
+      "endAyah": null,
+      "sourceId": null,
+      "deleted": false,
+      "updatedAt": "2026-09-01T00:00:00.000Z"
+    }
+  ]
+}

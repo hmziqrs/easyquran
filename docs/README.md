@@ -49,18 +49,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 | [A6](plans/abuse-0-foundations.md#a6-subject-keyed-limiters-for-authenticated-write-routes)                      | Subject-keyed limiters for authenticated write routes                         | -          |
 | [A7](plans/abuse-0-foundations.md#a7-daily-cross-domain-ceiling-sync-envelope-snapshot-guard-subject_score-seam) | Daily cross-domain ceiling, sync envelope, snapshot guard, subject_score seam | A5, S6     |
 
-### Sync
-
-| Item                                                         | Title                                 | Blocked by |
-| ------------------------------------------------------------ | ------------------------------------- | ---------- |
-| [S3](plans/sync.md#s3-reading-sessions-on-the-protocol)      | Reading sessions on the protocol      | S2         |
-| [S4](plans/sync.md#s4-bookmarks-and-folders-on-the-protocol) | Bookmarks and folders on the protocol | S2         |
-| [S5](plans/sync.md#s5-per-row-sync-results)                  | Per-row sync results                  | S3, S4     |
-| [S6](plans/sync.md#s6-delta-pull-with-tombstones)            | Delta pull with tombstones            | S5         |
-| [S7](plans/sync.md#s7-the-row-is-the-queue)                  | The row is the queue                  | S6         |
-| [S8](plans/sync.md#s8-protocol-versioning-and-old-clients)   | Protocol versioning and old clients   | S7         |
-| [S9](plans/sync.md#s9-multi-device-simulator)                | Multi-device simulator                | S8         |
-
 ### Account UX
 
 | Item                                                                     | Title                                         | Blocked by |

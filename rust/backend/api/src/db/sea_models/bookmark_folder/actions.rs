@@ -122,7 +122,11 @@ impl Entity {
             .is_some_and(|row| row.deleted_at.is_some());
         let merged = match &existing {
             Some(row) => {
+                if row.scrubbed_at.is_some() {
+                    return Ok(FolderOutcome::Superseded(Box::new(row.clone())));
+                }
                 let current = registers_of(row);
+                sync_counter::absorb_rewritten_replays(&current, &mut write);
                 let merged = merge_folder(&current, &write);
                 if canonical_json(&merged) == canonical_json(&current) {
                     return Ok(FolderOutcome::Superseded(Box::new(row.clone())));

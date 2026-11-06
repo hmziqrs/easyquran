@@ -244,7 +244,9 @@
           status={bookmarks.status}
           online={online.online}
           syncedAt={bookmarks.syncedAt}
-          enqueueError={bookmarks.enqueueError}
+          storageFailed={bookmarks.storageFailed}
+          rejected={bookmarks.rejectedCount}
+          capped={bookmarks.cappedCount}
         />
       {:else}
         <span class="text-caption text-muted">{copy.localOnly}</span>

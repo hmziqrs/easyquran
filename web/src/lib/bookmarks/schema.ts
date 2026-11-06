@@ -1,5 +1,5 @@
 import type { VerseKey } from "#lib/data/quran.js";
-import { asArray, asNumber, asObject, asString } from "#lib/storage/index.js";
+import { asArray, asLiteral, asNumber, asObject, asString } from "#lib/storage/index.js";
 import { uuidV5 } from "#lib/sync/ids.js";
 
 /**
@@ -37,6 +37,14 @@ export interface BookmarkFolder {
   readonly position: number | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /** One stamp per register; null until the row first belongs to an account. */
+  readonly nameStamp: string | null;
+  readonly positionStamp: string | null;
+  readonly deletedStamp: string | null;
+  readonly deleted: boolean;
+  /** The row is the queue: true until a result acknowledges these exact stamps. */
+  readonly dirty: boolean;
+  readonly rejected: boolean;
 }
 
 export interface Bookmark {
@@ -51,38 +59,77 @@ export interface Bookmark {
   /** Range end: null = single ayah. */
   readonly endSurah: number | null;
   readonly endAyah: number | null;
+  /** Whole-row register stamp; null until the row first belongs to an account. */
+  readonly stamp: string | null;
+  readonly deleted: boolean;
+  readonly dirty: boolean;
+  readonly rejected: boolean;
 }
 
-export type BookmarksMutation =
+export type BookmarksWireRow =
   | {
       readonly kind: "bookmark.upsert";
       readonly id: string;
+      readonly stamp: string | null;
       readonly folderId: string;
       readonly surah: number;
       readonly ayah: number;
       readonly endSurah: number | null;
       readonly endAyah: number | null;
       readonly sourceId: string | null;
+      readonly deleted: boolean;
       readonly updatedAt: string;
     }
-  | { readonly kind: "bookmark.delete"; readonly id: string; readonly updatedAt: string }
   | {
       readonly kind: "folder.upsert";
       readonly id: string;
+      readonly nameStamp: string | null;
       readonly name: string;
+      readonly positionStamp: string | null;
       readonly position: number | null;
+      readonly deletedStamp: string | null;
+      readonly deleted: boolean;
       readonly updatedAt: string;
-    }
-  | { readonly kind: "folder.delete"; readonly id: string; readonly updatedAt: string };
+    };
+
+export type BookmarkRowStatus = "applied" | "superseded" | "rejected" | "capped";
+
+export interface BookmarkRowResult {
+  readonly id: string;
+  readonly status: BookmarkRowStatus;
+  /** Null when the row is older than the tombstone floor. */
+  readonly stamps: Partial<Record<"row" | "name" | "position" | "deleted", string | null>> | null;
+}
 
 export interface BookmarksSnapshot {
   readonly folders: readonly BookmarkFolder[];
   readonly bookmarks: readonly Bookmark[];
 }
 
-export interface BookmarksSyncEnvelope extends BookmarksSnapshot {
-  readonly applied: number;
-  readonly skipped: number;
+export interface BookmarksStored extends BookmarksSnapshot {
+  readonly since: number;
+  readonly after: number;
+  readonly epoch: string | null;
+  readonly lastSeenAt: number;
+}
+
+export interface BookmarksRound extends BookmarksSnapshot {
+  readonly serverTime: number;
+  readonly syncEpoch: string | null;
+  readonly results: readonly BookmarkRowResult[];
+  /** Tombstone rows: stamps and identity only. */
+  readonly deletedFolders: readonly FolderTombstone[];
+  readonly rev: number;
+  readonly latestRev: number;
+  readonly more: boolean;
+  readonly tombstoneFloor: number;
+}
+
+export interface FolderTombstone {
+  readonly id: string;
+  readonly nameStamp: string | null;
+  readonly positionStamp: string | null;
+  readonly deletedStamp: string | null;
 }
 
 export function verseKeyOf(surah: number, ayah: number): VerseKey {
@@ -138,6 +185,12 @@ function decodeTimestamp(raw: unknown): string | undefined {
   return value !== undefined && value.length > 0 ? value : undefined;
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed nullable stamp; this helper is its boundary parser.
+function stampOrNull(raw: unknown): string | null {
+  const value = asString(raw);
+  return value !== undefined && value.length > 0 ? value : null;
+}
+
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed folder row (wire or storage); this decoder is its boundary parser.
 export function decodeBookmarkFolder(raw: unknown): BookmarkFolder | null {
   const obj = asObject(raw);
@@ -146,17 +199,33 @@ export function decodeBookmarkFolder(raw: unknown): BookmarkFolder | null {
   const name = asString(obj.name);
   if (id === undefined || id.length !== 36) return null;
   if (name === undefined || name.length === 0 || name.length > FOLDER_NAME_MAX) return null;
-  const createdAt = decodeTimestamp(obj.createdAt);
   const updatedAt = decodeTimestamp(obj.updatedAt);
-  if (createdAt === undefined || updatedAt === undefined) return null;
+  if (updatedAt === undefined) return null;
   return {
     id,
     name,
     isDefault: obj.isDefault === true,
     position: asNumber(obj.position, -1_000_000, 1_000_000) ?? null,
-    createdAt,
+    createdAt: decodeTimestamp(obj.createdAt) ?? updatedAt,
     updatedAt,
+    nameStamp: stampOrNull(obj.nameStamp),
+    positionStamp: stampOrNull(obj.positionStamp),
+    deletedStamp: stampOrNull(obj.deletedStamp),
+    deleted: obj.deleted === true,
+    dirty: obj.dirty === true,
+    rejected: obj.rejected === true,
   };
+}
+
+/** A range end equal to its start is a single verse: one shape for one row. */
+function normalizedEnd(
+  surah: number,
+  ayah: number,
+  endSurah: number | undefined,
+  endAyah: number | undefined,
+) {
+  if (endSurah === undefined || endAyah === undefined) return { endSurah: null, endAyah: null };
+  return endSurah === surah && endAyah === ayah ? { endSurah: null, endAyah: null } : { endSurah, endAyah };
 }
 
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed bookmark row (wire or storage); this decoder is its boundary parser.
@@ -178,9 +247,10 @@ export function decodeBookmark(raw: unknown): Bookmark | null {
   ) {
     return null;
   }
-  const createdAt = decodeTimestamp(obj.createdAt);
-  const updatedAt = decodeTimestamp(obj.updatedAt);
-  if (createdAt === undefined || updatedAt === undefined) return null;
+  const deleted = obj.deleted === true;
+  // A tombstone carries its key and stamps only.
+  const updatedAt = decodeTimestamp(obj.updatedAt) ?? (deleted ? "1970-01-01T00:00:00.000Z" : undefined);
+  if (updatedAt === undefined) return null;
   // Range ends travel together or not at all; exactly one is a corrupt row.
   const endSurah = asNumber(obj.endSurah, SURAH_MIN, SURAH_MAX);
   const endAyah = asNumber(obj.endAyah, 1, AYAH_MAX);
@@ -191,33 +261,87 @@ export function decodeBookmark(raw: unknown): Bookmark | null {
     folderId,
     surah,
     ayah,
-    createdAt,
+    createdAt: decodeTimestamp(obj.createdAt) ?? updatedAt,
     updatedAt,
     sourceId: sourceId !== undefined && sourceId.length > 0 ? sourceId : null,
-    endSurah: endSurah ?? null,
-    endAyah: endAyah ?? null,
+    ...normalizedEnd(surah, ayah, endSurah, endAyah),
+    stamp: stampOrNull(obj.stamp),
+    deleted,
+    dirty: obj.dirty === true,
+    rejected: obj.rejected === true,
   };
 }
 
-// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is a folders + bookmarks pair (wire snapshot or device envelope); this decoder is its boundary parser.
-export function decodeBookmarksSnapshot(raw: unknown): BookmarksSnapshot | null {
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed folder tombstone from a pull; this decoder is its boundary parser.
+function decodeFolderTombstone(raw: unknown): FolderTombstone | undefined {
+  const obj = asObject(raw);
+  const id = asString(obj?.id);
+  if (obj === undefined || id === undefined || obj.deleted !== true) return undefined;
+  return {
+    id,
+    nameStamp: stampOrNull(obj.nameStamp),
+    positionStamp: stampOrNull(obj.positionStamp),
+    deletedStamp: stampOrNull(obj.deletedStamp),
+  };
+}
+
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the unparsed per-owner localStorage value; this decoder is its boundary parser.
+export function decodeBookmarksStored(raw: unknown): BookmarksStored | null {
   const obj = asObject(raw);
   if (!obj || !Array.isArray(obj.folders) || !Array.isArray(obj.bookmarks)) return null;
+  const bound = Number.MAX_SAFE_INTEGER;
   return {
-    folders: asArray(obj.folders, (item) => decodeBookmarkFolder(item) ?? undefined),
-    bookmarks: asArray(obj.bookmarks, (item) => decodeBookmark(item) ?? undefined),
+    folders: asArray(obj.folders, (row) => decodeBookmarkFolder(row) ?? undefined),
+    bookmarks: asArray(obj.bookmarks, (row) => decodeBookmark(row) ?? undefined),
+    since: asNumber(obj.since, 0, bound) ?? 0,
+    after: asNumber(obj.after, -1, bound) ?? -1,
+    epoch: stampOrNull(obj.epoch),
+    lastSeenAt: asNumber(obj.lastSeenAt, 0, bound) ?? 0,
   };
 }
 
-/** Decode the `{ applied, skipped, folders, bookmarks }` sync response. */
-// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the unparsed JSON body of POST /bookmark/v1/sync; this decoder is its boundary parser.
-export function decodeBookmarksEnvelope(raw: unknown): BookmarksSyncEnvelope | null {
-  const snapshot = decodeBookmarksSnapshot(raw);
-  if (snapshot === null) return null;
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed per-row result; this decoder is its boundary parser.
+function decodeResult(raw: unknown): BookmarkRowResult | undefined {
   const obj = asObject(raw);
+  const id = asString(obj?.id);
+  const status = asLiteral<BookmarkRowStatus>(obj?.status, [
+    "applied",
+    "superseded",
+    "rejected",
+    "capped",
+  ]);
+  if (obj === undefined || id === undefined || status === undefined) return undefined;
+  const stamps = asObject(obj.stamps);
   return {
-    ...snapshot,
-    applied: asNumber(obj?.applied, 0, Number.POSITIVE_INFINITY) ?? 0,
-    skipped: asNumber(obj?.skipped, 0, Number.POSITIVE_INFINITY) ?? 0,
+    id,
+    status,
+    stamps:
+      stamps === undefined
+        ? null
+        : {
+            row: stampOrNull(stamps.row),
+            name: stampOrNull(stamps.name),
+            position: stampOrNull(stamps.position),
+            deleted: stampOrNull(stamps.deleted),
+          },
+  };
+}
+
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the unparsed POST /bookmark/v1/sync body; this decoder is its boundary parser.
+export function decodeBookmarksRound(raw: unknown): BookmarksRound | null {
+  const obj = asObject(raw);
+  if (!obj || !Array.isArray(obj.folders) || !Array.isArray(obj.bookmarks)) return null;
+  const bound = Number.MAX_SAFE_INTEGER;
+  return {
+    serverTime: asNumber(obj.serverTime, 0, bound) ?? Date.now(),
+    syncEpoch: stampOrNull(obj.syncEpoch),
+    results: asArray(obj.results, decodeResult),
+    folders: asArray(obj.folders, (row) => decodeBookmarkFolder(row) ?? undefined),
+    bookmarks: asArray(obj.bookmarks, (row) => decodeBookmark(row) ?? undefined),
+    deletedFolders: asArray(obj.folders, decodeFolderTombstone),
+    rev: asNumber(obj.rev, 0, bound) ?? 0,
+    latestRev: asNumber(obj.latestRev, 0, bound) ?? 0,
+    more: obj.more === true,
+    tombstoneFloor: asNumber(obj.tombstoneFloor, 0, bound) ?? 0,
   };
 }

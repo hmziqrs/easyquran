@@ -8,15 +8,24 @@
     status,
     online: isOnline,
     syncedAt,
-    enqueueError = null,
+    storageFailed = false,
+    rejected = 0,
+    capped = 0,
   }: {
-    copy: Pick<BookmarksCopy, "synced" | "syncing" | "syncError" | "pending" | "offline" | "saveError">;
+    copy: Pick<
+      BookmarksCopy,
+      "synced" | "syncing" | "syncError" | "pending" | "offline" | "saveError" | "rowsRejected" | "rowsCapped"
+    >;
     status: SyncStatus;
     online: boolean;
     /** Per-domain sync truth (round-2): epoch ms of the bookmarks domain's last landed snapshot; null = never synced. */
     syncedAt: number | null;
-    /** Last durable-enqueue failure (EC-27); the next successful enqueue clears it. */
-    enqueueError?: string | null;
+    /** The browser refused a durable write: the edit is not safe yet. */
+    storageFailed?: boolean;
+    /** Rows the server refused; kept on this device until edited. */
+    rejected?: number;
+    /** Rows waiting for room under the account's quota. */
+    capped?: number;
   } = $props();
 
   function label(): string {
@@ -49,10 +58,13 @@
     <span class={cn("inline-block size-1.5 rounded-pill", dotClass())} aria-hidden="true"></span>
     {label()}
   </span>
-  {#if enqueueError !== null}
-    <!-- EC-27: a failed durable write is never silent — the toggle the user just
-         made was not saved. Catalog copy stays visible; the raw storage error
-         rides along as the tooltip for diagnosis. -->
-    <p role="alert" class="text-caption text-danger" title={enqueueError}>{copy.saveError}</p>
+  {#if storageFailed}
+    <p role="alert" class="text-caption text-danger">{copy.saveError}</p>
+  {/if}
+  {#if rejected > 0}
+    <p role="status" class="text-caption text-danger">{copy.rowsRejected(rejected)}</p>
+  {/if}
+  {#if capped > 0}
+    <p role="status" class="text-caption text-muted">{copy.rowsCapped(capped)}</p>
   {/if}
 </div>

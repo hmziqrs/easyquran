@@ -23,6 +23,9 @@ const COLUMNS: &[(&str, &str, &str)] = &[
     ("bookmark_folders", "position_stamp", "TEXT"),
     ("bookmark_folders", "deleted_stamp", "TEXT"),
     ("bookmark_folders", "rev", "INTEGER NOT NULL DEFAULT 0"),
+    ("reading_sessions", "scrubbed_at", "TEXT"),
+    ("bookmarks", "scrubbed_at", "TEXT"),
+    ("bookmark_folders", "scrubbed_at", "TEXT"),
 ];
 
 const STMTS: &[&str] = &[

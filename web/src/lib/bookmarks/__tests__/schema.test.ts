@@ -4,7 +4,7 @@ import {
   compareFolders,
   decodeBookmark,
   decodeBookmarkFolder,
-  decodeBookmarksEnvelope,
+  decodeBookmarksStored,
   defaultFolderIdFor,
   isSingleVerseBookmark,
   liveKeyOf,
@@ -27,7 +27,7 @@ describe("decoders", () => {
   it("decodes a folder, flagging the default", () => {
     expect(
       decodeBookmarkFolder({ id: F, name: "Hifz", isDefault: true, createdAt: TS, updatedAt: TS }),
-    ).toEqual({
+    ).toMatchObject({
       id: F,
       name: "Hifz",
       isDefault: true,
@@ -51,15 +51,14 @@ describe("decoders", () => {
   });
 
   it("drops malformed rows instead of failing the whole snapshot", () => {
-    const envelope = decodeBookmarksEnvelope({
+    const envelope = decodeBookmarksStored({
       applied: 1,
       folders: [{ id: F, name: "A", createdAt: TS, updatedAt: TS }, { nope: true }],
       bookmarks: [{ id: B, folderId: F, surah: 1, ayah: 1, createdAt: TS, updatedAt: TS }, null],
     });
     expect(envelope?.folders).toHaveLength(1);
     expect(envelope?.bookmarks).toHaveLength(1);
-    expect(envelope?.skipped).toBe(0);
-    expect(decodeBookmarksEnvelope({ folders: [] })).toBeNull();
+    expect(decodeBookmarksStored({ folders: [] })).toBeNull();
   });
 });
 
@@ -81,6 +80,12 @@ describe("keys and order", () => {
       position,
       createdAt: TS,
       updatedAt: TS,
+      nameStamp: null,
+      positionStamp: null,
+      deletedStamp: null,
+      deleted: false,
+      dirty: false,
+      rejected: false,
     });
     const sorted = [
       folder("b", null),

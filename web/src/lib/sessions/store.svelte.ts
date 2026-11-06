@@ -22,6 +22,7 @@ import {
   syncEngine,
   type RegisteredSyncDomain,
 } from "#lib/sync/index.js";
+import { mergedDirty } from "#lib/sync/round-status.js";
 import { compareStamps, mergeThread, roundRatio, type JsonObject } from "#lib/sync/merge.js";
 
 import { deviceKind } from "./device";
@@ -163,43 +164,20 @@ function registersOf(thread: ReadingThread): JsonObject {
   };
 }
 
-function sameStamps(a: ThreadStamps, b: ThreadStamps): boolean {
-  return (
-    a.identityStamp === b.identityStamp &&
-    a.cursorStamp === b.cursorStamp &&
-    a.lifecycleStamp === b.lifecycleStamp
-  );
+function stampsOf(row: ThreadStamps): readonly (string | null)[] {
+  return [row.identityStamp, row.cursorStamp, row.lifecycleStamp];
 }
 
-/**
- * Does `row` hold a winning register the other side lacks? Only then can its
- * `dirty` flag still mean something after the merge.
- */
-function contributes(row: ReadingThread, other: ReadingThread, merged: ThreadStamps): boolean {
-  return (
-    (row.identityStamp === merged.identityStamp && other.identityStamp !== merged.identityStamp) ||
-    (row.cursorStamp === merged.cursorStamp && other.cursorStamp !== merged.cursorStamp) ||
-    (row.lifecycleStamp === merged.lifecycleStamp && other.lifecycleStamp !== merged.lifecycleStamp)
-  );
-}
-
-/**
- * S1 merge on the local row shape. `dirty` is OR across tabs, except that an ack
- * is final for the stamps it named: the same stamps clean on either side are clean,
- * and a dirty row whose registers all lost has nothing left to send.
- */
+/** S1 merge on the local row shape. `mergedDirty` holds the rule for the flag. */
 function mergeRow(a: ReadingThread, b: ReadingThread): ReadingThread {
   // Signed-out rows carry no stamps yet: their own time decides.
   if (a.cursorStamp === null && b.cursorStamp === null) return b.updatedAt > a.updatedAt ? b : a;
   const merged = decodeMerged(mergeThread(registersOf(a), registersOf(b)));
-  const stamps: ThreadStamps = {
-    identityStamp: merged.identityStamp ?? null,
-    cursorStamp: merged.cursorStamp ?? null,
-    lifecycleStamp: merged.lifecycleStamp ?? null,
-  };
-  const dirty = sameStamps(a, b)
-    ? a.dirty && b.dirty
-    : (a.dirty && contributes(a, b, stamps)) || (b.dirty && contributes(b, a, stamps));
+  const dirty = mergedDirty(
+    { dirty: a.dirty, stamps: stampsOf(a) },
+    { dirty: b.dirty, stamps: stampsOf(b) },
+    [merged.identityStamp ?? null, merged.cursorStamp ?? null, merged.lifecycleStamp ?? null],
+  );
   return {
     ...a,
     ...merged,

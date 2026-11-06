@@ -59,6 +59,8 @@ pub struct Model {
     pub state: String,
     pub device_id: Option<String>,
     pub rev: i64,
+    /// Set once a tombstone's content is gone. Such a row ignores further writes.
+    pub scrubbed_at: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -255,8 +257,13 @@ impl Entity {
         let existing = Self::load(conn, user_id, id).await?;
         let merged = match &existing {
             Some(row) => {
+                if sync_counter::is_scrubbed(conn, "reading_sessions", user_id, id).await? {
+                    return Ok(ThreadOutcome::Superseded(Box::new(row.clone())));
+                }
                 let current = row.registers();
-                let merged = merge_thread(&current, incoming);
+                let mut incoming = incoming.clone();
+                sync_counter::absorb_rewritten_replays(&current, &mut incoming);
+                let merged = merge_thread(&current, &incoming);
                 if canonical_json(&merged) == canonical_json(&current) {
                     return Ok(ThreadOutcome::Superseded(Box::new(row.clone())));
                 }

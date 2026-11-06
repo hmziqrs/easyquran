@@ -2,14 +2,18 @@ import { browser } from "$app/env";
 
 import { authClient } from "#lib/auth/auth-client.js";
 import { authState } from "#lib/auth/auth-state.svelte.js";
+import { deviceIdFor } from "#lib/device/identity.js";
 import {
+  asNumber,
+  asObject,
+  asString,
   readJSON,
   readRaw,
   removeJSON,
-  trailingDebounce,
-  writeJSON,
+  tryWriteJSON,
   writeRaw,
 } from "#lib/storage/index.js";
+import { createClock, localClockStorage, type SyncClock } from "#lib/sync/clock.js";
 import { newEntityId } from "#lib/sync/ids.js";
 import {
   registerDomain,
@@ -17,39 +21,36 @@ import {
   syncEngine,
   SyncPausedError,
   type RegisteredSyncDomain,
-  type SyncDomain,
-  type SyncMutation,
   type SyncStatus,
 } from "#lib/sync/index.js";
-import {
-  SYNC_DRAIN_CHANNEL,
-  SYNC_PAGE_NONCE,
-  type SyncDrainMessage,
-} from "#lib/sync/engine.svelte.js";
+import { compareStamps, mergeBookmark, mergeFolder, type JsonObject } from "#lib/sync/merge.js";
+import { mergedDirty } from "#lib/sync/round-status.js";
 
 import { bookmarksDomainFor, createBookmarksDomain, type BookmarkAuthLike } from "./domain";
 import {
   DEFAULT_FOLDER_NAME,
   FOLDER_NAME_MAX,
   compareFolders,
-  decodeBookmarksSnapshot,
+  decodeBookmarksStored,
   defaultFolderIdFor,
   isSingleVerseBookmark,
   liveKeyOf,
   parseVerseKey,
   type Bookmark,
   type BookmarkFolder,
-  type BookmarksMutation,
+  type BookmarkRowResult,
+  type BookmarksRound,
   type BookmarksSnapshot,
+  type BookmarksStored,
+  type BookmarksWireRow,
+  type FolderTombstone,
 } from "./schema";
 
 /** Engine surface the store depends on; the real SyncEngine satisfies it structurally. */
 export interface SyncEngineLike {
-  enqueue<P>(domain: string, payload: P): Promise<SyncMutation<P>>;
-  pendingFor(domain: string): number;
   flush(domain?: string): Promise<void>;
   start(): () => void;
-  hydrate?(): Promise<void>;
+  setStorageDegraded?(on: boolean): void;
   readonly status: SyncStatus;
 }
 
@@ -86,10 +87,10 @@ export interface DeletedFolder {
  *
  * - signed out → the device owner: folders + bookmarks live in
  *   `easyquran.bookmarks.local` and every edit writes through;
- * - signed in → the account: edits apply optimistically, queue in the
- *   `bookmarks.user:{id}` outbox partition, and the server snapshot is truth
- *   (pending overlays win until their mutation drains). The last snapshot is
- *   cached per account so the list paints instantly and works offline.
+ * - signed in → the account: the row is the queue. Each edit stamps its register
+ *   and persists `dirty` with the row; a round sends the dirty rows and merges
+ *   what it pulls (contracts/sync.md), so nothing waits in memory. Only a tombstone
+ *   deletes, and tombstones stay as clean rows until the cap trims them.
  *
  * On sign-in the device's bookmarks join the account silently (the device
  * default folder maps onto the account default); `onMerged` reports how many.
@@ -97,7 +98,12 @@ export interface DeletedFolder {
 
 const LOCAL_OWNER = "local";
 const LOCAL_KEY = "easyquran.bookmarks.local";
-const LOCAL_VERSION = 2;
+const LOCAL_VERSION = 3;
+const SYNC_PAGE = 200;
+/** A device may hold this many clean tombstones. */
+const TOMBSTONE_CAP = 500;
+/** A cached account nobody signed into for this long loses its clean rows. */
+const IDLE_ACCOUNT_MS = 180 * 24 * 60 * 60 * 1000;
 /** First-pull backstop: a paused first round would otherwise wait for the 30s periodic sync. */
 const FIRST_SYNC_RETRY_MS = 2_000;
 const FIRST_SYNC_RETRY_MAX = 3;
@@ -115,11 +121,6 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-// eslint-disable-next-line anti-slop/no-unknown-parameters -- err is a caught throw of unknown provenance; this formatter narrows it to a displayable message string.
-function errorMessage(err: unknown): string {
-  return err instanceof Error && err.message ? err.message : String(err);
-}
-
 function validFolderName(name: string): string | null {
   const trimmed = name.trim();
   return trimmed.length > 0 && trimmed.length <= FOLDER_NAME_MAX ? trimmed : null;
@@ -133,25 +134,111 @@ function seedDefault(id: string): BookmarkFolder {
     position: null,
     createdAt: EPOCH_ISO,
     updatedAt: EPOCH_ISO,
+    nameStamp: null,
+    positionStamp: null,
+    deletedStamp: null,
+    deleted: false,
+    dirty: false,
+    rejected: false,
   };
 }
 
-/** Narrow an untrusted cross-tab payload: a drain notice is `{domain, ids[]}`. */
-// eslint-disable-next-line anti-slop/no-unknown-parameters -- data is the raw BroadcastChannel message payload; this decoder is its boundary parser.
-function decodeDrainMessage(data: unknown): SyncDrainMessage | null {
-  // eslint-disable-next-line anti-slop/no-runtime-typeof -- typeof-object is the only discriminator for the raw BroadcastChannel payload at this parse boundary.
-  if (typeof data !== "object" || data === null) return null;
-  if (!("domain" in data) || !("ids" in data)) return null;
-  // SAFETY: property existence is checked above; this narrows the fields for validation only.
-  const { domain, ids, page } = data as { domain: unknown; ids: unknown; page?: unknown };
-  // eslint-disable-next-line anti-slop/no-runtime-typeof -- domain is a wire string field with no static type before this check.
-  if (typeof domain !== "string" || !Array.isArray(ids)) return null;
-  if (page === SYNC_PAGE_NONCE) return null;
-  for (const id of ids) {
-    // eslint-disable-next-line anti-slop/no-runtime-typeof -- each ids element is an opaque wire value until this string check.
-    if (typeof id !== "string") return null;
+/** A stamp the server rewrote is below ours: adopt it. One it beat arrives with the row. */
+function lowerOf(result: string | null | undefined, local: string | null): string | null {
+  return result !== null && result !== undefined && local !== null && result < local ? result : local;
+}
+
+function bookmarkRegisters(row: Bookmark): JsonObject {
+  return {
+    id: row.id,
+    register: {
+      stamp: row.stamp,
+      value: {
+        context: { sourceId: row.sourceId },
+        deleted: row.deleted,
+        folderId: row.folderId,
+        key: `${row.surah}:${row.ayah}-${row.endSurah ?? row.surah}:${row.endAyah ?? row.ayah}`,
+      },
+    },
+  };
+}
+
+/** Whole-row register: the winning side's row, with flags merged. */
+function mergeBookmarkRow(a: Bookmark, b: Bookmark): Bookmark {
+  const merged = mergeBookmark(bookmarkRegisters(a), bookmarkRegisters(b));
+  const winner = JSON.stringify(merged) === JSON.stringify(bookmarkRegisters(a)) ? a : b;
+  const dirty = mergedDirty(
+    { dirty: a.dirty, stamps: [a.stamp] },
+    { dirty: b.dirty, stamps: [b.stamp] },
+    [winner.stamp],
+  );
+  return { ...winner, dirty, rejected: a.rejected && b.rejected };
+}
+
+function folderRegisters(row: BookmarkFolder): JsonObject {
+  return {
+    id: row.id,
+    isDefault: row.isDefault,
+    name: { stamp: row.nameStamp, value: row.name },
+    position: { stamp: row.positionStamp, value: row.position },
+    deleted: { stamp: row.deletedStamp, value: row.deleted },
+  };
+}
+
+function folderStamps(row: BookmarkFolder): readonly (string | null)[] {
+  return [row.nameStamp, row.positionStamp, row.deletedStamp];
+}
+
+/** Name, position and deleted each merge alone. */
+function mergeFolderRow(a: BookmarkFolder, b: BookmarkFolder): BookmarkFolder {
+  const merged = mergeFolder(folderRegisters(a), folderRegisters(b));
+  const register = (name: string) => {
+    const pair = asObject(merged[name]);
+    return { stamp: asString(pair?.stamp) ?? null, value: pair?.value };
+  };
+  const nameStamp = register("name").stamp;
+  const positionStamp = register("position").stamp;
+  const deletedStamp = register("deleted").stamp;
+  return {
+    ...a,
+    name: asString(register("name").value) ?? a.name,
+    position: asNumber(register("position").value, -1_000_000, 1_000_000) ?? null,
+    deleted: register("deleted").value === true,
+    isDefault: a.isDefault || b.isDefault,
+    nameStamp,
+    positionStamp,
+    deletedStamp,
+    updatedAt: a.updatedAt > b.updatedAt ? a.updatedAt : b.updatedAt,
+    dirty: mergedDirty(
+      { dirty: a.dirty, stamps: folderStamps(a) },
+      { dirty: b.dirty, stamps: folderStamps(b) },
+      [nameStamp, positionStamp, deletedStamp],
+    ),
+    rejected: a.rejected && b.rejected,
+  };
+}
+
+function mergeRows<T extends { readonly id: string }>(
+  a: readonly T[],
+  b: readonly T[],
+  merge: (x: T, y: T) => T,
+): T[] {
+  const byId = new Map(a.map((row) => [row.id, row]));
+  for (const row of b) {
+    const mine = byId.get(row.id);
+    byId.set(row.id, mine === undefined ? row : merge(mine, row));
   }
-  return { domain, ids };
+  return [...byId.values()];
+}
+
+/** Clean tombstones beyond the cap go, oldest first. Live and dirty rows never do. */
+function trimTombstones<T extends { readonly deleted: boolean; readonly dirty: boolean }>(
+  rows: readonly T[],
+): readonly T[] {
+  const spare = rows.filter((row) => row.deleted && !row.dirty);
+  if (spare.length <= TOMBSTONE_CAP) return rows;
+  const dropped = new Set(spare.slice(0, spare.length - TOMBSTONE_CAP));
+  return rows.filter((row) => !dropped.has(row));
 }
 
 export class BookmarksStore {
@@ -161,26 +248,30 @@ export class BookmarksStore {
   readonly #register: (domain: RegisteredSyncDomain) => void;
   readonly #unregister: (name: string) => void;
 
-  /** Durable rows: the device envelope, or the account's last server snapshot. */
+  /** Durable rows, tombstones included: the device envelope or the account's cache. */
   #folders = $state.raw<readonly BookmarkFolder[]>([]);
   #bookmarks = $state.raw<readonly Bookmark[]>([]);
-  /** Account overlays: entity id → row (upsert) or null (delete), until drained. */
-  #pendingBookmarks = $state.raw<ReadonlyMap<string, Bookmark | null>>(new Map());
-  #pendingFolders = $state.raw<ReadonlyMap<string, BookmarkFolder | null>>(new Map());
   #owner = $state<string>(LOCAL_OWNER);
   #lastFolder = $state<string | null>(null);
   #syncedAt = $state<number | null>(null);
-  #enqueueError = $state<string | null>(null);
+  #storageFailed = $state(false);
+  #rejected = $state(0);
+  #capped = $state(0);
+  #updateRequired = $state(false);
   #suspended = $state(false);
   #hydrated = false;
   #generation = 0;
   #registered: string | null = null;
-  #mutationEntityIds = new Map<string, string>();
-  #drainChannel: BroadcastChannel | null = null;
   #firstSyncRetryTimer: ReturnType<typeof setTimeout> | null = null;
   #firstSyncRetries = 0;
   #mergeListeners = new Set<(count: number) => void>();
-  #persistCache = trailingDebounce(() => this.#writeCache(), 400);
+  #since = 0;
+  #after = -1;
+  #epoch: string | null = null;
+  #clock: SyncClock | null = null;
+  #cappedIds = new Set<string>();
+  /** Past the tombstone floor: ids seen in this full pull. Others are gone. */
+  #fullPullSeen: Set<string> | null = null;
 
   constructor(deps: BookmarksStoreDeps) {
     this.#engine = deps.engine;
@@ -203,39 +294,46 @@ export class BookmarksStore {
 
   /** Live folders, default first then manual order. Always holds the default folder. */
   get folders(): readonly BookmarkFolder[] {
-    const byId = new Map(this.#folders.map((f) => [f.id, f]));
-    for (const [id, row] of this.#pendingFolders) {
-      if (row === null) byId.delete(id);
-      else byId.set(id, row);
-    }
+    const live = this.#folders.filter((f) => !f.deleted);
     const defaultId = this.defaultFolderId;
-    if (!byId.has(defaultId)) byId.set(defaultId, seedDefault(defaultId));
-    return [...byId.values()].sort(compareFolders);
+    const withDefault = live.some((f) => f.id === defaultId)
+      ? live
+      : [...live, seedDefault(defaultId)];
+    return [...withDefault].sort(compareFolders);
   }
 
-  /** Live bookmarks whose folder is live, newest first. */
+  /**
+   * Live bookmarks, newest first, with the S1 set rules applied to the view. An
+   * older bookmark dies with a deleted folder and a newer one shows in the default
+   * folder, and one key shows one row, the highest stamp.
+   */
   get bookmarks(): readonly Bookmark[] {
-    const folderIds = new Set(this.folders.map((f) => f.id));
-    const byId = new Map(this.#bookmarks.map((b) => [b.id, b]));
-    for (const [id, row] of this.#pendingBookmarks) {
-      if (row === null) byId.delete(id);
-      else byId.set(id, row);
-    }
-    // One live row per (folder, range): a pending row beats a stale snapshot twin.
+    const deletedFolders = new Map(
+      this.#folders.filter((f) => f.deleted).map((f) => [f.id, f.deletedStamp]),
+    );
     const byKey = new Map<string, Bookmark>();
-    for (const row of byId.values()) {
-      if (!folderIds.has(row.folderId)) continue;
+    for (const stored of this.#bookmarks) {
+      if (stored.deleted) continue;
+      const row = this.#placed(stored, deletedFolders);
+      if (row === null) continue;
       const key = liveKeyOf(row);
       const prev = byKey.get(key);
-      if (
-        prev === undefined ||
-        this.#pendingBookmarks.has(row.id) ||
-        row.updatedAt > prev.updatedAt
-      ) {
-        byKey.set(key, row);
-      }
+      if (prev === undefined || this.#outranks(row, prev)) byKey.set(key, row);
     }
     return [...byKey.values()].sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));
+  }
+
+  #placed(row: Bookmark, deletedFolders: ReadonlyMap<string, string | null>): Bookmark | null {
+    if (!deletedFolders.has(row.folderId)) return row;
+    const stamp = deletedFolders.get(row.folderId) ?? null;
+    if (compareStamps(row.stamp, stamp) <= 0) return null;
+    return { ...row, folderId: this.defaultFolderId };
+  }
+
+  #outranks(a: Bookmark, b: Bookmark): boolean {
+    const order = compareStamps(a.stamp, b.stamp);
+    if (order !== 0) return order > 0;
+    return a.updatedAt > b.updatedAt;
   }
 
   /** Where a new tap saves: the last folder used, else the default. */
@@ -250,10 +348,10 @@ export class BookmarksStore {
     );
   }
 
+  /** Rows waiting to reach the server. */
   get pending(): number {
-    const ownerId = this.#accountId();
-    if (ownerId === null || this.#suspended) return 0;
-    return this.#engine.pendingFor(bookmarksDomainFor(ownerId));
+    if (this.#accountId() === null) return 0;
+    return [...this.#folders, ...this.#bookmarks].filter((row) => row.dirty && !row.rejected).length;
   }
 
   get status(): SyncStatus {
@@ -265,8 +363,24 @@ export class BookmarksStore {
     return this.#syncedAt;
   }
 
-  get enqueueError(): string | null {
-    return this.#enqueueError;
+  /** The browser refused a durable write. Never report those rows as synced. */
+  get storageFailed(): boolean {
+    return this.#storageFailed;
+  }
+
+  /** Rows the server refused, kept here and not resent until edited. */
+  get rejectedCount(): number {
+    return this.#rejected;
+  }
+
+  /** Rows waiting for room under the account's quota. */
+  get cappedCount(): number {
+    return this.#capped;
+  }
+
+  /** This build is below the server's minimum protocol. Reading keeps working. */
+  get updateRequired(): boolean {
+    return this.#updateRequired;
   }
 
   folderById(id: string): BookmarkFolder | undefined {
@@ -385,7 +499,7 @@ export class BookmarksStore {
 
   /** Undo for removals: same ids, fresh timestamps — newer than the tombstones. */
   restore(rows: readonly Bookmark[]): void {
-    for (const row of rows) this.#putBookmark({ ...row, updatedAt: nowIso() });
+    for (const row of rows) this.#putBookmark({ ...row, deleted: false, updatedAt: nowIso() });
   }
 
   moveToFolder(bookmarkId: string, folderId: string): void {
@@ -414,6 +528,12 @@ export class BookmarksStore {
       position: null,
       createdAt: now,
       updatedAt: now,
+      nameStamp: null,
+      positionStamp: null,
+      deletedStamp: null,
+      deleted: false,
+      dirty: false,
+      rejected: false,
     };
     this.#putFolder(folder);
     return folder;
@@ -437,23 +557,20 @@ export class BookmarksStore {
     const folder = this.folderById(id);
     if (folder === undefined || folder.isDefault || this.#suspended) return null;
     const bookmarks = this.bookmarksIn(id);
-    const now = nowIso();
     if (this.#accountId() === null) {
       this.#folders = this.#folders.filter((f) => f.id !== id);
       this.#bookmarks = this.#bookmarks.filter((b) => b.folderId !== id);
       this.#writeLocal();
     } else {
-      // The server cascades the tombstone to the folder's bookmarks.
-      this.#overlayFolder(id, null);
-      for (const row of bookmarks) this.#overlayBookmark(row.id, null);
-      this.#enqueue({ kind: "folder.delete", id, updatedAt: now });
+      // Rows in it follow the folder's stamp, here and on the server.
+      this.#putFolder({ ...folder, deleted: true, updatedAt: nowIso() });
     }
     if (this.#lastFolder === id) this.#rememberFolder(null);
     return { folder, bookmarks };
   }
 
   restoreFolder(deleted: DeletedFolder): void {
-    this.#putFolder({ ...deleted.folder, updatedAt: nowIso() });
+    this.#putFolder({ ...deleted.folder, deleted: false, updatedAt: nowIso() });
     this.restore(deleted.bookmarks);
   }
 
@@ -462,12 +579,13 @@ export class BookmarksStore {
   hydrate(): void {
     if (!browser || this.#hydrated) return;
     this.#hydrated = true;
-    this.#installDrainListener();
-    void this.#engine.hydrate?.();
     this.#load(this.#resolveOwner());
+    this.#pruneIdleAccounts();
     this.onAuthChanged();
     window.addEventListener("storage", (event) => {
       if (event.key === LOCAL_KEY && this.#owner === LOCAL_OWNER) this.#load(LOCAL_OWNER);
+      const ownerId = this.#accountId();
+      if (ownerId !== null && event.key === cacheKeyFor(ownerId)) this.#mergeStored();
     });
   }
 
@@ -486,19 +604,192 @@ export class BookmarksStore {
     this.#unregisterCurrent();
   }
 
-  applyServer(
-    snapshot: BookmarksSnapshot,
-    drained?: readonly SyncMutation<BookmarksMutation>[],
-  ): void {
-    if (drained !== undefined)
-      this.#retire(
-        drained.map((m) => m.payload.id),
-        drained.map((m) => m.id),
-      );
-    this.#folders = snapshot.folders;
-    this.#bookmarks = snapshot.bookmarks;
+  /** Rows the next round sends: folders first, so a new bookmark finds its folder. */
+  dirtyRows(): readonly BookmarksWireRow[] {
+    const ready = <T extends { id: string; dirty: boolean; rejected: boolean }>(
+      rows: readonly T[],
+    ): T[] => {
+      const dirty = rows.filter((row) => row.dirty && !row.rejected);
+      return [
+        ...dirty.filter((row) => !this.#cappedIds.has(row.id)),
+        ...dirty.filter((row) => this.#cappedIds.has(row.id)),
+      ];
+    };
+    const folders: BookmarksWireRow[] = ready(this.#folders).map((f) => ({
+      kind: "folder.upsert",
+      id: f.id,
+      nameStamp: f.nameStamp,
+      name: f.name,
+      positionStamp: f.positionStamp,
+      position: f.position,
+      deletedStamp: f.deletedStamp,
+      deleted: f.deleted,
+      updatedAt: f.updatedAt,
+    }));
+    const bookmarks: BookmarksWireRow[] = ready(this.#bookmarks).map((b) => ({
+      kind: "bookmark.upsert",
+      id: b.id,
+      stamp: b.stamp,
+      folderId: b.folderId,
+      surah: b.surah,
+      ayah: b.ayah,
+      endSurah: b.endSurah,
+      endAyah: b.endAyah,
+      sourceId: b.sourceId,
+      deleted: b.deleted,
+      updatedAt: b.updatedAt,
+    }));
+    return [...folders, ...bookmarks].slice(0, SYNC_PAGE);
+  }
+
+  /**
+   * Apply one round durably. `dirty` clears only for a row whose current stamps are
+   * the ones sent. A row missing from a response means nothing: only a tombstone
+   * deletes.
+   */
+  applyRound(round: BookmarksRound, sent: readonly BookmarksWireRow[]) {
+    this.#clock?.onServerTime(round.serverTime);
+    this.#mergeStored();
+
+    const epochChanged = this.#epoch !== null && round.syncEpoch !== this.#epoch;
+    const aheadOfServer = this.#since > round.latestRev;
+    const belowFloor = this.#since > 0 && this.#since < round.tombstoneFloor;
+    const restored = epochChanged || aheadOfServer;
+
+    const folders = new Map(this.#folders.map((f) => [f.id, f]));
+    const marks = new Map(this.#bookmarks.map((b) => [b.id, b]));
+    const sentById = new Map(sent.map((row) => [row.id, row]));
+    for (const result of round.results) {
+      this.#applyResult(result, sentById.get(result.id), folders, marks);
+    }
+    this.#rejected = [...folders.values(), ...marks.values()].filter((r) => r.rejected).length;
+    this.#capped = this.#cappedIds.size;
+
+    for (const row of round.folders) {
+      this.#clock?.observe(row.nameStamp);
+      this.#clock?.observe(row.positionStamp);
+      this.#clock?.observe(row.deletedStamp);
+      const mine = folders.get(row.id);
+      folders.set(row.id, mine === undefined ? row : mergeFolderRow(mine, row));
+      this.#fullPullSeen?.add(row.id);
+    }
+    for (const tombstone of round.deletedFolders) this.#applyFolderTombstone(tombstone, folders);
+    for (const row of round.bookmarks) {
+      this.#clock?.observe(row.stamp);
+      const mine = marks.get(row.id);
+      marks.set(row.id, mine === undefined ? row : mergeBookmarkRow(mine, row));
+      this.#fullPullSeen?.add(row.id);
+    }
+
+    if (belowFloor) this.#fullPullSeen = new Set();
+    if (restored) {
+      // Rows and `rev` went backwards: this device pushes everything it holds
+      // again, which heals writes the restore lost.
+      for (const [id, row] of folders) folders.set(id, { ...row, dirty: true });
+      for (const [id, row] of marks) marks.set(id, { ...row, dirty: true });
+    }
+
+    const reset = restored || belowFloor;
+    const fullPull = this.#since === 0;
+    if (reset) {
+      this.#since = 0;
+      this.#after = -1;
+    } else if (round.more && fullPull) {
+      this.#since = 0;
+      this.#after = round.rev;
+    } else {
+      this.#since = round.rev;
+      this.#after = -1;
+    }
+    if (!reset && !round.more && this.#fullPullSeen !== null) {
+      // Past the floor, the server no longer holds tombstones for what is gone.
+      const seen = this.#fullPullSeen;
+      for (const [id, row] of folders) {
+        if (!row.dirty && !seen.has(id)) folders.set(id, { ...row, deleted: true });
+      }
+      for (const [id, row] of marks) {
+        if (!row.dirty && !seen.has(id)) marks.set(id, { ...row, deleted: true });
+      }
+      this.#fullPullSeen = null;
+    }
+
+    this.#folders = trimTombstones([...folders.values()]);
+    this.#bookmarks = trimTombstones([...marks.values()]);
+    this.#epoch = round.syncEpoch ?? this.#epoch;
     this.#syncedAt = Date.now();
-    this.#persistCache.schedule();
+    // `since` is saved with the rows it covers, so an interrupted pull resumes.
+    this.#writeCache();
+
+    const progressed = round.results.some((r) => r.status === "applied" || r.status === "superseded");
+    const moreDirty = sent.length >= SYNC_PAGE && progressed && this.dirtyRows().length > 0;
+    return { more: reset || round.more || moreDirty };
+  }
+
+  #applyResult(
+    result: BookmarkRowResult,
+    sent: BookmarksWireRow | undefined,
+    folders: Map<string, BookmarkFolder>,
+    marks: Map<string, Bookmark>,
+  ): void {
+    if (sent === undefined) return;
+    this.#cappedIds.delete(result.id);
+    if (result.status === "capped") {
+      this.#cappedIds.add(result.id);
+      return;
+    }
+    if (sent.kind === "bookmark.upsert") {
+      const mine = marks.get(result.id);
+      if (mine === undefined || mine.stamp !== sent.stamp) return;
+      if (result.status === "rejected") {
+        marks.set(result.id, { ...mine, rejected: true });
+      } else if (result.stamps === null) {
+        marks.set(result.id, { ...mine, deleted: true, dirty: false });
+      } else {
+        marks.set(result.id, {
+          ...mine,
+          stamp: lowerOf(result.stamps.row, mine.stamp),
+          dirty: false,
+          rejected: false,
+        });
+      }
+      return;
+    }
+    const mine = folders.get(result.id);
+    if (mine === undefined) return;
+    const unchanged =
+      mine.nameStamp === sent.nameStamp &&
+      mine.positionStamp === sent.positionStamp &&
+      mine.deletedStamp === sent.deletedStamp;
+    if (!unchanged) return;
+    if (result.status === "rejected") {
+      folders.set(result.id, { ...mine, rejected: true });
+    } else if (result.stamps === null) {
+      folders.set(result.id, { ...mine, deleted: true, dirty: false });
+    } else {
+      folders.set(result.id, {
+        ...mine,
+        nameStamp: lowerOf(result.stamps.name, mine.nameStamp),
+        positionStamp: lowerOf(result.stamps.position, mine.positionStamp),
+        deletedStamp: lowerOf(result.stamps.deleted, mine.deletedStamp),
+        dirty: false,
+        rejected: false,
+      });
+    }
+  }
+
+  /** Delete only on a tombstone. A local undo with a newer stamp keeps its row. */
+  #applyFolderTombstone(tombstone: FolderTombstone, folders: Map<string, BookmarkFolder>): void {
+    this.#clock?.observe(tombstone.deletedStamp);
+    const mine = folders.get(tombstone.id);
+    if (mine === undefined) return;
+    if (compareStamps(mine.deletedStamp, tombstone.deletedStamp) > 0) return;
+    folders.set(tombstone.id, {
+      ...mine,
+      deleted: true,
+      deletedStamp: tombstone.deletedStamp,
+      nameStamp: tombstone.nameStamp ?? mine.nameStamp,
+      positionStamp: tombstone.positionStamp ?? mine.positionStamp,
+    });
   }
 
   // --- internals ---
@@ -522,6 +813,10 @@ export class BookmarksStore {
       sourceId,
       createdAt: now,
       updatedAt: now,
+      stamp: null,
+      deleted: false,
+      dirty: false,
+      rejected: false,
     };
     this.#putBookmark(bookmark);
     return bookmark;
@@ -536,18 +831,14 @@ export class BookmarksStore {
       this.#writeLocal();
       return;
     }
-    this.#overlayBookmark(row.id, row);
-    this.#enqueue({
-      kind: "bookmark.upsert",
-      id: row.id,
-      folderId: row.folderId,
-      surah: row.surah,
-      ayah: row.ayah,
-      endSurah: row.endSurah,
-      endAyah: row.endAyah,
-      sourceId: row.sourceId,
-      updatedAt: row.updatedAt,
-    });
+    const stamped: Bookmark = {
+      ...row,
+      stamp: this.#clock?.stamp() ?? row.stamp,
+      dirty: true,
+      rejected: false,
+    };
+    this.#bookmarks = [...this.#bookmarks.filter((b) => b.id !== row.id), stamped];
+    this.#afterAccountWrite();
   }
 
   #deleteBookmark(id: string): void {
@@ -556,70 +847,39 @@ export class BookmarksStore {
       this.#writeLocal();
       return;
     }
-    this.#overlayBookmark(id, null);
-    this.#enqueue({ kind: "bookmark.delete", id, updatedAt: nowIso() });
+    const row = this.#bookmarks.find((b) => b.id === id);
+    if (row === undefined) return;
+    this.#putBookmark({ ...row, deleted: true, updatedAt: nowIso() });
   }
 
+  /** Only a register whose value changed gets a new stamp. */
   #putFolder(folder: BookmarkFolder): void {
     if (this.#accountId() === null) {
       this.#folders = [...this.#folders.filter((f) => f.id !== folder.id), folder];
       this.#writeLocal();
       return;
     }
-    this.#overlayFolder(folder.id, folder);
-    this.#enqueue({
-      kind: "folder.upsert",
-      id: folder.id,
-      name: folder.name,
-      position: folder.position,
-      updatedAt: folder.updatedAt,
-    });
+    const prev = this.#folders.find((f) => f.id === folder.id);
+    const next = (changed: boolean, stamp: string | null): string | null =>
+      changed ? (this.#clock?.stamp() ?? stamp) : stamp;
+    const stamped: BookmarkFolder = {
+      ...folder,
+      nameStamp: next(prev === undefined || prev.name !== folder.name, folder.nameStamp),
+      positionStamp: next(prev !== undefined && prev.position !== folder.position, folder.positionStamp),
+      deletedStamp: next(prev !== undefined && prev.deleted !== folder.deleted, folder.deletedStamp),
+      dirty: true,
+      rejected: false,
+    };
+    this.#folders = [...this.#folders.filter((f) => f.id !== folder.id), stamped];
+    this.#afterAccountWrite();
   }
 
-  #overlayBookmark(id: string, row: Bookmark | null): void {
-    const next = new Map(this.#pendingBookmarks);
-    next.set(id, row);
-    this.#pendingBookmarks = next;
-  }
-
-  #overlayFolder(id: string, row: BookmarkFolder | null): void {
-    const next = new Map(this.#pendingFolders);
-    next.set(id, row);
-    this.#pendingFolders = next;
-  }
-
-  /** Drop overlays whose mutations drained (here or in another tab). */
-  #retire(entityIds: readonly string[], mutationIds: readonly string[]): void {
-    if (entityIds.length === 0) return;
-    const bookmarks = new Map(this.#pendingBookmarks);
-    const folders = new Map(this.#pendingFolders);
-    for (const id of entityIds) {
-      bookmarks.delete(id);
-      folders.delete(id);
-    }
-    for (const id of mutationIds) this.#mutationEntityIds.delete(id);
-    this.#pendingBookmarks = bookmarks;
-    this.#pendingFolders = folders;
-  }
-
-  #enqueue(payload: BookmarksMutation): void {
+  /** The dirty flag lands in the same write as the row, then a round picks it up. */
+  #afterAccountWrite(): void {
+    this.#writeCache();
     const ownerId = this.#accountId();
-    if (ownerId === null) return;
-    const generation = this.#generation;
-    void this.#engine.enqueue(bookmarksDomainFor(ownerId), payload).then(
-      (mutation) => {
-        if (generation !== this.#generation) return;
-        this.#mutationEntityIds.set(mutation.id, payload.id);
-        this.#enqueueError = null;
-      },
-      // eslint-disable-next-line anti-slop/no-unknown-parameters -- rejection reason is any thrown value (opaque boundary); errorMessage() narrows it.
-      (err: unknown) => {
-        if (generation !== this.#generation) return;
-        // A failed durable write is surfaced, never silently dropped.
-        this.#enqueueError = errorMessage(err);
-        this.#retire([payload.id], []);
-      },
-    );
+    if (ownerId === null || this.#registered !== bookmarksDomainFor(ownerId)) return;
+    void this.#engine.flush(bookmarksDomainFor(ownerId)).catch(() => undefined);
   }
 
   #rememberFolder(id: string | null): void {
@@ -654,36 +914,98 @@ export class BookmarksStore {
 
   /** Swap the in-memory view to `owner` (device envelope or cached account snapshot). */
   #load(owner: string): void {
-    this.#persistCache.flush();
     this.#unregisterCurrent();
     this.#generation += 1;
     this.#owner = owner;
     this.#syncedAt = null;
-    this.#pendingBookmarks = new Map();
-    this.#pendingFolders = new Map();
-    this.#mutationEntityIds.clear();
+    this.#cappedIds.clear();
+    this.#fullPullSeen = null;
     if (this.#firstSyncRetryTimer !== null) clearTimeout(this.#firstSyncRetryTimer);
     this.#firstSyncRetryTimer = null;
     this.#firstSyncRetries = 0;
     const last = readRaw("local", lastFolderKeyFor(owner));
     this.#lastFolder = last !== null && last.length > 0 ? last : null;
+    const accountId = owner === LOCAL_OWNER ? null : owner;
+    this.#clock =
+      accountId === null ? null : createClock(deviceIdFor(accountId), localClockStorage(accountId));
     const raw = owner === LOCAL_OWNER ? readJSON(LOCAL_KEY) : readJSON(cacheKeyFor(Number(owner)));
-    const stored = decodeBookmarksSnapshot(raw);
+    const stored = decodeBookmarksStored(raw);
     this.#folders = stored?.folders ?? [];
     this.#bookmarks = stored?.bookmarks ?? [];
+    this.#since = stored?.since ?? 0;
+    this.#after = stored?.after ?? -1;
+    this.#epoch = stored?.epoch ?? null;
+    this.#rejected = [...this.#folders, ...this.#bookmarks].filter((r) => r.rejected).length;
+    this.#capped = 0;
     if (owner === LOCAL_OWNER && !this.#folders.some((f) => f.isDefault)) {
       this.#folders = [seedDefault(this.#defaultIdFor(owner)), ...this.#folders];
+    }
+    if (accountId !== null) this.#writeCache();
+  }
+
+  /** Another tab of this account wrote: fold its rows in. */
+  #mergeStored(): void {
+    const ownerId = this.#accountId();
+    if (ownerId === null) return;
+    const stored = decodeBookmarksStored(readJSON(cacheKeyFor(ownerId)));
+    if (stored === null) return;
+    this.#folders = mergeRows(this.#folders, stored.folders, mergeFolderRow);
+    this.#bookmarks = mergeRows(this.#bookmarks, stored.bookmarks, mergeBookmarkRow);
+    this.#since = this.#since === 0 ? 0 : Math.max(this.#since, stored.since);
+    this.#epoch = this.#epoch ?? stored.epoch;
+  }
+
+  /** Other accounts' clean rows go after 180 days away. Dirty rows wait for sign-in. */
+  #pruneIdleAccounts(): void {
+    const prefix = "easyquran.bookmarks.user.";
+    const now = Date.now();
+    try {
+      for (const key of Object.keys(localStorage).filter((k) => k.startsWith(prefix))) {
+        const stored = decodeBookmarksStored(readJSON(key));
+        if (stored === null || stored.lastSeenAt === 0) continue;
+        if (key === cacheKeyFor(this.#accountId() ?? -1)) continue;
+        if (now - stored.lastSeenAt < IDLE_ACCOUNT_MS) continue;
+        tryWriteJSON(key, {
+          ...stored,
+          folders: stored.folders.filter((f) => f.dirty),
+          bookmarks: stored.bookmarks.filter((b) => b.dirty),
+        });
+      }
+    } catch {
+      return;
     }
   }
 
   #writeLocal(): void {
-    writeJSON(LOCAL_KEY, { v: LOCAL_VERSION, folders: this.#folders, bookmarks: this.#bookmarks });
+    this.#noteWrite(
+      tryWriteJSON(LOCAL_KEY, {
+        v: LOCAL_VERSION,
+        folders: this.#folders,
+        bookmarks: this.#bookmarks,
+      }),
+    );
   }
 
   #writeCache(): void {
     const ownerId = this.#accountId();
     if (ownerId === null) return;
-    writeJSON(cacheKeyFor(ownerId), { folders: this.#folders, bookmarks: this.#bookmarks });
+    const stored: BookmarksStored & { readonly v: number } = {
+      v: LOCAL_VERSION,
+      folders: this.#folders,
+      bookmarks: this.#bookmarks,
+      since: this.#since,
+      after: this.#after,
+      epoch: this.#epoch,
+      lastSeenAt: Date.now(),
+    };
+    this.#noteWrite(tryWriteJSON(cacheKeyFor(ownerId), stored));
+  }
+
+  #noteWrite(landed: boolean): void {
+    if (landed === this.#storageFailed) {
+      this.#storageFailed = !landed;
+      this.#engine.setStorageDegraded?.(!landed);
+    }
   }
 
   /** Sign-in: device rows join the account; the device default maps onto the account default. */
@@ -691,20 +1013,37 @@ export class BookmarksStore {
     const localDefault = defaultFolderIdFor("local");
     const accountDefault = this.defaultFolderId;
     const remap = (id: string): string => (id === localDefault ? accountDefault : id);
+    // Each row folds in with a stamp from its own time, so a newer edit elsewhere wins.
+    const at = (iso: string): string | null => {
+      const ms = Date.parse(iso);
+      return this.#clock?.stampAt(Number.isFinite(ms) ? ms : 0) ?? null;
+    };
+    const folders: BookmarkFolder[] = [];
     for (const folder of local.folders) {
       if (folder.isDefault) continue;
-      this.#putFolder(folder);
+      const stamp = at(folder.updatedAt);
+      folders.push({ ...folder, nameStamp: stamp, positionStamp: stamp, dirty: true });
     }
     // A renamed device default carries its name to the account default.
     const renamed = local.folders.find((f) => f.isDefault && f.name !== DEFAULT_FOLDER_NAME);
-    if (renamed !== undefined)
-      this.#putFolder({
+    if (renamed !== undefined) {
+      folders.push({
         ...seedDefault(accountDefault),
         name: renamed.name,
-        isDefault: true,
         updatedAt: renamed.updatedAt,
+        nameStamp: at(renamed.updatedAt),
+        dirty: true,
       });
-    for (const row of local.bookmarks) this.#putBookmark({ ...row, folderId: remap(row.folderId) });
+    }
+    const marks = local.bookmarks.map((row) => ({
+      ...row,
+      folderId: remap(row.folderId),
+      stamp: at(row.updatedAt),
+      dirty: true,
+    }));
+    this.#folders = mergeRows(this.#folders, folders, mergeFolderRow);
+    this.#bookmarks = mergeRows(this.#bookmarks, marks, mergeBookmarkRow);
+    this.#writeCache();
     removeJSON(LOCAL_KEY);
     const count = local.bookmarks.length;
     if (count > 0) for (const fn of this.#mergeListeners) fn(count);
@@ -722,23 +1061,36 @@ export class BookmarksStore {
     const generation = this.#generation;
     const isCurrent = (): boolean =>
       generation === this.#generation && this.#accountId() === ownerId && this.#registered === name;
-    const domain = createBookmarksDomain(this.#auth, this.#state, ownerId, isCurrent, () => {
-      if (!isCurrent()) return;
-      this.suspendAuth();
-      this.#state.notifySessionLost?.();
-    });
-    const adapter: SyncDomain<BookmarksMutation, BookmarksSnapshot> = {
-      name,
-      sync: async (mutations, signal) => {
+    const domain = createBookmarksDomain(
+      this.#auth,
+      this.#state,
+      ownerId,
+      {
+        dirtyRows: () => this.dirtyRows(),
+        position: () => ({ since: this.#since, after: this.#after }),
+        applyRound: (round, sent) => this.applyRound(round, sent),
+        onUpgradeRequired: () => {
+          this.#updateRequired = true;
+        },
+      },
+      isCurrent,
+      () => {
+        if (!isCurrent()) return;
+        this.suspendAuth();
+        this.#state.notifySessionLost?.();
+      },
+    );
+    const roundOf = domain.round?.bind(domain);
+    const adapter: RegisteredSyncDomain = {
+      ...domain,
+      round: async (signal) => {
+        if (roundOf === undefined) return { more: false };
         try {
-          return await domain.sync(mutations, signal);
+          return await roundOf(signal);
         } catch (err) {
           if (err instanceof SyncPausedError) this.#scheduleFirstSyncRetry(ownerId, generation);
           throw err;
         }
-      },
-      applyServer: (state, drained) => {
-        if (isCurrent()) this.applyServer(state, drained);
       },
     };
     this.#register(adapter);
@@ -758,26 +1110,6 @@ export class BookmarksStore {
     }, FIRST_SYNC_RETRY_MS);
   }
 
-  /** Another tab drained these mutations from the shared outbox: retire our overlays and pull. */
-  #installDrainListener(): void {
-    if (this.#drainChannel !== null || !("BroadcastChannel" in globalThis)) return;
-    const channel = new BroadcastChannel(SYNC_DRAIN_CHANNEL);
-    channel.onmessage = (event: MessageEvent<unknown>): void => {
-      const message = decodeDrainMessage(event.data);
-      const ownerId = this.#accountId();
-      if (message === null || ownerId === null || message.domain !== bookmarksDomainFor(ownerId)) {
-        return;
-      }
-      const entityIds = message.ids.flatMap((id) => {
-        const entity = this.#mutationEntityIds.get(id);
-        return entity === undefined ? [] : [entity];
-      });
-      this.#retire(entityIds, message.ids);
-      void this.#engine.hydrate?.();
-      void this.#engine.flush(message.domain).catch(() => undefined);
-    };
-    this.#drainChannel = channel;
-  }
 }
 
 export function createBookmarksStore(deps: BookmarksStoreDeps): BookmarksStore {

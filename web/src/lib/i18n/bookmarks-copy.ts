@@ -39,6 +39,8 @@ import {
   reader_bookmarks_saved,
   reader_bookmarks_select_label,
   reader_bookmarks_selected,
+  reader_bookmarks_rows_capped,
+  reader_bookmarks_rows_rejected,
   reader_bookmarks_save_error,
   reader_bookmarks_sign_in,
   reader_bookmarks_sign_in_note,
@@ -128,6 +130,8 @@ export interface BookmarksCopy {
   readonly syncError: string;
   /** Durable-enqueue failure (EC-27): the user's last change was not saved. */
   readonly saveError: string;
+  readonly rowsRejected: (count: number) => string;
+  readonly rowsCapped: (count: number) => string;
   readonly localOnly: string;
   readonly loading: string;
 }
@@ -209,6 +213,8 @@ export function getBookmarksCopy(locale: UiLocale = getLocale() as UiLocale): Bo
     syncing: noArgs(reader_bookmarks_syncing),
     syncError: noArgs(reader_bookmarks_sync_error),
     saveError: noArgs(reader_bookmarks_save_error),
+    rowsRejected: (count) => reader_bookmarks_rows_rejected({ count }, { locale }),
+    rowsCapped: (count) => reader_bookmarks_rows_capped({ count }, { locale }),
     localOnly: noArgs(reader_bookmarks_local_only),
     loading: noArgs(reader_bookmarks_loading),
   };

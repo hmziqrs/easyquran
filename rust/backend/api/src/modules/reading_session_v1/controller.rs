@@ -263,9 +263,7 @@ async fn pull_page(
         .collect();
     revs.sort_unstable();
     let more = revs.len() as u64 > PULL_PAGE;
-    let high = revs
-        .iter()
-        .take(PULL_PAGE as usize)
+    let high = revs[..revs.len().min(PULL_PAGE as usize)]
         .last()
         .copied()
         .unwrap_or(after);

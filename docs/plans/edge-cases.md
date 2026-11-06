@@ -8,56 +8,31 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 
 | Case                                         | Required behaviour                                                                     | Item   |
 | -------------------------------------------- | -------------------------------------------------------------------------------------- | ------ |
-| Device clock hours behind                    | Edit after seeing a row beats that row. Before any sync, it may lose, and it converges | S2, S3 |
-| Device clock hours or a year ahead           | Rewritten to server + 60 s, `last` reset, converges                                    | S2, S3 |
 | Time-zone change or travel                   | Local day follows the user's zone; stamps are unaffected                               | S2, F8 |
 
 ### Offline and conflicts
 
 | Case                                                      | Required behaviour                                            | Item   |
 | --------------------------------------------------------- | ------------------------------------------------------------- | ------ |
-| Same thread moved on two devices                          | Highest cursor stamp wins; progress keeps the MAX             | S1, S3 |
-| Same scope started on two devices offline                 | Two threads. Continue shows the newest                        | S1, S3 |
-| Thread ended on A, read further on stale B                | Stays ended; B's cursor lands; B's reading keeps its progress | S3     |
-| Deleted on A, read further on stale B                     | Stays deleted; B starts a new thread on its next read         | S3     |
-| Delete then Undo, with another device offline             | Later stamp restores; other device converges                  | S3     |
-| Folder renamed on A, reordered on B                       | Both survive                                                  | S1, S4 |
-| Folder deleted on A, bookmark added on B later            | Bookmark moves to the default folder                          | S1, S4 |
-| One verse bookmarked on two devices offline in one folder | One row survives on every client                              | S1, S4 |
-| Same folder name created twice offline                    | Both kept                                                     | S1, S4 |
 | Two settings changed on two devices                       | Both survive                                                  | S1, F2 |
-| Device offline longer than 180 days                       | Full pull; nothing deleted revives; its own newer rows land   | S6     |
-| 10,000 offline scrolls                                    | One dirty row                                                 | S7     |
 | Very large first sync or import above the daily ceiling   | Stays dirty, continues next day, surfaced; pulls still work   | S5, A7 |
 
 ### Failures and crashes
 
 | Case                                                      | Required behaviour                                                                            | Item       |
 | --------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ---------- |
-| App killed after row persisted                            | Nothing lost                                                                                  | S7         |
-| Hard kill during cursor debounce                          | Accepted limit: last moments of scroll position; lifecycle writes never lost                  | S7         |
-| Response lost after server commit                         | Replay changes nothing                                                                        | S1, S7     |
-| Duplicate or reordered requests                           | No effect                                                                                     | S1, S9     |
-| One invalid row in a batch                                | Only that row is refused                                                                      | S5         |
-| Multi-page pull interrupted                               | Resumes; `since` saved after durable apply                                                    | S6         |
-| Local storage full or failing                             | Degraded status, never reported as synced                                                     | S7         |
 | Safari 7-day cap or site data cleared, with unsynced rows | Accepted limit: those local rows are lost. Session cookie survives, so the device row is kept | D3, O32    |
 | Server restored from backup                               | `sync_epoch` forces full pull and re-push                                                     | S6, O2     |
-| Server 5xx, deploy, `SQLITE_BUSY`                         | Backoff with jitter; rows stay dirty                                                          | S5         |
 | Rate limited, many devices or tabs                        | One polling tab; `Retry-After` honoured                                                       | S5, S6, A6 |
 
 ### Accounts and sessions
 
 | Case                                           | Required behaviour                                                                                                    | Item       |
 | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------- |
-| Session expires with dirty rows                | Rows wait; drain on sign-in to the same account                                                                       | S7         |
 | Native app unused for weeks                    | 180-day session                                                                                                       | D6         |
 | Second account signs in on one device          | Separate partition, id, key and hint; nothing crosses                                                                 | S2, D3, S9 |
-| Signed-out reading, then sign-in               | Folds silently into that account, per product decision, even on a shared phone                                        | S2         |
-| Account banned or email unverified during sync | Pause; rows kept; never dead-lettered                                                                                 | S5         |
 | Remote sign-out while device is offline        | Next call 401; dirty rows wait; after sign-in a new id via 409                                                        | D2, D3, S9 |
 | Account deleted on another device              | Next call 401. Local data stays until cleared, per the survives-logout policy. Non-dirty cache dropped after 180 days | S7, F7     |
-| Same email re-registered                       | New user id. Accepted limit: the old partition's dirty rows never drain                                               | S7         |
 | Minor flag set                                 | No device row; random stamp tail; existing rows deleted                                                               | D2, A34    |
 | Session rotation on a native client            | `x-eq-session` replaced, CSRF refetched; lost response means sign in again                                            | D6         |
 | Browser tries to use `x-eq-session`            | Refused; not in the CORS list                                                                                         | D6         |
@@ -91,12 +66,6 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 
 | Case                                          | Required behaviour                                                 | Item     |
 | --------------------------------------------- | ------------------------------------------------------------------ | -------- |
-| Old app or stale tab on a new server          | Works within a protocol; below minimum, 426 and reading continues  | S8       |
-| Unknown enum, field or register               | Displayed neutrally and preserved                                  | S8       |
-| App downgrade with newer local schema         | Store untouched; sync pauses                                       | S8       |
-| Position written on another client or layout  | `surah:ayah` wins; page and ratio ignored unless same client class | S3       |
-| Translation or snippet missing on this client | Display fallback; row value preserved                              | S3       |
-| iOS or Android blocks background work         | Sync on foreground and resume; nothing depends on background       | S6       |
 | Signature formats differ by platform          | Fixed 64-byte raw form on the wire; vectors enforce                | D3       |
 | New client implementation                     | Must pass all shared vectors and O32                               | D6       |
 | Many users behind one carrier IP              | User bucket governs; IP bucket at least 10×                        | A6, D6   |

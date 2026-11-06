@@ -23,6 +23,7 @@ pub struct Model {
     pub position_stamp: Option<String>,
     pub deleted_stamp: Option<String>,
     pub rev: i64,
+    pub scrubbed_at: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

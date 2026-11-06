@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { RegisteredSyncDomain, SyncMutation, SyncStatus } from "#lib/sync/index.js";
+import type { AuthRequestResult, UnsafeRequestInit } from "#lib/auth/auth-client.js";
+import type { JsonRecord } from "#lib/storage/decoders.js";
+import type { RegisteredSyncDomain, SyncStatus } from "#lib/sync/index.js";
+import { SyncPausedError } from "#lib/sync/index.js";
 
-import { defaultFolderIdFor, type BookmarksMutation, type BookmarksSnapshot } from "../schema";
+import { defaultFolderIdFor } from "../schema";
 import { BookmarksStore, type SyncEngineLike } from "../store.svelte";
 
 vi.mock("$app/env", () => ({ browser: true }));
@@ -13,31 +16,74 @@ vi.mock("$app/env/public", () => ({
   PUBLIC_FCM_VAPID_KEY: undefined,
 }));
 
+type Row = JsonRecord;
+
 interface FakeAuth {
   authenticated: boolean;
   user: { id: number } | null;
   notifySessionLost: () => void;
 }
 
+interface FakeResponse {
+  readonly status?: number;
+  readonly body?: Row;
+  readonly during?: () => void;
+  readonly message?: string;
+}
+
 const STATUS: SyncStatus = { phase: "idle", pending: 0, lastSyncAt: null, lastError: null };
 
+/** Plain JSON: undefined fields gone, shape left to the row decoders. */
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- test helper over arbitrary fixtures; JSON round-trip is the point.
+function plain<T>(value: unknown): T {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function roundBody(over: Row = {}) {
+  return {
+    serverTime: Date.now(),
+    syncEpoch: "1",
+    results: [],
+    folders: [],
+    bookmarks: [],
+    rev: 1,
+    latestRev: 1,
+    more: false,
+    tombstoneFloor: 0,
+    ...over,
+  };
+}
+
 function setup(auth: FakeAuth = { authenticated: false, user: null, notifySessionLost: vi.fn() }) {
-  const enqueued: Array<{ domain: string; payload: BookmarksMutation }> = [];
   const registered: RegisteredSyncDomain[] = [];
+  const bodies: Row[] = [];
+  const answers: Array<FakeResponse | "throw"> = [];
+  const respond = (body: Row): AuthRequestResult<never> => {
+    const next = answers.shift();
+    if (next === "throw") throw new Error("connection lost");
+    next?.during?.();
+    const status = next?.status ?? 200;
+    const mutations: Row[] = Array.isArray(body.mutations) ? plain(body.mutations) : [];
+    const results: Row[] = plain(
+      mutations.map((m) => ({
+        id: m.id,
+        status: "applied",
+        stamps:
+          m.kind === "bookmark.upsert"
+            ? { row: m.stamp }
+            : { name: m.nameStamp, position: m.positionStamp, deleted: m.deletedStamp },
+      })),
+    );
+    return {
+      ok: status < 400,
+      status,
+      // SAFETY: test double — the domain decodes this body as unknown.
+      data: (status < 400 ? (next?.body ?? roundBody({ results })) : null) as never,
+      error: next?.message === undefined ? null : { message: next.message },
+      rotated: false,
+    };
+  };
   const engine: SyncEngineLike = {
-    async enqueue<P>(domain: string, payload: P) {
-      // SAFETY: test double — BookmarksStore only enqueues BookmarksMutation payloads.
-      enqueued.push({ domain, payload: payload as BookmarksMutation });
-      // SAFETY: test double — a minimal SyncMutation; the store reads id only.
-      return {
-        id: `m${enqueued.length}`,
-        domain,
-        seq: enqueued.length,
-        payload,
-        queuedAt: 0,
-      } as SyncMutation<P>;
-    },
-    pendingFor: () => 0,
     flush: async () => undefined,
     start: () => () => undefined,
     status: STATUS,
@@ -45,24 +91,26 @@ function setup(auth: FakeAuth = { authenticated: false, user: null, notifySessio
   const store = new BookmarksStore({
     engine,
     auth: {
-      unsafeRequest: async () => ({
-        ok: true,
-        status: 200,
-        data: null,
-        error: null,
-        rotated: false,
-      }),
+      unsafeRequest: async <T>(_path: string, init: UnsafeRequestInit) => {
+        // SAFETY: test double — the domain always sends an object body.
+        const body = init.body as Row;
+        bodies.push(body);
+        // SAFETY: test double — `never` data is assignable to whatever the domain asks for.
+        return respond(body) as AuthRequestResult<T>;
+      },
     },
     state: auth,
     register: (domain) => registered.push(domain),
     unregister: () => undefined,
   });
   store.hydrate();
-  return { store, enqueued, registered, auth };
+  const round = async () => {
+    const domain = registered.at(-1);
+    if (domain?.round === undefined) throw new Error("no row domain");
+    return domain.round();
+  };
+  return { store, registered, auth, bodies, answers, round };
 }
-
-/** Let the store's async enqueue handlers settle. */
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -145,128 +193,259 @@ describe("signed in: synced folders", () => {
     user: { id: 7 },
     notifySessionLost: vi.fn(),
   });
+  const FOLDER = "a1a1a1a1-a1a1-7a1a-8a1a-a1a1a1a1a1a1";
+  const MARK = "b1b1b1b1-b1b1-7b1b-8b1b-b1b1b1b1b1b1";
+  const MARK2 = "b2b2b2b2-b2b2-7b2b-8b2b-b2b2b2b2b2b2";
+  const stamp = (ms: number, device = "other"): string =>
+    `${String(ms).padStart(13, "0")}-0000-${device}`;
+  const NOW = Date.now();
 
-  it("edits apply optimistically and queue in the account partition", async () => {
-    const { store, enqueued, registered } = setup(account());
+  const serverMark = (over: Row = {}) => ({
+    id: MARK,
+    folderId: FOLDER,
+    surah: 2,
+    ayah: 255,
+    endSurah: 2,
+    endAyah: 255,
+    deleted: false,
+    stamp: stamp(NOW),
+    rev: 2,
+    sourceId: null,
+    createdAt: "2026-11-01T00:00:00.000Z",
+    updatedAt: "2026-11-01T00:00:00.000Z",
+    ...over,
+  });
+  const serverFolder = (over: Row = {}) => ({
+    id: FOLDER,
+    name: "Hifz",
+    isDefault: false,
+    position: null,
+    deleted: false,
+    rev: 1,
+    updatedAt: "2026-11-01T00:00:00.000Z",
+    nameStamp: stamp(NOW),
+    positionStamp: null,
+    deletedStamp: null,
+    ...over,
+  });
+
+  it("edits apply at once, persist dirty with the row, and an ack clears them", async () => {
+    const { store, registered, bodies, round } = setup(account());
     expect(registered.map((d) => d.name)).toEqual(["bookmarks.user:7"]);
-    expect(store.defaultFolderId).toBe(defaultFolderIdFor(7));
-    store.toggle(2, 255);
-    const folder = store.createFolder("Hifz")!;
-    store.setInFolder(2, 255, folder.id, true);
-    await settle();
-    expect(store.foldersOf(2, 255).size).toBe(2);
-    expect(enqueued.map((e) => `${e.domain} ${e.payload.kind}`)).toEqual([
-      "bookmarks.user:7 bookmark.upsert",
-      "bookmarks.user:7 folder.upsert",
-      "bookmarks.user:7 bookmark.upsert",
-    ]);
-    expect(enqueued[0]?.payload).toMatchObject({ folderId: defaultFolderIdFor(7), sourceId: null });
-  });
-
-  it("pending rows beat a stale snapshot until their mutation drains", async () => {
-    const { store, enqueued } = setup(account());
-    store.toggle(1, 1);
-    await settle();
-    const stale: BookmarksSnapshot = { folders: [], bookmarks: [] };
-    store.applyServer(stale);
-    expect(store.isBookmarked(1, 1)).toBe(true);
-    const row = store.bookmarks[0]!;
-    const drained = [
-      {
-        id: "m1",
-        domain: "bookmarks.user:7",
-        seq: 1,
-        queuedAt: 0,
-        payload: enqueued[0]!.payload,
-      },
-    ];
-    store.applyServer({ folders: [], bookmarks: [row] }, drained);
-    expect(store.bookmarks.map((b) => b.id)).toEqual([row.id]);
-    store.applyServer({ folders: [], bookmarks: [] });
-    expect(store.isBookmarked(1, 1)).toBe(false);
-  });
-
-  it("a folder delete hides its rows at once (the server cascades)", async () => {
-    const { store, enqueued } = setup(account());
-    const folder = store.createFolder("Juz Amma")!;
-    store.setInFolder(78, 1, folder.id, true);
-    store.deleteFolder(folder.id);
-    await settle();
-    expect(store.isBookmarked(78, 1)).toBe(false);
-    expect(enqueued.at(-1)?.payload).toMatchObject({ kind: "folder.delete", id: folder.id });
-  });
-
-  it("signing in folds device bookmarks into the account, device default → account default", async () => {
-    const auth: FakeAuth = { authenticated: false, user: null, notifySessionLost: vi.fn() };
-    const { store, enqueued } = setup(auth);
-    const merged = vi.fn();
-    store.onMerged(merged);
-    const hifz = store.createFolder("Hifz")!;
-    store.toggle(2, 255);
-    store.setInFolder(18, 10, hifz.id, true);
-    auth.authenticated = true;
-    auth.user = { id: 7 };
-    store.onAuthChanged();
-    await settle();
-    expect(merged).toHaveBeenCalledWith(2);
-    expect(window.localStorage.getItem("easyquran.bookmarks.local")).toBeNull();
-    const upserts = enqueued
-      .filter((e) => e.payload.kind === "bookmark.upsert")
-      .map((e) => e.payload);
-    expect(upserts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ surah: 2, ayah: 255, folderId: defaultFolderIdFor(7) }),
-        expect.objectContaining({ surah: 18, ayah: 10, folderId: hifz.id }),
-      ]),
-    );
+    const toggled = store.toggle(2, 255);
+    expect(toggled.kind).toBe("added");
+    expect(store.isBookmarked(2, 255)).toBe(true);
+    expect(store.pending).toBe(1);
+    const cached = JSON.parse(localStorage.getItem("easyquran.bookmarks.user.7") ?? "{}");
+    expect(cached.bookmarks[0]).toMatchObject({ dirty: true, surah: 2 });
+    await round();
+    expect(bodies[0]).toMatchObject({ expectedUserId: 7, client: { protocol: 1 } });
+    expect(store.pending).toBe(0);
     expect(store.isBookmarked(2, 255)).toBe(true);
   });
 
-  it("an account switch never shows the previous account's rows", async () => {
+  it("a kill before the ack loses nothing", () => {
+    const first = setup(account());
+    first.store.toggle(2, 255);
+    const second = setup(account());
+    expect(second.store.pending).toBe(1);
+    expect(second.store.isBookmarked(2, 255)).toBe(true);
+  });
+
+  it("an edit while the request flies stays dirty", async () => {
+    const { store, answers, round } = setup(account());
+    store.toggle(2, 255);
+    answers.push({ during: () => store.toggle(2, 255) });
+    await round();
+    expect(store.pending).toBe(1);
+    expect(store.isBookmarked(2, 255)).toBe(false);
+  });
+
+  it("a delete pulled from another device reaches this one, and an empty pull deletes nothing", async () => {
+    const { store, answers, round } = setup(account());
+    answers.push({
+      body: roundBody({ folders: [serverFolder()], bookmarks: [serverMark()], rev: 2, latestRev: 2 }),
+    });
+    await round();
+    expect(store.isBookmarked(2, 255)).toBe(true);
+    answers.push({ body: roundBody({ rev: 2, latestRev: 2 }) });
+    await round();
+    expect(store.isBookmarked(2, 255)).toBe(true);
+    answers.push({
+      body: roundBody({
+        bookmarks: [
+          {
+            id: MARK,
+            folderId: FOLDER,
+            surah: 2,
+            ayah: 255,
+            endSurah: 2,
+            endAyah: 255,
+            deleted: true,
+            stamp: stamp(NOW + 10),
+            rev: 3,
+          },
+        ],
+        rev: 3,
+        latestRev: 3,
+      }),
+    });
+    await round();
+    expect(store.isBookmarked(2, 255)).toBe(false);
+  });
+
+  it("two ids for one key show one row, and converge when the loser's tombstone lands", async () => {
+    const { store, answers, round } = setup(account());
+    answers.push({
+      body: roundBody({
+        folders: [serverFolder()],
+        bookmarks: [serverMark(), serverMark({ id: MARK2, stamp: stamp(NOW + 5) })],
+        rev: 3,
+        latestRev: 3,
+      }),
+    });
+    await round();
+    expect(store.bookmarks.map((b) => b.id)).toEqual([MARK2]);
+  });
+
+  it("rename here and move there both survive", async () => {
+    const { store, answers, round } = setup(account());
+    answers.push({ body: roundBody({ folders: [serverFolder()], rev: 1, latestRev: 1 }) });
+    await round();
+    store.renameFolder(FOLDER, "Memorise");
+    answers.push({
+      body: roundBody({
+        folders: [serverFolder({ position: 9, positionStamp: stamp(NOW + 1), rev: 2 })],
+        rev: 2,
+        latestRev: 2,
+      }),
+    });
+    await round();
+    expect(store.folderById(FOLDER)).toMatchObject({ name: "Memorise", position: 9 });
+  });
+
+  it("folder delete: older bookmarks die, newer ones show in the default folder", async () => {
+    const { store, answers, round } = setup(account());
+    answers.push({
+      body: roundBody({
+        folders: [serverFolder()],
+        bookmarks: [
+          serverMark({ stamp: stamp(NOW - 100) }),
+          serverMark({ id: MARK2, ayah: 1, endAyah: 1, stamp: stamp(NOW + 100) }),
+        ],
+        rev: 3,
+        latestRev: 3,
+      }),
+    });
+    await round();
+    answers.push({
+      body: roundBody({
+        folders: [
+          { id: FOLDER, deleted: true, rev: 4, nameStamp: null, positionStamp: null, deletedStamp: stamp(NOW) },
+        ],
+        rev: 4,
+        latestRev: 4,
+      }),
+    });
+    await round();
+    expect(store.folderById(FOLDER)).toBeUndefined();
+    expect(store.bookmarks.map((b) => b.id)).toEqual([MARK2]);
+    expect(store.bookmarks[0]?.folderId).toBe(defaultFolderIdFor(7));
+  });
+
+  it("deleting a folder here hides it at once, and undo restores with newer stamps", () => {
+    const { store } = setup(account());
+    const folder = store.createFolder("Hifz");
+    expect(folder).not.toBeNull();
+    if (folder === null) return;
+    store.setInFolder(2, 255, folder.id, true);
+    const deleted = store.deleteFolder(folder.id);
+    expect(store.folderById(folder.id)).toBeUndefined();
+    expect(store.isBookmarked(2, 255)).toBe(false);
+    if (deleted === null) throw new Error("expected a delete");
+    store.restoreFolder(deleted);
+    expect(store.folderById(folder.id)).toBeDefined();
+    expect(store.isBookmarked(2, 255)).toBe(true);
+  });
+
+  it("rejected keeps the row and stops resending; capped stays dirty and is surfaced", async () => {
+    const { store, answers, round } = setup(account());
+    store.toggle(2, 255);
+    const id = store.bookmarks[0]?.id ?? "";
+    answers.push({ body: roundBody({ results: [{ id, status: "rejected" }] }) });
+    await round();
+    expect(store.rejectedCount).toBe(1);
+    expect(store.dirtyRows()).toEqual([]);
+    expect(store.isBookmarked(2, 255)).toBe(true);
+
+    store.toggle(3, 1);
+    const other = store.bookmarks.find((b) => b.surah === 3)?.id ?? "";
+    answers.push({ body: roundBody({ results: [{ id: other, status: "capped" }] }) });
+    await round();
+    expect(store.cappedCount).toBe(1);
+    expect(store.dirtyRows().map((r) => r.id)).toEqual([other]);
+  });
+
+  it("past the floor: full pull, and a stale device revives nothing", async () => {
+    const { store, answers, round, bodies } = setup(account());
+    answers.push({
+      body: roundBody({ folders: [serverFolder()], bookmarks: [serverMark()], rev: 5, latestRev: 5 }),
+    });
+    await round();
+    answers.push({ body: roundBody({ rev: 50, latestRev: 50, tombstoneFloor: 40 }) });
+    expect((await round()).more).toBe(true);
+    answers.push({ body: roundBody({ rev: 50, latestRev: 50, tombstoneFloor: 40 }) });
+    await round();
+    expect(bodies.at(-1)).toMatchObject({ since: 0 });
+    expect(store.isBookmarked(2, 255)).toBe(false);
+  });
+
+  it("a restored server forces a full pull and re-push", async () => {
+    const { store, answers, round } = setup(account());
+    store.toggle(2, 255);
+    await round();
+    expect(store.pending).toBe(0);
+    answers.push({ body: roundBody({ syncEpoch: "2" }) });
+    expect((await round()).more).toBe(true);
+    expect(store.pending).toBe(1);
+  });
+
+  it("signing in folds device bookmarks into the account, device default → account default", () => {
+    const auth: FakeAuth = { authenticated: false, user: null, notifySessionLost: vi.fn() };
+    const seen: number[] = [];
+    const { store } = setup(auth);
+    store.onMerged((count) => seen.push(count));
+    store.toggle(2, 255);
+    auth.authenticated = true;
+    auth.user = { id: 7 };
+    store.onAuthChanged();
+    expect(seen).toEqual([1]);
+    expect(localStorage.getItem("easyquran.bookmarks.local")).toBeNull();
+    expect(store.bookmarks[0]?.folderId).toBe(defaultFolderIdFor(7));
+    const rows = store.dirtyRows();
+    expect(rows[0]).toMatchObject({ kind: "bookmark.upsert", stamp: expect.stringMatching(/^\d{13}-/u) });
+  });
+
+  it("an account switch never shows the previous account's rows", () => {
     const auth = account();
     const { store } = setup(auth);
-    store.toggle(5, 5);
-    await settle();
-    auth.user = { id: 8 };
+    store.toggle(2, 255);
+    auth.user = { id: 9 };
     store.onAuthChanged();
-    expect(store.isBookmarked(5, 5)).toBe(false);
-    expect(store.defaultFolderId).toBe(defaultFolderIdFor(8));
+    expect(store.bookmarks).toEqual([]);
+    expect(store.dirtyRows()).toEqual([]);
+    auth.user = { id: 7 };
+    store.onAuthChanged();
+    expect(store.isBookmarked(2, 255)).toBe(true);
+    expect(store.pending).toBe(1);
   });
 
   it("a cookie-account mismatch suspends the view and hands the loss to the auth seam", async () => {
     const auth = account();
-    const { store, registered } = setup(auth);
-    const domain = registered[0]!;
-    // The domain reports the mismatch through its callback, then pauses.
-    const failing = new BookmarksStore({
-      engine: {
-        enqueue: async <P>(domainName: string, payload: P) =>
-          // SAFETY: test double.
-          ({ id: "x", domain: domainName, seq: 1, payload, queuedAt: 0 }) as SyncMutation<P>,
-        pendingFor: () => 0,
-        flush: async () => undefined,
-        start: () => () => undefined,
-        status: STATUS,
-      },
-      auth: {
-        unsafeRequest: async () => ({
-          ok: false,
-          status: 403,
-          data: null,
-          error: { message: "Bookmark sync account changed" },
-          rotated: false,
-        }),
-      },
-      state: auth,
-      register: (d) => registered.push(d),
-      unregister: () => undefined,
-    });
-    failing.hydrate();
-    const adapter = registered.at(-1)!;
-    await expect(adapter.sync([])).rejects.toThrow("paused");
-    expect(failing.authed).toBe(false);
-    expect(auth.notifySessionLost).toHaveBeenCalled();
-    expect(domain.name).toBe("bookmarks.user:7");
-    expect(store.authed).toBe(true);
+    const { store, answers, round } = setup(auth);
+    answers.push({ status: 403, message: "Bookmark sync account changed" });
+    await expect(round()).rejects.toBeInstanceOf(SyncPausedError);
+    expect(store.authed).toBe(false);
+    expect(auth.notifySessionLost).toHaveBeenCalledOnce();
   });
 });

@@ -135,10 +135,14 @@ impl Entity {
         w: &BookmarkWrite<'_>,
     ) -> DbResult<BookmarkOutcome> {
         let existing = Self::load(conn, user_id, w.id).await?;
-        let incoming = registers_of_write(w);
+        let mut incoming = registers_of_write(w);
         let mut merged = match &existing {
             Some(row) => {
+                if row.scrubbed_at.is_some() {
+                    return Ok(BookmarkOutcome::Superseded(Box::new(row.clone())));
+                }
                 let current = registers_of(row);
+                sync_counter::absorb_rewritten_replays(&current, &mut incoming);
                 let merged = merge_bookmark(&current, &incoming);
                 if canonical_json(&merged) == canonical_json(&current) {
                     return Ok(BookmarkOutcome::Superseded(Box::new(row.clone())));

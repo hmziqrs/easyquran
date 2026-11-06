@@ -10,9 +10,39 @@ use crate::state::AppState;
 const TICK_INTERVAL_SECS: u64 = 60;
 const JOB_NAME: &str = "scheduled_post_publish";
 
+const SYNC_SCRUB_INTERVAL_SECS: u64 = 3_600;
+const SYNC_SCRUB_JOB: &str = "sync_tombstone_scrub";
+
 pub fn start_scheduler(state: AppState) {
+    tokio::spawn(run_sync_scrub(state.clone()));
     tokio::spawn(run(state));
     info!("Scheduled post publisher started (interval: {TICK_INTERVAL_SECS}s)");
+}
+
+async fn run_sync_scrub(state: AppState) {
+    let mut interval = tokio::time::interval(Duration::from_secs(SYNC_SCRUB_INTERVAL_SECS));
+    loop {
+        interval.tick().await;
+        let started = job_log::epoch_now();
+        let result = crate::services::sync_sweep::scrub_tombstones(&state.sea_db).await;
+        let finished = job_log::epoch_now();
+        let (outcome, detail) = match result {
+            Ok(rows) => (OUTCOME_OK, Some(format!("scrubbed={rows}"))),
+            Err(err) => {
+                error!(error = %err, "Sync tombstone scrub failed");
+                (OUTCOME_ERROR, None)
+            }
+        };
+        job_log::record(
+            &state.sea_db,
+            SYNC_SCRUB_JOB,
+            started,
+            finished,
+            outcome,
+            detail.as_deref(),
+        )
+        .await;
+    }
 }
 
 async fn run(state: AppState) {

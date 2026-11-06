@@ -49,6 +49,78 @@ Each account on each install keeps a hybrid logical clock.
 
 The device id is minted locally per account at first sign-in. No server row is needed.
 
+## Wire format
+
+`POST /reading-session/v1/sync` and `POST /bookmark/v1/sync`. JSON is camelCase.
+
+Request:
+
+| Field | Meaning |
+| --- | --- |
+| `expectedUserId` | Required. A mismatch is 403 before any write |
+| `client` | `{protocol, platform, appVersion}`. In the body, so the CORS table never changes |
+| `since` | Last `rev` applied. `0` is a full pull |
+| `after` | Page cursor inside a full pull. Starts at `-1` |
+| `mutations` | Up to 200 rows. Each parses alone, so one bad row is refused alone |
+
+Rows:
+
+- `session.upsert`: `id` (UUID v7), and any of three groups. `identityStamp` with `origin`, `originRef`, `scope`, `boundEnd`, `startedAt`. `cursorStamp` with `surah`, `ayah`, `localPage`, `ratio`, `sourceId`, `device`, `deviceId`. `lifecycleStamp` with `state`, `endedAt`, `endReason`. A new id needs identity and cursor.
+- `progress.upsert`: `surah`, `furthestAyah`, `updatedAt`. Its result id is `progress:{surah}`.
+- `folder.upsert`: `id`, then `nameStamp` with `name`, `positionStamp` with `position`, `deletedStamp` with `deleted`. A new id needs a name.
+- `bookmark.upsert`: `id`, `stamp`, `folderId`, `surah`, `ayah`, `endSurah`, `endAyah`, `sourceId`, `deleted`. An unknown folder id files in the default folder.
+
+`updatedAt` is display only. Stamps decide. A stamp more than 60 s ahead of the server is rewritten to `server + 60 s`, keeping its device id. The client adopts it from the result.
+
+Response: `serverTime`, `syncEpoch`, `results`, `applied`, `superseded`, `rejected`, `capped`, the changed rows (`sessions` and `progress`, or `folders`, `bookmarks` and `defaultFolderId`), `rev`, `latestRev`, `more`, `tombstoneFloor`.
+
+Each result is `{id, status, stamps?}`:
+
+| Status | Client behaviour |
+| --- | --- |
+| `applied`, `superseded` with `stamps` | Adopt a lower returned stamp. Clear `dirty` only if the row's stamps are still the ones sent |
+| `superseded` with no `stamps` | Older than the tombstone floor. The row may be long deleted: let it go |
+| `rejected` | Keep the row, stop resending until it is edited, surface the count |
+| `capped` | Keep it dirty, surface it, retry when room appears |
+
+## Pull
+
+- `rev` is per user and per domain, taken inside the write transaction. Save `since` only after the page is durably applied.
+- Delta (`since > 0`): changed rows by `rev`, tombstones included, 200 per page. Repeat while `more`.
+- Full (`since = 0`): open threads, all progress, live folders and bookmarks. Keep `since = 0` and send `after = rev` while `more`. History comes from `/reading-session/v1/archive`.
+- A tombstone is id, stamps, state and `rev` only. A bookmark tombstone keeps its key. Only a tombstone deletes: a missing row means nothing.
+- Content stays 24 h for Undo, then the server scrubs it, and a scrubbed row ignores further writes.
+- `since` below `tombstoneFloor`: full pull, then drop clean rows the pull did not name.
+- `syncEpoch` changed, or `since` above `latestRev`: the server was restored. Full pull, and mark every local row dirty.
+
+## The row is the queue
+
+- `dirty` persists on the row, in the same write as the row. A round sends the current dirty rows, so 10,000 offline cursor moves are one row.
+- Lifecycle writes persist at once. Cursor writes may debounce with a page-hide flush, so a hard kill can lose only the last moments of cursor movement.
+- Dirty rows are never evicted and never dropped at sign-out, expiry or device revoke. They wait, per account, for that account to sign in.
+- If local storage fails, keep the row in memory and surface the degraded status. Never report it synced.
+- Across tabs, `dirty` is OR, except that an ack is final for the stamps it named.
+- Clean rows of an account with no sign-in for 180 days are dropped on next launch.
+- One tab polls while visible, elected with `navigator.locks`. Every tab polls if locks are missing. Native polls in the foreground and on resume. Nothing depends on background sync.
+
+## Status table
+
+| Response | Client behaviour |
+| --- | --- |
+| 401 | Sign-out state. Keep dirty rows for that account |
+| 403 unverified, banned, or account mismatch | Pause. Never dead-letter. Keep dirty rows |
+| 404 (auth nests unmounted) | Pause with backoff |
+| 426 | Pause sync, show update prompt, keep reading |
+| 429 | Honour `Retry-After` |
+| 5xx, timeout, `SQLITE_BUSY`, malformed-request 400 | Retry with backoff and jitter. Rows stay dirty |
+
+## Versions
+
+- Within a protocol, changes are additive: new fields and registers are optional. The server never removes a field or tightens a validator. A breaking change means a new protocol and a period serving both.
+- Below the minimum protocol: 426 with no row applied. `tests/fixtures/sync-v1/` is frozen and must keep passing against every later build.
+- Clients preserve unknown fields on rows and show an unknown enum value with a neutral default.
+- A local store with a newer schema than the app stays untouched, and sync pauses.
+
 ## Edge cases
 
 | Case | Required behaviour |
@@ -57,3 +129,34 @@ The device id is minted locally per account at first sign-in. No server row is n
 | Clock changed backwards mid-session | Stamps keep rising |
 | Same-millisecond writes, counter overflow | Counter orders them; overflow bumps ms |
 | Sleep, wake, or suspended device | Offset refreshes on next sync |
+| Device clock hours behind | Edit after seeing a row beats that row. Before any sync, it may lose, and it converges |
+| Device clock hours or a year ahead | Rewritten to server + 60 s, `last` reset, converges |
+| Same thread moved on two devices | Highest cursor stamp wins; progress keeps the MAX |
+| Same scope started on two devices offline | Two threads. Continue shows the newest |
+| Thread ended on A, read further on stale B | Stays ended; B's cursor lands; B's reading keeps its progress |
+| Deleted on A, read further on stale B | Stays deleted; B starts a new thread on its next read |
+| Delete then Undo, with another device offline | Later stamp restores; other device converges |
+| Folder renamed on A, reordered on B | Both survive |
+| Folder deleted on A, bookmark added on B later | Bookmark moves to the default folder |
+| One verse bookmarked on two devices offline in one folder | One row survives on every client |
+| Same folder name created twice offline | Both kept |
+| Device offline longer than 180 days | Full pull; nothing deleted revives; its own newer rows land |
+| 10,000 offline scrolls | One dirty row |
+| App killed after row persisted | Nothing lost |
+| Hard kill during cursor debounce | Accepted limit: last moments of scroll position; lifecycle writes never lost |
+| Response lost after server commit | Replay changes nothing |
+| Duplicate or reordered requests | No effect |
+| One invalid row in a batch | Only that row is refused |
+| Multi-page pull interrupted | Resumes; `since` saved after durable apply |
+| Local storage full or failing | Degraded status, never reported as synced |
+| Server 5xx, deploy, `SQLITE_BUSY` | Backoff with jitter; rows stay dirty |
+| Session expires with dirty rows | Rows wait; drain on sign-in to the same account |
+| Signed-out reading, then sign-in | Folds silently into that account, per product decision, even on a shared phone |
+| Account banned or email unverified during sync | Pause; rows kept; never dead-lettered |
+| Same email re-registered | New user id. Accepted limit: the old partition's dirty rows never drain |
+| Old app or stale tab on a new server | Works within a protocol; below minimum, 426 and reading continues |
+| Unknown enum, field or register | Displayed neutrally and preserved |
+| App downgrade with newer local schema | Store untouched; sync pauses |
+| Position written on another client or layout | `surah:ayah` wins; page and ratio ignored unless same client class |
+| Translation or snippet missing on this client | Display fallback; row value preserved |
+| iOS or Android blocks background work | Sync on foreground and resume; nothing depends on background |

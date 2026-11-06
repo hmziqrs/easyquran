@@ -1,10 +1,6 @@
 import type { AuthRequestResult, UnsafeRequestInit } from "#lib/auth/auth-client.js";
-import {
-  SyncPausedError,
-  SyncRetryAfterError,
-  type RowRoundResult,
-  type SyncDomain,
-} from "#lib/sync/index.js";
+import { SyncPausedError, type RowRoundResult, type SyncDomain } from "#lib/sync/index.js";
+import { SYNC_CLIENT, throwForFailure } from "#lib/sync/round-status.js";
 
 import { decodeSessionRound, type SessionRound, type SessionWireRow } from "./schema";
 
@@ -30,37 +26,11 @@ export interface SessionsRoundPort {
 }
 
 const SYNC_PATH = "/reading-session/v1/sync";
-/** The wire protocol this build speaks (contracts/sync.md). */
-export const SYNC_PROTOCOL = 1;
-const CLIENT = { protocol: SYNC_PROTOCOL, platform: "web" };
-const DEFAULT_RETRY_AFTER_S = 60;
 
 export const SESSIONS_DOMAIN = "sessions";
 
 export function sessionsDomainFor(userId: number): string {
   return `${SESSIONS_DOMAIN}.user:${userId}`;
-}
-
-/** The status table in contracts/sync.md, the same on every client. */
-function classifyFailure(
-  res: AuthRequestResult<unknown>,
-  onAccountMismatch: (() => void) | undefined,
-  onUpgradeRequired: (() => void) | undefined,
-): never {
-  const { status } = res;
-  if (status === 403 && res.error?.message === "Reading session sync account changed") {
-    onAccountMismatch?.();
-  }
-  if (status === 401 || status === 403) {
-    throw new SyncPausedError(`reading-session sync paused (${status})`);
-  }
-  if (status === 426) {
-    onUpgradeRequired?.();
-    throw new SyncPausedError("reading-session sync paused: update required");
-  }
-  if (status === 429) throw new SyncRetryAfterError(res.retryAfter ?? DEFAULT_RETRY_AFTER_S);
-  // 404 (auth nests unmounted), 5xx, and a malformed-request 400: back off, rows stay dirty.
-  throw new Error(`reading-session sync failed (${status})`);
 }
 
 /**
@@ -93,14 +63,20 @@ export function createSessionsDomain(
         method: "POST",
         body: {
           expectedUserId: ownerId,
-          client: CLIENT,
+          client: SYNC_CLIENT,
           ...port.position(),
           mutations: sent,
         },
         signal,
       });
       assertCurrent(signal);
-      if (!res.ok) classifyFailure(res, onAccountMismatch, () => port.onUpgradeRequired?.());
+      if (!res.ok) {
+        throwForFailure("reading-session sync", res, {
+          mismatchMessage: "Reading session sync account changed",
+          onAccountMismatch,
+          onUpgradeRequired: () => port.onUpgradeRequired?.(),
+        });
+      }
       const round = decodeSessionRound(res.data);
       if (round === null) throw new Error("reading-session sync returned an unreadable round");
       return port.applyRound(round, sent);

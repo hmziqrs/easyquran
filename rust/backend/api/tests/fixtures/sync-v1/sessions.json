@@ -1,0 +1,31 @@
+{
+  "client": { "protocol": 1, "platform": "web", "appVersion": "1" },
+  "since": 0,
+  "mutations": [
+    {
+      "kind": "session.upsert",
+      "id": "019a0000-0000-7000-8000-00000000000a",
+      "identityStamp": "1790000000000-0000-frozen",
+      "origin": "index",
+      "originRef": null,
+      "scope": "surah:2",
+      "boundEnd": null,
+      "startedAt": "2026-09-01T00:00:00.000Z",
+      "cursorStamp": "1790000000000-0000-frozen",
+      "surah": 2,
+      "ayah": 5,
+      "localPage": 3,
+      "ratio": 0.25,
+      "sourceId": null,
+      "device": "phone",
+      "deviceId": "frozen",
+      "lifecycleStamp": "1790000000000-0000-frozen",
+      "state": "open",
+      "endedAt": null,
+      "endReason": null,
+      "updatedAt": "2026-09-01T00:00:00.000Z",
+      "fieldThisServerDoesNotKnow": { "kept": true }
+    },
+    { "kind": "progress.upsert", "surah": 2, "furthestAyah": 5, "updatedAt": "2026-09-01T00:00:00.000Z" }
+  ]
+}

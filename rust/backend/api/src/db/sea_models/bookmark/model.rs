@@ -25,6 +25,7 @@ pub struct Model {
     /// Whole-row register stamp; NULL ranks lowest.
     pub stamp: Option<String>,
     pub rev: i64,
+    pub scrubbed_at: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
