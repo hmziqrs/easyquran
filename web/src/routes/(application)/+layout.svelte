@@ -4,6 +4,8 @@
   import { beforeNavigate, goto } from "$app/navigation";
   import { installReadTracker } from "#lib/analytics/read-tracker.js";
   import SaveToSheet from "#lib/components/bookmarks/SaveToSheet.svelte";
+  import { AUDIO_ENABLED } from "#lib/audio/catalogue.js";
+  import { browser } from "$app/env";
   import amiriArabic from "@fontsource/amiri/files/amiri-arabic-400-normal.woff2?url";
   import { Nav } from "#lib/components/nav/index.js";
   import { Footer } from "#lib/components/footer/index.js";
@@ -247,6 +249,12 @@
   <Footer year={data.year} copy={copy.footer} links={footerLinks} />
 </div>
 <SaveToSheet />
+{#if AUDIO_ENABLED && browser}
+  <!-- F19: dark until a recitation source is licensed (O22). The dock and the audio engine are a dynamic import, so they stay out of the initial bundle. -->
+  {#await import("#lib/components/audio/AudioDock.svelte") then dock}
+    <dock.default />
+  {/await}
+{/if}
 <Tweaks
   locale={copy.locale}
   triggerLabel={copy.appearanceTrigger}

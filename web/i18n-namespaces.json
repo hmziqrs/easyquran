@@ -134,6 +134,11 @@
       "prefixes": ["reader"]
     },
     {
+      "id": "audio",
+      "description": "Recitation player (F19) and repeat engine (F20). Lazy: downloaded only with the dock, which mounts only once a recording is licensed (web/src/lib/audio/catalogue.ts).",
+      "prefixes": ["audio"]
+    },
+    {
       "id": "settings",
       "description": "Settings page: storage, reading, privacy and account sections. Lazy: downloaded whole when the settings route loads or the reader appearance panel opens (offline-pack + notification toggle copy). The marketing appearance panel and the settings privacy section reuse reader_* notifications strings instead and never pull this namespace.",
       "prefixes": ["settings"]
