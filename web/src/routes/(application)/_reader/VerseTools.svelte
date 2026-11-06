@@ -14,7 +14,21 @@
   import { Tooltip, TooltipTrigger, TooltipContent } from "#lib/components/ui/tooltip/index.js";
   import { Textarea } from "#lib/components/ui/textarea/index.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
-  import { reader_verse_note, reader_verse_note_close, reader_verse_note_open } from "#lib/i18n/m/reader.js";
+  import {
+    reader_bookmarks_undo,
+    reader_reading_bookmark_here,
+    reader_reading_bookmark_saved,
+    reader_reading_bookmark_set,
+    reader_verse_note,
+    reader_verse_note_close,
+    reader_verse_note_open,
+  } from "#lib/i18n/m/reader.js";
+  import {
+    currentReadingBookmark,
+    restoreReadingBookmark,
+    setReadingBookmark,
+  } from "#lib/preferences/reading-bookmark.svelte.js";
+  import { toast } from "svelte-sonner";
   import { appLocale } from "#lib/i18n/app-locale.js";
   import { cn } from "#lib/utils.js";
 
@@ -36,6 +50,25 @@
   function currentSourceId(): string | null {
     const ctx = routeContextFromParams(page.params);
     return ctx.kind === "translation" ? translationIdFromSegments(ctx.lang, ctx.translator) : null;
+  }
+
+  // The reader's own place to return to. Automatic resume never touches it.
+  const savedPlace = $derived(currentReadingBookmark());
+  const isReadingBookmark = $derived(
+    savedPlace !== null && `${savedPlace.surah}:${savedPlace.ayah}` === verseKeyValue,
+  );
+
+  function onSetReadingBookmark(): void {
+    const coords = parseVerseKey(vKey);
+    if (coords === null) return;
+    const previous = setReadingBookmark({ ...coords, sourceId: currentSourceId() });
+    toast(reader_reading_bookmark_saved(undefined, noteMsg), {
+      id: "reading-bookmark",
+      action: {
+        label: reader_bookmarks_undo(undefined, noteMsg),
+        onClick: () => restoreReadingBookmark(previous),
+      },
+    });
   }
 
   // Bookmarks reopen in the translation they were saved from.
@@ -146,6 +179,16 @@
       icon: bookmarked ? "bookmark-fill" : "bookmark",
       activeClass: bookmarked ? "text-primary" : undefined,
       pressed: bookmarked,
+    })}
+    {@render verseAction({
+      onclick: onSetReadingBookmark,
+      label: reader_reading_bookmark_set(undefined, noteMsg),
+      ariaLabel: isReadingBookmark
+        ? reader_reading_bookmark_here(undefined, noteMsg)
+        : reader_reading_bookmark_set(undefined, noteMsg),
+      icon: "book",
+      activeClass: isReadingBookmark ? "text-primary" : undefined,
+      pressed: isReadingBookmark,
     })}
     {@render verseAction({
       onclick: onCopy,

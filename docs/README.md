@@ -99,8 +99,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 
 | Item                                                               | Title                                  | Blocked by |
 | ------------------------------------------------------------------ | -------------------------------------- | ---------- |
-| [F2](plans/product.md#f2-settings-and-widget-layout-sync)          | Settings and widget-layout sync        | S7         |
-| [F5](plans/product.md#f5-explicit-reading-bookmark)                | Explicit reading bookmark              | S7         |
 | [F6](plans/product.md#f6-personal-data-export-and-import)          | Personal data export and import        | -          |
 | [F7](plans/product.md#f7-self-service-account-deletion)            | Self-service account deletion          | F6, A38    |
 | [F8](plans/product.md#f8-reading-goals-and-streaks)                | Reading goals and streaks              | S7         |

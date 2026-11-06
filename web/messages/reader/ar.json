@@ -191,8 +191,13 @@
   "reader_offline_working": "جارٍ العمل…",
   "reader_offline_routes": [
     {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=zero": "لا توجد مسارات",
         "countPlural=one": "مسار واحد",
@@ -478,5 +483,12 @@
   "reader_cards_schedule_hour": "الساعة",
   "reader_cards_schedule_minute": "الدقيقة",
   "reader_bookmarks_delete_folder_confirm_empty": "حذف «{name}»؟",
-  "reader_bookmarks_delete_folder_confirm_one": "حذف «{name}» وعلامته المرجعية؟"
+  "reader_bookmarks_delete_folder_confirm_one": "حذف «{name}» وعلامته المرجعية؟",
+  "reader_reading_bookmark_set": "اجعلها موضع قراءتي",
+  "reader_reading_bookmark_here": "موضع قراءتك هنا",
+  "reader_reading_bookmark_saved": "حُفظ موضع القراءة",
+  "reader_reading_bookmark_title": "موضع قراءتك",
+  "reader_reading_bookmark_open": "افتح",
+  "reader_reading_bookmark_detail": "{surah} · الآية {ayah}",
+  "reader_reading_bookmark_set_on": "{source} · حُفظ في {date}"
 }

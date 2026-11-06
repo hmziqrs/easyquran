@@ -2,7 +2,7 @@ import { browser } from "$app/env";
 
 import { asNumber, asObject, asString, readJSON, writeJSON } from "#lib/storage/index.js";
 
-/** Homepage widget layout (Feature 5). Local-only per §11.3: `easyquran.home`, never synced — per-device widgets need no sync policy (documentation/settings-system.md §7 gap stays moot). */
+/** Homepage widget layout (Feature 5). `easyquran.home`, synced as one document by `#lib/preferences` — per-device widgets need no sync policy (documentation/settings-system.md §7 gap stays moot). */
 
 const STORAGE_KEY = "easyquran.home";
 const SCHEMA_VERSION = 1;
@@ -123,6 +123,12 @@ class HomeLayoutStore {
     if (this.#hydrated || !browser) return;
     this.#hydrated = true;
     this.#envelope = decodeHomeLayout(readJSON(STORAGE_KEY));
+  }
+
+  /** Show a layout that arrived from another device. */
+  // eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is a synced value of uncertain shape; decodeHomeLayout is its parser.
+  replace(raw: unknown): void {
+    this.#write(decodeHomeLayout({ v: SCHEMA_VERSION, ...asObject(raw) }));
   }
 
   get entries(): readonly HomeWidgetEntry[] {

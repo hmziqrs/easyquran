@@ -23,6 +23,7 @@
   import { homeLayout, type HomeWidgetId } from "#lib/home/layout.svelte.js";
   import { entryAttrs } from "#lib/sessions/entry.js";
   import ContinueThreads from "./_components/ContinueThreads.svelte";
+  import ReadingBookmarkCard from "./_components/ReadingBookmarkCard.svelte";
   import ThreadHistory from "./_components/ThreadHistory.svelte";
   import ReadingInsights from "./_components/ReadingInsights.svelte";
   import NotesLibrary from "./_components/NotesLibrary.svelte";
@@ -411,6 +412,7 @@
   {#if view === "notes"}
     <NotesLibrary {quranData} />
   {:else if mounted}
+  <ReadingBookmarkCard {quranData} />
   {#each widgets as widget (widget.id)}
   {#if widget.visible && widget.id === "continue-reading"}
     <section aria-labelledby="yours-continue" class="mt-5">

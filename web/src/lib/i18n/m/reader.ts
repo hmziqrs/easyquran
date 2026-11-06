@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 426 messages. Import this barrel, never
+// 433 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "#lib/paraglide/messages/reader_account.js";
@@ -288,6 +288,13 @@ export { reader_quran_book } from "#lib/paraglide/messages/reader_quran_book.js"
 export { reader_range_translation_unavailable } from "#lib/paraglide/messages/reader_range_translation_unavailable.js";
 export { reader_reading } from "#lib/paraglide/messages/reader_reading.js";
 export { reader_reading_arabic } from "#lib/paraglide/messages/reader_reading_arabic.js";
+export { reader_reading_bookmark_detail } from "#lib/paraglide/messages/reader_reading_bookmark_detail.js";
+export { reader_reading_bookmark_here } from "#lib/paraglide/messages/reader_reading_bookmark_here.js";
+export { reader_reading_bookmark_open } from "#lib/paraglide/messages/reader_reading_bookmark_open.js";
+export { reader_reading_bookmark_saved } from "#lib/paraglide/messages/reader_reading_bookmark_saved.js";
+export { reader_reading_bookmark_set } from "#lib/paraglide/messages/reader_reading_bookmark_set.js";
+export { reader_reading_bookmark_set_on } from "#lib/paraglide/messages/reader_reading_bookmark_set_on.js";
+export { reader_reading_bookmark_title } from "#lib/paraglide/messages/reader_reading_bookmark_title.js";
 export { reader_reading_mode } from "#lib/paraglide/messages/reader_reading_mode.js";
 export { reader_reading_pick_note } from "#lib/paraglide/messages/reader_reading_pick_note.js";
 export { reader_reading_recent } from "#lib/paraglide/messages/reader_reading_recent.js";

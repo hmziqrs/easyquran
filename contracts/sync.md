@@ -31,6 +31,7 @@ A register is `{ "stamp": string | null, "value": any }`. Each row carries one p
 | Same scope on two devices offline | None | Keep both threads. Continue shows the newest per scope; the other stays reachable in History |
 | Settings | One per setting key | Highest stamp wins, so two settings changed on two devices both survive |
 | Home layout | Whole document | Highest stamp wins |
+| Reading bookmark | Whole value: `surah`, `ayah`, `sourceId`, `setAt`. Null when cleared | Highest stamp wins. Only an explicit set, replace, clear or undo writes it. Automatic resume never does |
 | Reading events | Insert-once by id | Idempotent |
 
 Rival-key and folder-delete rules run on the set of rows after merging (`convergeBookmarks`). They keep the row's stamp. At equal stamps `deleted: true` has the higher canonical bytes, so a tombstone made on one replica beats the live copy everywhere.
@@ -82,6 +83,8 @@ Each result is `{id, status, stamps?}`:
 | `superseded` with no `stamps` | Older than the tombstone floor. The row may be long deleted: let it go |
 | `rejected` | Keep the row, stop resending until it is edited, surface the count |
 | `capped` | Keep it dirty, surface it, retry when room appears |
+
+`POST /preference/v1/sync` carries settings, the home layout and the reading bookmark. Rows are `{key, value, stamp}`, where `key` is `settings.*`, `home.layout` or `reading.bookmark`, and any other key is `rejected`. A row is one register. There are no tombstones: clearing writes a null value with a newer stamp. The response has `preferences` in place of thread or bookmark rows. Consent flags and notes never sync.
 
 ## Pull
 
@@ -172,3 +175,4 @@ Each account may take 5,000 accepted mutations per UTC day, counted across readi
 | iOS or Android blocks background work | Sync on foreground and resume; nothing depends on background |
 | Very large first sync or import above the daily ceiling | Stays dirty, continues next day, surfaced; pulls still work |
 | Rate limited, many devices or tabs | One polling tab; `Retry-After` honoured |
+| Two settings changed on two devices | Both survive |

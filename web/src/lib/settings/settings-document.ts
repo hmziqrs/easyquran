@@ -226,13 +226,21 @@ function applyArabicScript(store: SettingsReaderPort, sourceId: QuranSourceId): 
   store.setArabicScript(sourceId);
 }
 
+/** Apply a file the user imported. An import can never turn consent on, whatever it claims. */
 export function applySettingsDoc(
   doc: SettingsDoc,
   stores: SettingsDocStores = { prefs, consent, reader },
 ): void {
-  stores.prefs.set({ ...doc.appearance, custom: { ...doc.appearance.custom } });
-  // An imported file can never turn consent on, whatever it claims.
   stores.consent.set({ analytics: false, advertising: false });
+  applySyncedSettings(doc, stores);
+}
+
+/** Apply appearance and reading values. Consent flags stay on this device. */
+export function applySyncedSettings(
+  doc: SettingsDoc,
+  stores: SettingsDocStores = { prefs, consent, reader },
+): void {
+  stores.prefs.set({ ...doc.appearance, custom: { ...doc.appearance.custom } });
   stores.reader.setMode(doc.reading.mode);
   stores.reader.setArabicFont(doc.reading.arabicFont);
   applyArabicScript(stores.reader, doc.reading.arabicScript);

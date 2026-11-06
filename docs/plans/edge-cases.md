@@ -14,7 +14,6 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 
 | Case                                                      | Required behaviour                                            | Item   |
 | --------------------------------------------------------- | ------------------------------------------------------------- | ------ |
-| Two settings changed on two devices                       | Both survive                                                  | S1, F2 |
 
 ### Failures and crashes
 

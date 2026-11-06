@@ -6,20 +6,6 @@ Product features, then the copy truth pass.
 
 ## Product
 
-#### F2. Settings and widget-layout sync
-
-Build: sync the settings document and home widget layout across devices on the `contracts/sync.md` protocol: one stamp per setting key, one for the layout document, per-row results, delta pull, `expectedUserId`. New migration (next free number), new module, wire `settings-document.ts`. Contract detail: `documentation/settings-system.md` §7. Notes stay device-local by decision; never add them to sync.
-Files: `web/src/lib/home/layout.svelte.ts`, `web/src/lib/sync/`, `rust/backend/api/src/modules/`, `rust/backend/api/migration/src/`
-Done when: changing a setting or widget layout on one signed-in device shows on another after sync; two different settings changed offline on two devices both survive; signed-out behaviour unchanged; vectors and `cargo test` cover merge and owner mismatch.
-Blocked by: S7
-
-#### F5. Explicit reading bookmark
-
-Build: user-set page/verse reading bookmark, separate from automatic resume. Set, replace with Undo toast, timestamp, source, card on `/yours`, synced with the account as a new `contracts/sync.md` domain, with its rule and vectors added first.
-Files: `web/src/lib/stores/reader.svelte.ts`, `web/src/routes/(application)/_reader/VerseTools.svelte`, `web/src/routes/(application)/yours/`
-Done when: automatic resume never overwrites the user-set bookmark; set, replace and undo are tested.
-Blocked by: S7
-
 #### F6. Personal data export and import
 
 Build: versioned JSON export of bookmarks, folders, notes, threads, cards and settings. Import validates, adds only rows whose ids are absent (with a toast), and rejects newer schema versions. Lives in Settings.

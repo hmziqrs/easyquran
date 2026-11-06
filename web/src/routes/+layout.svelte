@@ -17,6 +17,7 @@
   import { SITE } from "#lib/config/site.js";
   import { siteJsonLdGraph } from "#lib/seo/site-schema.js";
   import { startAnalytics } from "#lib/boot/analytics.js";
+  import { startPreferenceSync } from "#lib/preferences/sources.svelte.js";
   import { startCrashReporting } from "#lib/boot/crash-reporting.js";
   import { deLocalizeUrl } from "#lib/paraglide/runtime.js";
   import { copyIndopakSelection } from "#lib/quran/view/indopak-copy.js";
@@ -105,6 +106,7 @@
     const cleanups = [
       startAnalytics(),
       startCrashReporting(),
+      startPreferenceSync(),
       installEntryTagging(),
       // Sign-in folds the device's bookmarks into the account silently; say so once.
       bookmarks.onMerged((count) => toast(getBookmarksCopy().merged(count))),

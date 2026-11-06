@@ -191,8 +191,13 @@
   "reader_offline_working": "Working…",
   "reader_offline_routes": [
     {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
       "match": {
         "countPlural=zero": "0 routes",
         "countPlural=one": "1 route",
@@ -478,5 +483,12 @@
   "reader_cards_schedule_hour": "Hour",
   "reader_cards_schedule_minute": "Minute",
   "reader_bookmarks_delete_folder_confirm_empty": "Delete “{name}”?",
-  "reader_bookmarks_delete_folder_confirm_one": "Delete “{name}” and its bookmark?"
+  "reader_bookmarks_delete_folder_confirm_one": "Delete “{name}” and its bookmark?",
+  "reader_reading_bookmark_set": "Set as my reading place",
+  "reader_reading_bookmark_here": "Your reading place is here",
+  "reader_reading_bookmark_saved": "Reading place saved",
+  "reader_reading_bookmark_title": "Your reading place",
+  "reader_reading_bookmark_open": "Open",
+  "reader_reading_bookmark_detail": "{surah} · verse {ayah}",
+  "reader_reading_bookmark_set_on": "{source} · Set {date}"
 }

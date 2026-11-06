@@ -1162,6 +1162,50 @@
         "s": "é\n\"q\""
       },
       "expected": "{\"ratio\":0.1235,\"s\":\"é\\n\\\"q\\\"\",\"whole\":1}"
+    },
+    {
+      "name": "reading bookmark: one register, highest stamp wins, resume never writes it",
+      "op": "layout",
+      "a": {
+        "stamp": "0000000000100-0000-a",
+        "value": {
+          "surah": 2,
+          "ayah": 5
+        }
+      },
+      "b": {
+        "stamp": "0000000000200-0000-a",
+        "value": {
+          "surah": 3,
+          "ayah": 1
+        }
+      },
+      "expected": {
+        "stamp": "0000000000200-0000-a",
+        "value": {
+          "surah": 3,
+          "ayah": 1
+        }
+      }
+    },
+    {
+      "name": "reading bookmark: clearing is a newer null",
+      "op": "layout",
+      "a": {
+        "stamp": "0000000000100-0000-a",
+        "value": {
+          "surah": 2,
+          "ayah": 5
+        }
+      },
+      "b": {
+        "stamp": "0000000000200-0000-a",
+        "value": null
+      },
+      "expected": {
+        "stamp": "0000000000200-0000-a",
+        "value": null
+      }
     }
   ]
 }

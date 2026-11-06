@@ -2,6 +2,7 @@ import type { AuthTransitionContext, AuthTransitionHook } from "#lib/auth/auth-s
 import { bookmarks } from "#lib/bookmarks/store.svelte.js";
 import { scheduleDeviceRegistration } from "#lib/device/register.js";
 import { purgeUserCaches } from "#lib/offline/messages.js";
+import { preferences } from "#lib/preferences/store.svelte.js";
 import { sessions } from "#lib/sessions/store.svelte.js";
 
 const ACCOUNT_TRANSITION_KINDS: ReadonlySet<AuthTransitionContext["kind"]> = new Set([
@@ -25,6 +26,7 @@ export function makePurgeHook(): (ctx: AuthTransitionContext) => Promise<void> {
     if (ACCOUNT_TRANSITION_KINDS.has(ctx.kind)) {
       bookmarks.suspendAuth();
       sessions.onAuthTransition();
+      preferences.onAuthTransition();
     }
     await purgeUserCaches();
   };

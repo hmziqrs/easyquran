@@ -40,7 +40,7 @@ use crate::modules::seed_v1;
 use crate::modules::passkey_v1;
 use crate::modules::{apple_auth_v1, discord_auth_v1, facebook_auth_v1, github_auth_v1};
 use crate::modules::{
-    bookmark_v1, device_v1, notification_v1, reading_session_v1, user_analytics_v1,
+    bookmark_v1, device_v1, notification_v1, preference_v1, reading_session_v1, user_analytics_v1,
 };
 
 use crate::utils::sanitize::xml_escape;
@@ -178,6 +178,17 @@ pub fn router(state: AppState) -> Router<AppState> {
                 bookmark_v1::routes(),
                 &state,
                 "bookmark:sync",
+                rate_limit::SYNC_USER_MAX,
+                rate_limit::SYNC_IP_MAX,
+                rate_limit::SUBJECT_WINDOW_SECS,
+            ),
+        )
+        .nest(
+            "/preference/v1",
+            rate_limit::authenticated_write_limits(
+                preference_v1::routes(),
+                &state,
+                "preference:sync",
                 rate_limit::SYNC_USER_MAX,
                 rate_limit::SYNC_IP_MAX,
                 rate_limit::SUBJECT_WINDOW_SECS,
