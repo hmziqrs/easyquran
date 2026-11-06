@@ -2,40 +2,6 @@
 
 [Back to index](../README.md)
 
-#### A32. Retention sweeper with ship gates
-
-Build:
-
-1. Every new table: `expires_at INTEGER NOT NULL` and `retention_class TEXT NOT NULL`. Source-scan guard over the migration directory (house pattern).
-2. `rust/backend/api/src/services/retention.rs` (new). Own task, registered next to `scheduler::start_scheduler` (`rust/backend/api/src/services/scheduler.rs` line ~11) but not on the flush task. 6-hour interval with 0–300 s jitter. ≤500 rows per statement. 50 ms pause between batches. ≤20 batches per table per run. No `DELETE … LIMIT`. Non-fatal per table. No `PERSISTENCE_LOCK`.
-3. Every delete adds: `NOT EXISTS (SELECT 1 FROM legal_holds … )` and `NOT EXISTS (SELECT 1 FROM user_bans WHERE … AND revoked_at IS NULL)`.
-4. Retention classes:
-   - `user_sessions` 90 days (raw UA and IP stored forever today); UA and IP NULLed on revoke.
-   - `devices` (FCM) and `user_devices` 90 days idle.
-   - Deleted thread and folder content scrubbed after 24 h (S6). Sync tombstones 180 days. Advance `tombstone_floor` before deleting.
-   - `post_views` 90 days.
-   - `rate_limit_events` 180 days.
-   - `job_runs` 90 days.
-   - bans 12 months from max(`expires_at`, `revoked_at`, `created_at`); `user_bans.expires_at` stays TEXT (existing table). Notice, evidence, `audit_logs`, hidden comments, `comment_flags`, notifications 12 months.
-   - CSAM hold 1 year, never auto-released. Law-enforcement preservation 90 + 90 days.
-   - `media_deletions` 12 months.
-   - erasure receipts 24 months.
-   - reports 12 months.
-   - newsletter per A29.
-5. Ship gates (all required before deletes are enabled):
-   - Each run writes a `job_runs` row.
-   - A canary row inserted at boot is deleted by the first run.
-   - A run deleting 0 rows while rows past expiry exist raises an alert.
-   - Dry-run count is logged and checked before deletes are enabled. Behind a feature flag, default off.
-6. Physical deletion wording: `DELETE` leaves bytes in freelist and WAL on this build. Do not claim physical erasure (see A33).
-7. `POST /post/v1/track_view/{id}` is a public writer of raw IP and UA: hash or drop both, and rate-limit it.
-
-Files: new `rust/backend/api/src/services/retention.rs`, new migration, `rust/backend/api/src/main.rs`, `rust/backend/api/src/services/scheduler.rs`, `docker-compose.yml` (flag), `deploy/README.md`, `justfile`.
-
-Done when: seeded canary deleted by first sweep and a `job_runs` row written (test); row under legal hold survives (test); row under live ban survives (test); dry-run count logged; flag default off in production config.
-Blocked by: A5, A19, A25
-Owner: O2 before deletes are enabled.
-
 #### A33. Erasure receipts, physical deletion, backups
 
 Build:
