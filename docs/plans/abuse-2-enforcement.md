@@ -2,52 +2,6 @@
 
 [Back to index](../README.md)
 
-#### A21. Notice delivery, suppression result, appeal clock
-
-Build:
-
-1. Template `rust/backend/api/src/services/mail/templates/enforcement_notice.html`. Classify as transactional. Enforcement-scoped rule: sends despite `Complaint` suppression. Verification and reset mail keep today's drop. Add `TEMPLATE_ENFORCEMENT_NOTICE` to `is_transactional`.
-2. `NotificationKind::Enforcement` for in-app copy (`rust/crates/ruxlog-types/src/enums/notification.rs`). The in-app inbox is not a delivery channel; it is unreachable while banned.
-3. Write the notice row before send. `delivery_state` ∈ {`sent`, `suppressed`, `no_contact_details`, `send_failed`}. `sent` only when the provider accepts the message; `Ok` alone is not delivery.
-4. Mail router (`rust/backend/api/src/services/mail/router.rs` ~241–252): return a distinguishable `suppressed` result instead of `Ok(default)`. Fail closed on DB error with that same result. Bounce or manual suppression records `suppressed` and shows in the admin list.
-5. `notice_channel = 'email'`. The in-app row is post-unban copy only, never counted as delivered.
-
-Files: `rust/backend/api/src/services/mail/{router,provider}.rs`, new `rust/backend/api/src/services/mail/templates/enforcement_notice.html`, `rust/crates/ruxlog-types/src/enums/notification.rs`, `rust/backend/api/src/modules/admin_user_bans_v1/*`.
-
-Done when: `tests/ban_contract.rs` proves each `delivery_state` value; a suppressed address produces a row with `suppressed`; verification mail still dropped for a complained address (test).
-Blocked by: A19
-Owner: O3 for the real delivery check.
-
-#### A35. Appeal intake
-
-Build:
-
-1. `POST /appeal/v1/submit`: public, CSRF, rate-limited, uniform response with no case oracle.
-2. `/appeal/<token>` web page outside the auth `ready` gate. `X-Robots-Tag: noindex`, `Referrer-Policy: no-referrer`, no third-party scripts.
-3. `appeals` table. Token ≥128 bits, stored hashed (keyed HMAC).
-4. Appeal clock: decision due within 7 days of appeal. Queue-aging alert when open appeals exceed the clock.
-
-Files: new `rust/backend/api/src/modules/appeal_v1/`, new migration, `rust/backend/api/src/router.rs`, new `web/src/routes/appeal/[token]/`.
-
-Done when: a notice's token opens the page and submits an appeal; unknown and known tokens get an identical response; page headers tested; the appeal alert fires in a test.
-
-Blocked by: A21
-
-#### A22. Shared-device precedence and ban-decision fields
-
-Build:
-
-1. Precedence: account ban > grant > challenge > nothing.
-2. A device may challenge, never ban. A device-triggered action caps at L2.
-3. Multi-account decision: stored checklist in new `deploy/moderation-sop.md` (reference: `docs/research/abuse-prevention/R2-ban-operations.md`): prior case link → functional test (second account can do what first cannot) → causal test (created after ban, on retained identifier) → admissible corroborators (credential reuse, identical violating content, declared link) → mandatory shared-device check → continuity → closed reason codes.
-4. Shared-device check forces a step-down and bars L6.
-5. Two fields on the ban decision: `corroborator` (already required by A19) and `shared_device_checked` (boolean, required on create).
-
-Files: `rust/backend/api/src/modules/admin_user_bans_v1/*`, new `deploy/moderation-sop.md`, migration (only if `shared_device_checked` is a new column; add in A19 migration if not yet shipped).
-
-Done when: ban create without `shared_device_checked` → 400; SOP checklist committed; precedence rule tested (device signal alone cannot create a ban).
-Blocked by: A19
-
 #### A24. Incident intake: reports
 
 Build:
