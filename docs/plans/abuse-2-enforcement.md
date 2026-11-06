@@ -2,26 +2,6 @@
 
 [Back to index](../README.md)
 
-#### A19b. Evidence-safe user_bans
-
-`user_bans` keeps `ON DELETE CASCADE` from `users`, against the standing rule for evidence tables. Rebuild the table without it (next free migration, dedupe first, re-runnable, up-twice test), and add the source-scan guard. Run before A32 and A33: until then, deleting a user deletes their ban history.
-Done when: deleting a user leaves `user_bans` rows; the guard fails on a cascade from `users` on an evidence table.
-Blocked by: -
-
-#### A20. Enforcement correctness and banned UX
-
-Build:
-
-1. `rust/backend/api/src/middlewares/auth_guard.rs`: add `.not_banned()` to the `unverified` guard (~lines 46–55). The `verified`, `verified_with_role`, and `authenticated` guards already call `not_banned()`.
-2. Login (`auth_v1/controller.rs`): ban check runs after the password check, not before (hoisting creates a ban/existence oracle). In the ban branch clear the `login:<email>` key. A banned login returns the banned response, never a 429.
-3. Web `web/src/lib/auth/auth-copy.ts`: add a `banned` branch before the credential-status set (~lines 80–88 and 137–139). Removing `AUTH_006` from the set alone is not enough: a generic 403 fallback wins. `AUTH_006` is classified at `rust/crates/ruxlog-types/src/error.rs:231`.
-4. Banned screen: shows reason code and appeal link. i18n keys in `web/messages/auth/{en,ar}.json`.
-
-Files: `rust/backend/api/src/middlewares/auth_guard.rs`, `rust/backend/api/src/modules/auth_v1/controller.rs`, `rust/crates/ruxlog-types/src/error.rs`, `web/src/lib/auth/{auth-copy.ts,flows.svelte.ts}`, `web/messages/auth/{en,ar}.json`.
-
-Done when: every guard class rejects a banned user (test); a banned login returns the banned response, never a 429 or credential error (test); web test renders the banned copy with reason and appeal link; `bun run check` and `bun run lint` green with new i18n keys.
-Blocked by: A19
-
 #### A21. Notice delivery, suppression result, appeal clock
 
 Build:
