@@ -48,12 +48,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 | [A4b](plans/abuse-0-foundations.md#a4b-contact-addresses) | Contact addresses | O3 |
 | [A7](plans/abuse-0-foundations.md#a7-daily-cross-domain-ceiling-sync-envelope-snapshot-guard-subject_score-seam) | Daily cross-domain ceiling, sync envelope, snapshot guard, subject_score seam | A5, S6     |
 
-### Account UX
-
-| Item                                                                     | Title                                         | Blocked by |
-| ------------------------------------------------------------------------ | --------------------------------------------- | ---------- |
-| [U1](plans/account-ux.md#u1-account-page-chrome-primitives-localization) | Account page chrome, primitives, localization | -          |
-
 ### Devices
 
 | Item                                                                   | Title                                        | Blocked by |
