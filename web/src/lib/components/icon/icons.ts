@@ -24,6 +24,7 @@ export type IconName =
   | "x-brand"
   | "copy"
   | "share"
+  | "image"
   | "rows"
   | "continuous"
   | "user"
@@ -103,6 +104,12 @@ export const ICONS = {
   copy: {
     viewBox: "0 0 256 256",
     d: "M216 32H88a8 8 0 0 0-8 8v40H40a8 8 0 0 0-8 8v128a8 8 0 0 0 8 8h128a8 8 0 0 0 8-8v-40h40a8 8 0 0 0 8-8V40a8 8 0 0 0-8-8Zm-56 176H48V96h112Zm48-48h-32V88a8 8 0 0 0-8-8H96V48h112Z",
+  },
+  image: {
+    viewBox: "0 0 24 24",
+    stroke: true,
+    // lucide `image`: framed picture with a sun and a hill, for the share-card action.
+    d: "M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 7.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM21 15l-4.09-4.09a2 2 0 0 0-2.82 0L5 21",
   },
   share: {
     viewBox: "0 0 24 24",

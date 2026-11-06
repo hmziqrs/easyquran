@@ -78,12 +78,17 @@
     // ?v={surah}:{ayah} is the write-side of the scroll handler (share/reload parity);
     // ?verse= is the legacy spelling. A foreign surah number in ?v= is ignored.
     const shared = /^(\d+):(\d+)$/.exec(page.url.searchParams.get("v") ?? "");
+    // ?ayah=S:N-S:M is the canonical range permalink (share dialog); the reader
+    // opens at the range's first ayah.
+    const range = /^(\d+):(\d+)-(\d+):(\d+)$/.exec(page.url.searchParams.get("ayah") ?? "");
     const legacy = page.url.searchParams.get("verse");
     let value: number | undefined;
     if (hash !== undefined) {
       value = Number(hash);
     } else if (shared && Number(shared[1]) === surah.num) {
       value = Number(shared[2]);
+    } else if (range && Number(range[1]) === surah.num) {
+      value = Number(range[2]);
     } else if (legacy !== null) {
       value = Number(legacy);
     }

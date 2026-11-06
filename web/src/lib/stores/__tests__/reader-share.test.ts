@@ -8,7 +8,7 @@ const pageState = vi.hoisted(() => ({
 vi.mock("$app/state", () => ({ page: pageState }));
 vi.mock("$app/env", () => ({ browser: true }));
 
-import { createReaderShare } from "../reader-share.svelte";
+import { createReaderShare, rangeShareText } from "../reader-share.svelte";
 
 type WriteText = (text: string) => Promise<void>;
 
@@ -132,5 +132,42 @@ describe("reader-share range variant (Feature 7.5)", () => {
     const result = await share.shareRange("2:285", "2:286", [{ key: "2:285", text: "a" }]);
     expect(result).toBe("link-copied");
     expect(writeText.mock.calls[0]?.[0]).toBe("https://eq.test/surah-2?ayah=2:285-2:286");
+  });
+});
+
+describe("reader-share range options (F13)", () => {
+  it("rangeShareText drops per-verse refs and the link when switched off", () => {
+    const verses = [
+      { key: "2:285" as const, text: "a" },
+      { key: "2:286" as const, text: "b" },
+    ];
+    const link = "https://eq.test/surah-2?ayah=2:285-2:286";
+    expect(rangeShareText(verses, link, { includeReference: false, includeLink: false })).toBe(
+      "a\n\nb",
+    );
+    expect(rangeShareText(verses, link, { includeReference: true, includeLink: false })).toBe(
+      "a\nSurah 2 2:285\n\nb\nSurah 2 2:286",
+    );
+    expect(rangeShareText(verses, link, { includeReference: false, includeLink: true })).toBe(
+      `a\n\nb\n\n${link}`,
+    );
+  });
+
+  it("copyRange writes the body with the options applied", async () => {
+    const share = createReaderShare();
+    const writeText = stubNavigator();
+    const ok = await share.copyRange("2:285", "2:285", [{ key: "2:285", text: "a" }], {
+      includeReference: false,
+      includeLink: false,
+    });
+    expect(ok).toBe(true);
+    expect(writeText.mock.calls[0]?.[0]).toBe("a");
+  });
+
+  it("copyLink writes exactly the given link", async () => {
+    const share = createReaderShare();
+    const writeText = stubNavigator();
+    expect(await share.copyLink("https://eq.test/surah-2?ayah=2:285")).toBe(true);
+    expect(writeText.mock.calls[0]?.[0]).toBe("https://eq.test/surah-2?ayah=2:285");
   });
 });

@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 468 messages. Import this barrel, never
+// 488 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "#lib/paraglide/messages/reader_account.js";
@@ -363,7 +363,27 @@ export { reader_seo_translation_page_description } from "#lib/paraglide/messages
 export { reader_seo_yours_description } from "#lib/paraglide/messages/reader_seo_yours_description.js";
 export { reader_seo_yours_title } from "#lib/paraglide/messages/reader_seo_yours_title.js";
 export { reader_share } from "#lib/paraglide/messages/reader_share.js";
+export { reader_share_card_brand } from "#lib/paraglide/messages/reader_share_card_brand.js";
+export { reader_share_card_footer } from "#lib/paraglide/messages/reader_share_card_footer.js";
+export { reader_share_copy } from "#lib/paraglide/messages/reader_share_copy.js";
+export { reader_share_copy_link } from "#lib/paraglide/messages/reader_share_copy_link.js";
+export { reader_share_dialog_description } from "#lib/paraglide/messages/reader_share_dialog_description.js";
+export { reader_share_dialog_title } from "#lib/paraglide/messages/reader_share_dialog_title.js";
+export { reader_share_download } from "#lib/paraglide/messages/reader_share_download.js";
 export { reader_share_failed } from "#lib/paraglide/messages/reader_share_failed.js";
+export { reader_share_format } from "#lib/paraglide/messages/reader_share_format.js";
+export { reader_share_format_image } from "#lib/paraglide/messages/reader_share_format_image.js";
+export { reader_share_format_text } from "#lib/paraglide/messages/reader_share_format_text.js";
+export { reader_share_from } from "#lib/paraglide/messages/reader_share_from.js";
+export { reader_share_image_failed } from "#lib/paraglide/messages/reader_share_image_failed.js";
+export { reader_share_image_saved } from "#lib/paraglide/messages/reader_share_image_saved.js";
+export { reader_share_include_link } from "#lib/paraglide/messages/reader_share_include_link.js";
+export { reader_share_include_reference } from "#lib/paraglide/messages/reader_share_include_reference.js";
+export { reader_share_loading } from "#lib/paraglide/messages/reader_share_loading.js";
+export { reader_share_options } from "#lib/paraglide/messages/reader_share_options.js";
+export { reader_share_range_invalid } from "#lib/paraglide/messages/reader_share_range_invalid.js";
+export { reader_share_range_too_long } from "#lib/paraglide/messages/reader_share_range_too_long.js";
+export { reader_share_to } from "#lib/paraglide/messages/reader_share_to.js";
 export { reader_share_unavailable } from "#lib/paraglide/messages/reader_share_unavailable.js";
 export { reader_share_verse } from "#lib/paraglide/messages/reader_share_verse.js";
 export { reader_sidebar_description } from "#lib/paraglide/messages/reader_sidebar_description.js";

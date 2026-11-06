@@ -17,6 +17,7 @@
   import { Textarea } from "#lib/components/ui/textarea/index.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
   import {
+    reader_share_options,
     reader_bookmarks_undo,
     reader_reading_bookmark_here,
     reader_reading_bookmark_saved,
@@ -36,6 +37,7 @@
   import { toast } from "svelte-sonner";
   import { appLocale } from "#lib/i18n/app-locale.js";
   import { cn } from "#lib/utils.js";
+  import ShareDialog from "./ShareDialog.svelte";
 
   const COPY_FEEDBACK_MS = 1500;
 
@@ -59,6 +61,9 @@
   const pinned = $derived(pins.has(vKey));
   const noteOpen = $derived(reader.openNote === verseKeyValue);
   const hasNote = $derived(reader.getNote(verseKeyValue).length > 0);
+  const shareTarget = $derived(parseVerseKey(vKey));
+  // Share dialog (F13) mounts only while open: rows are many, the dialog is rare.
+  let shareDialogOpen = $state(false);
 
   // The translation being read (null on the Arabic reader). Bookmarks and notes
   // both record it so they reopen in the same translation.
@@ -243,6 +248,12 @@
       activeClass: sharedCopied ? "text-primary" : undefined,
     })}
     {@render verseAction({
+      onclick: () => (shareDialogOpen = true),
+      label: reader_share_options(undefined, noteMsg),
+      ariaLabel: reader_share_options(undefined, noteMsg),
+      icon: "image",
+    })}
+    {@render verseAction({
       onclick: () => reader.toggleNote(verseKeyValue),
       label: reader_verse_note(undefined, noteMsg),
       ariaLabel: noteOpen
@@ -254,6 +265,15 @@
     })}
   </div>
 </div>
+
+{#if shareDialogOpen && shareTarget !== null}
+  <ShareDialog
+    bind:open={shareDialogOpen}
+    surah={shareTarget.surah}
+    ayah={shareTarget.ayah}
+    currentText={text}
+  />
+{/if}
 
 {#if noteOpen}
   <div class="verse-note mt-[20px] flex flex-col gap-2 animate-fade-up">

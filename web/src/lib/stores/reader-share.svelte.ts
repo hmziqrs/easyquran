@@ -2,6 +2,7 @@ import { browser } from "$app/env";
 import { page } from "$app/state";
 
 import { peekQuranData } from "#lib/data/quran-data-client.js";
+import type { CatalogEntry } from "#lib/data/quran-types.js";
 import {
   parseKey,
   routeContextFromParams,
@@ -9,7 +10,6 @@ import {
   surahPathFor,
   type VerseKey,
 } from "#lib/data/quran.js";
-import type { CatalogEntry } from "#lib/data/quran-types.js";
 import { stripTajweedMarkup } from "#lib/quran/view/tajweed.js";
 
 export type ShareResult = "shared" | "copied" | "link-copied" | "cancelled" | "failed";
@@ -57,9 +57,27 @@ function verseShareText(key: VerseKey, text: string, link: string): string {
   return `${stripTajweedMarkup(text)}\n${verseRef(key)}\n${link}`;
 }
 
-function rangeShareText(verses: readonly ShareVerse[], link: string): string {
-  const body = verses.map((v) => `${stripTajweedMarkup(v.text)}\n${verseRef(v.key)}`).join("\n\n");
-  return `${body}\n\n${link}`;
+/** What a range share carries. Both default on; the dialog can switch either off. */
+export interface ShareOptions {
+  readonly includeReference: boolean;
+  readonly includeLink: boolean;
+}
+
+export const DEFAULT_SHARE_OPTIONS: ShareOptions = { includeReference: true, includeLink: true };
+
+/** Plain-text range body: verse text, optional ref per verse, optional trailing link. */
+export function rangeShareText(
+  verses: readonly ShareVerse[],
+  link: string,
+  options: ShareOptions = DEFAULT_SHARE_OPTIONS,
+): string {
+  const body = verses.map((v) => {
+    const text = stripTajweedMarkup(v.text);
+    return options.includeReference ? `${text}\n${verseRef(v.key)}` : text;
+  });
+  const parts = [body.join("\n\n")];
+  if (options.includeLink) parts.push(link);
+  return parts.join("\n\n");
 }
 
 async function writeClipboard(text: string): Promise<boolean> {
@@ -95,16 +113,21 @@ export function createReaderShare() {
         return (await writeClipboard(link)) ? "link-copied" : "failed";
       }
     },
-    /** Range variant: every verse's text + ref, joined, with the canonical `?ayah=` URL. */
+    /** Canonical `…/{slug}?ayah=S:N-S:M` permalink for a range. */
+    rangeLink(from: VerseKey, to: VerseKey): string {
+      return rangeDeepLink(from, to);
+    },
+    /** Range variant: every verse's text (+ ref), joined, with the canonical `?ayah=` URL. */
     async shareRange(
       from: VerseKey,
       to: VerseKey,
       verses: readonly ShareVerse[],
+      options: ShareOptions = DEFAULT_SHARE_OPTIONS,
     ): Promise<ShareResult> {
       if (!browser) return "failed";
       const link = rangeDeepLink(from, to);
       const title = rangeTitle(from, to);
-      const text = rangeShareText(verses, link);
+      const text = rangeShareText(verses, link, options);
       try {
         if (navigator.share) {
           await navigator.share({ title, text, url: link });
@@ -115,6 +138,20 @@ export function createReaderShare() {
         if (cause instanceof DOMException && cause.name === "AbortError") return "cancelled";
         return (await writeClipboard(link)) ? "link-copied" : "failed";
       }
+    },
+    /** Clipboard-only range copy: the dialog's fast path, no share sheet. */
+    async copyRange(
+      from: VerseKey,
+      to: VerseKey,
+      verses: readonly ShareVerse[],
+      options: ShareOptions = DEFAULT_SHARE_OPTIONS,
+    ): Promise<boolean> {
+      if (!browser) return false;
+      return writeClipboard(rangeShareText(verses, rangeDeepLink(from, to), options));
+    },
+    async copyLink(link: string): Promise<boolean> {
+      if (!browser) return false;
+      return writeClipboard(link);
     },
   };
 }
