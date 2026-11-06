@@ -27,6 +27,7 @@ use crate::{
         abuse_limiter::{self, Attempt, FailureMode},
         auth::AuthSession,
         mail::send_email_verification_code,
+        registration_admission::{self, CreationCaps},
         turnstile,
     },
     utils::twofa,
@@ -531,6 +532,21 @@ pub async fn register(
     .await?;
 
     let email = crate::utils::email::normalize_email(&payload.email);
+
+    if registration_admission::is_disposable_email(&email) {
+        return Err(ErrorResponse::new(ErrorCode::InvalidInput)
+            .with_message("Use a permanent email address"));
+    }
+
+    // Creation caps (A9): one counter per IP shared with every OAuth door, plus
+    // the global daily ceiling. Charged before the write so a burst cannot race past.
+    registration_admission::admit_creation(
+        &state.gate_store,
+        &secure_ip.to_string(),
+        CreationCaps::configured(),
+        chrono::Utc::now(),
+    )
+    .await?;
 
     // Store only the keyed hash; the plaintext code is emailed, never persisted.
     let code = email_verification::Entity::generate_code();

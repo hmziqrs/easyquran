@@ -2,7 +2,18 @@ use migration::{Migrator, MigratorTrait};
 use ruxlog::db::sea_models::{email_verification, forgot_password, user, user_oauth_identity};
 use ruxlog::error::ErrorCode;
 use ruxlog::services::oauth::{find_or_create_user_for_oauth, OAuthProvider};
+use ruxlog::services::registration_admission::CreationSite;
 use sea_orm::{ActiveModelTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, Set};
+
+/// Creation caps for the OAuth door in these tests: one shared store, one IP.
+fn site() -> CreationSite<'static> {
+    static STORE: std::sync::LazyLock<rux_request_gate::InMemoryStore> =
+        std::sync::LazyLock::new(rux_request_gate::InMemoryStore::default);
+    CreationSite {
+        store: &STORE,
+        ip: "203.0.113.10",
+    }
+}
 
 async fn database() -> DatabaseConnection {
     ruxlog::utils::field_crypto::set_key(&[0x6b; 32]).unwrap();
@@ -42,6 +53,7 @@ async fn matching_verified_provider_email_never_automatically_links_existing_acc
             Some(existing.email.clone()),
             "Provider user".into(),
             true,
+            site(),
         )
         .await;
 
@@ -72,6 +84,7 @@ async fn explicitly_linked_identity_can_sign_in_after_provider_email_changes() {
         Some("different@example.com".into()),
         "Changed profile".into(),
         false,
+        site(),
     )
     .await
     .unwrap();
@@ -333,6 +346,7 @@ async fn legacy_google_identity_migrates_without_matching_mutable_email() {
         Some("changed-at-provider@example.com".into()),
         "Legacy owner".into(),
         true,
+        site(),
     )
     .await
     .unwrap();

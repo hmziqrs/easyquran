@@ -964,6 +964,11 @@ async fn phase_1a_auth_regression_on_merged_router() {
             Request::builder()
                 .method(Method::POST)
                 .uri("/csrf/v1/generate")
+                // Anonymous CSRF sessions are capped per client IP (A9); ClientIp needs a peer.
+                .extension(axum::extract::ConnectInfo(std::net::SocketAddr::from((
+                    [203, 0, 113, 60],
+                    443,
+                ))))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -1073,6 +1078,11 @@ async fn w8a_private_api_responses_are_private_no_store() {
             Request::builder()
                 .method(Method::POST)
                 .uri("/csrf/v1/generate")
+                // Anonymous CSRF sessions are capped per client IP (A9); ClientIp needs a peer.
+                .extension(axum::extract::ConnectInfo(std::net::SocketAddr::from((
+                    [203, 0, 113, 60],
+                    443,
+                ))))
                 .body(Body::empty())
                 .unwrap(),
         )

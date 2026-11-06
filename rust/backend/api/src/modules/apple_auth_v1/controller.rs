@@ -4,9 +4,11 @@ use axum::{
     response::{IntoResponse, Redirect},
     Json,
 };
+use axum_client_ip::ClientIp;
 use axum_macros::debug_handler;
 use oauth2::PkceCodeChallenge;
 use serde_json::json;
+use std::net::IpAddr;
 use tower_sessions::Session;
 use tracing::{info, instrument, warn};
 
@@ -15,7 +17,7 @@ use crate::{
     extractors::ValidatedJson,
     extractors::ValidatedQuery,
     modules::auth_v1::controller::session_rotated_headers,
-    services::{auth::AuthSession, oauth},
+    services::{auth::AuthSession, oauth, registration_admission::CreationSite},
     AppState,
 };
 
@@ -58,9 +60,10 @@ pub async fn apple_login(
 }
 
 #[debug_handler]
-#[instrument(skip(state, auth, query), fields(user_id, result))]
+#[instrument(skip(state, auth, query, client_ip), fields(user_id, result))]
 pub async fn apple_callback(
     State(state): State<AppState>,
+    ClientIp(client_ip): ClientIp,
     mut auth: AuthSession,
     ValidatedQuery(query): ValidatedQuery<AppleCallbackQuery>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
@@ -76,7 +79,7 @@ pub async fn apple_callback(
         return Ok(Redirect::temporary(&url));
     }
 
-    match run_apple_callback(&state, &mut auth, query).await {
+    match run_apple_callback(&state, &mut auth, query, client_ip).await {
         Ok(user) => {
             tracing::Span::current().record("user_id", user.id);
             info!(user_id = user.id, "Apple login successful");
@@ -110,20 +113,23 @@ async fn run_apple_callback(
     state: &AppState,
     auth: &mut AuthSession,
     query: AppleCallbackQuery,
+    client_ip: IpAddr,
 ) -> Result<crate::db::sea_models::user::Model, ErrorResponse> {
-    finish_apple_code(state, auth, &query.code()?, &query.state()?).await
+    finish_apple_code(state, auth, &query.code()?, &query.state()?, client_ip).await
 }
 
 #[debug_handler]
-#[instrument(skip(state, auth, payload), fields(user_id, result))]
+#[instrument(skip(state, auth, payload, client_ip), fields(user_id, result))]
 pub async fn apple_exchange(
     State(state): State<AppState>,
+    ClientIp(client_ip): ClientIp,
     mut auth: AuthSession,
     ValidatedJson(payload): ValidatedJson<AppleExchangeRequest>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     info!("Processing Apple OAuth code exchange from client");
 
-    let user = finish_apple_code(&state, &mut auth, &payload.code, &payload.state).await?;
+    let user =
+        finish_apple_code(&state, &mut auth, &payload.code, &payload.state, client_ip).await?;
 
     info!(
         user_id = user.id,
@@ -165,9 +171,13 @@ pub async fn apple_token_nonce(headers: HeaderMap) -> Result<impl IntoResponse, 
 }
 
 #[debug_handler]
-#[instrument(skip(state, auth, payload, headers), fields(user_id, result))]
+#[instrument(
+    skip(state, auth, payload, headers, client_ip),
+    fields(user_id, result)
+)]
 pub async fn apple_token(
     State(state): State<AppState>,
+    ClientIp(client_ip): ClientIp,
     mut auth: AuthSession,
     headers: HeaderMap,
     ValidatedJson(payload): ValidatedJson<AppleTokenRequest>,
@@ -206,6 +216,7 @@ pub async fn apple_token(
         "picture": serde_json::Value::Null,
     });
 
+    let ip = client_ip.to_string();
     let user = oauth::find_or_create_user_for_oauth(
         &state.sea_db,
         oauth::OAuthProvider::Apple,
@@ -213,6 +224,10 @@ pub async fn apple_token(
         email,
         name,
         claims.is_email_verified(),
+        CreationSite {
+            store: &state.gate_store,
+            ip: &ip,
+        },
     )
     .await?;
 
@@ -251,6 +266,7 @@ async fn finish_apple_code(
     auth: &mut AuthSession,
     code: &str,
     state_secret: &str,
+    client_ip: IpAddr,
 ) -> Result<crate::db::sea_models::user::Model, ErrorResponse> {
     let session_id = oauth::oauth_session_id(auth.session())?;
     let oauth_state = oauth::consume_oauth_state(&session_id, state_secret)?;
@@ -287,6 +303,7 @@ async fn finish_apple_code(
     let email_verified = claims.is_email_verified();
     let name = "Apple User".to_string();
 
+    let ip = client_ip.to_string();
     let user = oauth::find_or_create_user_for_oauth(
         &state.sea_db,
         oauth::OAuthProvider::Apple,
@@ -294,6 +311,10 @@ async fn finish_apple_code(
         email,
         name,
         email_verified,
+        CreationSite {
+            store: &state.gate_store,
+            ip: &ip,
+        },
     )
     .await?;
 

@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use std::sync::LazyLock;
 
 use axum::{
@@ -6,6 +7,7 @@ use axum::{
     response::{IntoResponse, Redirect},
     Json,
 };
+use axum_client_ip::ClientIp;
 use axum_macros::debug_handler;
 use oauth2::{AuthorizationCode, CsrfToken, Scope, TokenResponse};
 use serde::{de::DeserializeOwned, Deserialize};
@@ -18,7 +20,7 @@ use crate::{
     extractors::ValidatedJson,
     extractors::ValidatedQuery,
     modules::auth_v1::controller::session_rotated_headers,
-    services::{auth::AuthSession, oauth},
+    services::{auth::AuthSession, oauth, registration_admission::CreationSite},
     AppState,
 };
 
@@ -93,6 +95,7 @@ pub async fn facebook_login(
 #[instrument(skip(state, auth, query), fields(user_id, result))]
 pub async fn facebook_callback(
     State(state): State<AppState>,
+    ClientIp(client_ip): ClientIp,
     mut auth: AuthSession,
     ValidatedQuery(query): ValidatedQuery<FacebookCallbackQuery>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
@@ -108,7 +111,7 @@ pub async fn facebook_callback(
         return Ok(Redirect::temporary(&url));
     }
 
-    match run_facebook_callback(&state, &mut auth, query).await {
+    match run_facebook_callback(&state, &mut auth, query, client_ip).await {
         Ok(user) => {
             tracing::Span::current().record("user_id", user.id);
             info!(user_id = user.id, "Facebook login successful");
@@ -142,6 +145,7 @@ async fn run_facebook_callback(
     state: &AppState,
     auth: &mut AuthSession,
     query: FacebookCallbackQuery,
+    client_ip: IpAddr,
 ) -> Result<crate::db::sea_models::user::Model, ErrorResponse> {
     let session_id = oauth::oauth_session_id(auth.session())?;
     let _oauth_state = oauth::consume_oauth_state(&session_id, &query.state()?)?;
@@ -160,13 +164,14 @@ async fn run_facebook_callback(
 
     let access_token = token_result.access_token().secret();
     let user_info = fetch_facebook_user_info(access_token).await?;
-    finish_facebook_login(state, auth, user_info).await
+    finish_facebook_login(state, auth, user_info, client_ip).await
 }
 
 #[debug_handler]
-#[instrument(skip(state, auth, payload), fields(user_id, result))]
+#[instrument(skip(state, auth, payload, client_ip), fields(user_id, result))]
 pub async fn facebook_exchange(
     State(state): State<AppState>,
+    ClientIp(client_ip): ClientIp,
     mut auth: AuthSession,
     ValidatedJson(payload): ValidatedJson<FacebookExchangeRequest>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
@@ -190,7 +195,7 @@ pub async fn facebook_exchange(
 
     let access_token = token_result.access_token().secret();
     let user_info = fetch_facebook_user_info(access_token).await?;
-    let user = finish_facebook_login(&state, &mut auth, user_info).await?;
+    let user = finish_facebook_login(&state, &mut auth, user_info, client_ip).await?;
 
     info!(
         user_id = user.id,
@@ -215,9 +220,13 @@ pub async fn facebook_exchange(
 }
 
 #[debug_handler]
-#[instrument(skip(state, auth, payload, headers), fields(user_id, result))]
+#[instrument(
+    skip(state, auth, payload, headers, client_ip),
+    fields(user_id, result)
+)]
 pub async fn facebook_token(
     State(state): State<AppState>,
+    ClientIp(client_ip): ClientIp,
     mut auth: AuthSession,
     headers: HeaderMap,
     ValidatedJson(payload): ValidatedJson<FacebookTokenRequest>,
@@ -240,7 +249,7 @@ pub async fn facebook_token(
         "email": &user_info.email,
         "picture": user_info.picture.as_ref().map(|picture| &picture.data.url),
     });
-    let user = finish_facebook_login(&state, &mut auth, user_info).await?;
+    let user = finish_facebook_login(&state, &mut auth, user_info, client_ip).await?;
 
     info!(user_id = user.id, "Facebook mobile login successful");
     tracing::Span::current().record("result", "success");
@@ -444,6 +453,7 @@ async fn finish_facebook_login(
     state: &AppState,
     auth: &mut AuthSession,
     user_info: FacebookUserInfo,
+    client_ip: IpAddr,
 ) -> Result<crate::db::sea_models::user::Model, ErrorResponse> {
     let email = user_info
         .email
@@ -454,6 +464,7 @@ async fn finish_facebook_login(
         .name
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| "Facebook User".to_string());
+    let ip = client_ip.to_string();
     let user = oauth::find_or_create_user_for_oauth(
         &state.sea_db,
         oauth::OAuthProvider::Facebook,
@@ -464,6 +475,10 @@ async fn finish_facebook_login(
         // Facebook email must stay unverified — find_or_create_user_for_oauth then
         // refuses to link it onto (or create an account from) an existing email.
         false,
+        CreationSite {
+            store: &state.gate_store,
+            ip: &ip,
+        },
     )
     .await?;
 

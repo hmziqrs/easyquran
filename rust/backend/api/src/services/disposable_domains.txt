@@ -1,0 +1,35 @@
+# Disposable e-mail domains refused at password registration (A9).
+# One domain per line. Lines starting with # are comments. A listed domain also
+# covers its subdomains. Seed list: extend it as abuse is observed; it is not
+# exhaustive and is never fetched at runtime.
+10minutemail.com
+20minutemail.com
+dispostable.com
+emailondeck.com
+fakeinbox.com
+getnada.com
+guerrillamail.biz
+guerrillamail.com
+guerrillamail.de
+guerrillamail.net
+guerrillamail.org
+guerrillamailblock.com
+maildrop.cc
+mailcatch.com
+mailinator.com
+mailnesia.com
+mintemail.com
+moakt.com
+mohmal.com
+mytemp.email
+sharklasers.com
+spam4.me
+temp-mail.org
+tempail.com
+tempmail.com
+tempmailo.com
+throwawaymail.com
+trashmail.com
+trashmail.net
+yopmail.com
+yopmail.fr

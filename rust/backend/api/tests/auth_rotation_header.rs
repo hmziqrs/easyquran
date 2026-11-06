@@ -243,6 +243,10 @@ fn oauth_callback_router(state: AppState) -> Router {
         .nest("/auth/facebook/v1", facebook_auth_v1::routes())
         .nest("/auth/github/v1", github_auth_v1::routes())
         .layer(session_layer)
+        // OAuth callbacks extract ClientIp for creation caps (A9); resolve it the
+        // same way the production stack does.
+        .layer(middleware::from_fn(resolve_client_ip))
+        .layer(Extension(axum_client_ip::ClientIpSource::CfConnectingIp))
         .with_state(state)
 }
 
@@ -284,6 +288,8 @@ async fn get_redirect(uri: &str) -> (StatusCode, Option<String>) {
             Request::builder()
                 .method("GET")
                 .uri(uri)
+                // ClientIp resolves from the edge header (CfConnectingIp source).
+                .header("cf-connecting-ip", "203.0.113.50")
                 .body(Body::empty())
                 .unwrap(),
         )

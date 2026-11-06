@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use std::sync::LazyLock;
 
 use axum::{
@@ -6,6 +7,7 @@ use axum::{
     response::{IntoResponse, Redirect},
     Json,
 };
+use axum_client_ip::ClientIp;
 use axum_macros::debug_handler;
 use oauth2::{AuthorizationCode, CsrfToken, PkceCodeChallenge, Scope, TokenResponse};
 use serde::{de::DeserializeOwned, Deserialize};
@@ -19,7 +21,7 @@ use crate::{
     extractors::ValidatedQuery,
     modules::auth_v1::controller::session_rotated_headers,
     services::oauth::login::{link_identity_to_unchanged_user, CallbackFailure, CallbackOutcome},
-    services::{auth::AuthSession, oauth},
+    services::{auth::AuthSession, oauth, registration_admission::CreationSite},
     AppState,
 };
 
@@ -129,9 +131,10 @@ pub async fn discord_link(
 }
 
 #[debug_handler]
-#[instrument(skip(state, auth, query), fields(user_id, result))]
+#[instrument(skip(state, auth, query, client_ip), fields(user_id, result))]
 pub async fn discord_callback(
     State(state): State<AppState>,
+    ClientIp(client_ip): ClientIp,
     mut auth: AuthSession,
     ValidatedQuery(query): ValidatedQuery<DiscordCallbackQuery>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
@@ -156,7 +159,7 @@ pub async fn discord_callback(
         return Ok(Redirect::temporary(&url));
     }
 
-    match run_discord_callback(&state, &mut auth, query).await {
+    match run_discord_callback(&state, &mut auth, query, client_ip).await {
         Ok(CallbackOutcome::Login(user_id)) => {
             tracing::Span::current().record("user_id", user_id);
             info!(user_id, "Discord login successful");
@@ -213,6 +216,7 @@ async fn run_discord_callback(
     state: &AppState,
     auth: &mut AuthSession,
     query: DiscordCallbackQuery,
+    client_ip: IpAddr,
 ) -> Result<CallbackOutcome, CallbackFailure> {
     let session_id = oauth::oauth_session_id(auth.session()).map_err(CallbackFailure::login)?;
     let state_secret = query.state().map_err(CallbackFailure::login)?;
@@ -254,7 +258,7 @@ async fn run_discord_callback(
         return Ok(outcome);
     }
 
-    let result = finish_discord_login(state, auth, user_info)
+    let result = finish_discord_login(state, auth, user_info, client_ip)
         .await
         .map_err(fail)?;
     oauth::login::callback_login_outcome(auth, result.user.id)
@@ -287,9 +291,10 @@ async fn link_discord_identity(
 }
 
 #[debug_handler]
-#[instrument(skip(state, auth, payload), fields(user_id, result))]
+#[instrument(skip(state, auth, payload, client_ip), fields(user_id, result))]
 pub async fn discord_exchange(
     State(state): State<AppState>,
+    ClientIp(client_ip): ClientIp,
     mut auth: AuthSession,
     ValidatedJson(payload): ValidatedJson<DiscordExchangeRequest>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
@@ -321,7 +326,7 @@ pub async fn discord_exchange(
 
     let access_token = token_result.access_token().secret();
     let user_info = fetch_discord_user_info(access_token).await?;
-    let result = finish_discord_login(&state, &mut auth, user_info).await?;
+    let result = finish_discord_login(&state, &mut auth, user_info, client_ip).await?;
     let user = result.user;
 
     info!(
@@ -347,9 +352,13 @@ pub async fn discord_exchange(
 }
 
 #[debug_handler]
-#[instrument(skip(state, auth, payload, headers), fields(user_id, result))]
+#[instrument(
+    skip(state, auth, payload, headers, client_ip),
+    fields(user_id, result)
+)]
 pub async fn discord_token(
     State(state): State<AppState>,
+    ClientIp(client_ip): ClientIp,
     mut auth: AuthSession,
     headers: HeaderMap,
     ValidatedJson(payload): ValidatedJson<DiscordTokenRequest>,
@@ -363,7 +372,7 @@ pub async fn discord_token(
         verify_discord_access_token(&payload.access_token, &credentials.client_id).await?;
     let user_info = fetch_discord_user_info(&payload.access_token).await?;
     let user_info = reconcile_discord_user_info(expected_user_id, user_info)?;
-    let result = finish_discord_login(&state, &mut auth, user_info).await?;
+    let result = finish_discord_login(&state, &mut auth, user_info, client_ip).await?;
     let provider_profile = json!({
         "name": &result.provider_name,
         "email": &result.provider_email,
@@ -581,6 +590,7 @@ async fn finish_discord_login(
     state: &AppState,
     auth: &mut AuthSession,
     user_info: DiscordUserInfo,
+    client_ip: IpAddr,
 ) -> Result<DiscordLoginResult, ErrorResponse> {
     let email = user_info
         .email
@@ -598,6 +608,7 @@ async fn finish_discord_login(
         .unwrap_or_else(|| user_info.username.clone());
     let provider_user_id = user_info.id.clone();
 
+    let ip = client_ip.to_string();
     let user = oauth::find_or_create_user_for_oauth(
         &state.sea_db,
         oauth::OAuthProvider::Discord,
@@ -605,6 +616,10 @@ async fn finish_discord_login(
         email.clone(),
         name.clone(),
         email_verified,
+        CreationSite {
+            store: &state.gate_store,
+            ip: &ip,
+        },
     )
     .await?;
 

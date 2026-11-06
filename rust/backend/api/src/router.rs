@@ -58,7 +58,8 @@ pub fn router(state: AppState) -> Router<AppState> {
         )
         .route(
             "/csrf/v1/generate",
-            post(csrf_v1::controller::generate).layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+            post(csrf_v1::controller::generate_capped)
+                .layer(rate_limit::rate_limit_layer(&state, 60, 60)),
         );
 
     // Auth nests mount ONLY when WEB_AUTH_ENABLED (W8f). CSRF generation stays

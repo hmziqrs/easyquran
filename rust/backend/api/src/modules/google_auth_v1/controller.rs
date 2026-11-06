@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use std::sync::LazyLock;
 
 use axum::{
@@ -6,6 +7,7 @@ use axum::{
     response::{IntoResponse, Redirect},
     Json,
 };
+use axum_client_ip::ClientIp;
 use axum_macros::debug_handler;
 use oauth2::{AuthorizationCode, CsrfToken, PkceCodeChallenge, Scope, TokenResponse};
 use serde_json::json;
@@ -19,7 +21,7 @@ use crate::{
     extractors::ValidatedQuery,
     modules::auth_v1::controller::session_rotated_headers,
     services::oauth::login::{link_identity_to_unchanged_user, CallbackFailure, CallbackOutcome},
-    services::{auth::AuthSession, oauth},
+    services::{auth::AuthSession, oauth, registration_admission::CreationSite},
     AppState,
 };
 
@@ -137,6 +139,7 @@ pub async fn google_link(
 #[instrument(skip(state, auth, query), fields(user_id, result))]
 pub async fn google_callback(
     State(state): State<AppState>,
+    ClientIp(client_ip): ClientIp,
     mut auth: AuthSession,
     ValidatedQuery(query): ValidatedQuery<GoogleCallbackQuery>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
@@ -161,7 +164,7 @@ pub async fn google_callback(
         return Ok(Redirect::temporary(&url));
     }
 
-    match run_google_callback(&state, &mut auth, query).await {
+    match run_google_callback(&state, &mut auth, query, client_ip).await {
         Ok(CallbackOutcome::Login(user_id)) => {
             tracing::Span::current().record("user_id", user_id);
             info!(user_id, "Google login successful");
@@ -220,6 +223,7 @@ async fn run_google_callback(
     state: &AppState,
     auth: &mut AuthSession,
     query: GoogleCallbackQuery,
+    client_ip: IpAddr,
 ) -> Result<CallbackOutcome, CallbackFailure> {
     let session_id = oauth::oauth_session_id(auth.session()).map_err(CallbackFailure::login)?;
     let state_secret = query.state().map_err(CallbackFailure::login)?;
@@ -260,9 +264,15 @@ async fn run_google_callback(
         return Ok(outcome);
     }
 
-    let user = finish_google_login(state, auth, token_result, oauth_state.nonce.as_deref())
-        .await
-        .map_err(fail)?;
+    let user = finish_google_login(
+        state,
+        auth,
+        token_result,
+        oauth_state.nonce.as_deref(),
+        client_ip,
+    )
+    .await
+    .map_err(fail)?;
     oauth::login::callback_login_outcome(auth, user.id)
         .await
         .map_err(fail)
@@ -304,6 +314,7 @@ pub async fn google_user_info(auth: AuthSession) -> Result<impl IntoResponse, Er
 #[instrument(skip(state, auth, payload), fields(user_id, result))]
 pub async fn google_exchange(
     State(state): State<AppState>,
+    ClientIp(client_ip): ClientIp,
     mut auth: AuthSession,
     ValidatedJson(payload): ValidatedJson<GoogleExchangeRequest>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
@@ -338,6 +349,7 @@ pub async fn google_exchange(
         &mut auth,
         token_result,
         oauth_state.nonce.as_deref(),
+        client_ip,
     )
     .await?;
 
@@ -384,6 +396,7 @@ pub async fn google_token_nonce(headers: HeaderMap) -> Result<impl IntoResponse,
 #[instrument(skip(state, auth, payload, headers), fields(user_id, result))]
 pub async fn google_token(
     State(state): State<AppState>,
+    ClientIp(client_ip): ClientIp,
     mut auth: AuthSession,
     headers: HeaderMap,
     ValidatedJson(payload): ValidatedJson<GoogleTokenRequest>,
@@ -433,7 +446,7 @@ pub async fn google_token(
         "email": &user_info.email,
         "picture": &user_info.picture,
     });
-    let user = find_or_create_user(&state, user_info).await?;
+    let user = find_or_create_user(&state, user_info, client_ip).await?;
     tracing::Span::current().record("user_id", user.id);
 
     oauth::finish_oauth_login(&state, &mut auth, &user, oauth::OAuthProvider::Google).await?;
@@ -466,6 +479,7 @@ async fn finish_google_login(
         oauth2::basic::BasicTokenType,
     >,
     expected_nonce: Option<&str>,
+    client_ip: IpAddr,
 ) -> Result<user::Model, ErrorResponse> {
     let access_token = token_result.access_token().secret();
 
@@ -498,7 +512,7 @@ async fn finish_google_login(
     info!("Retrieved user info from Google");
     let user_info = reconcile_google_user_info(&id_claims, provider_profile)?;
 
-    let user = find_or_create_user(state, user_info).await?;
+    let user = find_or_create_user(state, user_info, client_ip).await?;
     tracing::Span::current().record("user_id", user.id);
 
     oauth::finish_oauth_login(state, auth, &user, oauth::OAuthProvider::Google).await?;
@@ -647,6 +661,7 @@ async fn fetch_google_user_info_from_url(
 async fn find_or_create_user(
     state: &AppState,
     user_info: GoogleUserInfo,
+    client_ip: IpAddr,
 ) -> Result<user::Model, ErrorResponse> {
     if !user_info.verified_email {
         warn!("Refusing Google login: IdP email is not verified");
@@ -654,6 +669,7 @@ async fn find_or_create_user(
             .with_message("Google has not verified this email address"));
     }
 
+    let ip = client_ip.to_string();
     oauth::find_or_create_user_for_oauth(
         &state.sea_db,
         oauth::OAuthProvider::Google,
@@ -661,6 +677,10 @@ async fn find_or_create_user(
         Some(user_info.email),
         user_info.name,
         user_info.verified_email,
+        CreationSite {
+            store: &state.gate_store,
+            ip: &ip,
+        },
     )
     .await
 }

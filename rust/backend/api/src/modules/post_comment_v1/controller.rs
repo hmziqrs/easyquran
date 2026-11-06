@@ -13,7 +13,7 @@ use crate::{
     db::sea_models::{comment_flag, post, post_comment, user},
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
-    services::{abuse_limiter, auth::AuthSession},
+    services::{abuse_limiter, auth::AuthSession, registration_admission},
     AppState,
 };
 
@@ -70,6 +70,15 @@ pub async fn create(
     tracing::Span::current().record("post_id", new_comment.post_id);
     let tx = state.sea_db.begin().await?;
     require_post_visibility(&tx, new_comment.post_id, Some(&user)).await?;
+    // New-account limits (A9): one comment and no links in the first 24 hours.
+    registration_admission::check_fresh_comment(
+        &tx,
+        &user,
+        &new_comment.content,
+        chrono::Utc::now(),
+        true,
+    )
+    .await?;
 
     match post_comment::Entity::create(&tx, new_comment).await {
         Ok(comment) => {
@@ -100,6 +109,16 @@ pub async fn update(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user = auth.user.unwrap();
     let update_comment = payload.0.into_update_post_comment();
+    if let Some(content) = update_comment.content.as_deref() {
+        registration_admission::check_fresh_comment(
+            &state.sea_db,
+            &user,
+            content,
+            chrono::Utc::now(),
+            false,
+        )
+        .await?;
+    }
 
     match post_comment::Entity::update(&state.sea_db, comment_id, user.id, update_comment).await {
         Ok(Some(comment)) => {

@@ -559,6 +559,70 @@ that the recipient is in `CLOUDFLARE_EMAIL_ALLOWED_ADDRESSES` if you set that
 allowlist. Re-run the smoke from step 2 until the controlled inbox receives the
 mail with SPF+DKIM pass.
 
+## Registration admission (A9): caps, Turnstile, smoke test
+
+### Caps (`AdmissionSettings`, `rust/backend/api/src/config/settings.rs`)
+
+All three values are **not measured** defaults. The owner sets real values after
+the A5 measurement (O20), at >= 4x measured peak, never below it.
+
+| Env var | Default (not measured) | Meaning |
+| --- | --- | --- |
+| `REGISTRATIONS_PER_IP_DAILY` | `20` | Accounts per client IP per UTC day. The password door and all five OAuth doors share this one counter. |
+| `REGISTRATIONS_GLOBAL_DAILY` | `5000` | Accounts per UTC day across all doors and addresses. |
+| `ANONYMOUS_SESSIONS_PER_IP_DAILY` | `500` | New anonymous CSRF sessions per IP per UTC day. Only a request that creates a session is charged. |
+
+A refusal is HTTP 429 with `Retry-After` to the next UTC midnight. Nothing here
+bans or feeds escalation. A shared carrier-NAT address reaches the anonymous
+session cap first; raise `ANONYMOUS_SESSIONS_PER_IP_DAILY` after measurement if
+real users behind one address are refused.
+
+### Turnstile
+
+- Required on password registration only. Login never calls Turnstile.
+- Set `TURNSTILE_SECRET_KEY` on the API and the site key on the web together.
+  A secret without a site key leaves the widget unrendered, so registration
+  cannot complete. A site key without a secret is a misconfiguration.
+- Production with no secret: `/auth/v1/register` answers 503 (fails closed).
+- **Fallback: none is built.** Where `challenges.cloudflare.com` is blocked, a
+  reader cannot register with a password. That is documented as unavailable in
+  that region. OAuth sign-up has no Turnstile, so it stays available there,
+  subject to the same per-IP caps.
+
+### Fresh accounts (first 24 h after `created_at`)
+
+- One comment in total.
+- No links in comment content, on create or update. Links are detected by URL
+  scheme, `www.`, or a bare dotted host with an alphabetic TLD.
+- Media upload already requires the author role, which new accounts do not hold.
+
+### Disposable domains
+
+`rust/backend/api/src/services/disposable_domains.txt` is a seed list compiled
+into the binary. It is not fetched at runtime and is not exhaustive. It applies
+to password registration only; OAuth e-mail addresses come from the provider.
+Extend it by a normal code change.
+
+### Smoke test (before promoting a release)
+
+1. Automated gate. Exit code 0 is required:
+
+   ```bash
+   deploy/smoke-register.sh https://<api-host>
+   ```
+
+   The script bootstraps CSRF, then posts a register request with an empty
+   Turnstile token. Turnstile runs before any database write, so the probe
+   creates no account. Expected: `400 Captcha verification required`. A 503
+   means the secret is missing or siteverify is unreachable. A 2xx means the gate
+   is off. Any of these aborts the release.
+
+2. Manual end-to-end, owner only, with production keys. Register one test
+   account through the web UI with a mailbox you control. Complete the Turnstile
+   widget, confirm that the verification e-mail arrives, then delete the test
+   account. Do not automate this step with production keys. If it fails, do not
+   promote the release.
+
 ## Notes
 
 - `/api` is stripped at the edge (`easyquran.fyi/api/quran/health/ready` → `/quran/health/ready`). The public api router excludes `/api/healthz` (`!PathPrefix(`/api/healthz`)`), so `/healthz` is reachable only on the Docker network / in-container healthcheck — never via the public host router.

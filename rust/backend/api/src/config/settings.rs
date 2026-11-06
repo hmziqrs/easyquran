@@ -966,6 +966,57 @@ pub fn web_auth() -> &'static WebAuthSettings {
     WEB_AUTH.get_or_init(WebAuthSettings::default)
 }
 
+/// Registration admission caps (A9). Every default is "not measured": the owner
+/// sets real values after the A5 measurement (O20), at >= 4x measured peak.
+/// Counters only: a refused creation is a 429 to the next UTC midnight and never
+/// feeds escalation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdmissionSettings {
+    /// Accounts created per client IP per UTC day, across the password door and
+    /// all five OAuth doors (one shared counter). NOT MEASURED default.
+    pub registrations_per_ip_daily: u64,
+    /// Accounts created per UTC day, all doors and all IPs. NOT MEASURED default.
+    pub registrations_global_daily: u64,
+    /// New anonymous CSRF sessions per client IP per UTC day. NOT MEASURED default.
+    pub anonymous_sessions_per_ip_daily: u64,
+}
+
+pub const ADMISSION_DEFAULT_REGISTRATIONS_PER_IP_DAILY: u64 = 20;
+pub const ADMISSION_DEFAULT_REGISTRATIONS_GLOBAL_DAILY: u64 = 5_000;
+/// Not measured. A shared (carrier-NAT) address that reaches this cap gets 429
+/// on new CSRF sessions only; existing sessions are unaffected.
+pub const ADMISSION_DEFAULT_ANONYMOUS_SESSIONS_PER_IP_DAILY: u64 = 500;
+
+impl AdmissionSettings {
+    pub fn from_env() -> Self {
+        Self {
+            registrations_per_ip_daily: env_u64(
+                "REGISTRATIONS_PER_IP_DAILY",
+                ADMISSION_DEFAULT_REGISTRATIONS_PER_IP_DAILY,
+            )
+            .max(1),
+            registrations_global_daily: env_u64(
+                "REGISTRATIONS_GLOBAL_DAILY",
+                ADMISSION_DEFAULT_REGISTRATIONS_GLOBAL_DAILY,
+            )
+            .max(1),
+            anonymous_sessions_per_ip_daily: env_u64(
+                "ANONYMOUS_SESSIONS_PER_IP_DAILY",
+                ADMISSION_DEFAULT_ANONYMOUS_SESSIONS_PER_IP_DAILY,
+            )
+            .max(1),
+        }
+    }
+}
+
+static ADMISSION: std::sync::OnceLock<AdmissionSettings> = std::sync::OnceLock::new();
+
+/// Process-wide admission caps. `Settings::from_env` sets them at boot; before
+/// that (tests that bypass from_env) the same env-derived defaults apply.
+pub fn admission() -> &'static AdmissionSettings {
+    ADMISSION.get_or_init(AdmissionSettings::from_env)
+}
+
 impl Settings {
     pub fn from_env() -> Result<Self, String> {
         let cookie_key =
@@ -987,6 +1038,7 @@ impl Settings {
         // construction working).
         let web_auth = WebAuthSettings::from_env()?;
         let _ = WEB_AUTH.set(web_auth);
+        let _ = ADMISSION.set(AdmissionSettings::from_env());
         let _ = INGRESS.set(IngressSettings::from_env()?);
 
         Ok(Self {

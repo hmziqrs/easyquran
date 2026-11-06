@@ -9,7 +9,10 @@ use crate::{
     db::sea_models::{user, user_oauth_identity},
     error::{ErrorCode, ErrorResponse},
     modules::auth_v1::controller::create_bound_session,
-    services::auth::AuthSession,
+    services::{
+        auth::AuthSession,
+        registration_admission::{admit_creation, CreationCaps, CreationSite},
+    },
     AppState,
 };
 
@@ -56,8 +59,10 @@ impl std::fmt::Display for OAuthProvider {
 }
 
 /// `email_verified` must be true before linking onto or creating an account: an unverified-at-IdP identity with a victim's email must not take it over.
+/// `site` carries the creation caps for a new account (A9). Only the create
+/// branch charges them: logins by an existing identity or a link never do.
 #[allow(clippy::too_many_arguments)]
-#[instrument(skip(db), fields(provider = %provider))]
+#[instrument(skip(db, site), fields(provider = %provider))]
 pub async fn find_or_create_user_for_oauth(
     db: &sea_orm::DatabaseConnection,
     provider: OAuthProvider,
@@ -65,6 +70,7 @@ pub async fn find_or_create_user_for_oauth(
     email: Option<String>,
     name: String,
     email_verified: bool,
+    site: CreationSite<'_>,
 ) -> Result<user::Model, ErrorResponse> {
     if let Some(identity) =
         user_oauth_identity::Entity::find_by_provider(db, provider.as_str(), provider_user_id)
@@ -112,8 +118,11 @@ pub async fn find_or_create_user_for_oauth(
         );
     }
 
+    let now_utc = chrono::Utc::now();
+    admit_creation(site.store, site.ip, CreationCaps::configured(), now_utc).await?;
+
     info!("Creating new user from OAuth account");
-    let now = chrono::Utc::now().fixed_offset();
+    let now = now_utc.fixed_offset();
     let active = user::ActiveModel {
         name: Set(name),
         email: Set(email),
@@ -383,6 +392,15 @@ mod tests {
         assert!(result.is_err(), "unverified email must not link or create");
     }
 
+    fn test_site() -> CreationSite<'static> {
+        static STORE: std::sync::LazyLock<rux_request_gate::InMemoryStore> =
+            std::sync::LazyLock::new(rux_request_gate::InMemoryStore::default);
+        CreationSite {
+            store: &STORE,
+            ip: "203.0.113.10",
+        }
+    }
+
     async fn mem_db() -> sea_orm::DatabaseConnection {
         use migration::{Migrator, MigratorTrait};
         use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection};
@@ -457,6 +475,7 @@ mod tests {
             Some("victim@corp.com".to_string()),
             "Attacker".to_string(),
             false,
+            test_site(),
         )
         .await
         .unwrap_err();
