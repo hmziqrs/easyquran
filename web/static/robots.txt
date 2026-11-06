@@ -1,4 +1,6 @@
 # allow crawling everything by default
 User-agent: *
 Disallow:
+# Offline packs are per-device downloads with a daily budget, not crawl targets.
+Disallow: /offline/
 Sitemap: https://easyquran.fyi/sitemap.xml

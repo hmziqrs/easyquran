@@ -285,7 +285,7 @@ async fn robots_txt() -> (
     (
         StatusCode::OK,
         [(header::CONTENT_TYPE, "text/plain")],
-        "User-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /api/\nDisallow: /auth/\n\nSitemap: https://ruxlog.com/sitemap.xml\n",
+        "User-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /api/\nDisallow: /auth/\n",
     )
 }
 
@@ -331,4 +331,21 @@ async fn sitemap_xml(
         [(header::CONTENT_TYPE, "application/xml")],
         urls,
     ))
+}
+
+#[cfg(test)]
+mod robots_tests {
+    use super::robots_txt;
+
+    #[tokio::test]
+    async fn robots_names_no_foreign_sitemap_and_keeps_api_paths_closed() {
+        let (status, _headers, body) = robots_txt().await;
+        assert_eq!(status, axum::http::StatusCode::OK);
+        assert!(
+            !body.contains("ruxlog"),
+            "robots must not name another site: {body}"
+        );
+        assert!(body.contains("Disallow: /api/"));
+        assert!(body.contains("Disallow: /admin/"));
+    }
 }

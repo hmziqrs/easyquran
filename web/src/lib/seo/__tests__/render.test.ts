@@ -25,6 +25,12 @@ describe("renderLlmsIndex", () => {
     expect(llms).toContain("## How to call");
   });
 
+  it("publishes the bulk-data path and the offline pack limit", () => {
+    expect(llms).toContain("## Bulk data");
+    expect(llms).toContain(".well-known/quran-bulk.json");
+    expect(llms).toContain("capped at 20 a day");
+  });
+
   it("documents juz and mushaf page URL patterns", () => {
     expect(llms).toContain("/juz/");
     expect(llms).toContain("/page/");

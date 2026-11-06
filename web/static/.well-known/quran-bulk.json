@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "name": "EasyQuran bulk data",
+  "description": "Where to fetch Quran text in bulk. Reader pages and offline packs are the supported paths.",
+  "documentation": "https://easyquran.fyi/llms.txt",
+  "offline": {
+    "manifest": "https://easyquran.fyi/offline/manifest.json",
+    "pack": "https://easyquran.fyi/offline/pack.{packId}.json",
+    "limits": {
+      "downloadsPerDay": 20,
+      "burstPerMinute": 5,
+      "bytesPerDay": 104857600
+    },
+    "note": "Limits apply per address. Over the limit returns 429 with Retry-After."
+  },
+  "integrity": "Quran bytes come from the app's baked id maps. This file publishes no checksums, and nothing in the service verifies one at runtime."
+}
