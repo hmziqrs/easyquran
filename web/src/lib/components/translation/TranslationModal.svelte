@@ -47,6 +47,7 @@
   import type { ReadPick } from "#lib/reader/reading-flow.js";
   import { translationMatchesQuery } from "./translation-search";
   import { detectCountries, languagePriority } from "./translation-region";
+  import StackedLaneSettings from "./StackedLaneSettings.svelte";
 
   type LanguageGroup = {
     language: string;
@@ -770,6 +771,7 @@
               </button>
             </div>
           </div>
+          <StackedLaneSettings />
         {/if}
       </div>
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { MediaQuery } from "svelte/reactivity";
   import { getLocale } from "#lib/paraglide/runtime.js";
   import type { UiLocale } from "#lib/i18n/locales.js";
   import {
@@ -61,6 +62,12 @@
       ...stacked.map((t): ExtraRow => ({ kind: "text", t })),
     ].sort((a, b) => rank(rowSourceId(a)) - rank(rowSourceId(b))),
   );
+  // Side-by-side lanes need room: below the tablet breakpoint the lanes stack again, so a
+  // phone never gets columns too narrow to read. One lane has nothing to sit beside.
+  const wideLanes = new MediaQuery("min-width: 768px");
+  const parallel = $derived(
+    stackedTranslations.layout === "parallel" && wideLanes.current && extraRows.length > 1,
+  );
 
   /**
    * quran.com-style credit after the text: the translator, then the work in parentheses when
@@ -100,14 +107,26 @@
 
 <!-- Lanes: one accent edge per translation and its name inline, all in one colour —
      per-lane hues and grey text read as noise (user, 2026-10-02). -->
-<div class="verse-lanes">
+<div
+  class="verse-lanes"
+  class:verse-lanes--parallel={parallel}
+  style:--lane-count={extraRows.length}
+  data-lanes-layout={parallel ? "parallel" : "stacked"}
+>
   {#each extraRows as row (extraRowKey(row))}
     {#if row.kind === "skeleton"}
-      <div class="verse-extra verse-extra--skeleton" aria-hidden="true">
+      <div
+        class="verse-extra verse-extra--skeleton"
+        aria-hidden="true"
+        style:--lane-scale={stackedTranslations.laneScale(rowSourceId(row))}
+      >
         <span class="verse-lane-skeleton"></span>
       </div>
     {:else if row.kind === "error"}
-      <span class="verse-extra verse-extra--error">{errorLabel}</span>
+      <span
+        class="verse-extra verse-extra--error"
+        style:--lane-scale={stackedTranslations.laneScale(rowSourceId(row))}>{errorLabel}</span
+      >
     {:else}
       {@const tafsir = isTafsirTranslation(row.t.sourceId)}
       {@const translit = laneTranslit(row.t)}
@@ -119,6 +138,7 @@
         class:verse-extra--tafsir={tafsir}
         dir={row.t.direction}
         lang={row.t.languageCode}
+        style:--lane-scale={stackedTranslations.laneScale(row.t.sourceId)}
       >
         {#if laneEmpty(row.t)}
           <span class="verse-missing">{verseEmptyNote(row.t.name ?? row.t.language)}</span>
@@ -152,7 +172,7 @@
     color: var(--foreground);
     display: block;
     font-family: var(--reader-translation-family, var(--font-sans));
-    font-size: var(--reader-translation-size, 1.0625rem);
+    font-size: calc(var(--reader-translation-size, 1.0625rem) * var(--lane-scale, 1));
     line-height: 1.75;
     max-width: 72ch;
     padding-inline: 14px 10px;
@@ -164,9 +184,23 @@
      The Latin UI face has no Arabic glyphs, so they used to fall back to a cramped system font. */
   .verse-extra:dir(rtl) {
     font-family: "Noto Naskh Arabic", var(--font-arabic-ui);
-    font-size: calc(var(--reader-translation-size, 1.0625rem) * 1.2);
+    font-size: calc(var(--reader-translation-size, 1.0625rem) * 1.2 * var(--lane-scale, 1));
     line-height: 2.05;
     margin-left: auto;
+  }
+
+  /* Side by side (wide screens only, see wideLanes): one column per lane, the lanes keep
+     their order and their own text size. Columns share the row's width. */
+  .verse-lanes--parallel {
+    align-items: start;
+    column-gap: 20px;
+    display: grid;
+    grid-template-columns: repeat(var(--lane-count, 1), minmax(0, 1fr));
+    row-gap: 10px;
+  }
+
+  .verse-lanes--parallel .verse-extra {
+    max-width: none;
   }
 
   /* Credit after the text, grey and small (user pick, quran.com's pattern): it reads as
