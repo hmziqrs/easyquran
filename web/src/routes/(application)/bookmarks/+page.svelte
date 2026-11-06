@@ -139,24 +139,32 @@
     else selected.delete(bookmarkId);
   }
 
+  /** Bulk move with one Undo toast; Undo puts every moved row back in its old folder. */
   function moveSelected(folderId: string): void {
-    for (const id of selected) bookmarks.moveToFolder(id, folderId);
+    const folder = bookmarks.folderById(folderId);
+    const moved = bookmarks.moveMany([...selected], folderId);
     selected.clear();
+    if (moved.length === 0 || folder === undefined) return;
+    toast(copy.movedMany(moved.length, folder.name), {
+      id: "bookmarks-moved",
+      action: { label: copy.undo, onClick: () => bookmarks.restore(moved) },
+    });
   }
 
   /** Optimistic removal + one Undo toast (rapid removes share it). */
-  function removeRows(rows: readonly Bookmark[]): void {
-    if (rows.length === 0) return;
-    for (const row of rows) bookmarks.remove(row.id);
-    toast(copy.removed, {
+  function removeRows(ids: readonly string[]): void {
+    const removed = bookmarks.removeMany(ids);
+    if (removed.length === 0) return;
+    toast(removed.length === 1 ? copy.removed : copy.removedMany(removed.length), {
       id: "bookmarks-removed",
-      action: { label: copy.undo, onClick: () => bookmarks.restore(rows) },
+      action: { label: copy.undo, onClick: () => bookmarks.restore(removed) },
     });
   }
 
   function removeSelected(): void {
-    removeRows(bookmarks.bookmarks.filter((bookmark) => selected.has(bookmark.id)));
+    const ids = [...selected];
     selected.clear();
+    removeRows(ids);
   }
 
   function deleteFolder(id: string): void {
@@ -221,7 +229,7 @@
               : null}
             {folders}
             onMove={(id, folderId) => bookmarks.moveToFolder(id, folderId)}
-            onRemove={() => removeRows([bookmark])}
+            onRemove={() => removeRows([bookmark.id])}
             onSelect={toggleSelect}
             selected={selected.has(bookmark.id)}
             noteIcon={hasNote(bookmark)}
@@ -350,6 +358,8 @@
               value={folderFilter}
               onValueChange={(value) => {
                 folderFilter = value;
+                // Selection is for the rows on screen: a new filter starts clean.
+                selected.clear();
               }}
               items={filterItems}
             >

@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 488 messages. Import this barrel, never
+// 490 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "#lib/paraglide/messages/reader_account.js";
@@ -42,6 +42,7 @@ export { reader_bookmarks_move_label } from "#lib/paraglide/messages/reader_book
 export { reader_bookmarks_move_selected_to } from "#lib/paraglide/messages/reader_bookmarks_move_selected_to.js";
 export { reader_bookmarks_move_to } from "#lib/paraglide/messages/reader_bookmarks_move_to.js";
 export { reader_bookmarks_move_up } from "#lib/paraglide/messages/reader_bookmarks_move_up.js";
+export { reader_bookmarks_moved_many } from "#lib/paraglide/messages/reader_bookmarks_moved_many.js";
 export { reader_bookmarks_new_folder } from "#lib/paraglide/messages/reader_bookmarks_new_folder.js";
 export { reader_bookmarks_new_folder_label } from "#lib/paraglide/messages/reader_bookmarks_new_folder_label.js";
 export { reader_bookmarks_new_folder_placeholder } from "#lib/paraglide/messages/reader_bookmarks_new_folder_placeholder.js";
@@ -53,6 +54,7 @@ export { reader_bookmarks_remove } from "#lib/paraglide/messages/reader_bookmark
 export { reader_bookmarks_remove_label } from "#lib/paraglide/messages/reader_bookmarks_remove_label.js";
 export { reader_bookmarks_remove_selected } from "#lib/paraglide/messages/reader_bookmarks_remove_selected.js";
 export { reader_bookmarks_removed } from "#lib/paraglide/messages/reader_bookmarks_removed.js";
+export { reader_bookmarks_removed_many } from "#lib/paraglide/messages/reader_bookmarks_removed_many.js";
 export { reader_bookmarks_rename } from "#lib/paraglide/messages/reader_bookmarks_rename.js";
 export { reader_bookmarks_rename_label } from "#lib/paraglide/messages/reader_bookmarks_rename_label.js";
 export { reader_bookmarks_rows_capped } from "#lib/paraglide/messages/reader_bookmarks_rows_capped.js";

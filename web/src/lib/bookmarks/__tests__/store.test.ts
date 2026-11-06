@@ -264,7 +264,12 @@ describe("signed in: synced folders", () => {
   it("a delete pulled from another device reaches this one, and an empty pull deletes nothing", async () => {
     const { store, answers, round } = setup(account());
     answers.push({
-      body: roundBody({ folders: [serverFolder()], bookmarks: [serverMark()], rev: 2, latestRev: 2 }),
+      body: roundBody({
+        folders: [serverFolder()],
+        bookmarks: [serverMark()],
+        rev: 2,
+        latestRev: 2,
+      }),
     });
     await round();
     expect(store.isBookmarked(2, 255)).toBe(true);
@@ -341,7 +346,14 @@ describe("signed in: synced folders", () => {
     answers.push({
       body: roundBody({
         folders: [
-          { id: FOLDER, deleted: true, rev: 4, nameStamp: null, positionStamp: null, deletedStamp: stamp(NOW) },
+          {
+            id: FOLDER,
+            deleted: true,
+            rev: 4,
+            nameStamp: null,
+            positionStamp: null,
+            deletedStamp: stamp(NOW),
+          },
         ],
         rev: 4,
         latestRev: 4,
@@ -389,7 +401,12 @@ describe("signed in: synced folders", () => {
   it("past the floor: full pull, and a stale device revives nothing", async () => {
     const { store, answers, round, bodies } = setup(account());
     answers.push({
-      body: roundBody({ folders: [serverFolder()], bookmarks: [serverMark()], rev: 5, latestRev: 5 }),
+      body: roundBody({
+        folders: [serverFolder()],
+        bookmarks: [serverMark()],
+        rev: 5,
+        latestRev: 5,
+      }),
     });
     await round();
     answers.push({ body: roundBody({ rev: 50, latestRev: 50, tombstoneFloor: 40 }) });
@@ -423,7 +440,10 @@ describe("signed in: synced folders", () => {
     expect(localStorage.getItem("easyquran.bookmarks.local")).toBeNull();
     expect(store.bookmarks[0]?.folderId).toBe(defaultFolderIdFor(7));
     const rows = store.dirtyRows();
-    expect(rows[0]).toMatchObject({ kind: "bookmark.upsert", stamp: expect.stringMatching(/^\d{13}-/u) });
+    expect(rows[0]).toMatchObject({
+      kind: "bookmark.upsert",
+      stamp: expect.stringMatching(/^\d{13}-/u),
+    });
   });
 
   it("an account switch never shows the previous account's rows", () => {
@@ -447,5 +467,82 @@ describe("signed in: synced folders", () => {
     await expect(round()).rejects.toBeInstanceOf(SyncPausedError);
     expect(store.authed).toBe(false);
     expect(auth.notifySessionLost).toHaveBeenCalledOnce();
+  });
+});
+
+describe("bulk actions (F14)", () => {
+  const account = (): FakeAuth => ({
+    authenticated: true,
+    user: { id: 7 },
+    notifySessionLost: vi.fn(),
+  });
+
+  it("signed out: bulk move then Undo restores every row to its old folder", () => {
+    const { store } = setup();
+    const hifz = store.createFolder("Hifz")!;
+    store.toggle(2, 1);
+    store.toggle(2, 2);
+    const ids = store.bookmarks.map((b) => b.id);
+    const moved = store.moveMany(ids, hifz.id);
+    expect(moved).toHaveLength(2);
+    expect(store.bookmarksIn(hifz.id)).toHaveLength(2);
+    store.restore(moved);
+    expect(store.bookmarksIn(store.defaultFolderId)).toHaveLength(2);
+    expect(store.bookmarksIn(hifz.id)).toHaveLength(0);
+  });
+
+  it("signed out: bulk remove then Undo brings the rows back", () => {
+    const { store } = setup();
+    store.toggle(2, 1);
+    store.toggle(2, 2);
+    store.toggle(2, 3);
+    const removed = store.removeMany([store.bookmarks[0]!.id, store.bookmarks[1]!.id]);
+    expect(removed).toHaveLength(2);
+    expect(store.bookmarks).toHaveLength(1);
+    store.restore(removed);
+    expect(store.bookmarks).toHaveLength(3);
+  });
+
+  it("bulk move skips rows already in the target and unknown ids", () => {
+    const { store } = setup();
+    const hifz = store.createFolder("Hifz")!;
+    store.toggle(5, 1);
+    const id = store.bookmarks[0]!.id;
+    expect(store.moveMany([id, "missing-id"], store.defaultFolderId)).toEqual([]);
+    expect(store.moveMany([id, "missing-id"], "no-such-folder")).toEqual([]);
+    expect(store.moveMany([id], hifz.id)).toHaveLength(1);
+  });
+
+  it("signed in: each bulk row is stamped and dirty, and Undo writes newer stamps", () => {
+    const { store } = setup(account());
+    store.toggle(2, 1);
+    store.toggle(2, 2);
+    const before = store.bookmarks.map((b) => b.stamp);
+    const removed = store.removeMany(store.bookmarks.map((b) => b.id));
+    expect(store.bookmarks).toHaveLength(0);
+    expect(store.pending).toBeGreaterThan(0);
+    store.restore(removed);
+    expect(store.bookmarks).toHaveLength(2);
+    expect(store.bookmarks.every((b) => b.dirty)).toBe(true);
+    for (const [index, row] of store.bookmarks.entries()) {
+      const prior = before[index];
+      expect(prior).not.toBeNull();
+      expect(row.stamp! > prior!).toBe(true);
+    }
+  });
+
+  it("signed in: bulk move writes dirty rows in the new folder; Undo returns them", () => {
+    const { store } = setup(account());
+    const hifz = store.createFolder("Hifz")!;
+    store.toggle(3, 1);
+    store.toggle(3, 2);
+    const moved = store.moveMany(
+      store.bookmarks.map((b) => b.id),
+      hifz.id,
+    );
+    expect(store.bookmarksIn(hifz.id)).toHaveLength(2);
+    expect(store.bookmarks.every((b) => b.dirty)).toBe(true);
+    store.restore(moved);
+    expect(store.bookmarksIn(store.defaultFolderId)).toHaveLength(2);
   });
 });

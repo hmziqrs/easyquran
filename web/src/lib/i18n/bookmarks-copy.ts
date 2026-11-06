@@ -33,6 +33,8 @@ import {
   reader_bookmarks_remove_label,
   reader_bookmarks_remove_selected,
   reader_bookmarks_removed,
+  reader_bookmarks_removed_many,
+  reader_bookmarks_moved_many,
   reader_bookmarks_rename,
   reader_bookmarks_rename_label,
   reader_bookmarks_save,
@@ -62,7 +64,6 @@ import {
   reader_bookmarks_save_to,
   reader_bookmarks_saved_to,
 } from "#lib/i18n/m/reader.js";
-
 import { getLocale } from "#lib/paraglide/runtime.js";
 
 export interface BookmarksCopy {
@@ -117,6 +118,9 @@ export interface BookmarksCopy {
   readonly remove: string;
   readonly removeLabel: string;
   readonly removed: string;
+  /** Bulk-action toasts (F14): counts, and the destination folder's name for moves. */
+  readonly removedMany: (count: number) => string;
+  readonly movedMany: (count: number, folder: string) => string;
   readonly undo: string;
   readonly moveLabel: (reference: string) => string;
   readonly ayah: (ayah: number) => string;
@@ -197,6 +201,8 @@ export function getBookmarksCopy(locale: UiLocale = getLocale() as UiLocale): Bo
     remove: noArgs(reader_bookmarks_remove),
     removeLabel: noArgs(reader_bookmarks_remove_label),
     removed: noArgs(reader_bookmarks_removed),
+    removedMany: (count) => reader_bookmarks_removed_many({ count }, options),
+    movedMany: (count, folder) => reader_bookmarks_moved_many({ count, folder }, options),
     undo: noArgs(reader_bookmarks_undo),
     moveLabel: (reference) => reader_bookmarks_move_label({ reference }, options),
     ayah: (ayah) => reader_bookmarks_ayah({ ayah }, options),

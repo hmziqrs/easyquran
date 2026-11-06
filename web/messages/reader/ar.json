@@ -332,6 +332,8 @@
   "reader_nav_manual_pages": "تعذّر تحميل المزيد — انتقل إلى صفحة",
   "reader_bookmarks_move_to": "نقل إلى…",
   "reader_bookmarks_removed": "تمت إزالة العلامة المرجعية.",
+  "reader_bookmarks_removed_many": "أُزيلت {count} علامات مرجعية.",
+  "reader_bookmarks_moved_many": "نُقلت {count} إلى {folder}.",
   "reader_bookmarks_undo": "تراجع",
   "reader_bookmarks_move_up": "نقل {name} لأعلى",
   "reader_bookmarks_move_down": "نقل {name} لأسفل",

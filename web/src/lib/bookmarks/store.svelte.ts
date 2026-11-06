@@ -145,7 +145,9 @@ function seedDefault(id: string): BookmarkFolder {
 
 /** A stamp the server rewrote is below ours: adopt it. One it beat arrives with the row. */
 function lowerOf(result: string | null | undefined, local: string | null): string | null {
-  return result !== null && result !== undefined && local !== null && result < local ? result : local;
+  return result !== null && result !== undefined && local !== null && result < local
+    ? result
+    : local;
 }
 
 function bookmarkRegisters(row: Bookmark): JsonObject {
@@ -351,7 +353,8 @@ export class BookmarksStore {
   /** Rows waiting to reach the server. */
   get pending(): number {
     if (this.#accountId() === null) return 0;
-    return [...this.#folders, ...this.#bookmarks].filter((row) => row.dirty && !row.rejected).length;
+    return [...this.#folders, ...this.#bookmarks].filter((row) => row.dirty && !row.rejected)
+      .length;
   }
 
   get status(): SyncStatus {
@@ -495,6 +498,37 @@ export class BookmarksStore {
     const row = this.bookmarks.find((b) => b.id === bookmarkId) ?? null;
     if (row !== null) this.#deleteBookmark(row.id);
     return row;
+  }
+
+  /**
+   * Bulk remove (selection bar). Each row is a normal write: stamped and dirty
+   * when signed in. Returns the rows as they were, for `restore` on Undo.
+   */
+  removeMany(bookmarkIds: readonly string[]): Bookmark[] {
+    if (this.#suspended) return [];
+    const removed: Bookmark[] = [];
+    for (const id of new Set(bookmarkIds)) {
+      const row = this.remove(id);
+      if (row !== null) removed.push(row);
+    }
+    return removed;
+  }
+
+  /**
+   * Bulk move (selection bar). Rows already in the target folder are skipped.
+   * Returns the rows as they were before the move; `restore` on Undo puts each
+   * back in its old folder with a newer stamp, so the move reverts on every device.
+   */
+  moveMany(bookmarkIds: readonly string[], folderId: string): Bookmark[] {
+    if (this.#suspended || this.folderById(folderId) === undefined) return [];
+    const before: Bookmark[] = [];
+    for (const id of new Set(bookmarkIds)) {
+      const row = this.bookmarks.find((b) => b.id === id);
+      if (row === undefined || row.folderId === folderId) continue;
+      before.push(row);
+      this.moveToFolder(row.id, folderId);
+    }
+    return before;
   }
 
   /** Undo for removals: same ids, fresh timestamps — newer than the tombstones. */
@@ -720,7 +754,9 @@ export class BookmarksStore {
     // `since` is saved with the rows it covers, so an interrupted pull resumes.
     this.#writeCache();
 
-    const progressed = round.results.some((r) => r.status === "applied" || r.status === "superseded");
+    const progressed = round.results.some(
+      (r) => r.status === "applied" || r.status === "superseded",
+    );
     const moreDirty = sent.length >= SYNC_PAGE && progressed && this.dirtyRows().length > 0;
     return { more: reset || round.more || moreDirty };
   }
@@ -865,8 +901,14 @@ export class BookmarksStore {
     const stamped: BookmarkFolder = {
       ...folder,
       nameStamp: next(prev === undefined || prev.name !== folder.name, folder.nameStamp),
-      positionStamp: next(prev !== undefined && prev.position !== folder.position, folder.positionStamp),
-      deletedStamp: next(prev !== undefined && prev.deleted !== folder.deleted, folder.deletedStamp),
+      positionStamp: next(
+        prev !== undefined && prev.position !== folder.position,
+        folder.positionStamp,
+      ),
+      deletedStamp: next(
+        prev !== undefined && prev.deleted !== folder.deleted,
+        folder.deletedStamp,
+      ),
       dirty: true,
       rejected: false,
     };
@@ -1109,7 +1151,6 @@ export class BookmarksStore {
       void this.#engine.flush(bookmarksDomainFor(ownerId)).catch(() => undefined);
     }, FIRST_SYNC_RETRY_MS);
   }
-
 }
 
 export function createBookmarksStore(deps: BookmarksStoreDeps): BookmarksStore {

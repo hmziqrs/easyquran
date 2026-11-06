@@ -332,6 +332,8 @@
   "reader_nav_manual_pages": "Couldn't load more — jump to a page",
   "reader_bookmarks_move_to": "Move to…",
   "reader_bookmarks_removed": "Bookmark removed.",
+  "reader_bookmarks_removed_many": "{count} bookmarks removed.",
+  "reader_bookmarks_moved_many": "Moved {count} to {folder}.",
   "reader_bookmarks_undo": "Undo",
   "reader_bookmarks_move_up": "Move {name} up",
   "reader_bookmarks_move_down": "Move {name} down",
