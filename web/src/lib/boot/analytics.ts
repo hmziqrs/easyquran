@@ -18,7 +18,7 @@ export function startAnalytics(): () => void {
       fbAnalytics = await import("#lib/firebase/analytics.js");
       await fbAnalytics.initAnalytics();
       applyConsent();
-      if (consent.analytics) void fbAnalytics.pageView(location.pathname);
+      if (consent.analyticsAllowed) void fbAnalytics.pageView(location.pathname);
     } catch (err) {
       console.warn("[firebase] init failed:", err);
     }
@@ -26,11 +26,11 @@ export function startAnalytics(): () => void {
 
   function applyConsent(): void {
     if (!fbAnalytics) {
-      if (consent.analytics) void load();
+      if (consent.analyticsAllowed) void load();
       return;
     }
     void fbAnalytics.setConsentState(consent.consentSettings);
-    void fbAnalytics.setAnalyticsCollectionEnabled(consent.analytics);
+    void fbAnalytics.setAnalyticsCollectionEnabled(consent.analyticsAllowed);
   }
 
   window.addEventListener("easyquran:consent", applyConsent);

@@ -22,6 +22,7 @@
   import { getAuthCopy } from "#lib/i18n/auth-copy.js";
   import { getAccountCopy } from "#lib/i18n/account-copy.js";
   import { createClock, localClockStorage } from "#lib/sync/clock.js";
+  import AgeDeclaration from "#lib/auth/components/AgeDeclaration.svelte";
   import FreshAuthControls from "#lib/auth/components/FreshAuthControls.svelte";
   import TwoFactorControls from "#lib/auth/components/TwoFactorControls.svelte";
   import ConnectedAccounts from "#lib/auth/components/ConnectedAccounts.svelte";
@@ -333,6 +334,8 @@
         </Button>
       </div>
     </section>
+
+    <AgeDeclaration />
 
     <section class="flex flex-col gap-4">
       <div class="flex flex-col gap-1">

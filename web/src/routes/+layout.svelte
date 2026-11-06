@@ -182,7 +182,9 @@
     // locale suggest and the offline engine must only see real navigations.
     if (navigation.shallow) return;
     if (navigation.type !== "enter") {
-      if (!isAppealPath(location.pathname)) {
+      // Held until auth status is known and consent allows it (A34): the SDK's
+      // collection flag is not set yet, so an earlier event would use default consent.
+      if (!isAppealPath(location.pathname) && consent.analyticsAllowed) {
         void import("#lib/firebase/analytics.js")
           .then(({ pageView }) => pageView(location.pathname))
           .catch(() => {});

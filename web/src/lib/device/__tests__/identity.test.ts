@@ -5,6 +5,7 @@ import { isUuidV7 } from "#lib/sync/ids.js";
 import { deviceIdFor } from "../identity";
 
 vi.mock("$app/env", () => ({ browser: true }));
+vi.mock("$app/env/public", () => ({ PUBLIC_API_BASE_URL: "/api", PUBLIC_FCM_VAPID_KEY: "" }));
 
 describe("device id", () => {
   beforeEach(() => {

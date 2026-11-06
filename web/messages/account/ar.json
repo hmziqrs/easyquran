@@ -53,5 +53,13 @@
   "account_delete_fresh_auth": "أكِّد هويتك في قسم تأكيد الأمان أعلاه، ثم أعد الحذف.",
   "account_delete_submit": "حذف الحساب",
   "account_delete_deleting": "جارٍ الحذف…",
-  "account_delete_done": "تم حذف حسابك."
+  "account_delete_done": "تم حذف حسابك.",
+  "account_age_heading": "عمرك",
+  "account_age_description": "إذا كان عمرك دون 18 عامًا، فسيتم إيقاف التعليقات والتحليلات الخاصة بالقراءة وميزات الأجهزة في هذا الحساب. نستخدم تاريخ ميلادك مرة واحدة لتحديد ذلك ولا نحتفظ به. يمكنك الإجابة مرة واحدة فقط، ولا يمكن تغيير الإجابة من هنا.",
+  "account_age_field": "تاريخ الميلاد",
+  "account_age_submit": "حفظ",
+  "account_age_saving": "جارٍ الحفظ…",
+  "account_age_invalid": "أدخل تاريخ ميلاد صحيحًا.",
+  "account_age_done": "تم تسجيل عمرك.",
+  "account_age_already": "تم تسجيل عمرك في هذا الحساب مسبقًا."
 }

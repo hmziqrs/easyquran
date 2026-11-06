@@ -619,6 +619,36 @@ pub async fn admin_erase_data_request(
     ))
 }
 
+/// Record the account's self-declared age (A34), for accounts created without a date of
+/// birth (OAuth, pre-A34 email). The first answer stands: a second call is refused. The
+/// date is parsed for the minor check and never stored, logged or echoed. An under-18
+/// answer sets the flag and removes device state (see `User::declare_age`).
+#[debug_handler]
+#[instrument(skip(state, auth, payload), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
+pub async fn declare_age(
+    State(state): State<AppState>,
+    auth: AuthSession,
+    payload: ValidatedJson<V1DeclareAgePayload>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let owner = auth.user_required()?;
+    let today = chrono::Utc::now().date_naive();
+    let dob =
+        crate::modules::auth_v1::validator::parse_date_of_birth(&payload.0.date_of_birth, today)
+            .map_err(|_| {
+                ErrorResponse::new(ErrorCode::InvalidInput)
+                    .with_message("Enter a valid date of birth")
+            })?;
+    let is_minor = crate::modules::auth_v1::validator::is_minor_on(dob, today);
+    match User::declare_age(&state.sea_db, owner.id, is_minor).await? {
+        Some(user) => {
+            info!(user_id = user.id, is_minor, "Age declared");
+            Ok((StatusCode::OK, Json(json!(user))))
+        }
+        None => Err(ErrorResponse::new(ErrorCode::DuplicateEntry)
+            .with_message("Your age is already recorded for this account")),
+    }
+}
+
 /// Self-service account deletion (F7). Fresh auth first, then the typed email, then every
 /// session of the caller ends, then the A38 self path erases the account in one
 /// transaction. Immediate: no grace period. Authored posts and uploaded media stay.

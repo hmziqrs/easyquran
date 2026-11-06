@@ -290,6 +290,20 @@ export class AccountClient {
     return { status, httpStatus: res.status, data, error: res.error };
   }
 
+  /**
+   * One-time self-declared age (A34). The date goes to the server once and is not kept
+   * in client storage. A 409 means the age was already recorded.
+   */
+  async declareAge(dateOfBirth: string): Promise<AccountResult<UserProfile>> {
+    const res = await this.auth.unsafeRequest<UserProfile>("/user/v1/age/declare", {
+      method: "POST",
+      body: { date_of_birth: dateOfBirth },
+    });
+    const status = statusFor(res.status, res.error);
+    const data = res.ok ? decodeUserProfile(res.data) : null;
+    return { status, httpStatus: res.status, data, error: res.error };
+  }
+
   async listSessions(): Promise<AccountResult<SessionInfo[]>> {
     const res = await this.auth.get<SessionListResponse>("/auth/v1/sessions/list");
     const status = statusFor(res.status, res.error);

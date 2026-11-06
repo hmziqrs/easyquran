@@ -138,6 +138,14 @@ pub struct V1DeleteAccountPayload {
     pub confirm_email: String,
 }
 
+/// Self-declared date of birth, `YYYY-MM-DD` (A34). Read once to set the minor flag and
+/// never stored. The controller parses it; this only bounds the length.
+#[derive(Debug, Deserialize, Validate)]
+pub struct V1DeclareAgePayload {
+    #[validate(length(min = 10, max = 10))]
+    pub date_of_birth: String,
+}
+
 #[derive(Debug, Deserialize, Validate)]
 pub struct V1AdminOpenDataRequestPayload {
     pub user_id: i32,

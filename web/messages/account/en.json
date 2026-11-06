@@ -53,5 +53,13 @@
   "account_delete_fresh_auth": "Confirm your identity in Security confirmation above, then delete again.",
   "account_delete_submit": "Delete account",
   "account_delete_deleting": "Deleting…",
-  "account_delete_done": "Your account was deleted."
+  "account_delete_done": "Your account was deleted.",
+  "account_age_heading": "Your age",
+  "account_age_description": "If you are under 18, this turns off comments, reading analytics and device features on this account. Your date of birth is used once to decide this and is not kept. You can answer once, and the answer cannot be changed here.",
+  "account_age_field": "Date of birth",
+  "account_age_submit": "Save",
+  "account_age_saving": "Saving…",
+  "account_age_invalid": "Enter a valid date of birth.",
+  "account_age_done": "Your age is recorded.",
+  "account_age_already": "Your age is already recorded for this account."
 }

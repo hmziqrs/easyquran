@@ -34,8 +34,11 @@ export function decodeConsent(raw: unknown): ConsentFlags {
 
 export interface Consent {
   readonly current: Readonly<ConsentFlags>;
+  /** Stored preference for a non-minor account. Drives the Settings toggle. */
   readonly analytics: boolean;
   readonly advertising: boolean;
+  /** Analytics may leave the device now: preference on, not a minor, auth status resolved. */
+  readonly analyticsAllowed: boolean;
   readonly consentSettings: ConsentSettings;
   set(patch: ConsentPatch): void;
   setAnalytics(on: boolean): void;
@@ -44,12 +47,18 @@ export interface Consent {
   hydrate(): void;
   /** Signed-in account is a declared minor (A34): analytics and ads stay off, whatever is stored. */
   setMinorAccount(on: boolean): void;
+  /**
+   * Auth status has left "unknown" (A34). Until then analytics and ads are held off, so a
+   * signed-in minor's first page view cannot leave before the flag is known. Latches once set.
+   */
+  markAuthResolved(): void;
 }
 
 export function createConsent(): Consent {
   let flags = $state<ConsentFlags>({ ...DEFAULT_FLAGS });
   let hydrated = false;
   let minorAccount = $state(false);
+  let authResolved = $state(false);
 
   const set = (patch: ConsentPatch): void => {
     if (patch.analytics !== undefined) flags.analytics = patch.analytics;
@@ -59,6 +68,9 @@ export function createConsent(): Consent {
       window.dispatchEvent(new CustomEvent("easyquran:consent", { detail: patch }));
     }
   };
+
+  /** Analytics and ads are held while the account is a minor or its status is still unknown. */
+  const held = (): boolean => minorAccount || !authResolved;
 
   return {
     get current(): Readonly<ConsentFlags> {
@@ -70,13 +82,16 @@ export function createConsent(): Consent {
     get advertising(): boolean {
       return flags.advertising && !minorAccount;
     },
+    get analyticsAllowed(): boolean {
+      return flags.analytics && !held();
+    },
     get consentSettings(): ConsentSettings {
       const g = (on: boolean) => (on ? "granted" : "denied");
       return {
-        ad_storage: g(flags.advertising && !minorAccount),
-        ad_user_data: g(flags.advertising && !minorAccount),
-        ad_personalization: g(flags.advertising && !minorAccount),
-        analytics_storage: g(flags.analytics && !minorAccount),
+        ad_storage: g(flags.advertising && !held()),
+        ad_user_data: g(flags.advertising && !held()),
+        ad_personalization: g(flags.advertising && !held()),
+        analytics_storage: g(flags.analytics && !held()),
         functionality_storage: "granted",
         security_storage: "granted",
       };
@@ -93,6 +108,11 @@ export function createConsent(): Consent {
     setMinorAccount(on: boolean): void {
       if (minorAccount === on) return;
       minorAccount = on;
+      if (browser) window.dispatchEvent(new CustomEvent("easyquran:consent", { detail: {} }));
+    },
+    markAuthResolved(): void {
+      if (authResolved) return;
+      authResolved = true;
       if (browser) window.dispatchEvent(new CustomEvent("easyquran:consent", { detail: {} }));
     },
   };

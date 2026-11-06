@@ -135,6 +135,20 @@ fn set_cookie(reply: &Reply) -> String {
 /// Verified account with a password, created through the real user path.
 /// `is_minor` is the flag under test.
 async fn seed(state: &AppState, name: &str, is_minor: bool) -> user::Model {
+    seed_with_age(state, name, is_minor, true).await
+}
+
+/// Account created without a date of birth (OAuth or pre-A34 email): never declared.
+async fn seed_undeclared(state: &AppState, name: &str) -> user::Model {
+    seed_with_age(state, name, false, false).await
+}
+
+async fn seed_with_age(
+    state: &AppState,
+    name: &str,
+    is_minor: bool,
+    age_declared: bool,
+) -> user::Model {
     let code_hash = hash_code(&state.secret_key, "dummy-verification-code");
     let created = user::Entity::create(
         &state.sea_db,
@@ -144,6 +158,7 @@ async fn seed(state: &AppState, name: &str, is_minor: bool) -> user::Model {
             password: PASSWORD.into(),
             role: UserRole::User,
             is_minor,
+            age_declared,
         },
         code_hash,
     )
@@ -329,4 +344,200 @@ async fn minor_comment_create_is_refused() {
     )
     .await;
     assert_eq!(reply.status, StatusCode::FORBIDDEN, "{}", reply.body);
+}
+
+#[tokio::test]
+async fn sign_up_with_date_of_birth_records_the_declared_age() {
+    let (state, _app) = state_and_app().await;
+    let declared = seed(&state, "decladult", false).await;
+    let undeclared = seed_undeclared(&state, "declnone").await;
+    assert!(
+        declared.age_declared_at.is_some(),
+        "sign-up sets age_declared_at"
+    );
+    assert!(
+        undeclared.age_declared_at.is_none(),
+        "no DOB, never declared"
+    );
+}
+
+/// Seeds one push token and one `user_devices` row for `user_id`.
+async fn seed_device_state(state: &AppState, user_id: i32) {
+    device::Entity::upsert(
+        &state.sea_db,
+        device::NewDevice {
+            user_id,
+            token: PUSH_TOKEN.into(),
+            platform: "ios".into(),
+            device_id: Some(DEVICE.into()),
+        },
+    )
+    .await
+    .expect("token seeded");
+    user_device::Entity::register(
+        &state.sea_db,
+        user_device::NewUserDevice {
+            user_id,
+            id: DEVICE.into(),
+            platform: "ios".into(),
+            client: "react_native".into(),
+            form_factor: "phone".into(),
+            browser: None,
+            os_major: None,
+            app_version: None,
+            key_store: "none".into(),
+            key: None,
+            continuity_hint: None,
+        },
+        None,
+    )
+    .await
+    .expect("device row seeded");
+}
+
+async fn declare(app: &Router, origin: &str, cookie: &str, token: &str, dob: &str) -> Reply {
+    call(
+        app,
+        Method::POST,
+        "/user/v1/age/declare",
+        Some(cookie),
+        &[("csrf-token", token), ("origin", origin)],
+        Some(json!({ "date_of_birth": dob })),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn declaring_under_eighteen_sets_flag_and_deletes_device_state() {
+    let (state, app) = state_and_app().await;
+    let origin = state.allowed_origins.header_values()[0]
+        .to_str()
+        .unwrap()
+        .to_string();
+    let account = seed_undeclared(&state, "oauthkid").await;
+    seed_device_state(&state, account.id).await;
+    let (cookie, token) = sign_in(&app, &origin, "oauthkid@example.com").await;
+
+    let reply = declare(&app, &origin, &cookie, &token, "2015-01-01").await;
+    assert_eq!(reply.status, StatusCode::OK, "{}", reply.body);
+    assert_eq!(reply.body["is_minor"], json!(true), "flag in the reply");
+    assert!(
+        !reply.body.to_string().contains("2015"),
+        "the date of birth is never echoed"
+    );
+
+    let reloaded = user::Entity::find_by_id(account.id)
+        .one(&state.sea_db)
+        .await
+        .unwrap()
+        .expect("row");
+    assert!(reloaded.is_minor, "flag persisted");
+    assert!(reloaded.age_declared_at.is_some(), "declaration recorded");
+
+    let tokens = device::Entity::find()
+        .filter(device::Column::UserId.eq(account.id))
+        .count(&state.sea_db)
+        .await
+        .unwrap();
+    assert_eq!(tokens, 0, "push token rows deleted with the flag");
+    let rows = user_device::Entity::find()
+        .filter(user_device::Column::UserId.eq(account.id))
+        .count(&state.sea_db)
+        .await
+        .unwrap();
+    assert_eq!(rows, 0, "device rows deleted with the flag");
+}
+
+#[tokio::test]
+async fn declaring_adult_records_the_age_and_keeps_devices() {
+    let (state, app) = state_and_app().await;
+    let origin = state.allowed_origins.header_values()[0]
+        .to_str()
+        .unwrap()
+        .to_string();
+    let account = seed_undeclared(&state, "adultkid").await;
+    seed_device_state(&state, account.id).await;
+    let (cookie, token) = sign_in(&app, &origin, "adultkid@example.com").await;
+
+    let reply = declare(&app, &origin, &cookie, &token, "1990-06-15").await;
+    assert_eq!(reply.status, StatusCode::OK, "{}", reply.body);
+    assert_eq!(reply.body["is_minor"], json!(false));
+
+    let reloaded = user::Entity::find_by_id(account.id)
+        .one(&state.sea_db)
+        .await
+        .unwrap()
+        .expect("row");
+    assert!(!reloaded.is_minor, "adult not flagged");
+    assert!(reloaded.age_declared_at.is_some(), "declaration recorded");
+    let rows = user_device::Entity::find()
+        .filter(user_device::Column::UserId.eq(account.id))
+        .count(&state.sea_db)
+        .await
+        .unwrap();
+    assert_eq!(rows, 1, "adult keeps device rows");
+}
+
+#[tokio::test]
+async fn second_age_declaration_is_refused_and_the_first_stands() {
+    let (state, app) = state_and_app().await;
+    let origin = state.allowed_origins.header_values()[0]
+        .to_str()
+        .unwrap()
+        .to_string();
+    let account = seed_undeclared(&state, "twiceage").await;
+    let (cookie, token) = sign_in(&app, &origin, "twiceage@example.com").await;
+
+    let first = declare(&app, &origin, &cookie, &token, "1990-06-15").await;
+    assert_eq!(first.status, StatusCode::OK, "{}", first.body);
+    let second = declare(&app, &origin, &cookie, &token, "2015-01-01").await;
+    assert_eq!(second.status, StatusCode::CONFLICT, "{}", second.body);
+
+    let reloaded = user::Entity::find_by_id(account.id)
+        .one(&state.sea_db)
+        .await
+        .unwrap()
+        .expect("row");
+    assert!(!reloaded.is_minor, "a second answer cannot set the flag");
+}
+
+#[tokio::test]
+async fn age_declaration_rejects_bad_dates_and_anonymous_callers() {
+    let (state, app) = state_and_app().await;
+    let origin = state.allowed_origins.header_values()[0]
+        .to_str()
+        .unwrap()
+        .to_string();
+    let account = seed_undeclared(&state, "badage").await;
+    let (cookie, token) = sign_in(&app, &origin, "badage@example.com").await;
+
+    let junk = declare(&app, &origin, &cookie, &token, "06/11/2010").await;
+    assert_eq!(junk.status, StatusCode::BAD_REQUEST, "{}", junk.body);
+    let future = declare(&app, &origin, &cookie, &token, "2999-01-01").await;
+    assert_eq!(future.status, StatusCode::BAD_REQUEST, "{}", future.body);
+
+    let reloaded = user::Entity::find_by_id(account.id)
+        .one(&state.sea_db)
+        .await
+        .unwrap()
+        .expect("row");
+    assert!(
+        reloaded.age_declared_at.is_none(),
+        "rejected dates record nothing"
+    );
+
+    let anonymous = call(
+        &app,
+        Method::POST,
+        "/user/v1/age/declare",
+        None,
+        &[("csrf-token", &token), ("origin", &origin)],
+        Some(json!({ "date_of_birth": "2015-01-01" })),
+    )
+    .await;
+    assert_ne!(
+        anonymous.status,
+        StatusCode::OK,
+        "no session, no declaration"
+    );
 }

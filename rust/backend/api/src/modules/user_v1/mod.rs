@@ -20,6 +20,7 @@ pub fn routes() -> Router<AppState> {
                 .route("/identities", get(controller::list_identities))
                 .route("/identities/unlink", post(controller::unlink_identity))
                 .route("/delete", post(controller::self_delete_account))
+                .route("/age/declare", post(controller::declare_age))
                 .route_layer(middleware::from_fn(auth_guard::authenticated)),
         );
 

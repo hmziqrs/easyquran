@@ -53,6 +53,8 @@ impl V1RegisterPayload {
             password: self.password,
             role: UserRole::User,
             is_minor,
+            // Sign-up always carries a date of birth (validated by the controller).
+            age_declared: true,
         }
     }
 }

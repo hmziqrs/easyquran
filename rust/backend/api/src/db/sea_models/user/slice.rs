@@ -92,6 +92,8 @@ pub struct NewUser {
     pub password: String,
     pub role: UserRole,
     pub is_minor: bool,
+    /// True when sign-up carried a date of birth, so `age_declared_at` is set (A34).
+    pub age_declared: bool,
 }
 
 #[derive(Deserialize, Debug)]

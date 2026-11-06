@@ -36,6 +36,9 @@ pub struct Model {
     /// Self-declared under 18 at sign-up (A34). Gates device, push, analytics and
     /// comments. The date of birth itself is never stored.
     pub is_minor: bool,
+    /// When the account recorded its age (A34): at sign-up with a date of birth, or
+    /// from the account page. NULL = never declared. The date itself is never stored.
+    pub age_declared_at: Option<DateTimeWithTimeZone>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }

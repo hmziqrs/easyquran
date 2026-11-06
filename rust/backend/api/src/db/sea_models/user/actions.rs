@@ -1,6 +1,6 @@
 use crate::{
-    db::sea_models::email_verification,
-    error::{DbResult, ErrorCode, ErrorResponse},
+    db::sea_models::{device, email_verification, user_device},
+    error::{DbResult, DbResultExt, ErrorCode, ErrorResponse},
     services::registration_admission,
 };
 use ruxlog_types::PaginatedList;
@@ -72,6 +72,56 @@ impl Entity {
         Ok(results)
     }
 
+    /// Record the account's one self-declared age (A34). Returns the updated row, or
+    /// `None` when the age was already declared (the first answer stands). An under-18
+    /// answer also sets `is_minor` and deletes the account's device rows and push tokens
+    /// in the same transaction, so no device state survives the flag.
+    ///
+    /// Undeclared rows are never flagged, so writing `is_minor` here never clears a flag.
+    pub async fn declare_age(
+        conn: &DbConn,
+        user_id: i32,
+        is_minor: bool,
+    ) -> DbResult<Option<Model>> {
+        let transaction = conn.begin().await.map_err(|_| {
+            ErrorResponse::new(ErrorCode::TransactionError)
+                .with_message("Failed to begin transaction")
+        })?;
+        let now = chrono::Utc::now().fixed_offset();
+        let claimed = Self::update_many()
+            .col_expr(Column::AgeDeclaredAt, Expr::value(now))
+            .col_expr(Column::IsMinor, Expr::value(is_minor))
+            .filter(Column::Id.eq(user_id))
+            .filter(Column::AgeDeclaredAt.is_null())
+            .exec(&transaction)
+            .await
+            .map_err_to_response()?;
+        if claimed.rows_affected == 0 {
+            // Already declared, or the account is gone. Nothing was written.
+            return Ok(None);
+        }
+        if is_minor {
+            user_device::Entity::delete_many()
+                .filter(user_device::Column::UserId.eq(user_id))
+                .exec(&transaction)
+                .await
+                .map_err_to_response()?;
+            device::Entity::delete_many()
+                .filter(device::Column::UserId.eq(user_id))
+                .exec(&transaction)
+                .await
+                .map_err_to_response()?;
+        }
+        transaction.commit().await.map_err(|_| {
+            ErrorResponse::new(ErrorCode::TransactionError)
+                .with_message("Failed to commit transaction")
+        })?;
+        Self::find_by_id(user_id)
+            .one(conn)
+            .await
+            .map_err_to_response()
+    }
+
     #[instrument(skip(conn, new_user, email_code_hash), fields(user_id))]
     pub async fn create(
         conn: &DbConn,
@@ -92,6 +142,7 @@ impl Entity {
             role: Set(new_user.role),
             is_verified: Set(false),
             is_minor: Set(new_user.is_minor),
+            age_declared_at: Set(new_user.age_declared.then_some(now)),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()

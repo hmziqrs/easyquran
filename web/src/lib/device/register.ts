@@ -5,7 +5,7 @@ import { deviceKind } from "#lib/sessions/device.js";
 import { asNumber, asObject, asString, readJSON, writeJSON } from "#lib/storage/index.js";
 import { newEntityId } from "#lib/sync/ids.js";
 
-import { deviceIdFor, setDeviceIdFor } from "./identity";
+import { deviceIdFor, isMinorOwner, setDeviceIdFor } from "./identity";
 import {
   type DeviceKeyStore,
   ensureDeviceKey,
@@ -265,6 +265,8 @@ async function registerOnce(
 /**
  * Register this device if due. Returns false only on a real failure. A tab that
  * finds another tab holding the lock returns true: that tab is registering now.
+ * A minor account (A34) never registers: there is no device row and no push token,
+ * so this is a no-op, not a failure.
  */
 export async function ensureDeviceRegistered(
   owner: number,
@@ -272,6 +274,7 @@ export async function ensureDeviceRegistered(
   signal?: AbortSignal,
 ): Promise<boolean> {
   if (!browser) return false;
+  if (isMinorOwner(String(owner))) return true;
   if (!registrationDue(owner, token)) return true;
 
   const run = async (): Promise<boolean> => {

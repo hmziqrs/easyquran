@@ -948,6 +948,7 @@ mod tests {
             session_auth_secret: format!("test-secret-{id}"),
             verification_identity_hash: None,
             is_minor: false,
+            age_declared_at: None,
             created_at: now,
             updated_at: now,
         }

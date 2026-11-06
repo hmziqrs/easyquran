@@ -40,6 +40,7 @@ mod m000150_retention_sweep;
 mod m000160_erasure_receipts;
 mod m000170_data_requests;
 mod m000200_user_is_minor;
+mod m000210_user_age_declared;
 
 pub struct Migrator;
 
@@ -158,6 +159,8 @@ impl MigratorTrait for Migrator {
             Box::new(m000170_data_requests::Migration),
             // m000200 adds users.is_minor (A34): constant-default flag from self-declared age at sign-up.
             Box::new(m000200_user_is_minor::Migration),
+            // m000210 adds users.age_declared_at (A34): when the account recorded its age. NULL = never.
+            Box::new(m000210_user_age_declared::Migration),
         ]
     }
 }

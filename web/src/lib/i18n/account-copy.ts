@@ -55,6 +55,14 @@ import {
   account_delete_submit,
   account_delete_deleting,
   account_delete_done,
+  account_age_heading,
+  account_age_description,
+  account_age_field,
+  account_age_submit,
+  account_age_saving,
+  account_age_invalid,
+  account_age_done,
+  account_age_already,
 } from "#lib/i18n/m/account.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
 
@@ -116,6 +124,14 @@ export interface AccountCopy {
   deleteSubmit: string;
   deleteDeleting: string;
   deleteDone: string;
+  ageHeading: string;
+  ageDescription: string;
+  ageField: string;
+  ageSubmit: string;
+  ageSaving: string;
+  ageInvalid: string;
+  ageDone: string;
+  ageAlready: string;
 }
 
 // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.
@@ -178,5 +194,13 @@ export function getAccountCopy(locale: UiLocale = getLocale() as UiLocale): Acco
     deleteSubmit: account_delete_submit(undefined, { locale }),
     deleteDeleting: account_delete_deleting(undefined, { locale }),
     deleteDone: account_delete_done(undefined, { locale }),
+    ageHeading: account_age_heading(undefined, { locale }),
+    ageDescription: account_age_description(undefined, { locale }),
+    ageField: account_age_field(undefined, { locale }),
+    ageSubmit: account_age_submit(undefined, { locale }),
+    ageSaving: account_age_saving(undefined, { locale }),
+    ageInvalid: account_age_invalid(undefined, { locale }),
+    ageDone: account_age_done(undefined, { locale }),
+    ageAlready: account_age_already(undefined, { locale }),
   };
 }

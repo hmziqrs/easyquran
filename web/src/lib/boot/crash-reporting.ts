@@ -2,7 +2,7 @@ import { consent } from "#lib/stores/consent.svelte.js";
 
 export function startCrashReporting(): () => void {
   const reportException = (description: string): void => {
-    if (!consent.analytics) return;
+    if (!consent.analyticsAllowed) return;
     void import("#lib/firebase/analytics.js")
       .then(({ logException }) => logException(description, true))
       .catch(() => {});

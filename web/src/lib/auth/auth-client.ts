@@ -12,8 +12,10 @@ export interface UserProfile {
   email: string;
   avatar_id: number | null;
   is_verified: boolean;
-  /** Self-declared under 18 at sign-up (A34). */
+  /** Self-declared under 18 (A34). */
   is_minor?: boolean;
+  /** The account has recorded its age (A34). The date itself is never sent back. */
+  age_declared?: boolean;
   role: string;
   two_fa_enabled: boolean;
   oauth_provider: string | null;
@@ -107,6 +109,7 @@ export function decodeUserProfile(raw: unknown): UserProfile | null {
     avatar_id: isNumber(o.avatar_id) ? o.avatar_id : null,
     is_verified: isBoolean(o.is_verified) ? o.is_verified : false,
     is_minor: o.is_minor === true,
+    age_declared: isString(o.age_declared_at),
     role: isString(o.role) ? o.role : "user",
     two_fa_enabled: isBoolean(o.two_fa_enabled) ? o.two_fa_enabled : false,
     oauth_provider: isString(o.oauth_provider) ? o.oauth_provider : null,

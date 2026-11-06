@@ -2,9 +2,17 @@
 //
 // Account page (/account): chrome, profile, sessions, security. Lazy: ships only inside the account route chunk.
 //
-// 55 messages. Import this barrel, never
+// 63 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
+export { account_age_already } from "#lib/paraglide/messages/account_age_already.js";
+export { account_age_description } from "#lib/paraglide/messages/account_age_description.js";
+export { account_age_done } from "#lib/paraglide/messages/account_age_done.js";
+export { account_age_field } from "#lib/paraglide/messages/account_age_field.js";
+export { account_age_heading } from "#lib/paraglide/messages/account_age_heading.js";
+export { account_age_invalid } from "#lib/paraglide/messages/account_age_invalid.js";
+export { account_age_saving } from "#lib/paraglide/messages/account_age_saving.js";
+export { account_age_submit } from "#lib/paraglide/messages/account_age_submit.js";
 export { account_anonymous_body } from "#lib/paraglide/messages/account_anonymous_body.js";
 export { account_checking_session } from "#lib/paraglide/messages/account_checking_session.js";
 export { account_create_account } from "#lib/paraglide/messages/account_create_account.js";

@@ -103,6 +103,7 @@ async fn seed_account(state: &AppState, name: &str) -> user::Model {
             password: PASSWORD.into(),
             role: UserRole::User,
             is_minor: false,
+            age_declared: false,
         },
         code_hash,
     )

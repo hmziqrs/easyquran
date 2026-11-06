@@ -184,6 +184,7 @@ mod tests {
             session_auth_secret: "test-secret".to_string(),
             verification_identity_hash: None,
             is_minor: false,
+            age_declared_at: None,
             created_at: now,
             updated_at: now,
         }

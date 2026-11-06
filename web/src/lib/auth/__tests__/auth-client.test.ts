@@ -399,10 +399,26 @@ describe("error envelope decoding", () => {
       email: "a@b.c",
       avatar_id: null,
       is_verified: false,
+      is_minor: false,
+      age_declared: false,
       role: "user",
       two_fa_enabled: false,
       oauth_provider: null,
     });
+  });
+
+  it("decodeUserProfile reads the minor flag and whether the age was declared, never a date", () => {
+    const declared = decodeUserProfile({
+      id: 2,
+      email: "b@c.d",
+      is_minor: true,
+      age_declared_at: "2026-11-06T10:00:00+00:00",
+    });
+    expect(declared?.is_minor).toBe(true);
+    expect(declared?.age_declared).toBe(true);
+    const undeclared = decodeUserProfile({ id: 3, email: "c@d.e", age_declared_at: null });
+    expect(undeclared?.age_declared).toBe(false);
+    expect(Object.keys(undeclared ?? {})).not.toContain("date_of_birth");
   });
 });
 

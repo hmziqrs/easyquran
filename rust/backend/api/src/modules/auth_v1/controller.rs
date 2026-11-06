@@ -1559,6 +1559,7 @@ mod tests {
             session_auth_secret: "s".repeat(64),
             verification_identity_hash: None,
             is_minor: false,
+            age_declared_at: None,
             created_at: chrono::Utc::now().fixed_offset(),
             updated_at: chrono::Utc::now().fixed_offset(),
         }
@@ -1670,6 +1671,7 @@ mod tests {
             session_auth_secret: "s".repeat(64),
             verification_identity_hash: None,
             is_minor: false,
+            age_declared_at: None,
             created_at: chrono::Utc::now().fixed_offset(),
             updated_at: chrono::Utc::now().fixed_offset(),
         }

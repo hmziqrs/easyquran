@@ -248,6 +248,7 @@ async fn register(db: &DatabaseConnection, email: &str) -> Result<user::Model, E
             password: "correct-horse-battery".into(),
             role: user::UserRole::User,
             is_minor: false,
+            age_declared: false,
         },
         "code-hash-fixture".into(),
     )
