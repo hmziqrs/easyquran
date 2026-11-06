@@ -4,15 +4,16 @@ use serde_json::json;
 use tracing::{info, instrument};
 
 use crate::{
-    db::sea_models::notification,
+    db::sea_models::{notification, reminder_schedule},
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
-    services::{auth::AuthSession, notification::NotificationService},
+    services::{auth::AuthSession, notification::NotificationService, reminders},
     AppState,
 };
 
 use super::validator::{
     V1AdminCreateNotificationPayload, V1ListNotificationsPayload, V1MarkReadPayload,
+    V1ReminderKindPayload, V1ReminderSetPayload,
 };
 
 #[debug_handler]
@@ -105,4 +106,71 @@ pub async fn admin_create(
         "Admin created notification"
     );
     Ok((StatusCode::CREATED, Json(json!({ "id": model.id }))))
+}
+
+fn reminder_view(row: &reminder_schedule::Model) -> serde_json::Value {
+    json!({
+        "kind": row.kind,
+        "enabled": row.enabled,
+        "time_zone": row.time_zone,
+        "reminder_minute": row.reminder_minute,
+        "quiet_start_minute": row.quiet_start_minute,
+        "quiet_end_minute": row.quiet_end_minute,
+        "updated_at": row.updated_at.to_rfc3339(),
+    })
+}
+
+/// The caller's schedule, or `null` when none is stored.
+#[debug_handler]
+#[instrument(skip(state, auth, payload), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
+pub async fn reminder_get(
+    state: State<AppState>,
+    auth: AuthSession,
+    payload: ValidatedJson<V1ReminderKindPayload>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let user = auth.user.unwrap(); // safe: route is behind auth_guard::authenticated
+    let row =
+        reminder_schedule::Entity::find_for(&state.sea_db, user.id, payload.kind.as_str()).await?;
+    Ok((
+        StatusCode::OK,
+        Json(json!({ "reminder": row.as_ref().map(reminder_view) })),
+    ))
+}
+
+/// Stores the caller's schedule. `enabled: false` is the unsubscribe: the row stays
+/// so the choice of times is kept, and the scheduler skips it.
+#[debug_handler]
+#[instrument(skip(state, auth, payload), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
+pub async fn reminder_set(
+    state: State<AppState>,
+    auth: AuthSession,
+    payload: ValidatedJson<V1ReminderSetPayload>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let user = auth.user.unwrap(); // safe: route is behind auth_guard::authenticated
+    if let Some(problem) = reminders::schedule_problem(
+        &payload.time_zone,
+        payload.reminder_minute,
+        payload.quiet_start_minute,
+        payload.quiet_end_minute,
+    ) {
+        return Err(ErrorResponse::new(ErrorCode::InvalidValue).with_message(problem));
+    }
+    let row = reminder_schedule::Entity::upsert(
+        &state.sea_db,
+        reminder_schedule::NewSchedule {
+            user_id: user.id,
+            kind: payload.kind.as_str().to_string(),
+            enabled: payload.enabled,
+            time_zone: payload.time_zone.clone(),
+            reminder_minute: payload.reminder_minute,
+            quiet_start_minute: payload.quiet_start_minute,
+            quiet_end_minute: payload.quiet_end_minute,
+        },
+    )
+    .await?;
+    info!(enabled = row.enabled, "Goal reminder schedule saved");
+    Ok((
+        StatusCode::OK,
+        Json(json!({ "reminder": reminder_view(&row) })),
+    ))
 }

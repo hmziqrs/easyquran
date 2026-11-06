@@ -59,6 +59,18 @@ import {
   settings_palette_sepia_label,
   settings_palette_sepia_note,
   settings_privacy_intro,
+  settings_privacy_reminders,
+  settings_privacy_reminders_error,
+  settings_privacy_reminders_intro,
+  settings_privacy_reminders_invalid,
+  settings_privacy_reminders_load_error,
+  settings_privacy_reminders_needs_push,
+  settings_privacy_reminders_quiet,
+  settings_privacy_reminders_quiet_from,
+  settings_privacy_reminders_quiet_until,
+  settings_privacy_reminders_signed_out,
+  settings_privacy_reminders_time,
+  settings_privacy_reminders_zone,
   settings_privacy_sign_out,
   settings_privacy_sign_out_error,
   settings_privacy_sync_note,
@@ -367,6 +379,20 @@ export interface SettingsCopy {
     readonly syncNote: string;
     readonly signOut: string;
     readonly signOutError: string;
+    readonly reminders: {
+      readonly heading: string;
+      readonly intro: string;
+      readonly time: string;
+      readonly quiet: string;
+      readonly quietFrom: string;
+      readonly quietUntil: string;
+      readonly zone: (zone: string) => string;
+      readonly signedOut: string;
+      readonly needsPush: string;
+      readonly invalid: string;
+      readonly error: string;
+      readonly loadError: string;
+    };
   };
   readonly account: {
     readonly intro: string;
@@ -610,6 +636,20 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
       syncNote: noArgs(settings_privacy_sync_note),
       signOut: noArgs(settings_privacy_sign_out),
       signOutError: noArgs(settings_privacy_sign_out_error),
+      reminders: {
+        heading: noArgs(settings_privacy_reminders),
+        intro: noArgs(settings_privacy_reminders_intro),
+        time: noArgs(settings_privacy_reminders_time),
+        quiet: noArgs(settings_privacy_reminders_quiet),
+        quietFrom: noArgs(settings_privacy_reminders_quiet_from),
+        quietUntil: noArgs(settings_privacy_reminders_quiet_until),
+        zone: (zone) => settings_privacy_reminders_zone({ zone }, options),
+        signedOut: noArgs(settings_privacy_reminders_signed_out),
+        needsPush: noArgs(settings_privacy_reminders_needs_push),
+        invalid: noArgs(settings_privacy_reminders_invalid),
+        error: noArgs(settings_privacy_reminders_error),
+        loadError: noArgs(settings_privacy_reminders_load_error),
+      },
     },
     account: {
       intro: noArgs(settings_account_intro),

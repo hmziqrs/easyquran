@@ -40,6 +40,7 @@ pub mod user_session;
 pub mod device;
 pub mod notification;
 pub mod passkey_credential;
+pub mod reminder_schedule;
 pub mod user_device;
 pub mod user_oauth_identity;
 

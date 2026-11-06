@@ -17,6 +17,40 @@ pub struct V1MarkReadPayload {
     pub id: i32,
 }
 
+/// Closed set of reminder kinds. Serde refuses any other value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReminderKind {
+    Goal,
+}
+
+impl ReminderKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ReminderKind::Goal => "goal",
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Validate)]
+pub struct V1ReminderKindPayload {
+    pub kind: ReminderKind,
+}
+
+#[derive(Debug, Deserialize, Serialize, Validate)]
+pub struct V1ReminderSetPayload {
+    pub kind: ReminderKind,
+    pub enabled: bool,
+    #[validate(length(min = 1, max = 64))]
+    pub time_zone: String,
+    #[validate(range(min = 0, max = 1439))]
+    pub reminder_minute: i32,
+    #[validate(range(min = 0, max = 1439))]
+    pub quiet_start_minute: Option<i32>,
+    #[validate(range(min = 0, max = 1439))]
+    pub quiet_end_minute: Option<i32>,
+}
+
 #[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct V1AdminCreateNotificationPayload {
     #[validate(range(min = 1))]

@@ -2,7 +2,7 @@
 //
 // Settings page: storage, reading, privacy and account sections. Lazy: downloaded whole when the settings route loads or the reader appearance panel opens (offline-pack + notification toggle copy). The marketing appearance panel and the settings privacy section reuse reader_* notifications strings instead and never pull this namespace.
 //
-// 155 messages. Import this barrel, never
+// 167 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { settings_account_device_note } from "#lib/paraglide/messages/settings_account_device_note.js";
@@ -53,6 +53,18 @@ export { settings_palette_sapphire_note } from "#lib/paraglide/messages/settings
 export { settings_palette_sepia_label } from "#lib/paraglide/messages/settings_palette_sepia_label.js";
 export { settings_palette_sepia_note } from "#lib/paraglide/messages/settings_palette_sepia_note.js";
 export { settings_privacy_intro } from "#lib/paraglide/messages/settings_privacy_intro.js";
+export { settings_privacy_reminders } from "#lib/paraglide/messages/settings_privacy_reminders.js";
+export { settings_privacy_reminders_error } from "#lib/paraglide/messages/settings_privacy_reminders_error.js";
+export { settings_privacy_reminders_intro } from "#lib/paraglide/messages/settings_privacy_reminders_intro.js";
+export { settings_privacy_reminders_invalid } from "#lib/paraglide/messages/settings_privacy_reminders_invalid.js";
+export { settings_privacy_reminders_load_error } from "#lib/paraglide/messages/settings_privacy_reminders_load_error.js";
+export { settings_privacy_reminders_needs_push } from "#lib/paraglide/messages/settings_privacy_reminders_needs_push.js";
+export { settings_privacy_reminders_quiet } from "#lib/paraglide/messages/settings_privacy_reminders_quiet.js";
+export { settings_privacy_reminders_quiet_from } from "#lib/paraglide/messages/settings_privacy_reminders_quiet_from.js";
+export { settings_privacy_reminders_quiet_until } from "#lib/paraglide/messages/settings_privacy_reminders_quiet_until.js";
+export { settings_privacy_reminders_signed_out } from "#lib/paraglide/messages/settings_privacy_reminders_signed_out.js";
+export { settings_privacy_reminders_time } from "#lib/paraglide/messages/settings_privacy_reminders_time.js";
+export { settings_privacy_reminders_zone } from "#lib/paraglide/messages/settings_privacy_reminders_zone.js";
 export { settings_privacy_sign_out } from "#lib/paraglide/messages/settings_privacy_sign_out.js";
 export { settings_privacy_sign_out_error } from "#lib/paraglide/messages/settings_privacy_sign_out_error.js";
 export { settings_privacy_sync_note } from "#lib/paraglide/messages/settings_privacy_sync_note.js";

@@ -17,6 +17,8 @@ pub fn routes() -> Router<AppState> {
         .route("/unread_count", post(controller::unread_count))
         .route("/mark_read", post(controller::mark_read))
         .route("/mark_all_read", post(controller::mark_all_read))
+        .route("/reminder/get", post(controller::reminder_get))
+        .route("/reminder/set", post(controller::reminder_set))
         .route_layer(middleware::from_fn(auth_guard::authenticated));
 
     admin.merge(authenticated)

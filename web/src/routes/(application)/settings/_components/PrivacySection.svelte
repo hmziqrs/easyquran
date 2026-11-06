@@ -10,6 +10,7 @@
   import { notifications } from "#lib/stores/notifications.svelte.js";
   import { cn } from "#lib/utils.js";
   import type { SettingsCopy } from "#lib/i18n/settings-copy.js";
+  import GoalReminders from "./GoalReminders.svelte";
 
   let {
     id,
@@ -75,6 +76,8 @@
         {notificationsLabel}
       </span>
     </div>
+
+    <GoalReminders copy={copy.reminders} onLabel={copy.on} offLabel={copy.off} />
 
     {#if signedIn}
       <div class="flex flex-wrap items-center gap-3 px-4 py-3.5 sm:px-5">

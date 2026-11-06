@@ -23,6 +23,7 @@ mod m000021_user_preferences;
 mod m000022_verification_identity;
 mod m000026_email_change_pending;
 mod m000030_user_ban_contract;
+mod m000031_reminder_schedules;
 
 pub struct Migrator;
 
@@ -102,6 +103,8 @@ impl MigratorTrait for Migrator {
             // (partial unique index), the enforcement_notices case record, and audit
             // indices. Additive; down() drops only the active-ban index.
             Box::new(m000030_user_ban_contract::Migration),
+            // m000031 holds the goal reminder schedule (F9). m000027 to m000030 are reserved.
+            Box::new(m000031_reminder_schedules::Migration),
         ]
     }
 }
