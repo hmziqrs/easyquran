@@ -30,9 +30,9 @@ Web items come first, then the apps. If app work must start sooner, move the Nat
 
 1. Take the first item in **Build order** below whose `Blocked by` items are all gone from this index. Read it in full in its sub-plan. Skip blocked items and come back to them.
 2. Build it and its tests. Follow `AGENTS.MD`, [the rules](plans/rules.md), and the area docs it names.
-3. Get gates green: `bun run check`, `bun run lint`, `bun run test` from `web/`; `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test` for Rust changes.
+3. Gates: `bun run check` and `bun run lint` from `web/` always. Tests only where AGENTS.MD's test policy asks (costly bugs); full suites (`bun run test`, `cargo test`, `cargo clippy`) run on mains power when asked, never on battery. `cargo fmt` for Rust changes.
 4. Delete the finished item from its sub-plan and its row from this index in the same commit. One commit per item, on the current branch. Never push.
-5. An item is done only when every [edge-case ledger](plans/edge-cases.md) row naming it has a test, or is marked manual and listed in O32. Copy those rows into the contract file the row names. Delete a row once all its items are finished.
+5. An item is done only when every [edge-case ledger](plans/edge-cases.md) row naming it has a test (costly-bug rows, per AGENTS.MD test policy), or is marked manual and listed in O32. Copy those rows into the contract file the row names. Delete a row once all its items are finished.
 6. Repeat until only blocked items remain.
 
 `Blocked by` stops an item. `Owner` names a human step for real-world rollout: build anyway, keep the feature behind config or off until that step is done, and never wait for it. Owner steps live in [owner.md](plans/owner.md); the owner deletes each one when done. A `Blocked by` naming an `O<n>` clears the same way.

@@ -24,7 +24,7 @@ Standing rules, closed decisions and what already exists.
 - Drain the old container before a migration that can take a write lock (`SQLITE_BUSY`).
 - Add source-scan guards as the matching items land: no `ON DELETE CASCADE` from `users` on evidence tables, no `DELETE … LIMIT`, route-count guard for new admin nests.
 - Shared Rust test harness lives in `tests/` (`src/test_utils` is `cfg(test)`-only; `tests/reading_common/mod.rs` is the pattern). Update existing guards when you change what they pin: `ErrorCode` snapshot (`rust/crates/ruxlog-types/src/error.rs`), CORS route table, ban-export tests, `auth-client.test.ts` fetch counts, the middleware-order mirror `full_app()` in `tests/quran_v1.rs`.
-- Rollout abort: any existing test fails; ingress canary reports a forged header; sweeper deletes a row under a hold or live ban; a notice says `sent` with no mail delivered; reader shows empty shells; authenticated post list returns 500.
+- Rollout abort: any surviving test fails (test policy in AGENTS.MD: fewer tests, targeted at costly bugs); ingress canary reports a forged header; sweeper deletes a row under a hold or live ban; a notice says `sent` with no mail delivered; reader shows empty shells; authenticated post list returns 500.
 
 ## Do not build (these decisions are closed; do not re-open in code)
 
