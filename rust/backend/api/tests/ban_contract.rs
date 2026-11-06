@@ -4,7 +4,7 @@ mod reading_common;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use axum::body::{to_bytes, Body};
@@ -17,12 +17,14 @@ use tower::ServiceExt;
 
 use reading_common::{harness, login_cookie, router_with_state, seed_user, Harness};
 use rux_request_gate::{AbuseLimiterConfig, GateDecision, RateLimitStore};
+use ruxlog::db::sea_models::appeal;
 use ruxlog::db::sea_models::email_suppression::{self, SuppressionUpsert};
 use ruxlog::db::sea_models::enforcement_notice;
 use ruxlog::db::sea_models::user::{self, UserRole};
 use ruxlog::db::sea_models::user_ban;
 use ruxlog::middlewares::auth_guard;
 use ruxlog::modules::admin_user_bans_v1;
+use ruxlog::modules::appeal_v1;
 use ruxlog::services::abuse_limiter::{self, Attempt, FailureMode};
 use ruxlog::services::mail::provider::{
     MailError, MailProvider, OutboundEmail, SendReceipt, TEMPLATE_ENFORCEMENT_NOTICE,
@@ -376,6 +378,10 @@ async fn renew_needs_self_review_and_extends_only() {
     );
 }
 
+/// Body of the last message the recording provider was handed. Tests read the
+/// appeal token from it, the only place the raw token exists.
+static LAST_HTML: Mutex<Option<String>> = Mutex::new(None);
+
 /// Provider double for notice delivery (A21). Counts sends and reports either an
 /// accepted message or an `Ok` that accepted nothing.
 struct RecordingProvider {
@@ -389,8 +395,9 @@ impl MailProvider for RecordingProvider {
         "test"
     }
 
-    async fn send(&self, _msg: OutboundEmail) -> Result<SendReceipt, MailError> {
+    async fn send(&self, msg: OutboundEmail) -> Result<SendReceipt, MailError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        *LAST_HTML.lock().unwrap() = msg.html.clone();
         Ok(SendReceipt {
             delivered: u32::from(self.accept),
             ..SendReceipt::default()
@@ -651,6 +658,165 @@ async fn lookup_error_fails_closed_for_enforcement_only() {
     assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
 
+// ---- Appeal intake (A35) -------------------------------------------------
+
+/// Raw token from the last notice mail. The mail is the only place it exists.
+fn token_from_last_mail() -> String {
+    let html = LAST_HTML
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("notice body captured");
+    let start = html.find("/appeal/").expect("appeal link in notice") + "/appeal/".len();
+    html[start..start + appeal_v1::controller::TOKEN_HEX_LEN].to_string()
+}
+
+fn intake_req(token: &str, statement: &str) -> Request<Body> {
+    req(
+        "POST",
+        "/submit",
+        "",
+        Some(json!({ "token": token, "statement": statement })),
+    )
+}
+
+#[tokio::test]
+async fn notice_token_opens_intake_and_is_stored_only_as_a_hash() {
+    let (h, _calls) = admin_with_provider(true).await;
+    let (status, body) = send(
+        &h.app,
+        req("POST", "/", &h.cookie_a, Some(create_body(h.uid_b, 1))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "ban: {body}");
+    let token = token_from_last_mail();
+    assert_eq!(token.len(), 64, "256-bit token, hex");
+
+    let stored = enforcement_notice::Entity::find()
+        .one(&h.state.sea_db)
+        .await
+        .unwrap()
+        .unwrap()
+        .appeal_token_hash
+        .expect("hash stored");
+    assert_eq!(
+        stored,
+        appeal_v1::controller::token_hash(&h.state.secret_key, &token)
+    );
+    assert_ne!(stored, token, "raw token never stored");
+
+    let intake = router_with_state(h.state.clone(), appeal_v1::routes());
+    let (status, body) = send(&intake, intake_req(&token, "I was not spamming")).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "intake: {body}");
+    assert_eq!(body["received"], true);
+    assert_eq!(count(&h, "SELECT COUNT(*) FROM appeals").await, 1);
+    assert_eq!(
+        count(&h, "SELECT due_at - submitted_at FROM appeals").await,
+        appeal::DECISION_CLOCK_SECS,
+        "decision due 7 days after submit"
+    );
+}
+
+#[tokio::test]
+async fn unknown_known_and_malformed_tokens_get_the_same_answer() {
+    let (h, _calls) = admin_with_provider(true).await;
+    send(
+        &h.app,
+        req("POST", "/", &h.cookie_a, Some(create_body(h.uid_b, 1))),
+    )
+    .await;
+    let token = token_from_last_mail();
+    let intake = router_with_state(h.state.clone(), appeal_v1::routes());
+
+    let known = send(&intake, intake_req(&token, "appeal text")).await;
+    let unknown = send(&intake, intake_req(&"f".repeat(64), "appeal text")).await;
+    let malformed = send(&intake, intake_req("not-a-token", "appeal text")).await;
+    assert_eq!(known, unknown, "known and unknown answer identically");
+    assert_eq!(known, malformed, "malformed answers identically");
+    assert_eq!(count(&h, "SELECT COUNT(*) FROM appeals").await, 1);
+}
+
+#[tokio::test]
+async fn repeat_submit_for_one_notice_writes_nothing_new() {
+    let (h, _calls) = admin_with_provider(true).await;
+    send(
+        &h.app,
+        req("POST", "/", &h.cookie_a, Some(create_body(h.uid_b, 1))),
+    )
+    .await;
+    let token = token_from_last_mail();
+    let intake = router_with_state(h.state.clone(), appeal_v1::routes());
+    let first = send(&intake, intake_req(&token, "first")).await;
+    let second = send(&intake, intake_req(&token, "second")).await;
+    assert_eq!(first, second);
+    assert_eq!(count(&h, "SELECT COUNT(*) FROM appeals").await, 1);
+}
+
+#[tokio::test]
+async fn empty_statement_is_refused() {
+    let (h, _calls) = admin_with_provider(true).await;
+    let intake = router_with_state(h.state.clone(), appeal_v1::routes());
+    let (status, _) = send(&intake, intake_req(&"a".repeat(64), "   ")).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn resend_retires_the_earlier_appeal_link() {
+    let (h, _calls) = admin_with_provider(true).await;
+    let (_, body) = send(
+        &h.app,
+        req("POST", "/", &h.cookie_a, Some(create_body(h.uid_b, 1))),
+    )
+    .await;
+    let old_token = token_from_last_mail();
+    let ban_id = body["banId"].as_i64().unwrap();
+    let (status, _) = send(
+        &h.app,
+        req(
+            "POST",
+            &format!("/{ban_id}/notice/resend"),
+            &h.cookie_a,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let new_token = token_from_last_mail();
+    assert_ne!(old_token, new_token);
+
+    let intake = router_with_state(h.state.clone(), appeal_v1::routes());
+    send(&intake, intake_req(&old_token, "old link")).await;
+    assert_eq!(count(&h, "SELECT COUNT(*) FROM appeals").await, 0);
+    send(&intake, intake_req(&new_token, "new link")).await;
+    assert_eq!(count(&h, "SELECT COUNT(*) FROM appeals").await, 1);
+}
+
+#[tokio::test]
+async fn appeal_clock_alert_fires_only_past_the_decision_clock() {
+    let (h, _calls) = admin_with_provider(true).await;
+    send(
+        &h.app,
+        req("POST", "/", &h.cookie_a, Some(create_body(h.uid_b, 1))),
+    )
+    .await;
+    let token = token_from_last_mail();
+    let intake = router_with_state(h.state.clone(), appeal_v1::routes());
+    send(&intake, intake_req(&token, "appeal text")).await;
+
+    let now = chrono::Utc::now().timestamp();
+    let before = appeal_v1::controller::check_appeal_clock(&h.state.sea_db, now)
+        .await
+        .unwrap();
+    assert_eq!(before, 0, "inside the 7-day clock: no alert");
+    let after = appeal_v1::controller::check_appeal_clock(
+        &h.state.sea_db,
+        now + appeal::DECISION_CLOCK_SECS + 1,
+    )
+    .await
+    .unwrap();
+    assert_eq!(after, 1, "past the clock: alert counts the open appeal");
+}
+
 // Source-scan guards (house pattern): the ban contract writes no DELETE and
 // adds no ON DELETE CASCADE from users.
 #[test]
@@ -661,6 +827,7 @@ fn ban_contract_source_has_no_delete_or_user_cascade() {
         include_str!("../src/db/sea_models/enforcement_notice/model.rs"),
         include_str!("../src/modules/admin_user_bans_v1/controller.rs"),
         include_str!("../src/modules/admin_user_bans_v1/notice.rs"),
+        include_str!("../src/modules/appeal_v1/controller.rs"),
     ];
     for src in sources {
         assert!(

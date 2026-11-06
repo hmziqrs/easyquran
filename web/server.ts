@@ -11,6 +11,7 @@ import {
   notAcceptableBody,
   varyWithAccept,
 } from "./src/lib/accept-parse";
+import { APPEAL_HEADERS, isAppealPath } from "./src/lib/appeal/route";
 import { trustedClientIp } from "./src/lib/server/client-identity";
 import { assertInternalQuranEnv } from "./src/lib/server/internal-quran-env";
 import { OfflinePackBudget } from "./src/lib/server/offline-pack-budget";
@@ -321,6 +322,12 @@ export function applyHeaders(
   }
   if (pathname.endsWith(".md") || pathname.endsWith(".txt")) {
     setIfAbsent("X-Robots-Tag", "noindex, follow");
+  }
+  // Appeal pages (A35): overwrite, never keep an earlier referrer policy.
+  if (isAppealPath(pathname)) {
+    for (const [name, value] of Object.entries(APPEAL_HEADERS)) {
+      response.headers.set(name, value);
+    }
   }
   if (
     mdPath !== null ||

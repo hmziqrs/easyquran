@@ -27,6 +27,7 @@ mod m000031_reminder_schedules;
 mod m000032_user_bans_evidence_safe;
 mod m000050_audit_logs_evidence;
 mod m000033_notice_channel;
+mod m000034_appeals;
 
 pub struct Migrator;
 
@@ -116,6 +117,9 @@ impl MigratorTrait for Migrator {
             Box::new(m000050_audit_logs_evidence::Migration),
             // m000033 adds enforcement_notices.notice_channel (A21). Constant default, guarded add.
             Box::new(m000033_notice_channel::Migration),
+            // m000034 adds the appeals table (A35): one appeal per notice, 7-day decision
+            // clock, token hash index on enforcement_notices. Additive, IF NOT EXISTS.
+            Box::new(m000034_appeals::Migration),
         ]
     }
 }

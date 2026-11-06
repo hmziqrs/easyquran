@@ -1,0 +1,15 @@
+{
+  "appeal_page_title": "Appeal a moderation decision",
+  "appeal_intro": "If your account was suspended, you can contest the decision here. Use the appeal link from the notice email.",
+  "appeal_entry_label": "Appeal link or code",
+  "appeal_entry_help": "Paste the full link from the notice email.",
+  "appeal_entry_submit": "Continue",
+  "appeal_invalid_link": "That does not look like an appeal link. Check the email and try again.",
+  "appeal_statement_label": "Your statement",
+  "appeal_statement_help": "Explain why you believe the decision is wrong. Up to 2000 characters.",
+  "appeal_statement_invalid": "Write a statement of 1 to 2000 characters.",
+  "appeal_submit": "Send appeal",
+  "appeal_sending": "Sending…",
+  "appeal_received": "Your appeal was received. A moderator will review it, and the decision is targeted within 7 days.",
+  "appeal_error": "We could not send your appeal. Try again shortly."
+}

@@ -34,6 +34,7 @@ use crate::modules::admin_route_v1;
 
 use crate::modules::admin_bans_v1;
 use crate::modules::admin_user_bans_v1;
+use crate::modules::appeal_v1;
 
 use crate::modules::admin_abuse_v1;
 
@@ -182,6 +183,11 @@ pub fn router(state: AppState) -> Router<AppState> {
     // ABUSE_BAN_WRITES_ENABLED=true. Flip only with A20, A21, A22, A35 deployed.
     if admin_user_bans_v1::controller::writes_enabled() {
         router = router.nest("/admin/users/bans", admin_user_bans_v1::routes());
+        // Appeal intake (A35) ships with the bans: one release, same flag.
+        router = router.nest(
+            "/appeal/v1",
+            appeal_v1::routes().layer(rate_limit::rate_limit_layer(&state, 10, 60)),
+        );
     }
 
     #[cfg(feature = "seed-system")]

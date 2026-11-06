@@ -134,6 +134,11 @@
       "prefixes": ["auth"]
     },
     {
+      "id": "appeal",
+      "description": "Appeal intake pages (/appeal, /appeal/<token>). Lazy: ships only on the appeal routes.",
+      "prefixes": ["appeal"]
+    },
+    {
       "id": "account",
       "description": "Account page (/account): chrome, profile, sessions, security. Lazy: ships only inside the account route chunk.",
       "prefixes": ["account"]

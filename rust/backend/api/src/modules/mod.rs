@@ -14,6 +14,7 @@ pub mod admin_bans_v1;
 pub mod admin_route_v1;
 pub mod admin_user_bans_v1;
 pub mod analytics_v1;
+pub mod appeal_v1;
 pub mod email_verification_v1;
 pub mod forgot_password_v1;
 pub mod google_auth_v1;

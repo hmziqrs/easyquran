@@ -18,6 +18,7 @@
   import { siteJsonLdGraph } from "#lib/seo/site-schema.js";
   import { startAnalytics } from "#lib/boot/analytics.js";
   import { startPreferenceSync } from "#lib/preferences/sources.svelte.js";
+  import { isAppealPath } from "#lib/appeal/route.js";
   import { startCrashReporting } from "#lib/boot/crash-reporting.js";
   import { deLocalizeUrl } from "#lib/paraglide/runtime.js";
   import { copyIndopakSelection } from "#lib/quran/view/indopak-copy.js";
@@ -103,9 +104,12 @@
     online.hydrate();
     offline.hydrate();
 
+    // Appeal pages (A35) load no third-party script: analytics and crash reporting stay off.
+    const thirdParty = isAppealPath(location.pathname)
+      ? []
+      : [startAnalytics(), startCrashReporting()];
     const cleanups = [
-      startAnalytics(),
-      startCrashReporting(),
+      ...thirdParty,
       startPreferenceSync(),
       installEntryTagging(),
       // Sign-in folds the device's bookmarks into the account silently; say so once.
@@ -177,9 +181,11 @@
     // locale suggest and the offline engine must only see real navigations.
     if (navigation.shallow) return;
     if (navigation.type !== "enter") {
-      void import("#lib/firebase/analytics.js")
-        .then(({ pageView }) => pageView(location.pathname))
-        .catch(() => {});
+      if (!isAppealPath(location.pathname)) {
+        void import("#lib/firebase/analytics.js")
+          .then(({ pageView }) => pageView(location.pathname))
+          .catch(() => {});
+      }
       // Locale suggest re-evaluates on every client-side navigation (plan §5.3):
       // onMount never re-fires, so a suppressed first landing must not burn the chance.
       localeSuggest.evaluate(location.pathname);

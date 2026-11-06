@@ -14,6 +14,7 @@ use crate::db::sea_models::user::{self, new_session_auth_secret};
 use crate::db::sea_models::user_ban::{self, NewUserBan, UserBanQuery};
 use crate::error::{ErrorCode, ErrorResponse};
 use crate::modules::admin_bans_v1;
+use crate::modules::appeal_v1;
 use crate::services::audit::{self, AuditAction, AuditEvent};
 use crate::services::auth::AuthSession;
 use crate::AppState;
@@ -85,6 +86,13 @@ pub async fn list_bans(
     Query(query): Query<UserBanQuery>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let _admin = actor(&auth)?;
+    // Appeal decision-clock alert (A35). Runs on each admin list load: no scheduler yet.
+    if let Err(err) =
+        appeal_v1::controller::check_appeal_clock(&state.sea_db, chrono::Utc::now().timestamp())
+            .await
+    {
+        warn!(error = ?err, "appeal clock check failed");
+    }
     let page = user_ban::Entity::admin_list(&state.sea_db, query).await?;
     Ok((StatusCode::OK, Json(page)))
 }
@@ -206,23 +214,41 @@ pub async fn create_ban(
 }
 
 /// Sends a notice for the account, or records `no_contact_details` when the
-/// account is gone. The appeal link is not attached until A35 issues tokens.
+/// account is gone. A send issues a fresh appeal link first (A35); the stored
+/// hash is replaced, so an earlier link stops working.
 async fn deliver_notice(
     state: &AppState,
     notice: &enforcement_notice::Model,
     target: Option<&user::Model>,
 ) -> Result<DeliveryState, ErrorResponse> {
     let contact = target.map(|user| (user.email.as_str(), user.name.as_str()));
+    let appeal_url = match contact {
+        Some(_) => Some(issue_appeal_link(state, notice).await?),
+        None => None,
+    };
     let delivery = delivery::deliver(
         &state.sea_db,
         &state.mailer,
         &state.settings.site.name,
         notice,
         contact,
-        None,
+        appeal_url.as_deref(),
     )
     .await?;
     Ok(delivery)
+}
+
+async fn issue_appeal_link(
+    state: &AppState,
+    notice: &enforcement_notice::Model,
+) -> Result<String, ErrorResponse> {
+    let token = appeal_v1::controller::new_token();
+    let hash = appeal_v1::controller::token_hash(&state.secret_key, &token);
+    enforcement_notice::Entity::set_appeal_token_hash(&state.sea_db, notice.id, &hash).await?;
+    Ok(appeal_v1::controller::appeal_url(
+        &state.settings.site.url,
+        &token,
+    ))
 }
 
 #[instrument(skip(state, auth))]

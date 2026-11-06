@@ -8,7 +8,8 @@
       "./messages/{locale}.json",
       "./messages/reader/{locale}.json",
       "./messages/auth/{locale}.json",
-      "./messages/account/{locale}.json"
+      "./messages/account/{locale}.json",
+      "./messages/appeal/{locale}.json"
     ]
   }
 }

@@ -154,9 +154,10 @@ fn banned_error(status: &rux_auth::BanStatus) -> ErrorResponse {
         rux_auth::BanStatus::Banned { reason, .. } => reason.clone(),
         rux_auth::BanStatus::NotBanned => None,
     };
+    // /appeal is the intake page (A35). It takes the token from the notice email.
     ErrorResponse::new(ErrorCode::AccountLocked)
         .with_message("This account has been banned")
-        .with_context(json!({ "reasonCode": reason_code }))
+        .with_context(json!({ "reasonCode": reason_code, "appealPath": "/appeal" }))
 }
 
 #[debug_handler]

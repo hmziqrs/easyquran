@@ -1,3 +1,4 @@
+pub mod appeal;
 pub mod category;
 pub mod comment_flag;
 pub mod discount_code;

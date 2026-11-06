@@ -82,6 +82,34 @@ impl Entity {
             .await?)
     }
 
+    /// The notice an appeal token points at. Callers pass the keyed HMAC of the
+    /// presented token, never the token.
+    pub async fn find_by_appeal_token_hash<C: ConnectionTrait>(
+        conn: &C,
+        token_hash: &str,
+    ) -> DbResult<Option<Model>> {
+        Ok(Self::find()
+            .filter(Column::AppealTokenHash.eq(token_hash))
+            .one(conn)
+            .await?)
+    }
+
+    /// Replaces the notice's appeal token hash. A new token retires the old link.
+    pub async fn set_appeal_token_hash<C: ConnectionTrait>(
+        conn: &C,
+        notice_id: i64,
+        token_hash: &str,
+    ) -> DbResult<()> {
+        ActiveModel {
+            id: Set(notice_id),
+            appeal_token_hash: Set(Some(token_hash.to_string())),
+            ..Default::default()
+        }
+        .update(conn)
+        .await?;
+        Ok(())
+    }
+
     /// Record the provider-confirmed outcome. `sent_at` is set only for `sent`.
     pub async fn record_delivery<C: ConnectionTrait>(
         conn: &C,

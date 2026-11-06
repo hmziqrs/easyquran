@@ -4,6 +4,7 @@ import { building } from "$app/env";
 import type { RequestEvent } from "@sveltejs/kit";
 import type { Handle } from "@sveltejs/kit/hooks";
 
+import { APPEAL_HEADERS, isAppealPath } from "#lib/appeal/route.js";
 import { QURAN } from "#lib/config/site.js";
 import { SURAH_COUNT } from "#lib/data/quran-data.js";
 import { isUiLocale, uiDirection, type UiDirection, type UiLocale } from "#lib/i18n/locales.js";
@@ -176,6 +177,12 @@ export function applyHeaders(
   }
   if (textVariant || mdSiblingRequest(pathname) !== null || response.status === 404) {
     appendVaryAccept(response.headers);
+  }
+  // Appeal pages (A35): no referrer leaks the token-bearing URL, and no index.
+  if (isAppealPath(pathname)) {
+    for (const [name, value] of Object.entries(APPEAL_HEADERS)) {
+      response.headers.set(name, value);
+    }
   }
 }
 
