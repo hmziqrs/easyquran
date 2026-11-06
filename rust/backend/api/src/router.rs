@@ -173,15 +173,36 @@ pub fn router(state: AppState) -> Router<AppState> {
         )
         .nest(
             "/bookmark/v1",
-            bookmark_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
+            rate_limit::authenticated_write_limits(
+                bookmark_v1::routes(),
+                &state,
+                "bookmark:sync",
+                rate_limit::SYNC_USER_MAX,
+                rate_limit::SYNC_IP_MAX,
+                rate_limit::SUBJECT_WINDOW_SECS,
+            ),
         )
         .nest(
             "/reading-session/v1",
-            reading_session_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
+            rate_limit::authenticated_write_limits(
+                reading_session_v1::routes(),
+                &state,
+                "session:sync",
+                rate_limit::SYNC_USER_MAX,
+                rate_limit::SYNC_IP_MAX,
+                rate_limit::SUBJECT_WINDOW_SECS,
+            ),
         )
         .nest(
             "/user/analytics/v1",
-            user_analytics_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
+            rate_limit::authenticated_write_limits(
+                user_analytics_v1::routes(),
+                &state,
+                "analytics:events",
+                rate_limit::ANALYTICS_USER_MAX,
+                rate_limit::ANALYTICS_IP_MAX,
+                rate_limit::SUBJECT_WINDOW_SECS,
+            ),
         );
 
     #[cfg(feature = "openapi")]

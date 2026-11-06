@@ -14,7 +14,7 @@ pub use error::GateError;
 pub use hooks::{LimiterHooks, NoHooks};
 pub use ip::{
     ClientIpIdentitySource, ClientIpSource, FnIpSource, IdentitySource, InternalServiceId,
-    IpSource, RequestIdentity,
+    IpSource, RequestIdentity, SubjectIdentitySource, VerifiedSubject,
 };
 pub use layer::{
     blocked_by_path, BlockInfo, Escalation, PathKey, RateLimitLayer, RateLimitLayerBuilder,

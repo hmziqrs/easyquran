@@ -1,9 +1,20 @@
-use axum::response::IntoResponse;
+use axum::{
+    extract::Request,
+    http::Method,
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
+    Extension, Router,
+};
+use tower_sessions::Session;
 
 use crate::error::{ErrorCode, ErrorResponse};
+use crate::services::auth::AuthBackend;
 use crate::state::AppState;
 
-use rux_request_gate::{ClientIpIdentitySource, IdentitySource, RequestIdentity};
+use rux_auth::AuthSession;
+use rux_request_gate::{
+    ClientIpIdentitySource, IdentitySource, RequestIdentity, SubjectIdentitySource, VerifiedSubject,
+};
 pub use rux_request_gate::{PathKey, RateLimitLayer};
 
 fn blocked_response(info: rux_request_gate::BlockInfo) -> axum::response::Response {
@@ -37,6 +48,91 @@ pub fn rate_limit_layer_branch(
         .path_key(PathKey::Fixed(fixed_label))
         .on_block(blocked_response)
         .build()
+}
+
+/// Hard ceiling on any Retry-After an authenticated subject receives.
+pub const SUBJECT_RETRY_AFTER_CAP_SECS: u64 = 900;
+
+/// Per-user write budgets for the authenticated sync and analytics routes, and
+/// the IP ceiling beside each. The IP ceiling is at least 10x the user budget:
+/// one carrier NAT can front many users, so the IP layer must not be the
+/// binding limit for a single signed-in user.
+pub const SYNC_USER_MAX: u64 = 60;
+pub const SYNC_IP_MAX: u64 = 600;
+pub const ANALYTICS_USER_MAX: u64 = 30;
+pub const ANALYTICS_IP_MAX: u64 = 300;
+pub const SUBJECT_WINDOW_SECS: u64 = 60;
+
+/// Stamps `VerifiedSubject` only when the session passes the same checks
+/// `auth_guard` runs (expiry, auth hash, revocation). Anonymous and invalid
+/// sessions get no subject and fall through to the IP-only layer; the route's
+/// own auth guard still rejects them.
+pub async fn verified_subject(
+    Extension(state): Extension<AppState>,
+    session: Session,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    let backend = AuthBackend::new(
+        &state.sea_db,
+        state.session_store.clone(),
+        state.revoked_sessions.clone(),
+    );
+    let auth = AuthSession::new(backend, session).await;
+    if let Some(user) = auth.user.as_ref() {
+        request
+            .extensions_mut()
+            .insert(VerifiedSubject::new(user.id));
+    }
+    next.run(request).await
+}
+
+/// Per-user budget for unsafe methods. Keys only on the verified subject, never
+/// the IP. Requests without a verified subject pass through untouched.
+fn subject_write_applies(req: &Request) -> bool {
+    !matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS)
+        && req.extensions().get::<VerifiedSubject>().is_some()
+}
+
+fn subject_rate_limit_layer(
+    state: &AppState,
+    max_requests: u64,
+    window_secs: u64,
+    class: &'static str,
+) -> RateLimitLayer {
+    RateLimitLayer::builder(state.gate_store.clone(), max_requests, window_secs)
+        .identity_source(std::sync::Arc::new(SubjectIdentitySource))
+        .path_key(PathKey::Fixed(class))
+        .applies(subject_write_applies)
+        .retry_after_cap(SUBJECT_RETRY_AFTER_CAP_SECS)
+        .on_block(blocked_response)
+        .build()
+}
+
+/// Dual-bucket stack for an authenticated write route class. Effective limit is
+/// min(IP bucket, user bucket): the IP layer runs for everyone, and the user
+/// layer adds a per-account ceiling once `verified_subject` has resolved a
+/// signed-in session. Both must pass.
+///
+/// Layer order (outermost first): IP limiter -> verified_subject -> user limiter
+/// -> route auth guard -> handler.
+pub fn authenticated_write_limits(
+    routes: Router<AppState>,
+    state: &AppState,
+    class: &'static str,
+    user_max: u64,
+    ip_max: u64,
+    window_secs: u64,
+) -> Router<AppState> {
+    routes
+        .route_layer(subject_rate_limit_layer(
+            state,
+            user_max,
+            window_secs,
+            class,
+        ))
+        .route_layer(middleware::from_fn(verified_subject))
+        .layer(rate_limit_layer(state, ip_max, window_secs))
 }
 
 fn identity_is_internal(req: &axum::extract::Request) -> bool {

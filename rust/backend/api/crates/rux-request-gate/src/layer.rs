@@ -128,6 +128,9 @@ pub struct RateLimitLayer {
     // W3a escalation. `None` on every limiter except the outer quran-v1 content
     // ceiling, so all other routes keep the exact pre-W3a path.
     escalation: Option<Arc<dyn Escalation>>,
+    // Upper bound on any Retry-After this limiter emits. `None` keeps the
+    // fixed-window ttl unchanged.
+    retry_after_cap: Option<u64>,
 }
 
 impl RateLimitLayer {
@@ -142,6 +145,7 @@ impl RateLimitLayer {
             on_block: Arc::new(default_on_block),
             on_unavailable: Arc::new(default_on_unavailable),
             escalation: None,
+            retry_after_cap: None,
         }
     }
 
@@ -161,6 +165,7 @@ impl RateLimitLayer {
             on_block: Arc::new(default_on_block),
             on_unavailable: Arc::new(default_on_unavailable),
             escalation: None,
+            retry_after_cap: None,
         }
     }
 
@@ -214,6 +219,11 @@ impl RateLimitLayerBuilder {
         F: Fn() -> Response + Send + Sync + 'static,
     {
         self.layer.on_unavailable = Arc::new(f);
+        self
+    }
+    /// Cap every Retry-After this limiter emits (header and body) at `secs`.
+    pub fn retry_after_cap(mut self, secs: u64) -> Self {
+        self.layer.retry_after_cap = Some(secs);
         self
     }
     pub fn build(self) -> RateLimitLayer {
@@ -436,7 +446,10 @@ fn canonical_unit_key(ip: IpAddr) -> String {
 // Shared 429 builder: applies on_block + the standard x-ratelimit headers.
 // Hoisted so both the fixed-window block and the W3a active-ban / just-created
 // ban short-circuits emit an identical shaped response.
-fn blocked_response(layer: &RateLimitLayer, info: BlockInfo) -> Response {
+fn blocked_response(layer: &RateLimitLayer, mut info: BlockInfo) -> Response {
+    if let Some(cap) = layer.retry_after_cap {
+        info.retry_after_secs = info.retry_after_secs.min(cap);
+    }
     let retry_after = info.retry_after_secs;
     let mut response = (layer.on_block)(info);
     let headers = response.headers_mut();

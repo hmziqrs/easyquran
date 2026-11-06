@@ -39,6 +39,35 @@ impl InternalServiceId {
 pub enum RequestIdentity {
     External(IpAddr),
     InternalService(InternalServiceId),
+    /// Verified end user (server session id, never client-authored). Keys the
+    /// per-user budget; never escalates and never carries an IP.
+    Subject(String),
+}
+
+/// Verified end-user id stamped by the auth layer after session checks pass.
+/// Kept distinct from `RequestIdentity` so the IP limiter (which prefers that
+/// extension) can never mistake a user id for a client address.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VerifiedSubject(String);
+
+impl VerifiedSubject {
+    pub fn new(user_id: impl std::fmt::Display) -> Self {
+        Self(user_id.to_string())
+    }
+}
+
+/// Resolves a per-user identity from [`VerifiedSubject`]. `None` when the auth
+/// layer did not verify a session, so the caller's IP-only layer governs alone.
+#[derive(Clone, Copy, Default, Debug)]
+pub struct SubjectIdentitySource;
+
+impl IdentitySource for SubjectIdentitySource {
+    fn resolve(&self, request: &axum::extract::Request) -> Option<RequestIdentity> {
+        request
+            .extensions()
+            .get::<VerifiedSubject>()
+            .map(|s| RequestIdentity::Subject(s.0.clone()))
+    }
 }
 
 impl RequestIdentity {
@@ -46,6 +75,7 @@ impl RequestIdentity {
         match self {
             RequestIdentity::External(ip) => ip.to_string(),
             RequestIdentity::InternalService(id) => id.bucket_label().to_string(),
+            RequestIdentity::Subject(id) => format!("user:{id}"),
         }
     }
 
