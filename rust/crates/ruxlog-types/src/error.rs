@@ -67,6 +67,8 @@ pub enum ErrorCode {
     RateLimited,
     #[serde(rename = "SRV_005")]
     ConfigurationError,
+    #[serde(rename = "SRV_006")]
+    SnapshotTooLarge,
 
     #[serde(rename = "BIZ_001")]
     OperationNotAllowed,
@@ -182,6 +184,7 @@ impl ErrorCode {
             Self::Timeout => "The request timed out",
             Self::RateLimited => "Too many requests, please try again later",
             Self::ConfigurationError => "Server configuration error",
+            Self::SnapshotTooLarge => "Your library is larger than a full sync can send",
 
             Self::OperationNotAllowed => "This operation is not allowed",
             Self::ResourceConflict => "The operation would create a conflict",
@@ -254,6 +257,7 @@ impl ErrorCode {
             Self::Timeout => 504,
             Self::RateLimited => 429,
             Self::ConfigurationError => 500,
+            Self::SnapshotTooLarge => 507,
 
             Self::OperationNotAllowed => 403,
             Self::ResourceConflict => 409,
@@ -375,6 +379,7 @@ mod tests {
         assert_eq!(ErrorCode::ServiceUnavailable.status_code(), 503);
         assert_eq!(ErrorCode::Timeout.status_code(), 504);
         assert_eq!(ErrorCode::BusinessRuleViolation.status_code(), 422);
+        assert_eq!(ErrorCode::SnapshotTooLarge.status_code(), 507);
     }
 
     #[allow(deprecated)]

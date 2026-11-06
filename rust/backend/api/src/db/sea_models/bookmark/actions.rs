@@ -13,7 +13,7 @@ use super::{Column, Entity, Model};
 
 /// Per-user live-bookmark quota. A new live row past the cap comes back `capped`
 /// and the client keeps it dirty; updating an already-live id is always allowed.
-const LIVE_BOOKMARK_QUOTA: u64 = 10_000;
+pub const LIVE_BOOKMARK_QUOTA: u64 = 10_000;
 pub const BOOKMARKS_DOMAIN: &str = "bookmarks";
 
 /// One bookmark write: the live key is (folder, surah, ayah, end_surah,
@@ -327,7 +327,8 @@ impl Entity {
             .map_err_to_response()
     }
 
-    async fn count_live_for_user(conn: &DatabaseTransaction, user_id: i32) -> DbResult<u64> {
+    /// Live (not tombstoned) rows for one account. Full-pull snapshot guard (A7).
+    pub async fn count_live_for_user(conn: &DatabaseTransaction, user_id: i32) -> DbResult<u64> {
         Self::find()
             .filter(Column::UserId.eq(user_id))
             .filter(Column::DeletedAt.is_null())

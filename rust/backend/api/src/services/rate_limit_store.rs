@@ -33,8 +33,8 @@ const FLUSH_INTERVAL_SECS: u64 = 10;
 
 /// Retention for `rate_limit_events` rows (abuse measurement, A5). The sweeper
 /// that deletes expired rows ships with A32; until then rows accumulate.
-const LEDGER_RETENTION_SECS: i64 = 180 * 86_400;
-const LEDGER_RETENTION_CLASS: &str = "abuse_180d";
+pub(crate) const LEDGER_RETENTION_SECS: i64 = 180 * 86_400;
+pub(crate) const LEDGER_RETENTION_CLASS: &str = "abuse_180d";
 const EVENT_BLOCK_CREATED: &str = "block_created";
 const EVENT_BLOCK_EXPIRED: &str = "block_expired";
 

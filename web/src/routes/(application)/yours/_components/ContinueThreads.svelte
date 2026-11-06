@@ -11,6 +11,8 @@
     reader_threads_on_desktop,
     reader_threads_on_phone,
     reader_threads_on_tablet,
+    reader_threads_rows_capped,
+    reader_threads_rows_rejected,
     reader_threads_sync_error,
     reader_threads_verse_of,
   } from "#lib/i18n/m/reader.js";
@@ -73,6 +75,16 @@
 
 {#if sessions.storageFailed !== null}
   <p role="status" class="mt-3 text-[13px] text-danger">{reader_threads_sync_error(undefined, msg)}</p>
+{/if}
+{#if sessions.rejectedCount > 0}
+  <p role="status" class="mt-3 text-[13px] text-danger">
+    {reader_threads_rows_rejected({ count: sessions.rejectedCount }, msg)}
+  </p>
+{/if}
+{#if sessions.cappedCount > 0}
+  <p role="status" class="mt-3 text-[13px] text-muted">
+    {reader_threads_rows_capped({ count: sessions.cappedCount }, msg)}
+  </p>
 {/if}
 
 {#if lead === undefined}

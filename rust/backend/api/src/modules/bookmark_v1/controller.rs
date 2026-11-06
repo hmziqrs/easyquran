@@ -17,7 +17,10 @@ use crate::{
     error::{DbResult, DbResultExt, ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
     quran::QuranStore,
-    services::auth::AuthSession,
+    services::{
+        auth::AuthSession,
+        write_ceiling::{ceiling_error, CeilingLedger},
+    },
     AppState,
 };
 
@@ -180,14 +183,9 @@ async fn apply_bookmark(
     Ok(verdict)
 }
 
-/// One row, one verdict. A bad row is refused alone; the others still land.
-async fn apply_row(
-    tx: &DatabaseTransaction,
-    quran: &QuranStore,
-    user_id: i32,
-    raw: &Value,
-    server_ms: i64,
-) -> DbResult<Value> {
+/// Parse, validate and range-check one row without touching the DB. A refused
+/// row comes back as its `rejected` verdict and never reaches the ceiling.
+fn precheck(quran: &QuranStore, raw: &Value) -> Result<SyncMutation, Value> {
     let row_id: String = raw
         .get("id")
         .and_then(Value::as_str)
@@ -196,17 +194,29 @@ async fn apply_row(
         .take(36)
         .collect();
     let Ok(m) = serde_json::from_value::<SyncMutation>(raw.clone()) else {
-        return Ok(rejected(row_id, "row does not parse"));
+        return Err(rejected(row_id, "row does not parse"));
     };
     if m.validate().is_err() {
-        return Ok(rejected(row_id, "row fails validation"));
+        return Err(rejected(row_id, "row fails validation"));
     }
     if let Err(reason) = ensure_valid_range(quran, &m) {
-        return Ok(rejected(row_id, reason));
+        return Err(rejected(row_id, reason));
     }
+    Ok(m)
+}
+
+/// Apply one row that passed `precheck` and holds a ceiling slot. A bad row is
+/// refused alone; the others still land.
+async fn apply_valid(
+    tx: &DatabaseTransaction,
+    user_id: i32,
+    m: &SyncMutation,
+    raw: &Value,
+    server_ms: i64,
+) -> DbResult<Value> {
     match m.kind {
-        MutationKind::FolderUpsert => apply_folder(tx, user_id, &m, raw, server_ms).await,
-        MutationKind::BookmarkUpsert => apply_bookmark(tx, user_id, &m, raw, server_ms).await,
+        MutationKind::FolderUpsert => apply_folder(tx, user_id, m, raw, server_ms).await,
+        MutationKind::BookmarkUpsert => apply_bookmark(tx, user_id, m, raw, server_ms).await,
     }
 }
 
@@ -276,6 +286,35 @@ async fn pull_page(
     })
 }
 
+/// Snapshot guard (A7): a full pull whose live rows exceed a quota is refused
+/// with 507 instead of being cut short. Quotas stop new rows, so this only fires
+/// when stored rows exceed what a client can hold.
+async fn snapshot_too_large(tx: &DatabaseTransaction, user_id: i32) -> DbResult<bool> {
+    let bookmarks = bookmark::Entity::count_live_for_user(tx, user_id).await?;
+    let folders = bookmark_folder::Entity::count_live_for_user(tx, user_id).await?;
+    Ok(bookmarks > bookmark::LIVE_BOOKMARK_QUOTA || folders > bookmark_folder::LIVE_FOLDER_QUOTA)
+}
+
+fn snapshot_too_large_error() -> ErrorResponse {
+    ErrorResponse::new(ErrorCode::SnapshotTooLarge)
+        .with_details("full pull exceeds the live bookmark or folder quota")
+}
+
+/// What one round decided inside its transaction.
+enum Round {
+    Done(Settled),
+    Refused { retry_after: u64 },
+    TooLarge,
+}
+
+struct Settled {
+    results: Vec<Value>,
+    page: PullPage,
+    latest: i64,
+    floor: i64,
+    epoch: String,
+}
+
 #[debug_handler]
 #[instrument(skip(state, auth, payload), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
 pub async fn sync(
@@ -297,17 +336,44 @@ pub async fn sync(
     let mutations = payload.mutations.as_deref().unwrap_or(&[]);
     let since = payload.since.unwrap_or(0);
     let server_ms = Utc::now().timestamp_millis();
+    let now = Utc::now();
 
     // Push and pull share ONE transaction, so a folder delete cannot race a write
-    // into it and any error rolls the whole round back.
+    // into it and any error rolls the whole round back. Each valid row takes one
+    // slot of the daily ceiling (A7); a pull-only round takes none.
+    let mut ledger = CeilingLedger::default();
     let tx = state.sea_db.begin().await.map_err_to_response()?;
     let round = async {
         bookmark_folder::Entity::ensure_default(&tx, user.id).await?;
         let mut results = Vec::with_capacity(mutations.len());
+        let mut granted = false;
         for raw in mutations {
-            results.push(apply_row(&tx, &state.quran, user.id, raw, server_ms).await?);
+            let m = match precheck(&state.quran, raw) {
+                Ok(m) => m,
+                Err(verdict) => {
+                    results.push(verdict);
+                    continue;
+                }
+            };
+            let charge = ledger.charge(&state.gate_store, user.id, now).await?;
+            if !charge.accepted {
+                // Nothing fit this round: hold the pushes (429). Once a row got
+                // a slot, the rest wait as `capped` and stay dirty.
+                if !granted {
+                    return DbResult::Ok(Round::Refused {
+                        retry_after: charge.retry_after,
+                    });
+                }
+                results.push(json!({ "id": m.id, "status": "capped" }));
+                continue;
+            }
+            granted = true;
+            results.push(apply_valid(&tx, user.id, &m, raw, server_ms).await?);
         }
         let full = since == 0;
+        if full && snapshot_too_large(&tx, user.id).await? {
+            return DbResult::Ok(Round::TooLarge);
+        }
         let after = if full {
             payload.after.unwrap_or(-1)
         } else {
@@ -318,17 +384,44 @@ pub async fn sync(
         let latest = sync_counter::current_rev(&tx, user.id, domain).await?;
         let floor = sync_counter::floor_rev(&tx, user.id, domain).await?;
         let epoch = sync_counter::sync_epoch(&tx).await?;
-        DbResult::Ok((results, page, latest, floor, epoch))
+        DbResult::Ok(Round::Done(Settled {
+            results,
+            page,
+            latest,
+            floor,
+            epoch,
+        }))
     }
     .await;
-    let (results, page, latest, floor, epoch) = match round {
-        Ok(round) => round,
+    // Only a committed round keeps its writes. A refused or oversize round rolls
+    // back, so nothing is half-applied behind the error.
+    let settled = match round {
+        Ok(Round::Done(settled)) => match tx.commit().await.map_err_to_response() {
+            Ok(()) => Ok(settled),
+            Err(err) => Err(err),
+        },
+        Ok(Round::Refused { retry_after }) => {
+            let _ = tx.rollback().await;
+            Err(ceiling_error(retry_after))
+        }
+        Ok(Round::TooLarge) => {
+            let _ = tx.rollback().await;
+            Err(snapshot_too_large_error())
+        }
         Err(err) => {
-            tx.rollback().await.map_err_to_response()?;
-            return Err(err);
+            let _ = tx.rollback().await;
+            Err(err)
         }
     };
-    tx.commit().await.map_err_to_response()?;
+    // The ledger row is written only now, after the transaction has ended.
+    ledger.settle(&state.sea_db, user.id, now).await;
+    let Settled {
+        results,
+        page,
+        latest,
+        floor,
+        epoch,
+    } = settled?;
 
     let count = |status: &str| results.iter().filter(|r| r["status"] == status).count();
     let rev = if page.more || since > 0 {

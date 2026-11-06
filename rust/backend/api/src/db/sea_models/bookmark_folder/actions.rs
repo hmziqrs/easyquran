@@ -33,7 +33,7 @@ const SEED_TS: &str = "1970-01-01T00:00:00.000000Z";
 
 /// Live-folder quota per user. A new live folder past the cap comes back `capped`;
 /// a rename at the cap still works.
-const LIVE_FOLDER_QUOTA: u64 = 200;
+pub const LIVE_FOLDER_QUOTA: u64 = 200;
 
 /// Deterministic default-folder id for one account.
 pub fn default_folder_id(user_id: i32) -> String {
@@ -211,7 +211,8 @@ impl Entity {
             .map_err_to_response()
     }
 
-    async fn count_live_for_user(conn: &DatabaseTransaction, user_id: i32) -> DbResult<u64> {
+    /// Live (not tombstoned) rows for one account. Full-pull snapshot guard (A7).
+    pub async fn count_live_for_user(conn: &DatabaseTransaction, user_id: i32) -> DbResult<u64> {
         Self::find()
             .filter(Column::UserId.eq(user_id))
             .filter(Column::DeletedAt.is_null())

@@ -359,28 +359,39 @@ export class SyncEngine {
     signal: AbortSignal,
     isCurrent: () => boolean,
   ): Promise<DrainOutcome> {
+    // A 429 holds only this domain's pushes. Pulls are never charged toward the
+    // daily ceiling or the request limit's push budget, so a held domain keeps
+    // pulling: its rounds run pull-only until the hold lapses.
     const hold = this.#holdUntil.get(domain.name) ?? 0;
-    if (Date.now() < hold) return "paused";
-    this.#holdUntil.delete(domain.name);
+    let pullOnly = Date.now() < hold;
+    if (!pullOnly) this.#holdUntil.delete(domain.name);
     for (let i = 0; i < MAX_ROUNDS_PER_FLUSH; i += 1) {
       if (!isCurrent()) return "paused";
       try {
-        const result = await round(signal);
+        const result = await round(signal, { pullOnly });
         if (!isCurrent()) return "paused";
         this.#lastSyncAt = Date.now();
         this.#lastError = null;
+        // A pull-only round never drains the queue: the held pushes still wait.
+        if (pullOnly) {
+          if (!result.more) return "paused";
+          continue;
+        }
         if (!result.more) return "drained";
       } catch (err) {
         if (!isCurrent() || err instanceof SyncPausedError) return "paused";
         if (err instanceof SyncRetryAfterError) {
           this.#holdUntil.set(domain.name, Date.now() + err.seconds * 1000);
-          return "paused";
+          if (pullOnly) return "paused";
+          // The push was held: pull this flush so changes still arrive.
+          pullOnly = true;
+          continue;
         }
         this.#lastError = messageOf(err);
         return "failed";
       }
     }
-    return "drained";
+    return pullOnly ? "paused" : "drained";
   }
 
   async #drain(domainFilter: string | undefined): Promise<void> {

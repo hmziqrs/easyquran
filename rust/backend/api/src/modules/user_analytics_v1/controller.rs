@@ -15,12 +15,17 @@ use sea_orm::{
 use serde_json::{json, Value};
 use tracing::instrument;
 
+use rux_request_gate::InMemoryStore;
+
 use crate::{
     db::sea_models::bookmark_folder::lww_timestamp,
     error::{DbResult, DbResultExt, ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
     quran::QuranStore,
-    services::auth::AuthSession,
+    services::{
+        auth::AuthSession,
+        write_ceiling::{ceiling_error, CeilingLedger},
+    },
     AppState,
 };
 
@@ -153,12 +158,33 @@ async fn insert_event(
 pub async fn ingest_events(
     db: &DatabaseConnection,
     quran: &QuranStore,
+    store: &InMemoryStore,
     user_id: i32,
     payload: &V1EventsPayload,
 ) -> Result<u64, ErrorResponse> {
     let events = payload.events.as_deref().unwrap_or(&[]);
     for e in events {
         ensure_real_verse(quran, e.surah, e.ayah)?;
+    }
+    // Daily ceiling (A7): a batch is all-or-nothing, so it needs a slot for every
+    // event or it is refused with 429. Slots taken before a refusal stay spent
+    // for the day (the counter cannot give them back); the batch is never partly
+    // stored. The ledger row goes out before the transaction starts.
+    if !events.is_empty() {
+        let now = Utc::now();
+        let mut ledger = CeilingLedger::default();
+        let mut refused = None;
+        for _ in events {
+            let charge = ledger.charge(store, user_id, now).await?;
+            if !charge.accepted {
+                refused = Some(charge.retry_after);
+                break;
+            }
+        }
+        ledger.settle(db, user_id, now).await;
+        if let Some(retry_after) = refused {
+            return Err(ceiling_error(retry_after));
+        }
     }
     let tx = db.begin().await.map_err_to_response()?;
     let round = async {
@@ -266,7 +292,14 @@ pub async fn events(
         return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
             .with_message("Reading analytics account changed"));
     }
-    let accepted = ingest_events(&state.sea_db, &state.quran, user.id, &payload).await?;
+    let accepted = ingest_events(
+        &state.sea_db,
+        &state.quran,
+        &state.gate_store,
+        user.id,
+        &payload,
+    )
+    .await?;
     Ok((StatusCode::OK, Json(json!({ "accepted": accepted }))))
 }
 

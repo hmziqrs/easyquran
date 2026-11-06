@@ -52,7 +52,15 @@ export interface SyncDomain<P = unknown, S = unknown> {
    * asks for rounds and never touches the outbox. Omit it for insert-once data,
    * which stays on the outbox.
    */
-  round?(signal?: AbortSignal): Promise<RowRoundResult>;
+  round?(signal?: AbortSignal, options?: SyncRoundOptions): Promise<RowRoundResult>;
+}
+
+export interface SyncRoundOptions {
+  /**
+   * Send no rows, only pull. The server never charges a pull toward the daily
+   * write ceiling, so a held domain keeps receiving changes while its pushes wait.
+   */
+  readonly pullOnly?: boolean;
 }
 
 export interface RowRoundResult {
@@ -67,6 +75,19 @@ export class SyncRetryAfterError extends Error {
     super("sync rate limited");
     this.name = "SyncRetryAfterError";
     this.seconds = seconds;
+  }
+}
+
+/**
+ * Thrown on 507: a full pull would exceed the server's snapshot quota. The server
+ * never truncates, so the pull cannot land until the library shrinks. Surfaced as a
+ * failure with its message; the engine retries on backoff, and a later success
+ * clears it.
+ */
+export class SyncSnapshotTooLargeError extends Error {
+  constructor(label: string) {
+    super(`${label} failed (507): the library is larger than a full sync can send`);
+    this.name = "SyncSnapshotTooLargeError";
   }
 }
 

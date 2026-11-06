@@ -54,6 +54,20 @@ pub fn blocked_by_path() -> Vec<(String, u64)> {
     }
 }
 
+/// Subject scores below this halve the budget. Documented seam (A7): nothing sets
+/// a score today, so every limiter runs at the default 1.0.
+pub const LOW_SUBJECT_SCORE: f64 = 0.5;
+
+/// Effective budget for one limiter given its subject score. Score 1.0 (the
+/// default) keeps `max` exactly. A low score halves it, never below 1. It never
+/// blocks a request by itself: the fixed window still does the enforcing.
+pub fn scaled_max(max: u64, subject_score: f64) -> u64 {
+    if subject_score >= LOW_SUBJECT_SCORE {
+        return max;
+    }
+    (max / 2).max(1)
+}
+
 /// Escalation hook invoked by the outer Quran content limiter only. The
 /// implementation (api crate `EscalationEngine`) resolves the canonical BanUnit,
 /// consults the shared store, and owns the L1 suspicious/qualifying state. The
@@ -131,6 +145,8 @@ pub struct RateLimitLayer {
     // Upper bound on any Retry-After this limiter emits. `None` keeps the
     // fixed-window ttl unchanged.
     retry_after_cap: Option<u64>,
+    // Subject score seam (A7). Default 1.0; see `scaled_max`.
+    subject_score: f64,
 }
 
 impl RateLimitLayer {
@@ -146,6 +162,7 @@ impl RateLimitLayer {
             on_unavailable: Arc::new(default_on_unavailable),
             escalation: None,
             retry_after_cap: None,
+            subject_score: 1.0,
         }
     }
 
@@ -166,6 +183,7 @@ impl RateLimitLayer {
             on_unavailable: Arc::new(default_on_unavailable),
             escalation: None,
             retry_after_cap: None,
+            subject_score: 1.0,
         }
     }
 
@@ -221,6 +239,23 @@ impl RateLimitLayerBuilder {
         self.layer.on_unavailable = Arc::new(f);
         self
     }
+    /// Subject score seam (A7). Clamped to [0, 1]; non-finite input keeps the
+    /// default 1.0. A low score logs an operator event once, at build time.
+    pub fn subject_score(mut self, score: f64) -> Self {
+        let score = if score.is_finite() {
+            score.clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        if score < LOW_SUBJECT_SCORE {
+            warn!(
+                subject_score = score,
+                "rate-limit subject score is low: budget halved (operator event)"
+            );
+        }
+        self.layer.subject_score = score;
+        self
+    }
     /// Cap every Retry-After this limiter emits (header and body) at `secs`.
     pub fn retry_after_cap(mut self, secs: u64) -> Self {
         self.layer.retry_after_cap = Some(secs);
@@ -266,6 +301,7 @@ where
         let mut inner = self.inner.clone();
 
         Box::pin(async move {
+            let max = scaled_max(layer.max_requests, layer.subject_score);
             if !(layer.applies)(&req) {
                 return inner.call(req).await;
             }
@@ -314,9 +350,9 @@ where
                             &layer,
                             BlockInfo {
                                 retry_after_secs: retry_after,
-                                max_requests: layer.max_requests,
+                                max_requests: max,
                                 window_secs: layer.window_secs,
-                                count: layer.max_requests + 1,
+                                count: max + 1,
                                 ttl: retry_after,
                             },
                         ));
@@ -343,12 +379,12 @@ where
                 }
             };
 
-            if count > layer.max_requests {
+            if count > max {
                 // W3a (4): the rate window qualifies ONLY at count == max+1.
                 // That equality is the one-event-per-window primitive — no
                 // dedup_nx, no append on every 429. The engine checks the
                 // suspicious counter internally; raw volume alone never bans.
-                if count == layer.max_requests + 1 {
+                if count == max + 1 {
                     if let Some(esc) = &layer.escalation {
                         if let Some(id) = identity.as_ref().filter(|i| i.is_external_ip()) {
                             if let Some(retry_after) = esc.on_first_block(id).await {
@@ -359,7 +395,7 @@ where
                                     &layer,
                                     BlockInfo {
                                         retry_after_secs: retry_after,
-                                        max_requests: layer.max_requests,
+                                        max_requests: max,
                                         window_secs: layer.window_secs,
                                         count,
                                         ttl: retry_after,
@@ -378,7 +414,7 @@ where
                     identity = %id_key,
                     path,
                     count,
-                    limit = layer.max_requests,
+                    limit = max,
                     window_secs = layer.window_secs,
                     "Rate limit exceeded"
                 );
@@ -387,7 +423,7 @@ where
                     &layer,
                     BlockInfo {
                         retry_after_secs: ttl,
-                        max_requests: layer.max_requests,
+                        max_requests: max,
                         window_secs: layer.window_secs,
                         count,
                         ttl,
@@ -407,10 +443,10 @@ where
                 }
             }
 
-            let remaining = layer.max_requests.saturating_sub(count);
+            let remaining = max.saturating_sub(count);
             let mut response = response;
             let headers = response.headers_mut();
-            insert_header(headers, &X_RATELIMIT_LIMIT, layer.max_requests);
+            insert_header(headers, &X_RATELIMIT_LIMIT, max);
             insert_header(headers, &X_RATELIMIT_REMAINING, remaining);
             insert_header(headers, &X_RATELIMIT_RESET, ttl);
 
@@ -453,7 +489,7 @@ fn blocked_response(layer: &RateLimitLayer, mut info: BlockInfo) -> Response {
     let retry_after = info.retry_after_secs;
     let mut response = (layer.on_block)(info);
     let headers = response.headers_mut();
-    insert_header(headers, &X_RATELIMIT_LIMIT, layer.max_requests);
+    insert_header(headers, &X_RATELIMIT_LIMIT, info.max_requests);
     insert_header(headers, &X_RATELIMIT_REMAINING, 0u64);
     insert_header(headers, &X_RATELIMIT_RESET, info.ttl);
     insert_header(headers, &axum::http::header::RETRY_AFTER, retry_after);
@@ -648,6 +684,77 @@ mod tests {
             0x2001, 0x0db8, 0, 0, 0, 0, 0, 0xabcd,
         )));
         assert_eq!(a, b, "a /64 range must key to one fixed bucket");
+    }
+
+    #[test]
+    fn subject_score_default_keeps_the_budget() {
+        // A7 seam: the default 1.0 must be a no-op for every budget.
+        for max in [1u64, 2, 60, 600] {
+            assert_eq!(scaled_max(max, 1.0), max);
+        }
+        assert_eq!(
+            scaled_max(60, 0.5),
+            60,
+            "0.5 is not low: the floor is strict"
+        );
+    }
+
+    #[test]
+    fn subject_score_low_halves_budget_never_below_one() {
+        assert_eq!(scaled_max(60, 0.25), 30);
+        assert_eq!(scaled_max(3, 0.0), 1);
+        assert_eq!(scaled_max(1, 0.0), 1);
+    }
+
+    #[test]
+    fn subject_score_builder_clamps_and_defaults_non_finite() {
+        let store = Arc::new(InMemoryStore::default()) as Arc<dyn RateLimitStore>;
+        let base = || RateLimitLayer::builder(store.clone(), 5, 60);
+        assert_eq!(base().build().subject_score, 1.0);
+        assert_eq!(base().subject_score(f64::NAN).build().subject_score, 1.0);
+        assert_eq!(base().subject_score(2.5).build().subject_score, 1.0);
+        assert_eq!(base().subject_score(-3.0).build().subject_score, 0.0);
+    }
+
+    #[tokio::test]
+    async fn low_subject_score_lowers_the_budget_but_default_does_not() {
+        // Default score: max 4 means four allowed, the fifth blocked.
+        let store = Arc::new(InMemoryStore::default()) as Arc<dyn RateLimitStore>;
+        let default = RateLimitLayer::builder(store.clone(), 4, 60)
+            .path_key(PathKey::Fixed("a7-default"))
+            .build()
+            .layer(OkService);
+        let mut ok = 0;
+        for _ in 0..5 {
+            if default.clone().oneshot(req()).await.unwrap().status() == axum::http::StatusCode::OK
+            {
+                ok += 1;
+            }
+        }
+        assert_eq!(ok, 4);
+
+        // Low score 0.25: budget 4 -> 2, so only two pass.
+        let low = RateLimitLayer::builder(store, 4, 60)
+            .path_key(PathKey::Fixed("a7-low"))
+            .subject_score(0.25)
+            .build()
+            .layer(OkService);
+        let mut ok = 0;
+        let mut limit_header = None;
+        for _ in 0..5 {
+            let resp = low.clone().oneshot(req()).await.unwrap();
+            if resp.status() == axum::http::StatusCode::OK {
+                ok += 1;
+            } else {
+                limit_header = resp.headers().get("x-ratelimit-limit").cloned();
+            }
+        }
+        assert_eq!(ok, 2);
+        assert_eq!(
+            limit_header.unwrap(),
+            "2",
+            "emitted limit follows the budget"
+        );
     }
 
     #[test]

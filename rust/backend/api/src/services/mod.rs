@@ -26,6 +26,7 @@ pub mod translation_popularity_store;
 pub mod turnstile;
 pub mod webauthn;
 pub mod webhook_util;
+pub mod write_ceiling;
 
 // Security: predictable-RNG seeder + admin TUI must never ship in release — keep the seed-system cfg gates intact.
 #[cfg(feature = "seed-system")]

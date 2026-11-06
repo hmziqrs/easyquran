@@ -1,6 +1,6 @@
 import type { AuthRequestResult } from "#lib/auth/auth-client.js";
 
-import { SyncPausedError, SyncRetryAfterError } from "./types";
+import { SyncPausedError, SyncRetryAfterError, SyncSnapshotTooLargeError } from "./types";
 
 /** The wire protocol this build speaks (contracts/sync.md). */
 export const SYNC_PROTOCOL = 1;
@@ -30,6 +30,7 @@ export function throwForFailure(
     throw new SyncPausedError(`${label} paused: update required`);
   }
   if (status === 429) throw new SyncRetryAfterError(res.retryAfter ?? DEFAULT_RETRY_AFTER_S);
+  if (status === 507) throw new SyncSnapshotTooLargeError(label);
   // 404 (auth nests unmounted), 5xx, and a malformed-request 400: back off, rows stay dirty.
   throw new Error(`${label} failed (${status})`);
 }

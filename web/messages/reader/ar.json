@@ -437,6 +437,8 @@
   "reader_threads_start_over": "ابدأ من جديد",
   "reader_threads_close": "إغلاق",
   "reader_threads_sync_error": "تعذّر حفظ آخر موضع لك. يبقى على هذا الجهاز ويُعاد المحاولة عند قراءتك التالية.",
+  "reader_threads_rows_rejected": "تعذّرت مزامنة {count} من مواضع القراءة. تبقى على هذا الجهاز.",
+  "reader_threads_rows_capped": "{count} من مواضع القراءة بانتظار توفر مساحة في حسابك. تبقى على هذا الجهاز.",
   "reader_bookmarks_saved_to": "حُفظت في {folder}",
   "reader_bookmarks_change": "تغيير",
   "reader_bookmarks_save_to": "حفظ في…",

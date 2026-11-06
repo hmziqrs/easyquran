@@ -111,8 +111,18 @@ Each result is `{id, status, stamps?}`:
 | 403 unverified, banned, or account mismatch | Pause. Never dead-letter. Keep dirty rows |
 | 404 (auth nests unmounted) | Pause with backoff |
 | 426 | Pause sync, show update prompt, keep reading |
-| 429 | Honour `Retry-After` |
+| 429 | Hold this domain's pushes for `Retry-After`. Pulls continue (pull-only rounds) |
+| 507 | A full pull is over the live quota (10,000 bookmarks or 200 folders). Surfaced as a failure with its message. The server never truncates, so nothing lands until the library shrinks. Rows stay dirty |
 | 5xx, timeout, `SQLITE_BUSY`, malformed-request 400 | Retry with backoff and jitter. Rows stay dirty |
+
+## Daily ceiling
+
+Each account may take 5,000 accepted mutations per UTC day, counted across reading-session sync, bookmark sync and analytics events. A pull-only round (`mutations` empty) never counts. A row the server refuses as `rejected` never counts.
+
+- A sync round with room for some rows applies them and returns `capped` for the rest. Those rows stay dirty and retry next day.
+- A sync round with no room at all returns 429 with `Retry-After` to midnight UTC, and the client holds its pushes.
+- An analytics batch is all-or-nothing: it returns 429 when it does not fit.
+- The first refusal of a user's day writes one `rate_limit_events` row (`daily_ceiling`), never one per request.
 
 ## Versions
 

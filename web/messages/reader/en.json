@@ -437,6 +437,8 @@
   "reader_threads_start_over": "Start over",
   "reader_threads_close": "Close",
   "reader_threads_sync_error": "Couldn't save your latest position. It stays on this device and retries on your next read.",
+  "reader_threads_rows_rejected": "{count} reading positions could not sync. They stay on this device.",
+  "reader_threads_rows_capped": "{count} reading positions wait for room in your account. They stay on this device.",
   "reader_bookmarks_saved_to": "Saved to {folder}",
   "reader_bookmarks_change": "Change",
   "reader_bookmarks_save_to": "Save to…",

@@ -1,5 +1,10 @@
 import type { AuthRequestResult, UnsafeRequestInit } from "#lib/auth/auth-client.js";
-import { SyncPausedError, type RowRoundResult, type SyncDomain } from "#lib/sync/index.js";
+import {
+  SyncPausedError,
+  type RowRoundResult,
+  type SyncDomain,
+  type SyncRoundOptions,
+} from "#lib/sync/index.js";
 import { SYNC_CLIENT, throwForFailure } from "#lib/sync/round-status.js";
 
 import { decodeBookmarksRound, type BookmarksRound, type BookmarksWireRow } from "./schema";
@@ -52,9 +57,10 @@ export function createBookmarksDomain(
       throw new Error("bookmarks sync through rounds, not the outbox");
     },
     applyServer(): void {},
-    async round(signal?: AbortSignal): Promise<RowRoundResult> {
+    async round(signal?: AbortSignal, options?: SyncRoundOptions): Promise<RowRoundResult> {
       assertCurrent(signal);
-      const sent = port.dirtyRows();
+      // A pull-only round sends no rows: it never takes a daily-ceiling slot.
+      const sent = options?.pullOnly === true ? [] : port.dirtyRows();
       const res = await auth.unsafeRequest<unknown>(SYNC_PATH, {
         method: "POST",
         body: {

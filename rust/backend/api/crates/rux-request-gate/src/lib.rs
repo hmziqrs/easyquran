@@ -17,6 +17,7 @@ pub use ip::{
     IpSource, RequestIdentity, SubjectIdentitySource, VerifiedSubject,
 };
 pub use layer::{
-    blocked_by_path, BlockInfo, Escalation, PathKey, RateLimitLayer, RateLimitLayerBuilder,
+    blocked_by_path, scaled_max, BlockInfo, Escalation, PathKey, RateLimitLayer,
+    RateLimitLayerBuilder, LOW_SUBJECT_SCORE,
 };
 pub use store::{BanStatus, BucketSnapshot, InMemoryStore, QualifyingCounts, RateLimitStore};
