@@ -2,22 +2,6 @@
 
 [Back to index](../README.md)
 
-#### A30. Media takedown: variants, tombstones, sweep
-
-Build:
-
-1. Delete: read the variant keys first (`@480w`, `@768w`, `@1024w`, `@1600w`, `@2048w`, `@lqip`, and any others the optimizer writes). Delete the original and every variant object from R2. Then delete the rows. Write a tombstone row (`media_deletions`) in the same transaction as the row delete. Retries on object-delete failure. Retention 12 months.
-2. Variant upload failures are currently logged and ignored (`rust/backend/api/src/modules/media_v1/controller.rs` ~471–486). Make a failed variant upload fail the upload.
-3. `just media-sweep`: dry-run by default; 24-hour grace; cross-checks `media` and `media_variant` tables against R2 listing; prints orphans; deletes only with explicit flag.
-4. `Cache-Control` on PUT and a purge step for the bucket's CDN (owner config for the CDN domain).
-5. Delete restricted to Admin (A28 item 4).
-6. Before trusting media URLs, pin the shape with a unit test: media is `{public_url}/{bucket}/{key}`, Quran has no bucket.
-
-Files: `rust/backend/api/src/modules/media_v1/*`, `rust/backend/api/src/services/media.rs`, `rust/backend/api/src/services/image_optimizer.rs`, `rust/backend/api/src/db/sea_models/{media,media_variant}/*`, new migration (`media_deletions`), `rust/backend/api/src/router.rs`, `justfile`.
-
-Done when: deleting a media item leaves no reachable variant URL (test requests each derived key → 404 on a test bucket); sweeper finds zero orphans after a full cycle (test); tombstone written in same transaction (test).
-Blocked by: A23, A28
-
 #### A37. Image moderation and CSAM path
 
 Build:
