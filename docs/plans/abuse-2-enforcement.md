@@ -2,21 +2,6 @@
 
 [Back to index](../README.md)
 
-#### A31. Media upload hardening and gate
-
-Build:
-
-1. Magic-byte validation after the declared-MIME check and before dedup (`rust/backend/api/src/modules/media_v1/validator.rs` ~46–88 trusts declared type and extension today). Reconcile the GIF allowlist with the missing decoder (drop GIF or add decoder; record choice).
-2. Strip metadata by default and apply orientation first. Check first which served objects keep EXIF and GPS today; the test must cover the original as well as each variant.
-3. Bound decode cost: width and height caps plus a decode semaphore, in addition to the existing 12 Mpx ceiling.
-4. Per-uploader quota and daily cap. Indices on `media.uploader_id` and `media.content_hash` (migration).
-5. Gate: do not grant the Author role for media upload and do not ship any media UI until items 1–4 are done. Existing limits: 2 MiB, 12 Mpx, 30 per minute.
-
-Files: `rust/backend/api/src/modules/media_v1/validator.rs`, `rust/backend/api/src/modules/media_v1/controller.rs`, `rust/backend/api/src/services/image_optimizer.rs`, migration.
-
-Done when: a polyglot upload (valid image header with script payload) is rejected (test); EXIF absent from served object (test); decode bomb (over cap) rejected before decode (test); quota enforced (test).
-Blocked by: A30
-
 #### A32. Retention sweeper with ship gates
 
 Build:
