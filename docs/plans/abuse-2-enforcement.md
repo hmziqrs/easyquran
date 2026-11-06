@@ -2,22 +2,6 @@
 
 [Back to index](../README.md)
 
-#### A26. Alerting, runbook, drill
-
-Build:
-
-1. P0 intake alert: mail and FCM push to operator. Requires `FCM_ENABLED` and a registered operator device (O12). Record the dispatch result. `Ok` from the FCM call is not delivery.
-2. Daily 08:00 digest of open reports and appeals.
-3. External uptime monitor on a public health endpoint (owner executes: O19).
-4. Docs: new `deploy/incident-response.md` (runbook plus drill log section), new `deploy/legal-debt.md` (legal-debt list with trigger conditions).
-5. The drill itself is owner-executed (O13).
-
-Files: `rust/backend/api/src/modules/report_v1/`, `rust/backend/api/src/services/notification/`, new `deploy/incident-response.md`, new `deploy/legal-debt.md`.
-
-Done when: a P0 report triggers the mail and push path in a test env with dispatch result recorded; runbook and legal-debt list committed. Drill acceptance is owner's.
-Blocked by: A24, A25
-Owner: O12, O13, O19.
-
 #### A27. Moderation notice and comment hardening
 
 Build:
@@ -32,27 +16,6 @@ Files: `rust/backend/api/src/modules/post_comment_v1/*`, `rust/backend/api/src/d
 
 Done when: hiding a comment creates a notice row and an appeal token (test); author edit refused on hidden or flagged comment (test); cleared flag count stays cleared after a new flag (test); self-flag refused; rate limit test.
 Blocked by: A21, A25
-
-#### A28. Admin safety
-
-Build:
-
-1. The `confirm_evidence` guard is built in A25; do not build it twice. Delete the dead helper `comment_flag::clear_flags` (`rust/backend/api/src/db/sea_models/comment_flag/actions.rs` ~179–186; zero callers).
-2. User delete requires a typed email confirmation. Writes a pre-state snapshot into `audit_logs` before deleting (the cascade currently destroys bans, sessions, and reports; see `m000001_init.rs` ~48–73 and ~283–308).
-3. Category delete requires confirmation (cascades every post in the category).
-4. Media delete: restrict to Admin. Moderator keeps read. Current media routes use `verified_with_role::<ROLE_AUTHOR>` (`rust/backend/api/src/modules/media_v1/mod.rs` ~20). Verify each delete route.
-5. Add rate-limit layers to the unmetered nests, one line each in `rust/backend/api/src/router.rs`: `/feed/v1` (~135), `/category/v1` (~128), `/tag/v1` (~129), `/mail/v1` (~130), `/email_verification/v1` (~84), `/forgot_password/v1` (~85), `/analytics/v1` (~146), `/admin/route/v1` (~148), `/admin/acl/v1` (~150), `/admin/bans` (verify its mount). Use the existing `rate_limit_layer` pattern.
-6. Route blocker: refuse to block its own unblock route. Audit every block and unblock (A23).
-7. `app_constants` import filter: `R2_ACCESS_KEY_ID` slips past the denylist in `rust/backend/api/src/services/acl_service.rs` (~85–135) because it ends `_ID`, and is stored in plaintext. Add an `ACCESS_KEY` needle; a blanket `_ID` needle would refuse harmless values such as `GOOGLE_CLIENT_ID`. Unit test: known secret env names are refused.
-8. Seeder: refuse to run when `is_production()` at every entry point (`seed_v1`, the TUI, and CLI paths; none check it today, and only the `seed-system` feature gates the routes). Drop the `password == email` pattern. Stop minting Admin-role accounts. Stop the TUI undo deleting ID ranges that include `users` (`rust/backend/api/src/services/seed/undo.rs` ~34–105).
-9. Narrow moderator inline powers: `is_moderator()` must not grant reading any user's email, paywall bypass, hidden-post comments, attaching any media, or seeing all drafts.
-10. Persist the route-blocker runtime pause (`route_blocker_config::is_paused` is in-memory, a redeploy reverts it): store in `app_constants`, rehydrate at boot.
-
-Files: `rust/backend/api/src/modules/{user_v1,category_v1,media_v1,admin_route_v1}/*`, `rust/backend/api/src/db/sea_models/{comment_flag,post_comment}/actions.rs`, `rust/backend/api/src/services/seed/*`, `rust/backend/api/src/services/acl_service.rs`, `rust/backend/api/src/tui/*`, `rust/backend/api/src/router.rs`.
-
-Done when: every destructive action in the A23 list has an audit row; category delete without confirmation refused (test); a Moderator cannot delete media (test); unmetered-nest test list is empty (guard test); `R2_ACCESS_KEY_ID` refused by filter (test); seeder refuses in production (test).
-Blocked by: A23
-Owner: O8 (default: no moderator role until this lands).
 
 #### A36. Device token hygiene
 
