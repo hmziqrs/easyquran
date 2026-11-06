@@ -2,41 +2,42 @@ use crate::db::sea_models::user;
 use base64::prelude::*;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
-use std::time::Instant;
 use subtle::ConstantTimeEq;
+use tower_sessions::Session;
 use tracing::{error, warn};
 use webauthn_rs::prelude::{DiscoverableAuthentication, PasskeyRegistration};
 
 use crate::error::{ErrorCode, ErrorResponse};
+use crate::services::session_challenges::{self, Quota};
 
-const STATE_TTL_SECS: u64 = 300;
-const MAX_STATES: usize = 10_000;
+/// Pending passkey challenges live in the caller's session payload (A13): they survive a
+/// restart and are bound to that session's cookie. Five-minute life, eight per session.
+const SESSION_KEY: &str = "rux_passkey_challenges";
+const QUOTA: Quota = Quota {
+    per_session: 8,
+    ttl_secs: 300,
+};
 
 #[derive(Serialize, Deserialize)]
 struct RegistrationBinding {
     user_id: i32,
-    session_id: String,
     credential_secret: String,
     factor_secret: Option<String>,
     factor_enabled: bool,
 }
 
 impl RegistrationBinding {
-    fn from_user(user: &user::Model, session_id: &str) -> Self {
+    fn from_user(user: &user::Model) -> Self {
         Self {
             user_id: user.id,
-            session_id: session_id.to_owned(),
             credential_secret: user.session_auth_secret.clone(),
             factor_secret: user.two_fa_secret.clone(),
             factor_enabled: user.two_fa_enabled,
         }
     }
 
-    fn matches(&self, user: &user::Model, session_id: &str) -> bool {
+    fn matches(&self, user: &user::Model) -> bool {
         self.user_id == user.id
-            && self.session_id == session_id
             && self.factor_enabled == user.two_fa_enabled
             && bool::from(
                 self.credential_secret
@@ -56,7 +57,6 @@ enum EntryRef<'a> {
     },
     Authentication {
         state: &'a DiscoverableAuthentication,
-        session_id: &'a str,
     },
 }
 
@@ -69,23 +69,10 @@ enum EntryOwned {
     },
     Authentication {
         state: DiscoverableAuthentication,
-        session_id: String,
     },
 }
 
-type StateMap = HashMap<String, (String, Instant)>;
-
-static STATES: OnceLock<Mutex<StateMap>> = OnceLock::new();
-
-fn states() -> &'static Mutex<StateMap> {
-    STATES.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-fn reap_stale(map: &mut StateMap) {
-    map.retain(|_, (_, at)| at.elapsed().as_secs() < STATE_TTL_SECS);
-}
-
-fn issue(entry: &EntryRef<'_>) -> Result<String, ErrorResponse> {
+async fn issue(entry: &EntryRef<'_>, session: &Session) -> Result<String, ErrorResponse> {
     let mut bytes = [0_u8; 32];
     rand::rng().fill(&mut bytes);
     let handle = BASE64_URL_SAFE_NO_PAD.encode(bytes);
@@ -94,46 +81,20 @@ fn issue(entry: &EntryRef<'_>) -> Result<String, ErrorResponse> {
         ErrorResponse::new(ErrorCode::InternalServerError)
             .with_message("Failed to issue passkey challenge")
     })?;
-
-    let mut map = states().lock().map_err(|e| {
-        error!(error = %e, "Passkey state map poisoned");
-        ErrorResponse::new(ErrorCode::InternalServerError)
-            .with_message("Failed to issue passkey challenge")
-    })?;
-    reap_stale(&mut map);
-    if map.len() >= MAX_STATES {
-        if let Some(oldest) = map
-            .iter()
-            .min_by_key(|(_, (_, issued_at))| *issued_at)
-            .map(|(key, _)| key.clone())
-        {
-            map.remove(&oldest);
-        }
-    }
-    map.insert(handle.clone(), (payload, Instant::now()));
+    session_challenges::insert(session, SESSION_KEY, QUOTA, &handle, payload).await?;
     Ok(handle)
 }
 
-/// Single-use guard: `map.remove(...)` below must stay a remove-on-read (never
-/// `get`/peek) so a replayed handle observes `None`. The WebAuthn state itself
-/// never leaves the server — a client-forged or replayed state must not reach
-/// finish_passkey_authentication/finish_passkey_registration.
-fn consume(handle: &str) -> Result<EntryOwned, ErrorResponse> {
+/// Single-use: `session_challenges::take` removes the slot before it is parsed, so a
+/// replayed handle observes `None`. The WebAuthn state never leaves the server.
+async fn consume(handle: &str, session: &Session) -> Result<EntryOwned, ErrorResponse> {
     let handle = handle.trim();
     if handle.is_empty() {
         return Err(invalid_state());
     }
-    let stored = {
-        let mut map = states().lock().map_err(|e| {
-            error!(error = %e, "Passkey state map poisoned");
-            ErrorResponse::new(ErrorCode::InternalServerError)
-                .with_message("Failed to verify passkey challenge")
-        })?;
-        reap_stale(&mut map);
-        map.remove(handle)
-    };
-
-    let (payload, _at) = stored.ok_or_else(invalid_state)?;
+    let payload = session_challenges::take(session, SESSION_KEY, QUOTA, handle)
+        .await?
+        .ok_or_else(invalid_state)?;
     serde_json::from_str(&payload).map_err(|e| {
         error!(error = ?e, "Failed to parse stored passkey state");
         ErrorResponse::new(ErrorCode::InternalServerError).with_message("Corrupt passkey state")
@@ -145,46 +106,45 @@ fn invalid_state() -> ErrorResponse {
     ErrorResponse::new(ErrorCode::InvalidToken).with_message("Invalid passkey challenge")
 }
 
-pub fn issue_registration(
+pub async fn issue_registration(
     user: &user::Model,
-    session_id: &str,
+    session: &Session,
     state: &PasskeyRegistration,
 ) -> Result<String, ErrorResponse> {
-    issue(&EntryRef::Registration {
-        state,
-        binding: RegistrationBinding::from_user(user, session_id),
-    })
+    issue(
+        &EntryRef::Registration {
+            state,
+            binding: RegistrationBinding::from_user(user),
+        },
+        session,
+    )
+    .await
 }
 
-pub fn consume_registration(
+pub async fn consume_registration(
     handle: &str,
     user: &user::Model,
-    session_id: &str,
+    session: &Session,
 ) -> Result<PasskeyRegistration, ErrorResponse> {
-    match consume(handle)? {
-        EntryOwned::Registration { state, binding } if binding.matches(user, session_id) => {
-            Ok(state)
-        }
+    match consume(handle, session).await? {
+        EntryOwned::Registration { state, binding } if binding.matches(user) => Ok(state),
         _ => Err(invalid_state()),
     }
 }
 
-pub fn issue_authentication(
+pub async fn issue_authentication(
     state: &DiscoverableAuthentication,
-    session_id: &str,
+    session: &Session,
 ) -> Result<String, ErrorResponse> {
-    issue(&EntryRef::Authentication { state, session_id })
+    issue(&EntryRef::Authentication { state }, session).await
 }
 
-pub fn consume_authentication(
+pub async fn consume_authentication(
     handle: &str,
-    session_id: &str,
+    session: &Session,
 ) -> Result<DiscoverableAuthentication, ErrorResponse> {
-    match consume(handle)? {
-        EntryOwned::Authentication {
-            state,
-            session_id: bound,
-        } if bound == session_id => Ok(state),
+    match consume(handle, session).await? {
+        EntryOwned::Authentication { state } => Ok(state),
         _ => Err(invalid_state()),
     }
 }
@@ -195,6 +155,12 @@ mod tests {
     use crate::db::sea_models::user;
     use crate::services::webauthn::WebauthnService;
     use chrono::TimeZone;
+    use std::sync::Arc;
+    use tower_sessions::MemoryStore;
+
+    fn fresh_session() -> Session {
+        Session::new(None, Arc::new(MemoryStore::default()), None)
+    }
 
     fn make_user() -> user::Model {
         let now = chrono::Utc
@@ -227,58 +193,80 @@ mod tests {
             .expect("dev WebAuthn service must construct for a real origin")
     }
 
-    #[test]
-    fn authentication_state_round_trips_once() {
+    #[tokio::test]
+    async fn authentication_state_round_trips_once() {
+        let session = fresh_session();
         let (_challenge, state) = svc().start_login().unwrap();
-        let handle = issue_authentication(&state, "session").unwrap();
+        let handle = issue_authentication(&state, &session).await.unwrap();
 
-        consume_authentication(&handle, "session").unwrap();
+        consume_authentication(&handle, &session).await.unwrap();
 
         assert!(
-            consume_authentication(&handle, "session").is_err(),
+            consume_authentication(&handle, &session).await.is_err(),
             "replayed handle must fail"
         );
     }
 
-    #[test]
-    fn registration_state_round_trips_once_and_binds_user() {
+    #[tokio::test]
+    async fn registration_state_round_trips_once_and_binds_user() {
+        let session = fresh_session();
         let (_challenge, state) = svc().start_registration(&make_user()).unwrap();
-        let handle = issue_registration(&make_user(), "session", &state).unwrap();
+        let handle = issue_registration(&make_user(), &session, &state)
+            .await
+            .unwrap();
 
-        consume_registration(&handle, &make_user(), "session").unwrap();
+        consume_registration(&handle, &make_user(), &session)
+            .await
+            .unwrap();
 
         assert!(
-            consume_registration(&handle, &make_user(), "session").is_err(),
+            consume_registration(&handle, &make_user(), &session)
+                .await
+                .is_err(),
             "replayed handle must fail"
         );
     }
 
-    #[test]
-    fn registration_handle_rejects_other_user() {
+    #[tokio::test]
+    async fn registration_handle_rejects_other_user() {
+        let session = fresh_session();
         let (_challenge, state) = svc().start_registration(&make_user()).unwrap();
-        let handle = issue_registration(&make_user(), "session", &state).unwrap();
+        let handle = issue_registration(&make_user(), &session, &state)
+            .await
+            .unwrap();
 
         let mut other_user = make_user();
         other_user.id = 2;
-        assert!(consume_registration(&handle, &other_user, "session").is_err());
+        assert!(consume_registration(&handle, &other_user, &session)
+            .await
+            .is_err());
     }
 
-    #[test]
-    fn unknown_handle_rejected() {
-        assert!(consume_authentication("does-not-exist", "session").is_err());
-        assert!(consume_registration("does-not-exist", &make_user(), "session").is_err());
+    #[tokio::test]
+    async fn unknown_handle_rejected() {
+        let session = fresh_session();
+        assert!(consume_authentication("does-not-exist", &session)
+            .await
+            .is_err());
+        assert!(
+            consume_registration("does-not-exist", &make_user(), &session)
+                .await
+                .is_err()
+        );
     }
 
-    #[test]
-    fn empty_handle_rejected() {
-        assert!(consume_authentication("", "session").is_err());
-        assert!(consume_authentication("   ", "session").is_err());
+    #[tokio::test]
+    async fn empty_handle_rejected() {
+        let session = fresh_session();
+        assert!(consume_authentication("", &session).await.is_err());
+        assert!(consume_authentication("   ", &session).await.is_err());
     }
 
-    #[test]
-    fn handle_is_opaque_and_bounded() {
+    #[tokio::test]
+    async fn handle_is_opaque_and_bounded() {
+        let session = fresh_session();
         let (_challenge, state) = svc().start_login().unwrap();
-        let handle = issue_authentication(&state, "session").unwrap();
+        let handle = issue_authentication(&state, &session).await.unwrap();
 
         assert_eq!(handle.len(), 43, "32 random bytes base64url-encoded");
         assert!(
@@ -289,18 +277,22 @@ mod tests {
         );
     }
 
-    #[test]
-    fn authentication_handle_cannot_be_consumed_as_registration() {
+    #[tokio::test]
+    async fn authentication_handle_cannot_be_consumed_as_registration() {
+        let session = fresh_session();
         let (_challenge, state) = svc().start_login().unwrap();
-        let handle = issue_authentication(&state, "session").unwrap();
+        let handle = issue_authentication(&state, &session).await.unwrap();
 
         assert!(
-            consume_registration(&handle, &make_user(), "session").is_err(),
+            consume_registration(&handle, &make_user(), &session)
+                .await
+                .is_err(),
             "kind mismatch must fail"
         );
     }
-    #[test]
-    fn registration_rejects_changed_credentials_factor_or_session() {
+
+    #[tokio::test]
+    async fn registration_rejects_changed_credentials_or_factor() {
         let user = make_user();
         let (_, state) = svc().start_registration(&user).unwrap();
         let mut credential_changed = user.clone();
@@ -308,20 +300,38 @@ mod tests {
         let mut factor_changed = user.clone();
         factor_changed.two_fa_enabled = true;
         factor_changed.two_fa_secret = Some("new-factor".into());
-        for (current, session_id) in [
-            (credential_changed, "session"),
-            (factor_changed, "session"),
-            (user.clone(), "other-session"),
-        ] {
-            let handle = issue_registration(&user, "session", &state).unwrap();
-            assert!(consume_registration(&handle, &current, session_id).is_err());
+        for current in [credential_changed, factor_changed] {
+            let session = fresh_session();
+            let handle = issue_registration(&user, &session, &state).await.unwrap();
+            assert!(consume_registration(&handle, &current, &session)
+                .await
+                .is_err());
         }
     }
 
-    #[test]
-    fn authentication_challenge_rejects_other_session() {
-        let (_, state) = svc().start_login().unwrap();
-        let handle = issue_authentication(&state, "session").unwrap();
-        assert!(consume_authentication(&handle, "other-session").is_err());
+    #[tokio::test]
+    async fn challenge_survives_restart_from_session_store() {
+        // State lives in the session payload, not in process memory: a Session object
+        // rebuilt over the same store (the post-restart view) still consumes the handle.
+        let store = Arc::new(MemoryStore::default());
+        let before = Session::new(None, store.clone(), None);
+        let (_challenge, state) = svc().start_login().unwrap();
+        let handle = issue_authentication(&state, &before).await.unwrap();
+
+        let after_restart = Session::new(before.id(), store, None);
+        consume_authentication(&handle, &after_restart)
+            .await
+            .expect("unused challenge must survive a restart");
+    }
+
+    #[tokio::test]
+    async fn full_session_refuses_new_challenge() {
+        let session = fresh_session();
+        let (_challenge, state) = svc().start_login().unwrap();
+        for _ in 0..8 {
+            issue_authentication(&state, &session).await.unwrap();
+        }
+        let refused = issue_authentication(&state, &session).await.unwrap_err();
+        assert_eq!(refused.code, ErrorCode::RateLimited);
     }
 }

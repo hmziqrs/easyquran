@@ -1,45 +1,73 @@
-use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant};
-
-use rand::Rng;
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use subtle::ConstantTimeEq;
 
 use crate::db::sea_models::user;
 use crate::error::{ErrorCode, ErrorResponse};
 use crate::services::auth::AuthSession;
+use crate::services::session_challenges::{self, fingerprint, Quota};
 
 const SESSION_KEY: &str = "rux_auth_fresh_grant";
 const SETUP_KEY: &str = "rux_auth_factor_setup";
-const TTL: Duration = Duration::from_secs(300);
-const MAX_GRANTS: usize = 10_000;
+const LINK_KEY: &str = "rux_auth_link_grants";
+const TTL_SECS: i64 = 300;
+const LINK_QUOTA: Quota = Quota {
+    per_session: 8,
+    ttl_secs: TTL_SECS,
+};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 enum Purpose {
     SecurityAction,
     FactorSetup,
     OAuthLink,
 }
 
-#[derive(Clone)]
+/// Grant held in the caller's session payload (A13). Secret material is stored as
+/// fingerprints, never as the password hash or TOTP seed. The session cookie is the binding.
+#[derive(Clone, Serialize, Deserialize)]
 struct Grant {
     purpose: Purpose,
-    session_id: String,
     user_id: i32,
-    credential_secret: String,
+    issued_at: i64,
+    /// Session id at issue. A rotation keeps the payload but not the id, so the grant dies.
+    session_id: String,
+    credential: String,
     password: Option<String>,
-    factor_secret: Option<String>,
+    factor: Option<String>,
     factor_enabled: bool,
 }
 
 impl Grant {
-    fn matches(&self, session_id: &str, user: &user::Model) -> bool {
-        self.session_id == session_id
-            && self.user_id == user.id
-            && same_secret(&self.credential_secret, &user.session_auth_secret)
-            && same_optional_secret(self.password.as_deref(), user.password.as_deref())
-            && same_optional_secret(self.factor_secret.as_deref(), user.two_fa_secret.as_deref())
+    fn new(purpose: Purpose, user: &user::Model, session_id: String) -> Self {
+        Self {
+            purpose,
+            user_id: user.id,
+            issued_at: Utc::now().timestamp(),
+            session_id,
+            credential: fingerprint(&user.session_auth_secret),
+            password: user.password.as_deref().map(fingerprint),
+            factor: user.two_fa_secret.as_deref().map(fingerprint),
+            factor_enabled: user.two_fa_enabled,
+        }
+    }
+
+    fn is_fresh(&self) -> bool {
+        Utc::now().timestamp() - self.issued_at < TTL_SECS
+    }
+
+    fn matches(&self, user: &user::Model) -> bool {
+        self.user_id == user.id
+            && same_secret(&self.credential, &fingerprint(&user.session_auth_secret))
+            && same_optional_secret(
+                self.password.as_deref(),
+                user.password.as_deref().map(fingerprint).as_deref(),
+            )
+            && same_optional_secret(
+                self.factor.as_deref(),
+                user.two_fa_secret.as_deref().map(fingerprint).as_deref(),
+            )
             && self.factor_enabled == user.two_fa_enabled
     }
 }
@@ -54,17 +82,6 @@ fn same_optional_secret(left: Option<&str>, right: Option<&str>) -> bool {
         (None, None) => true,
         _ => false,
     }
-}
-
-type GrantMap = HashMap<String, (Grant, Instant)>;
-static GRANTS: OnceLock<Mutex<GrantMap>> = OnceLock::new();
-
-fn grants() -> &'static Mutex<GrantMap> {
-    GRANTS.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-fn reap(map: &mut GrantMap) {
-    map.retain(|_, (_, issued)| issued.elapsed() < TTL);
 }
 
 fn internal_error() -> ErrorResponse {
@@ -85,26 +102,10 @@ pub async fn issue(auth: &AuthSession, user: &user::Model) -> Result<(), ErrorRe
 
 pub async fn authorize_link(auth: &AuthSession, state_secret: &str) -> Result<(), ErrorResponse> {
     let user = auth.user_required()?;
-    let session_id = auth.session().id().ok_or_else(required)?.to_string();
-    let grant = Grant {
-        purpose: Purpose::OAuthLink,
-        session_id: session_id.clone(),
-        user_id: user.id,
-        credential_secret: user.session_auth_secret.clone(),
-        password: user.password.clone(),
-        factor_secret: user.two_fa_secret.clone(),
-        factor_enabled: user.two_fa_enabled,
-    };
-    let mut map = grants().lock().map_err(|_| internal_error())?;
-    reap(&mut map);
-    if map.len() >= MAX_GRANTS {
-        return Err(ErrorResponse::new(ErrorCode::RateLimited));
-    }
-    map.insert(
-        format!("link:{session_id}:{state_secret}"),
-        (grant, Instant::now()),
-    );
-    Ok(())
+    let sid = auth.session().id().ok_or_else(required)?.to_string();
+    let grant = Grant::new(Purpose::OAuthLink, user, sid);
+    let body = serde_json::to_string(&grant).map_err(|_| internal_error())?;
+    session_challenges::insert(auth.session(), LINK_KEY, LINK_QUOTA, state_secret, body).await
 }
 
 pub async fn consume_link(
@@ -113,19 +114,20 @@ pub async fn consume_link(
     state_secret: &str,
 ) -> Result<user::Model, ErrorResponse> {
     let owner = auth.user_required()?;
-    let session_id = auth.session().id().ok_or_else(required)?.to_string();
+    let sid = auth.session().id().ok_or_else(required)?.to_string();
     let user = user::Entity::find_by_id_with_404(db, owner.id).await?;
     if !same_secret(&owner.session_auth_secret, &user.session_auth_secret) {
         return Err(required());
     }
-    let mut map = grants().lock().map_err(|_| internal_error())?;
-    reap(&mut map);
-    let key = format!("link:{session_id}:{state_secret}");
-    let grant = map
-        .remove(&key)
-        .map(|(grant, _)| grant)
+    let body = session_challenges::take(auth.session(), LINK_KEY, LINK_QUOTA, state_secret)
+        .await?
         .ok_or_else(required)?;
-    if grant.purpose != Purpose::OAuthLink || !grant.matches(&session_id, &user) {
+    let grant: Grant = serde_json::from_str(&body).map_err(|_| required())?;
+    if grant.purpose != Purpose::OAuthLink
+        || !grant.is_fresh()
+        || grant.session_id != sid
+        || !grant.matches(&user)
+    {
         return Err(required());
     }
     Ok(user)
@@ -154,62 +156,38 @@ async fn issue_for(
     {
         return Err(required());
     }
-    let session_id = auth.session().id().ok_or_else(required)?.to_string();
-    let mut bytes = [0u8; 32];
-    rand::rng().fill(&mut bytes);
-    let token = hex::encode(bytes);
-    let grant = Grant {
-        purpose,
-        session_id: session_id.clone(),
-        user_id: user.id,
-        credential_secret: user.session_auth_secret.clone(),
-        password: user.password.clone(),
-        factor_secret: user.two_fa_secret.clone(),
-        factor_enabled: user.two_fa_enabled,
-    };
-    {
-        let mut map = grants().lock().map_err(|_| internal_error())?;
-        reap(&mut map);
-        map.retain(|_, (existing, _)| {
-            existing.session_id != session_id || existing.purpose != purpose
-        });
-        if map.len() >= MAX_GRANTS {
-            return Err(ErrorResponse::new(ErrorCode::RateLimited));
-        }
-        map.insert(token.clone(), (grant, Instant::now()));
-    }
-    if auth.session().insert(key, &token).await.is_err() || auth.session().save().await.is_err() {
-        grants()
-            .lock()
-            .map_err(|_| internal_error())?
-            .remove(&token);
-        return Err(internal_error());
-    }
+    let sid = auth.session().id().ok_or_else(required)?.to_string();
+    // Replaces any grant of this purpose the session already holds.
+    auth.session()
+        .insert(key, &Grant::new(purpose, user, sid))
+        .await
+        .map_err(|_| internal_error())?;
+    auth.session().save().await.map_err(|_| internal_error())?;
     Ok(())
 }
 
+/// Reads the grant under `key` for the signed-in owner. Missing, undecodable (legacy), or
+/// stale-credential grants read as absent.
 async fn current_grant(
     auth: &AuthSession,
     db: &sea_orm::DatabaseConnection,
     key: &str,
-) -> Result<Option<(String, String, user::Model)>, ErrorResponse> {
+) -> Result<Option<(Grant, user::Model)>, ErrorResponse> {
     let owner = auth.user_required()?;
-    let Some(session_id) = auth.session().id().map(|id| id.to_string()) else {
+    let Some(sid) = auth.session().id().map(|id| id.to_string()) else {
         return Ok(None);
     };
-    let Some(token) = auth
-        .session()
-        .get::<String>(key)
-        .await
-        .map_err(|_| internal_error())?
-    else {
+    let Some(grant) = session_challenges::read_payload::<Grant>(auth.session(), key).await else {
         return Ok(None);
     };
+    if grant.session_id != sid {
+        return Ok(None);
+    }
     let user = user::Entity::find_by_id_with_404(db, owner.id).await?;
     if !same_secret(&owner.session_auth_secret, &user.session_auth_secret) {
         return Ok(None);
     }
-    Ok(Some((token, session_id, user)))
+    Ok(Some((grant, user)))
 }
 
 pub async fn available(
@@ -232,17 +210,13 @@ async fn available_for(
     purpose: Purpose,
     key: &str,
 ) -> Result<bool, ErrorResponse> {
-    let Some((token, session_id, user)) = current_grant(auth, db, key).await? else {
+    let Some((grant, user)) = current_grant(auth, db, key).await? else {
         return Ok(false);
     };
-    let mut map = grants().lock().map_err(|_| internal_error())?;
-    reap(&mut map);
-    Ok(map
-        .get(&token)
-        .is_some_and(|(grant, _)| grant.purpose == purpose && grant.matches(&session_id, &user)))
+    Ok(grant.purpose == purpose && grant.is_fresh() && grant.matches(&user))
 }
 
-/// Atomically consumes a cookie-bound grant, rejecting expiry and credential/factor changes.
+/// Atomically consumes a session-bound grant, rejecting expiry and credential/factor changes.
 pub async fn consume(
     auth: &AuthSession,
     db: &sea_orm::DatabaseConnection,
@@ -263,29 +237,20 @@ async fn consume_for(
     purpose: Purpose,
     key: &str,
 ) -> Result<(), ErrorResponse> {
-    let Some((token, session_id, user)) = current_grant(auth, db, key).await? else {
+    // Process-local lock: the read-check-remove below must not interleave with another
+    // consume on the same session, or one fresh auth could authorise two actions.
+    let _guard = session_challenges::lock().await;
+    let Some((grant, user)) = current_grant(auth, db, key).await? else {
         return Err(required());
     };
-    let consumed = {
-        let mut map = grants().lock().map_err(|_| internal_error())?;
-        reap(&mut map);
-        if map
-            .get(&token)
-            .is_some_and(|(grant, _)| grant.purpose == purpose && grant.matches(&session_id, &user))
-        {
-            map.remove(&token);
-            true
-        } else {
-            false
-        }
-    };
-    if !consumed {
+    if grant.purpose != purpose || !grant.is_fresh() || !grant.matches(&user) {
         return Err(required());
     }
     auth.session()
-        .remove::<String>(key)
+        .remove::<Grant>(key)
         .await
         .map_err(|_| internal_error())?;
+    auth.session().save().await.map_err(|_| internal_error())?;
     Ok(())
 }
 
@@ -294,22 +259,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn expired_grants_are_reaped_at_boundary() {
-        let grant = Grant {
+    fn grant_expires_at_ttl_boundary() {
+        let mut grant = Grant {
             purpose: Purpose::SecurityAction,
-            session_id: "sid".into(),
             user_id: 1,
-            credential_secret: "secret".into(),
+            issued_at: Utc::now().timestamp(),
+            session_id: String::new(),
+            credential: String::new(),
             password: None,
-            factor_secret: None,
+            factor: None,
             factor_enabled: false,
         };
-        let mut map = HashMap::from([
-            ("expired".into(), (grant.clone(), Instant::now() - TTL)),
-            ("live".into(), (grant, Instant::now())),
-        ]);
-        reap(&mut map);
-        assert_eq!(map.len(), 1);
-        assert!(map.contains_key("live"));
+        assert!(grant.is_fresh());
+        grant.issued_at -= TTL_SECS;
+        assert!(!grant.is_fresh());
     }
 }

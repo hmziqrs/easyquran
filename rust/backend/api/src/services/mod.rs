@@ -21,6 +21,7 @@ pub mod registration_admission;
 pub mod route_blocker_config;
 pub mod route_blocker_service;
 pub mod scheduler;
+pub mod session_challenges;
 pub mod session_store;
 pub mod sync_sweep;
 pub mod translation_popularity_store;

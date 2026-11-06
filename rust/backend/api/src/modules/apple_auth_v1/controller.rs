@@ -44,14 +44,15 @@ pub async fn apple_login(
 
     let auth_url = build_apple_authorize_url(&cfg, csrf.secret(), pkce_challenge.as_str(), &nonce)?;
 
-    let session_id = oauth::oauth_session_id(&session)?;
+    oauth::oauth_session_id(&session)?;
     oauth::store_oauth_state(
-        &session_id,
+        &session,
         csrf.secret(),
         pkce_verifier.secret(),
         Some(&nonce),
         None,
-    )?;
+    )
+    .await?;
 
     info!("Generated Apple auth URL with PKCE + session-bound CSRF state + OIDC nonce");
     tracing::Span::current().record("result", "success");
@@ -268,8 +269,9 @@ async fn finish_apple_code(
     state_secret: &str,
     client_ip: IpAddr,
 ) -> Result<crate::db::sea_models::user::Model, ErrorResponse> {
-    let session_id = oauth::oauth_session_id(auth.session())?;
-    let oauth_state = oauth::consume_oauth_state(&session_id, state_secret)?;
+    oauth::oauth_session_id(auth.session())?;
+    let oauth_state =
+        oauth::consume_oauth_state_guarded(state, client_ip, auth.session(), state_secret).await?;
     let code_verifier = oauth_state
         .pkce_verifier
         .as_ref()

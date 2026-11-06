@@ -258,12 +258,28 @@ async fn stale_snapshot_cannot_overwrite_accepted_counter_or_deleted_key() {
 async fn passkey_challenge_is_single_use_even_for_zero_counter_authenticator() {
     let (db, svc, authenticator, owner) = fixture().await;
     let (challenge, state) = svc.start_login().unwrap();
-    let handle = ruxlog::services::passkey_state::issue_authentication(&state, "session").unwrap();
+    let session = passkey_session(&db).await;
+    let handle = ruxlog::services::passkey_state::issue_authentication(&state, &session)
+        .await
+        .unwrap();
     let assertion = authenticator.assertion(&challenge, owner.id, 0, true);
-    let state =
-        ruxlog::services::passkey_state::consume_authentication(&handle, "session").unwrap();
+    let state = ruxlog::services::passkey_state::consume_authentication(&handle, &session)
+        .await
+        .unwrap();
     svc.finish_login(&db, &assertion, &state).await.unwrap();
-    assert!(ruxlog::services::passkey_state::consume_authentication(&handle, "session").is_err());
+    assert!(
+        ruxlog::services::passkey_state::consume_authentication(&handle, &session)
+            .await
+            .is_err()
+    );
+}
+
+/// Session backed by the DB store, the same store production uses for challenge payloads.
+async fn passkey_session(db: &DatabaseConnection) -> tower_sessions::Session {
+    let store = std::sync::Arc::new(
+        ruxlog::services::session_store::SqliteSessionStore::new(db.clone()).await,
+    );
+    tower_sessions::Session::new(None, store, None)
 }
 
 async fn anonymous(db: &DatabaseConnection) -> ruxlog::services::auth::AuthSession {

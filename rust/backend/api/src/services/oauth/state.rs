@@ -11,18 +11,24 @@ use tower_sessions::Session;
 use tracing::{error, warn};
 
 use crate::error::{ErrorCode, ErrorResponse};
+use crate::services::session_challenges::{self, Quota};
 
-const STATE_TTL_SECS: u64 = 600;
-pub const NATIVE_TOKEN_NONCE_TTL_SECS: u64 = STATE_TTL_SECS;
+pub const NATIVE_TOKEN_NONCE_TTL_SECS: u64 = 600;
+/// Process-wide cap on native sign-in nonces. Native nonces carry no session, so they
+/// stay in memory. At the cap a new challenge is refused, never evicted.
 const MAX_NATIVE_NONCES: usize = 10_000;
-const MAX_OAUTH_STATES: usize = 10_000;
 
-type StateMap = HashMap<String, (String, Instant)>;
-
-static OAUTH_STATES: OnceLock<Mutex<StateMap>> = OnceLock::new();
-static NATIVE_NONCES: OnceLock<Mutex<NativeNonceMap>> = OnceLock::new();
+/// Browser OAuth states live in the caller's session payload (A13). Ten-minute life,
+/// eight pending flows per session; a full session refuses the ninth.
+const OAUTH_SESSION_KEY: &str = "rux_oauth_states";
+const OAUTH_QUOTA: Quota = Quota {
+    per_session: 8,
+    ttl_secs: 600,
+};
 
 type NativeNonceMap = HashMap<String, (NativeTokenProvider, Instant)>;
+
+static NATIVE_NONCES: OnceLock<Mutex<NativeNonceMap>> = OnceLock::new();
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NativeTokenProvider {
@@ -35,16 +41,8 @@ pub struct NativeTokenChallenge {
     pub provider_nonce: String,
 }
 
-fn oauth_states() -> &'static Mutex<StateMap> {
-    OAUTH_STATES.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
 fn native_nonces() -> &'static Mutex<NativeNonceMap> {
     NATIVE_NONCES.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-fn reap_stale(map: &mut StateMap) {
-    map.retain(|_, (_, at)| at.elapsed().as_secs() < STATE_TTL_SECS);
 }
 
 fn reap_stale_native_nonces(map: &mut NativeNonceMap) {
@@ -69,13 +67,9 @@ pub fn issue_native_token_challenge(
     })?;
     reap_stale_native_nonces(&mut map);
     if map.len() >= MAX_NATIVE_NONCES {
-        if let Some(oldest) = map
-            .iter()
-            .min_by_key(|(_, (_, issued_at))| *issued_at)
-            .map(|(key, _)| key.clone())
-        {
-            map.remove(&oldest);
-        }
+        warn!("native nonce cap reached; refusing new sign-in challenge");
+        return Err(ErrorResponse::new(ErrorCode::RateLimited)
+            .with_message("Too many pending sign-in attempts. Try again shortly."));
     }
     map.insert(provider_nonce.clone(), (provider, Instant::now()));
 
@@ -113,10 +107,6 @@ fn invalid_native_nonce() -> ErrorResponse {
     ErrorResponse::new(ErrorCode::InvalidToken).with_message("Invalid sign-in challenge")
 }
 
-fn state_key(session_id: &str, state_secret: &str) -> String {
-    format!("oauth:state:{session_id}:{state_secret}")
-}
-
 #[allow(clippy::result_large_err)]
 pub fn oauth_session_id(session: &Session) -> Result<String, ErrorResponse> {
     session.id().map(|id| id.to_string()).ok_or_else(|| {
@@ -125,34 +115,22 @@ pub fn oauth_session_id(session: &Session) -> Result<String, ErrorResponse> {
     })
 }
 
-pub fn store_oauth_state(
-    session_id: &str,
+pub async fn store_oauth_state(
+    session: &Session,
     state_secret: &str,
     pkce_verifier_secret: &str,
     nonce: Option<&str>,
     link_user_id: Option<i32>,
 ) -> Result<(), ErrorResponse> {
     let payload = json!({ "v": pkce_verifier_secret, "n": nonce, "lu": link_user_id }).to_string();
-    let mut map = oauth_states().lock().map_err(|e| {
-        error!(error = %e, "OAuth state map poisoned");
-        ErrorResponse::new(ErrorCode::InternalServerError)
-            .with_message("Failed to store OAuth state")
-    })?;
-    reap_stale(&mut map);
-    if map.len() >= MAX_OAUTH_STATES {
-        if let Some(oldest) = map
-            .iter()
-            .min_by_key(|(_, (_, stored_at))| *stored_at)
-            .map(|(key, _)| key.clone())
-        {
-            map.remove(&oldest);
-        }
-    }
-    map.insert(
-        state_key(session_id, state_secret),
-        (payload, Instant::now()),
-    );
-    Ok(())
+    session_challenges::insert(
+        session,
+        OAUTH_SESSION_KEY,
+        OAUTH_QUOTA,
+        state_secret,
+        payload,
+    )
+    .await
 }
 
 #[derive(Deserialize)]
@@ -172,25 +150,18 @@ pub struct ConsumedOauthState {
     pub link_user_id: Option<i32>,
 }
 
-/// Single-use CSRF guard: `map.remove(...)` below must stay a remove-on-read (never `get`/peek, don't defer past a successful parse) so a replayed `state` observes `None`. No test pins this — do not weaken without one.
-pub fn consume_oauth_state(
-    session_id: &str,
+/// Single-use CSRF guard: the slot is removed on read (`session_challenges::take`) before the
+/// payload is parsed, so a replayed `state` observes `None`.
+pub async fn consume_oauth_state(
+    session: &Session,
     state_secret: &str,
 ) -> Result<ConsumedOauthState, ErrorResponse> {
-    let stored = {
-        let mut map = oauth_states().lock().map_err(|e| {
-            error!(error = %e, "OAuth state map poisoned");
-            ErrorResponse::new(ErrorCode::InternalServerError)
-                .with_message("Failed to verify OAuth state")
+    let payload = session_challenges::take(session, OAUTH_SESSION_KEY, OAUTH_QUOTA, state_secret)
+        .await?
+        .ok_or_else(|| {
+            warn!("Invalid, expired, already-consumed, or session-mismatched OAuth state");
+            ErrorResponse::new(ErrorCode::InvalidToken).with_message("Invalid OAuth state")
         })?;
-        reap_stale(&mut map);
-        map.remove(&state_key(session_id, state_secret))
-    };
-
-    let (payload, _at) = stored.ok_or_else(|| {
-        warn!("Invalid, expired, already-consumed, or session-mismatched OAuth state");
-        ErrorResponse::new(ErrorCode::InvalidToken).with_message("Invalid OAuth state")
-    })?;
 
     let parsed: StoredState = serde_json::from_str(&payload).map_err(|e| {
         error!(error = ?e, "Failed to parse stored OAuth state");
@@ -210,13 +181,12 @@ pub fn consume_oauth_state(
 
 /// Cancelled/error callback detection for link flows: the provider echoes `state` back, so consume
 /// it (single-use — the flow is abandoned either way) and report the link target it carried.
-pub fn link_user_id_from_cancelled_state(
+pub async fn link_user_id_from_cancelled_state(
     session: &Session,
     state_secret: Option<&str>,
 ) -> Option<i32> {
     let state_secret = state_secret.filter(|secret| !secret.trim().is_empty())?;
-    let session_id = oauth_session_id(session).ok()?;
-    match consume_oauth_state(&session_id, state_secret) {
+    match consume_oauth_state(session, state_secret).await {
         Ok(state) => state.link_user_id,
         Err(_) => None,
     }
@@ -225,15 +195,11 @@ pub fn link_user_id_from_cancelled_state(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use tower_sessions::MemoryStore;
 
-    /// The state map is process-global, so tests that store/consume must not interleave with the
-    /// cap test's eviction sweep.
-    static STATE_TEST_LOCK: Mutex<()> = Mutex::new(());
-
-    fn state_test_guard() -> std::sync::MutexGuard<'static, ()> {
-        STATE_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    fn fresh_session() -> Session {
+        Session::new(None, Arc::new(MemoryStore::default()), None)
     }
 
     #[test]
@@ -263,41 +229,38 @@ mod tests {
         );
     }
 
-    #[test]
-    fn state_store_caps_map_size() {
-        let _guard = state_test_guard();
-        for i in 0..(MAX_OAUTH_STATES + 5) {
-            store_oauth_state(
-                &format!("cap-session-{i}"),
-                &format!("cap-state-{i}"),
-                "",
-                None,
-                None,
-            )
-            .unwrap();
+    #[tokio::test]
+    async fn state_per_session_quota_refuses_ninth() {
+        let session = fresh_session();
+        for i in 0..8 {
+            store_oauth_state(&session, &format!("quota-state-{i}"), "", None, None)
+                .await
+                .unwrap();
         }
-
-        let map = oauth_states().lock().unwrap();
-        assert_eq!(
-            map.len(),
-            MAX_OAUTH_STATES,
-            "OAUTH_STATES must evict-oldest instead of growing without bound"
-        );
+        let refused = store_oauth_state(&session, "quota-state-8", "", None, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(refused.code, ErrorCode::RateLimited));
+        // Refusal evicts nothing: the first pending flow still completes.
+        consume_oauth_state(&session, "quota-state-0")
+            .await
+            .expect("refused insert must not evict an existing flow");
     }
 
-    #[test]
-    fn state_round_trips_link_user_id() {
-        let _guard = state_test_guard();
+    #[tokio::test]
+    async fn state_round_trips_link_user_id() {
+        let session = fresh_session();
         store_oauth_state(
-            "link-session",
+            &session,
             "link-state",
             "link-verifier",
             Some("link-nonce"),
             Some(42),
         )
+        .await
         .unwrap();
 
-        let consumed = consume_oauth_state("link-session", "link-state").unwrap();
+        let consumed = consume_oauth_state(&session, "link-state").await.unwrap();
 
         assert_eq!(consumed.link_user_id, Some(42));
         assert_eq!(consumed.nonce.as_deref(), Some("link-nonce"));
@@ -307,26 +270,43 @@ mod tests {
         );
     }
 
-    #[test]
-    fn state_round_trips_login_without_link_intent() {
-        let _guard = state_test_guard();
-        store_oauth_state("login-session", "login-state", "", None, None).unwrap();
+    #[tokio::test]
+    async fn state_is_single_use() {
+        let session = fresh_session();
+        store_oauth_state(&session, "once", "", None, None)
+            .await
+            .unwrap();
+        consume_oauth_state(&session, "once").await.unwrap();
+        assert!(consume_oauth_state(&session, "once").await.is_err());
+    }
 
-        let consumed = consume_oauth_state("login-session", "login-state").unwrap();
+    #[tokio::test]
+    async fn state_round_trips_login_without_link_intent() {
+        let session = fresh_session();
+        store_oauth_state(&session, "login-state", "", None, None)
+            .await
+            .unwrap();
+
+        let consumed = consume_oauth_state(&session, "login-state").await.unwrap();
 
         assert_eq!(consumed.link_user_id, None);
     }
 
-    #[test]
-    fn state_parses_payload_stored_before_link_intent_existed() {
-        let _guard = state_test_guard();
-        // Payload shape written before the `lu` field was added; serde(default) must keep it readable.
-        oauth_states().lock().unwrap().insert(
-            state_key("legacy-session", "legacy-state"),
-            (r#"{"v":"","n":null}"#.to_string(), Instant::now()),
-        );
+    #[tokio::test]
+    async fn state_parses_payload_stored_before_link_intent_existed() {
+        // Payload body written before the `lu` field was added; serde(default) keeps it readable.
+        let session = fresh_session();
+        session_challenges::insert(
+            &session,
+            OAUTH_SESSION_KEY,
+            OAUTH_QUOTA,
+            "legacy-state",
+            r#"{"v":"","n":null}"#.to_string(),
+        )
+        .await
+        .unwrap();
 
-        let consumed = consume_oauth_state("legacy-session", "legacy-state").unwrap();
+        let consumed = consume_oauth_state(&session, "legacy-state").await.unwrap();
 
         assert_eq!(consumed.link_user_id, None);
     }

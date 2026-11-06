@@ -82,8 +82,8 @@ pub async fn facebook_login(
         .url();
 
     // Empty PKCE verifier: Facebook has no PKCE; "" round-trips as `None` at consume time.
-    let session_id = oauth::oauth_session_id(&session)?;
-    oauth::store_oauth_state(&session_id, csrf_token.secret(), "", None, None)?;
+    oauth::oauth_session_id(&session)?;
+    oauth::store_oauth_state(&session, csrf_token.secret(), "", None, None).await?;
 
     info!("Generated Facebook auth URL with session-bound CSRF state");
     tracing::Span::current().record("result", "success");
@@ -147,8 +147,10 @@ async fn run_facebook_callback(
     query: FacebookCallbackQuery,
     client_ip: IpAddr,
 ) -> Result<crate::db::sea_models::user::Model, ErrorResponse> {
-    let session_id = oauth::oauth_session_id(auth.session())?;
-    let _oauth_state = oauth::consume_oauth_state(&session_id, &query.state()?)?;
+    oauth::oauth_session_id(auth.session())?;
+    let _oauth_state =
+        oauth::consume_oauth_state_guarded(state, client_ip, auth.session(), &query.state()?)
+            .await?;
 
     let client = get_facebook_oauth_client()?;
     let token_result = client
@@ -177,8 +179,10 @@ pub async fn facebook_exchange(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     info!("Processing Facebook OAuth code exchange from client");
 
-    let session_id = oauth::oauth_session_id(auth.session())?;
-    let _oauth_state = oauth::consume_oauth_state(&session_id, &payload.state)?;
+    oauth::oauth_session_id(auth.session())?;
+    let _oauth_state =
+        oauth::consume_oauth_state_guarded(&state, client_ip, auth.session(), &payload.state)
+            .await?;
 
     let client = get_facebook_oauth_client()?;
     let token_result = client

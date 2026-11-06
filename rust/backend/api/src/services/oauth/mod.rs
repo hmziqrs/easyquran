@@ -19,6 +19,36 @@ pub use state::{
     NATIVE_TOKEN_NONCE_TTL_SECS,
 };
 
+/// Consumes a browser OAuth state under the failure-only IP budget (A13). A rejected state
+/// (unknown, replayed, or from another session) counts one failure against the client IP.
+pub async fn consume_oauth_state_guarded(
+    state: &crate::AppState,
+    client_ip: std::net::IpAddr,
+    session: &tower_sessions::Session,
+    state_secret: &str,
+) -> Result<ConsumedOauthState, ErrorResponse> {
+    use crate::services::abuse_limiter::{self, FailureMode, FINISH_FAILURE_CONFIG};
+
+    let key = format!("oauth_finish:{client_ip}");
+    abuse_limiter::gate(
+        &state.gate_store,
+        &key,
+        FINISH_FAILURE_CONFIG,
+        FailureMode::Ip,
+    )
+    .await?;
+    let consumed = consume_oauth_state(session, state_secret).await;
+    abuse_limiter::settle(
+        &state.gate_store,
+        &key,
+        FINISH_FAILURE_CONFIG,
+        FailureMode::Ip,
+        abuse_limiter::attempt_of(&consumed),
+    )
+    .await;
+    consumed
+}
+
 /// Provider callback URL: explicit `<PROVIDER>_REDIRECT_URI` env override, else
 /// derived from `FRONTEND_URL` as `{origin}/api/auth/{provider}/v1/callback`.
 /// Shared mapping so provider services stay one-liners.

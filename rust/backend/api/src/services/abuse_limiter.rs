@@ -90,6 +90,17 @@ fn map_gate_error(err: GateError) -> ErrorResponse {
     }
 }
 
+/// Failure-only IP budget for the passkey and OAuth finish paths (A13). A rejected finish
+/// counts one failure; a success never clears another client's block (Ip mode).
+pub const FINISH_FAILURE_CONFIG: AbuseLimiterConfig = AbuseLimiterConfig {
+    temp_block_attempts: 10,
+    temp_block_range: 600,
+    temp_block_duration: 600,
+    block_retry_limit: 5,
+    block_range: 900,
+    block_duration: 900,
+};
+
 /// Outcome of one credential or IP check, as [`settle`] sees it (A8).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Attempt {

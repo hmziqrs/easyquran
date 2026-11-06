@@ -1,50 +1,62 @@
-use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant};
-
+use chrono::Utc;
 use rand::Rng;
 use rux_auth::AuthBackend as _;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use subtle::ConstantTimeEq;
 
 use crate::db::sea_models::user;
 use crate::error::{ErrorCode, ErrorResponse};
 use crate::services::auth::AuthSession;
+use crate::services::session_challenges::{self, fingerprint};
 
 const PENDING_KEY: &str = "rux_auth_pending_totp";
 const BOOTSTRAP_KEY: &str = "rux_auth_pending_totp_bootstrap";
-const TTL: Duration = Duration::from_secs(300);
-const MAX_GRANTS: usize = 10_000;
+const TTL_SECS: i64 = 300;
 
-#[derive(Clone)]
+/// Second-factor step after a verified first factor (A13). Lives in the session payload:
+/// one pending login per session, bound to that session's cookie, secrets fingerprinted.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PendingGrant {
     pub user_id: i32,
+    token: String,
+    /// Session id at issue. A rotation keeps the payload but not the id, so the grant dies.
     session_id: String,
-    credential_secret: String,
-    factor_secret: String,
+    issued_at: i64,
+    credential: String,
+    factor: String,
+}
+
+fn session_key(session: &tower_sessions::Session) -> String {
+    session.id().map(|id| id.to_string()).unwrap_or_default()
 }
 
 impl PendingGrant {
+    fn is_fresh(&self) -> bool {
+        Utc::now().timestamp() - self.issued_at < TTL_SECS
+    }
+
+    fn bound_to(&self, session: &tower_sessions::Session) -> bool {
+        let current = session_key(session);
+        !current.is_empty() && self.session_id == current
+    }
+
     pub fn matches_user(&self, user: &user::Model) -> bool {
         self.user_id == user.id
             && user.two_fa_enabled
             && bool::from(
-                self.credential_secret
+                self.credential
                     .as_bytes()
-                    .ct_eq(user.session_auth_secret.as_bytes()),
+                    .ct_eq(fingerprint(&user.session_auth_secret).as_bytes()),
             )
-            && user.two_fa_secret.as_ref().is_some_and(|secret| {
-                bool::from(self.factor_secret.as_bytes().ct_eq(secret.as_bytes()))
+            && user.two_fa_secret.as_deref().is_some_and(|secret| {
+                bool::from(self.factor.as_bytes().ct_eq(fingerprint(secret).as_bytes()))
             })
     }
-}
 
-type GrantMap = HashMap<String, (PendingGrant, Instant)>;
-
-static GRANTS: OnceLock<Mutex<GrantMap>> = OnceLock::new();
-
-fn grants() -> &'static Mutex<GrantMap> {
-    GRANTS.get_or_init(|| Mutex::new(HashMap::new()))
+    fn token_matches(&self, token: &str) -> bool {
+        bool::from(self.token.as_bytes().ct_eq(token.as_bytes()))
+    }
 }
 
 fn internal_error() -> ErrorResponse {
@@ -52,15 +64,11 @@ fn internal_error() -> ErrorResponse {
         .with_message("Unable to prepare second factor")
 }
 
-fn reap(map: &mut GrantMap) {
-    map.retain(|_, (_, issued)| issued.elapsed() < TTL);
-}
-
 pub async fn issue(auth: &AuthSession, user: &user::Model) -> Result<String, ErrorResponse> {
     if auth.user.is_some() || !user.two_fa_enabled {
         return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed));
     }
-    let factor_secret = user.two_fa_secret.clone().ok_or_else(internal_error)?;
+    let factor_secret = user.two_fa_secret.as_deref().ok_or_else(internal_error)?;
     if auth.session().id().is_none() {
         auth.session()
             .insert(BOOTSTRAP_KEY, true)
@@ -68,33 +76,25 @@ pub async fn issue(auth: &AuthSession, user: &user::Model) -> Result<String, Err
             .map_err(|_| internal_error())?;
         auth.session().save().await.map_err(|_| internal_error())?;
     }
-    let session_id = auth.session().id().ok_or_else(internal_error)?.to_string();
     let mut bytes = [0u8; 32];
     rand::rng().fill(&mut bytes);
     let token = hex::encode(bytes);
     let grant = PendingGrant {
         user_id: user.id,
-        session_id: session_id.clone(),
-        credential_secret: user.session_auth_secret.clone(),
-        factor_secret,
+        token: token.clone(),
+        session_id: session_key(auth.session()),
+        issued_at: Utc::now().timestamp(),
+        credential: fingerprint(&user.session_auth_secret),
+        factor: fingerprint(factor_secret),
     };
     {
-        let mut map = grants().lock().map_err(|_| internal_error())?;
-        reap(&mut map);
-        map.retain(|_, (existing, _)| existing.session_id != session_id);
-        if map.len() >= MAX_GRANTS {
-            return Err(ErrorResponse::new(ErrorCode::RateLimited));
-        }
-        map.insert(token.clone(), (grant, Instant::now()));
-    }
-    if auth.session().insert(PENDING_KEY, &token).await.is_err()
-        || auth.session().save().await.is_err()
-    {
-        grants()
-            .lock()
-            .map_err(|_| internal_error())?
-            .remove(&token);
-        return Err(internal_error());
+        let _guard = session_challenges::lock().await;
+        // Replaces any pending login this session already holds.
+        auth.session()
+            .insert(PENDING_KEY, &grant)
+            .await
+            .map_err(|_| internal_error())?;
+        auth.session().save().await.map_err(|_| internal_error())?;
     }
     auth.session()
         .remove::<bool>(BOOTSTRAP_KEY)
@@ -103,59 +103,35 @@ pub async fn issue(auth: &AuthSession, user: &user::Model) -> Result<String, Err
     Ok(token)
 }
 
+/// Removes the pending login and returns it only when the token matches and the window is open.
 pub async fn take(auth: &AuthSession, token: &str) -> Result<Option<PendingGrant>, ErrorResponse> {
-    let Some(session_id) = auth.session().id().map(|id| id.to_string()) else {
+    let _guard = session_challenges::lock().await;
+    let Some(grant) =
+        session_challenges::read_payload::<PendingGrant>(auth.session(), PENDING_KEY).await
+    else {
         return Ok(None);
     };
-    let grant = {
-        let mut map = grants().lock().map_err(|_| internal_error())?;
-        reap(&mut map);
-        if map
-            .get(token)
-            .is_some_and(|(grant, _)| grant.session_id == session_id)
-        {
-            map.remove(token).map(|(grant, _)| grant)
-        } else {
-            None
-        }
-    };
-    if grant.is_some() {
-        let pending = auth
-            .session()
-            .get::<String>(PENDING_KEY)
-            .await
-            .map_err(|_| internal_error())?;
-        if pending.as_deref() == Some(token) {
-            auth.session()
-                .remove::<String>(PENDING_KEY)
-                .await
-                .map_err(|_| internal_error())?;
-        }
+    if !grant.token_matches(token) || !grant.is_fresh() || !grant.bound_to(auth.session()) {
+        return Ok(None);
     }
-    Ok(grant)
+    auth.session()
+        .remove::<PendingGrant>(PENDING_KEY)
+        .await
+        .map_err(|_| internal_error())?;
+    auth.session().save().await.map_err(|_| internal_error())?;
+    Ok(Some(grant))
 }
 
 pub async fn response(auth: &AuthSession) -> Result<Option<Value>, ErrorResponse> {
     if auth.user.is_some() {
         return Ok(None);
     }
-    let Some(token) = auth
-        .session()
-        .get::<String>(PENDING_KEY)
-        .await
-        .map_err(|_| internal_error())?
+    let Some(grant) =
+        session_challenges::read_payload::<PendingGrant>(auth.session(), PENDING_KEY).await
     else {
         return Ok(None);
     };
-    let session_id = auth.session().id().map(|id| id.to_string());
-    let grant = {
-        let mut map = grants().lock().map_err(|_| internal_error())?;
-        reap(&mut map);
-        map.get(&token)
-            .filter(|(grant, _)| Some(grant.session_id.as_str()) == session_id.as_deref())
-            .map(|(grant, _)| grant.clone())
-    };
-    if let Some(grant) = grant {
+    if grant.is_fresh() && grant.bound_to(auth.session()) {
         let user = auth
             .backend()
             .get_user(&grant.user_id)
@@ -163,15 +139,18 @@ pub async fn response(auth: &AuthSession) -> Result<Option<Value>, ErrorResponse
             .map_err(|_| internal_error())?;
         if user.as_ref().is_some_and(|user| grant.matches_user(user)) {
             return Ok(Some(
-                json!({ "status": "totp_required", "totp_token": token }),
+                json!({ "status": "totp_required", "totp_token": grant.token }),
             ));
         }
-        let _ = take(auth, &token).await?;
     }
-    auth.session()
-        .remove::<String>(PENDING_KEY)
-        .await
-        .map_err(|_| internal_error())?;
+    {
+        let _guard = session_challenges::lock().await;
+        auth.session()
+            .remove::<PendingGrant>(PENDING_KEY)
+            .await
+            .map_err(|_| internal_error())?;
+        auth.session().save().await.map_err(|_| internal_error())?;
+    }
     Ok(None)
 }
 
@@ -180,19 +159,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn expired_grants_are_reaped_even_without_store_expiry() {
+    fn pending_grant_expires_at_ttl_boundary() {
         let grant = PendingGrant {
             user_id: 1,
-            session_id: "session".into(),
-            credential_secret: "credential".into(),
-            factor_secret: "factor".into(),
+            token: "t".into(),
+            session_id: "sid".into(),
+            issued_at: Utc::now().timestamp() - TTL_SECS,
+            credential: String::new(),
+            factor: String::new(),
         };
-        let mut map = GrantMap::from([
-            ("old".into(), (grant.clone(), Instant::now() - TTL)),
-            ("live".into(), (grant, Instant::now())),
-        ]);
-        reap(&mut map);
-        assert!(!map.contains_key("old"));
-        assert!(map.contains_key("live"));
+        assert!(!grant.is_fresh());
     }
 }

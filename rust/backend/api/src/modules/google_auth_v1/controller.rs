@@ -72,14 +72,15 @@ pub async fn google_login(
         .set_pkce_challenge(pkce_challenge)
         .url();
 
-    let session_id = oauth::oauth_session_id(&session)?;
+    oauth::oauth_session_id(&session)?;
     oauth::store_oauth_state(
-        &session_id,
+        &session,
         csrf_token.secret(),
         pkce_verifier.secret(),
         Some(&nonce),
         None,
-    )?;
+    )
+    .await?;
 
     info!("Generated auth URL with PKCE + session-bound CSRF state + OIDC nonce");
     tracing::Span::current().record("result", "success");
@@ -118,14 +119,15 @@ pub async fn google_link(
         .set_pkce_challenge(pkce_challenge)
         .url();
 
-    let session_id = oauth::oauth_session_id(auth.session())?;
+    oauth::oauth_session_id(auth.session())?;
     oauth::store_oauth_state(
-        &session_id,
+        auth.session(),
         csrf_token.secret(),
         pkce_verifier.secret(),
         Some(&nonce),
         Some(link_user_id),
-    )?;
+    )
+    .await?;
 
     tracing::Span::current().record("user_id", link_user_id);
     info!("Generated Google link URL with PKCE + session-bound CSRF state + OIDC nonce");
@@ -149,6 +151,7 @@ pub async fn google_callback(
     if query.is_error() {
         tracing::Span::current().record("result", "cancelled");
         if oauth::state::link_user_id_from_cancelled_state(auth.session(), query.state.as_deref())
+            .await
             .is_some()
         {
             tracing::Span::current().record("result", "link_cancelled");
@@ -225,10 +228,12 @@ async fn run_google_callback(
     query: GoogleCallbackQuery,
     client_ip: IpAddr,
 ) -> Result<CallbackOutcome, CallbackFailure> {
-    let session_id = oauth::oauth_session_id(auth.session()).map_err(CallbackFailure::login)?;
+    oauth::oauth_session_id(auth.session()).map_err(CallbackFailure::login)?;
     let state_secret = query.state().map_err(CallbackFailure::login)?;
     let oauth_state =
-        oauth::consume_oauth_state(&session_id, &state_secret).map_err(CallbackFailure::login)?;
+        oauth::consume_oauth_state_guarded(state, client_ip, auth.session(), &state_secret)
+            .await
+            .map_err(CallbackFailure::login)?;
     let link_user_id = oauth_state.link_user_id;
     let link_mode = link_user_id.is_some();
     let fail = move |error: ErrorResponse| CallbackFailure { link_mode, error };
@@ -320,8 +325,10 @@ pub async fn google_exchange(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     info!("Processing Google OAuth code exchange from client");
 
-    let session_id = oauth::oauth_session_id(auth.session())?;
-    let oauth_state = oauth::consume_oauth_state(&session_id, &payload.state)?;
+    oauth::oauth_session_id(auth.session())?;
+    let oauth_state =
+        oauth::consume_oauth_state_guarded(&state, client_ip, auth.session(), &payload.state)
+            .await?;
     if oauth_state.link_user_id.is_some() {
         warn!("Rejecting account-link state on the Google exchange endpoint");
         return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
