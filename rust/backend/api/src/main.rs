@@ -531,6 +531,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    // A37: production refuses to boot with media upload mounted and no moderator.
+    if let Err(msg) = ruxlog::services::image_moderation::moderation_boot_gate(
+        ruxlog::config::settings::env_class(),
+        ruxlog::services::image_moderation::MEDIA_UPLOAD_MOUNTED,
+        image_moderator.is_some(),
+    ) {
+        eprintln!("Configuration error: {msg}");
+        std::process::exit(1);
+    }
+
     let quran_load_started = std::time::Instant::now();
     let (quran_store, quran_load_duration_ms) =
         match ruxlog::quran::load_quran_store(&settings.quran).await {
@@ -688,6 +698,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             client: s3_client,
             optimizer: settings.optimizer.clone(),
             image_moderator,
+            known_hash_matcher: None,
         },
         secret_key: settings.cookie_key.as_bytes().to_vec(),
         http_client,

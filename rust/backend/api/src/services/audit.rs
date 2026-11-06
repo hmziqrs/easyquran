@@ -48,6 +48,8 @@ pub enum AuditAction {
     LegalHoldPlace,
     LegalHoldRenew,
     AlertDispatch,
+    MediaModerationReject,
+    MediaHashMatch,
 }
 
 impl AuditAction {
@@ -81,6 +83,8 @@ impl AuditAction {
         Self::LegalHoldPlace,
         Self::LegalHoldRenew,
         Self::AlertDispatch,
+        Self::MediaModerationReject,
+        Self::MediaHashMatch,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -114,6 +118,8 @@ impl AuditAction {
             Self::LegalHoldPlace => "legal_hold.place",
             Self::LegalHoldRenew => "legal_hold.renew",
             Self::AlertDispatch => "alert.dispatch",
+            Self::MediaModerationReject => "media.moderation_reject",
+            Self::MediaHashMatch => "media.hash_match",
         }
     }
 
@@ -142,6 +148,7 @@ impl AuditAction {
             Self::IncidentCapture => "case",
             Self::LegalHoldPlace | Self::LegalHoldRenew => "legal_hold",
             Self::AlertDispatch => "report",
+            Self::MediaModerationReject | Self::MediaHashMatch => "media",
         }
     }
 }

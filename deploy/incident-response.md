@@ -15,6 +15,7 @@ Owner steps still open: O12 (operator FCM device), O13 (drill), O19 (uptime moni
 | `FCM_ENABLED`, `FCM_PROJECT_ID`, `FCM_SERVICE_ACCOUNT_PATH` | No push to any device. Operator push needs these plus `OPERATOR_USER_ID`. |
 | `MAIL_PROVIDER` (not `none`) | Mail is dropped; `NoOpMailProvider` returns no receipt, so the alert records `not_accepted`. |
 | `ABUSE_BAN_WRITES_ENABLED` | Ban routes are not mounted. Needed to act on a P0 with a ban. |
+| `IMAGE_MODERATION_ENABLED` + `IMAGE_MODERATION_URL` | Off. In `APP_ENV=production` the API refuses to boot while media upload is mounted and this pair is unset. |
 
 `OPERATOR_USER_ID` is the account the operator signs into on the phone. That account must
 register a device (O12) for push to reach anyone.
@@ -62,6 +63,34 @@ register a device (O12) for push to reach anyone.
 7. Record the case note: steps taken, times, reason code, who decided. No report
    status route exists yet, so `status` stays `open` after handling. Open counts in the
    digest will not drop until a later item adds the status change.
+
+## Upload screening and CSAM triage (A37)
+
+What the code does, automatically:
+
+- Every media upload runs moderation (`IMAGE_MODERATION_URL`), then known-hash match, both
+  before dedup. A flagged image, a known-hash match, or a provider error refuses the upload.
+  Nothing is stored for a refused image.
+- A refusal writes one audit row: `media.moderation_reject` or `media.hash_match`, with
+  `resource_id` = SHA-256 of the image bytes and `user_id` = uploader. No bytes are kept.
+- Known-hash matching has no provider in this build. The refusal path exists; the match
+  source does not, so it is inactive until the owner registers a provider (O29).
+- A refusal raises no P0 alert: A26 dispatch needs a report row, and reports do not target
+  media in this build. Until that changes, check `audit_logs` for `media.hash_match` daily.
+
+Triage. Human-confirmed violating content only. The code never removes stored content.
+
+1. A human confirms the content violates policy. A match alone is not a decision. Quran
+   text is never violating content.
+2. Preserve before any removal: place an A25 legal hold (`rust/backend/api/src/services/legal_hold.rs`).
+   Gap: no route or CLI places a media hold in this build. Record the hold id.
+3. Remove: `DELETE /media/v1/{id}` (A30 takedown: storage objects, CDN purge when
+   `CDN_PURGE_ZONE_ID` and `CDN_PURGE_API_TOKEN` are set, tombstone and audit row).
+4. Report to NCMEC: outside this build. The code makes no referral. Owner (O29) and
+   `deploy/legal-debt.md` item 1.
+5. Freeze the account: L6 ban via `POST /admin/users/bans` per `deploy/moderation-sop.md`
+   (human decision before effect; needs `ABUSE_BAN_WRITES_ENABLED`).
+6. Case note: times, who confirmed, hold id, tombstone id, report id if any.
 
 ## Appeals
 

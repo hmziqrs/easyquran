@@ -257,6 +257,7 @@ mod tests {
                     default_webp_quality: 80,
                 },
                 image_moderator: None,
+                known_hash_matcher: None,
             },
             secret_key: b"test_secret_key".to_vec(),
             http_client: build_http_client(),

@@ -1,9 +1,25 @@
+//! Upload screening (A37). Two checks run on every media upload, before dedup:
+//!
+//! 1. [`ImageModerator`]: classifier verdict from the configured provider (HTTP).
+//! 2. [`KnownHashMatcher`]: hash-match against known abusive material. Trait only; no
+//!    vendor is bound in this build. Nothing is wired in production until the owner
+//!    registers a provider (O29).
+//!
+//! Both fail closed: a provider error rejects the upload. A rejected image never
+//! reaches dedup or storage.
+
 use std::collections::HashMap;
 
 use async_trait::async_trait;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
+
+use crate::config::settings::EnvClass;
+
+/// `media_v1` is nested unconditionally in `router.rs`. If that changes, pass the new
+/// truth to [`moderation_boot_gate`].
+pub const MEDIA_UPLOAD_MOUNTED: bool = true;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModerationVerdict {
@@ -31,21 +47,77 @@ pub trait ImageModerator: Send + Sync {
     ) -> Result<ModerationVerdict, ModerationError>;
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct NoOpModerator;
-
+/// Hash-match against known abusive material. `Ok(true)` means a known match.
+/// Implementations live outside this build until a provider is chosen (O29).
 #[async_trait]
-impl ImageModerator for NoOpModerator {
-    async fn classify(
-        &self,
-        _bytes: &[u8],
-        _ctype: &str,
-    ) -> Result<ModerationVerdict, ModerationError> {
-        Ok(ModerationVerdict {
-            safe: true,
-            scores: HashMap::new(),
-        })
+pub trait KnownHashMatcher: Send + Sync {
+    async fn matches(&self, bytes: &[u8]) -> Result<bool, ModerationError>;
+}
+
+/// Why an upload was refused before dedup. The client sees one generic message for
+/// `Unsafe` and `KnownHash` so a probe cannot tell which check fired.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScreenRejection {
+    Unsafe,
+    KnownHash,
+    Unavailable,
+}
+
+/// Runs moderation, then hash-match. Both are optional; an absent check passes.
+/// Moderation runs first so a flagged image never reaches the hash-match provider.
+pub async fn screen_upload<M, H>(
+    moderator: Option<&M>,
+    hashes: Option<&H>,
+    bytes: &[u8],
+    ctype: &str,
+) -> Result<(), ScreenRejection>
+where
+    M: ImageModerator + ?Sized,
+    H: KnownHashMatcher + ?Sized,
+{
+    if let Some(moderator) = moderator {
+        match moderator.classify(bytes, ctype).await {
+            Ok(verdict) if verdict.safe => {}
+            Ok(verdict) => {
+                warn!(scores = ?verdict.scores, "Upload flagged by image moderation");
+                return Err(ScreenRejection::Unsafe);
+            }
+            Err(err) => {
+                warn!(error = %err, "Image moderation provider error; failing closed");
+                return Err(ScreenRejection::Unavailable);
+            }
+        }
     }
+    if let Some(hashes) = hashes {
+        match hashes.matches(bytes).await {
+            Ok(false) => {}
+            Ok(true) => return Err(ScreenRejection::KnownHash),
+            Err(err) => {
+                warn!(error = %err, "Known-hash provider error; failing closed");
+                return Err(ScreenRejection::Unavailable);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Production must not boot with media upload mounted and no moderator. Other
+/// environments may boot without one.
+pub fn moderation_boot_gate(
+    env: EnvClass,
+    media_upload_mounted: bool,
+    moderator_configured: bool,
+) -> Result<(), &'static str> {
+    if !media_upload_mounted || moderator_configured {
+        return Ok(());
+    }
+    if matches!(env, EnvClass::Production) {
+        return Err(
+            "APP_ENV=production with media upload enabled requires IMAGE_MODERATION_ENABLED=true \
+             and IMAGE_MODERATION_URL set",
+        );
+    }
+    Ok(())
 }
 
 #[derive(Clone)]
@@ -112,15 +184,137 @@ impl ImageModerator for HttpModerator {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use super::*;
 
+    #[derive(Clone, Copy)]
+    enum FakeVerdict {
+        Safe,
+        Unsafe,
+        Down,
+    }
+
+    struct FakeModerator(FakeVerdict);
+
+    #[async_trait]
+    impl ImageModerator for FakeModerator {
+        async fn classify(
+            &self,
+            _bytes: &[u8],
+            _ctype: &str,
+        ) -> Result<ModerationVerdict, ModerationError> {
+            match self.0 {
+                FakeVerdict::Safe => Ok(ModerationVerdict {
+                    safe: true,
+                    scores: HashMap::new(),
+                }),
+                FakeVerdict::Unsafe => Ok(ModerationVerdict {
+                    safe: false,
+                    scores: HashMap::new(),
+                }),
+                FakeVerdict::Down => Err(ModerationError::Parse("down".to_string())),
+            }
+        }
+    }
+
+    struct FakeHashes {
+        hit: bool,
+        down: bool,
+        calls: AtomicUsize,
+    }
+
+    impl FakeHashes {
+        fn new(hit: bool, down: bool) -> Self {
+            Self {
+                hit,
+                down,
+                calls: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl KnownHashMatcher for FakeHashes {
+        async fn matches(&self, _bytes: &[u8]) -> Result<bool, ModerationError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            if self.down {
+                return Err(ModerationError::Parse("down".to_string()));
+            }
+            Ok(self.hit)
+        }
+    }
+
+    const BYTES: &[u8] = b"not really an image";
+
     #[tokio::test]
-    async fn noop_moderator_always_safe() {
-        let noop = NoOpModerator;
-        let bytes = b"not really an image";
-        let verdict = noop.classify(bytes, "image/png").await.unwrap();
-        assert!(verdict.safe);
-        assert!(verdict.scores.is_empty());
+    async fn no_checks_configured_passes() {
+        let r = screen_upload::<FakeModerator, FakeHashes>(None, None, BYTES, "image/png").await;
+        assert_eq!(r, Ok(()));
+    }
+
+    #[tokio::test]
+    async fn safe_verdict_and_no_hash_hit_passes() {
+        let m = FakeModerator(FakeVerdict::Safe);
+        let h = FakeHashes::new(false, false);
+        let r = screen_upload(Some(&m), Some(&h), BYTES, "image/png").await;
+        assert_eq!(r, Ok(()));
+        assert_eq!(h.calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn unsafe_verdict_rejects_before_hash_match() {
+        let m = FakeModerator(FakeVerdict::Unsafe);
+        let h = FakeHashes::new(false, false);
+        let r = screen_upload(Some(&m), Some(&h), BYTES, "image/png").await;
+        assert_eq!(r, Err(ScreenRejection::Unsafe));
+        assert_eq!(
+            h.calls.load(Ordering::SeqCst),
+            0,
+            "hash provider must not see flagged bytes"
+        );
+    }
+
+    #[tokio::test]
+    async fn known_hash_hit_rejects() {
+        let h = FakeHashes::new(true, false);
+        let r = screen_upload::<FakeModerator, _>(None, Some(&h), BYTES, "image/png").await;
+        assert_eq!(r, Err(ScreenRejection::KnownHash));
+    }
+
+    #[tokio::test]
+    async fn moderator_error_fails_closed() {
+        let m = FakeModerator(FakeVerdict::Down);
+        let r = screen_upload::<_, FakeHashes>(Some(&m), None, BYTES, "image/png").await;
+        assert_eq!(r, Err(ScreenRejection::Unavailable));
+    }
+
+    #[tokio::test]
+    async fn hash_provider_error_fails_closed() {
+        let h = FakeHashes::new(false, true);
+        let r = screen_upload::<FakeModerator, _>(None, Some(&h), BYTES, "image/png").await;
+        assert_eq!(r, Err(ScreenRejection::Unavailable));
+    }
+
+    #[test]
+    fn production_without_moderator_refuses_boot() {
+        assert!(moderation_boot_gate(EnvClass::Production, true, false).is_err());
+    }
+
+    #[test]
+    fn production_with_moderator_boots() {
+        assert!(moderation_boot_gate(EnvClass::Production, true, true).is_ok());
+    }
+
+    #[test]
+    fn non_production_without_moderator_boots() {
+        assert!(moderation_boot_gate(EnvClass::NonProduction, true, false).is_ok());
+        assert!(moderation_boot_gate(EnvClass::Unset, true, false).is_ok());
+    }
+
+    #[test]
+    fn production_without_media_mount_boots() {
+        assert!(moderation_boot_gate(EnvClass::Production, false, false).is_ok());
     }
 
     #[test]

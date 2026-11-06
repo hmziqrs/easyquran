@@ -115,6 +115,7 @@ async fn state_with_public_url(public_url: &str) -> AppState {
         client: aws_sdk_s3::Client::new(&aws_config::SdkConfig::builder().build()),
         optimizer: settings.optimizer.clone(),
         image_moderator: None,
+        known_hash_matcher: None,
     };
     let billing_router = Arc::new(BillingRouter::new(
         HashMap::new(),

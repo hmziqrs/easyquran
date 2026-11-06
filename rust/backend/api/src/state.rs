@@ -7,7 +7,7 @@ use crate::services::session_store::SqliteSessionStore;
 
 use crate::services::billing::BillingRouter;
 
-use crate::services::image_moderation::ImageModerator;
+use crate::services::image_moderation::{ImageModerator, KnownHashMatcher};
 use crate::utils::cors::AllowedOrigins;
 use rux_fcm::FcmClient;
 
@@ -28,6 +28,8 @@ pub struct StorageState {
     pub client: aws_sdk_s3::Client,
     pub optimizer: OptimizerConfig,
     pub image_moderator: Option<std::sync::Arc<dyn ImageModerator + Send + Sync>>,
+    /// Known-material hash-match (A37). Unset in this build: no provider is bound (O29).
+    pub known_hash_matcher: Option<std::sync::Arc<dyn KnownHashMatcher + Send + Sync>>,
 }
 
 #[derive(Clone, Copy, Debug)]

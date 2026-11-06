@@ -32,6 +32,8 @@ use crate::{
 };
 
 use crate::db::sea_models::media_variant::{Entity as MediaVariant, NewMediaVariant};
+use crate::services::audit::{self, AuditAction, AuditEvent};
+use crate::services::image_moderation::{screen_upload, ScreenRejection};
 use crate::services::image_optimizer;
 use crate::services::media_takedown;
 use tracing::{debug, error, info, instrument, warn};
@@ -247,6 +249,21 @@ pub async fn create(
     debug!(content_hash = %content_hash, "File hash calculated");
     tracing::Span::current().record("content_hash", &content_hash);
 
+    // A37: screen before dedup. A refused image never reaches the dedup lookup, so it
+    // cannot return an existing row, and nothing is stored for it.
+    if let Err(rejection) = screen_upload(
+        state.storage.image_moderator.as_deref(),
+        state.storage.known_hash_matcher.as_deref(),
+        &file_bytes,
+        &declared_mime,
+    )
+    .await
+    {
+        tracing::Span::current().record("result", "refused_by_screening");
+        refuse_upload(&state.sea_db, uploader.id, &content_hash, rejection).await?;
+        return Err(refusal_error(rejection));
+    }
+
     if let Some(existing) = Media::find_by_hash(&state.sea_db, &content_hash).await? {
         // Cross-user duplicate not returned; fall through creates a fresh record so no key/URL leak.
         if can_view_media(&uploader, existing.uploader_id) {
@@ -267,43 +284,6 @@ pub async fn create(
     }
 
     tracing::Span::current().record("is_duplicate", false);
-
-    // Fail-closed on moderation provider error: an unverifiable image is rejected
-    // rather than landing unmoderated (availability tradeoff accepted).
-    if let Some(moderator) = state.storage.image_moderator.as_ref() {
-        match moderator.classify(&file_bytes, &declared_mime).await {
-            Ok(verdict) => {
-                if !verdict.safe {
-                    warn!(
-                        user_id = uploader.id,
-                        content_hash = %content_hash,
-                        scores = ?verdict.scores,
-                        "Upload rejected by image moderation"
-                    );
-                    return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
-                        .with_message("Image rejected by moderation")
-                        .with_details(
-                            "The uploaded image was flagged as unsafe by the moderation provider",
-                        ));
-                }
-                debug!(
-                    user_id = uploader.id,
-                    scores = ?verdict.scores,
-                    "Upload passed image moderation"
-                );
-            }
-            Err(err) => {
-                error!(
-                    user_id = uploader.id,
-                    error = %err,
-                    "Image moderation provider error; failing closed (upload rejected)"
-                );
-                tracing::Span::current().record("result", "moderation_unavailable");
-                return Err(ErrorResponse::new(ErrorCode::ServiceUnavailable)
-                    .with_message("Image moderation is unavailable; upload rejected"));
-            }
-        }
-    }
 
     if metadata.width.is_none() || metadata.height.is_none() {
         if let Ok(dimensions) = imagesize::blob_size(&file_bytes) {
@@ -875,6 +855,47 @@ pub async fn delete(
             "media_id": media.id,
         })),
     ))
+}
+
+/// Audit row for an upload refused by screening (A37). A provider fault is not an
+/// enforcement action, so `Unavailable` is logged by the screener and not audited.
+/// Metadata carries no device identity and no image bytes.
+async fn refuse_upload(
+    db: &sea_orm::DatabaseConnection,
+    user_id: i32,
+    content_hash: &str,
+    rejection: ScreenRejection,
+) -> Result<(), ErrorResponse> {
+    let action = match rejection {
+        ScreenRejection::Unsafe => AuditAction::MediaModerationReject,
+        ScreenRejection::KnownHash => AuditAction::MediaHashMatch,
+        ScreenRejection::Unavailable => return Ok(()),
+    };
+    audit::record(
+        db,
+        AuditEvent {
+            actor_id: Some(user_id),
+            action,
+            resource_id: content_hash.to_string(),
+            metadata: json!({ "stage": "upload" }),
+        },
+    )
+    .await
+    .map_err(ErrorResponse::from)
+}
+
+/// Client-facing refusal. Unsafe and known-hash share one message so a probe cannot
+/// tell which check fired.
+fn refusal_error(rejection: ScreenRejection) -> ErrorResponse {
+    match rejection {
+        ScreenRejection::Unsafe | ScreenRejection::KnownHash => {
+            ErrorResponse::new(ErrorCode::OperationNotAllowed)
+                .with_message("Image rejected by moderation")
+                .with_details("The uploaded image was flagged as unsafe by the moderation provider")
+        }
+        ScreenRejection::Unavailable => ErrorResponse::new(ErrorCode::ServiceUnavailable)
+            .with_message("Image moderation is unavailable; upload rejected"),
+    }
 }
 
 #[allow(dead_code)]
