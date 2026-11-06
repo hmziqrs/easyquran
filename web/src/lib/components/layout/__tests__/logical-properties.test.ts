@@ -45,12 +45,17 @@ const PHYSICAL: [name: string, re: RegExp][] = [
 const guarded = [
   ...walk("src/lib/components/layout", ".svelte"),
   ...walk("src/routes/(marketing)", ".svelte"),
+  // F18: the reader surfaces mirror under RTL, so they carry the same contract.
+  ...walk("src/routes/(application)/_reader", ".svelte"),
 ];
 
 describe("plan 04 logical properties guard", () => {
   it("found the guarded trees (sanity — not vacuous)", () => {
     expect(guarded.filter((f) => f.startsWith("src/lib/components/layout")).length).toBe(3);
     expect(guarded.filter((f) => f.startsWith("src/routes/(marketing)")).length).toBeGreaterThan(5);
+    expect(
+      guarded.filter((f) => f.startsWith("src/routes/(application)/_reader")).length,
+    ).toBeGreaterThan(5);
   });
 
   for (const file of guarded) {

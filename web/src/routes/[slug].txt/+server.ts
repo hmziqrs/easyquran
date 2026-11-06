@@ -1,7 +1,13 @@
 export const prerender = true;
 
 import { MARKETING_ROUTES } from "#lib/config/site-structure.js";
-import { htmlToMarkdown, mdToPlain, pagePath, textVariantEntries } from "#lib/seo/render.js";
+import { getLocale } from "#lib/paraglide/runtime.js";
+import {
+  htmlToMarkdown,
+  mdToPlain,
+  textVariantEntries,
+  textVariantSource,
+} from "#lib/seo/render.js";
 
 function matchMarketingText(slug: string): boolean {
   if (slug === "") return false;
@@ -25,9 +31,14 @@ export const GET: RequestHandler = async ({ fetch, params }) => {
       headers: { "content-type": "text/plain; charset=utf-8" },
     });
   }
-  const res = await fetch(pagePath(params.slug));
+  // Locale from the `/ar` prefix: the Arabic twin when published, else the en canonical.
+  const source = textVariantSource(params.slug, getLocale());
+  const res = await fetch(source.path);
   const md = htmlToMarkdown(await res.text());
   return new Response(mdToPlain(md), {
-    headers: { "content-type": "text/plain; charset=utf-8" },
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "content-language": source.lang,
+    },
   });
 };

@@ -3,6 +3,8 @@ import TurndownService from "turndown";
 import { MARKETING_PAGES } from "#lib/config/site-structure.js";
 import { SITE } from "#lib/config/site.js";
 import { baseEnglishPageCopy } from "#lib/i18n/base-english-copy.js";
+import type { UiLocale } from "#lib/i18n/locales.js";
+import { isMarketingPublished } from "#lib/i18n/marketing.js";
 
 const turndown = new TurndownService({
   headingStyle: "atx",
@@ -120,6 +122,25 @@ export function mdToPlain(md: string): string {
 }
 
 export const pagePath = (slug: string): string => (slug === "index" ? "/" : `/${slug}`);
+
+/**
+ * Source page for a text variant. The Arabic twin serves when the page is published
+ * in ar and the request locale is ar; otherwise the en canonical (en-only pages
+ * have no Arabic copy to serve).
+ */
+export interface TextVariantSource {
+  readonly path: string;
+  readonly lang: UiLocale;
+}
+
+export function textVariantSource(slug: string, locale: string): TextVariantSource {
+  const path = pagePath(slug);
+  const page = MARKETING_PAGES.find((p) => p.href === path);
+  if (locale !== "ar" || !page || !isMarketingPublished(page.id, "ar")) {
+    return { path, lang: "en" };
+  }
+  return { path: path === "/" ? "/ar" : `/ar${path}`, lang: "ar" };
+}
 
 export const textVariantEntries = (): { slug: string }[] =>
   MARKETING_PAGES.filter((p) => p.href === "/" || !p.href.slice(1).includes("/")).map((p) => ({

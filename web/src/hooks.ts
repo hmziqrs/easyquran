@@ -1,6 +1,7 @@
 import type { Reroute } from "@sveltejs/kit/hooks";
 
 import { deLocalizeUrl } from "#lib/paraglide/runtime.js";
+import { isLocalizedTextVariant } from "#lib/seo/text-variant-route.js";
 
 const SURAH_SEGMENT = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
 const CONTENT_LANGUAGE_SEGMENT = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
@@ -65,6 +66,7 @@ function localizedReaderTuple(rawPathname: string, candidatePathname: string): b
 export const reroute: Reroute = ({ url }) => {
   const candidate = deLocalizeUrl(url);
   if (localizedReaderTuple(url.pathname, candidate.pathname)) return candidate.pathname;
+  if (isLocalizedTextVariant(url.pathname, candidate.pathname)) return candidate.pathname;
   if ((url.pathname === "/ar" || url.pathname === "/ar/") && candidate.pathname === "/") {
     return "/";
   }

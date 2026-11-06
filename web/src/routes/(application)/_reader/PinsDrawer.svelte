@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
+  import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
   import { bookmarks } from "#lib/bookmarks/store.svelte.js";
   import { parseVerseKey } from "#lib/bookmarks/schema.js";
   import { TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
@@ -119,7 +121,7 @@
               disabled={index === 0}
               onclick={() => pins.move(pin.key, -1)}
             >
-              <Icon name="arrow-right" size={12} class="-rotate-90" />
+              <ArrowUpIcon size={12} />
             </Button>
             <Button
               variant="ghost"
@@ -128,7 +130,7 @@
               disabled={index === pins.count - 1}
               onclick={() => pins.move(pin.key, 1)}
             >
-              <Icon name="arrow-right" size={12} class="rotate-90" />
+              <ArrowDownIcon size={12} />
             </Button>
             <Button
               variant="ghost"
