@@ -65,6 +65,12 @@ for p in /surah /al-kahf /ar/al-kahf; do
 done
 ok "clean-URL HTML routes resolve (200)"
 
+# F15: the microphone is open to this origin only (voice search); camera and location stay closed.
+pp_headers=$(curl -sSI "$ORIGIN/surah")
+contains "web Permissions-Policy allows microphone for self only" "$pp_headers" 'permissions-policy: .*microphone=(self)'
+contains "web Permissions-Policy keeps camera closed" "$pp_headers" 'camera=()'
+absent "web Permissions-Policy does not open microphone to all origins" "$pp_headers" 'microphone=\*'
+
 # Scheme A legacy 308 map: single hop, deterministic Location, bounded public TTL.
 assert_redirect() {
 	local from="$1" want="$2"

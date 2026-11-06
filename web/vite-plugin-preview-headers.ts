@@ -63,7 +63,7 @@ export function previewSecurityHeaders(): Plugin {
         const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
         res.setHeader("X-Content-Type-Options", "nosniff");
         res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-        res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+        res.setHeader("Permissions-Policy", "camera=(), microphone=(self), geolocation=()");
         res.setHeader("Strict-Transport-Security", HSTS);
         if (!loaded) {
           loaded = true;

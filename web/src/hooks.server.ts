@@ -13,6 +13,7 @@ import {
   type MarketingPageId,
 } from "#lib/i18n/marketing.js";
 import { paraglideMiddleware } from "#lib/paraglide/server.js";
+import { READER_MORE_PARAM } from "#lib/reader/more-param.js";
 import {
   agentNotFoundMarkdown,
   appendVaryAccept,
@@ -30,7 +31,6 @@ import {
   tafsirRedirectTarget,
   type ParsedReaderRoute,
 } from "#lib/server/reader-route.js";
-import { READER_MORE_PARAM } from "#lib/reader/more-param.js";
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
 
@@ -132,7 +132,8 @@ export function applyHeaders(
   response.headers.set("Content-Security-Policy", buildCsp(nonce));
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  // Microphone is for same-origin voice search only (F15); camera and location stay off.
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(self), geolocation=()");
   response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   const translationPending = response.headers.get("x-eq-translation-pending");
   const privateMode = requestHasCookie || responseSetsCookie(response);

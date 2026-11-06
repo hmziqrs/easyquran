@@ -34,6 +34,7 @@
   import { Icon } from "#lib/components/icon/index.js";
   import { HighlightedArabic } from "#lib/components/text/index.js";
   import HighlightedText from "#lib/components/text/HighlightedText.svelte";
+  import VoiceSearchButton from "#lib/components/search/VoiceSearchButton.svelte";
 
   registerBuiltinPaletteSources();
 
@@ -153,6 +154,10 @@
     placeholder="Search verses, surahs, juz, pages…"
     aria-label="Search the Quran and the site"
   />
+
+  <div class="border-b border-border px-4 py-2.5">
+    <VoiceSearchButton onTranscript={(transcript) => commandPalette.setQuery(transcript)} />
+  </div>
 
   <Cmd.List>
     {#if engine.catalogueFailed}

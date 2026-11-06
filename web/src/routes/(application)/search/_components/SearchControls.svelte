@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SearchCopy } from "#lib/i18n/search-copy.js";
+  import VoiceSearchButton from "#lib/components/search/VoiceSearchButton.svelte";
 
   let {
     copy,
@@ -36,6 +37,9 @@
       spellcheck="false"
       class="h-11 w-full rounded-xl border border-border-strong bg-background-subtle px-4 text-[14.5px] text-foreground shadow-none outline-none transition-colors placeholder:text-muted focus:border-border-strong focus:ring-2 focus:ring-focus-ring/40"
     />
+    <div class="mt-2">
+      <VoiceSearchButton onTranscript={onQuery} />
+    </div>
   </div>
 
   <div class="flex flex-wrap items-center gap-1.5">

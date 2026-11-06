@@ -278,7 +278,8 @@ export function applyHeaders(
   };
   setIfAbsent("X-Content-Type-Options", "nosniff");
   setIfAbsent("Referrer-Policy", "strict-origin-when-cross-origin");
-  setIfAbsent("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  // Microphone is for same-origin voice search only (F15); camera and location stay off.
+  setIfAbsent("Permissions-Policy", "camera=(), microphone=(self), geolocation=()");
   setIfAbsent("Strict-Transport-Security", HSTS);
   const contentType = response.headers.get("content-type");
   const isHtml = contentType !== null && contentType.includes("text/html");
