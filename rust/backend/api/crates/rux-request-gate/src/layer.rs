@@ -1,14 +1,15 @@
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::net::{IpAddr, Ipv6Addr};
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::Duration;
 
 use axum::http::{HeaderName, HeaderValue};
 use axum::response::{IntoResponse, Response};
 use tower::{Layer, Service};
-use tracing::{debug, warn};
+use tracing::warn;
 
 use crate::ip::{ClientIpIdentitySource, IdentitySource, RequestIdentity};
 use crate::store::RateLimitStore;
@@ -16,6 +17,42 @@ use crate::store::RateLimitStore;
 static X_RATELIMIT_LIMIT: HeaderName = HeaderName::from_static("x-ratelimit-limit");
 static X_RATELIMIT_REMAINING: HeaderName = HeaderName::from_static("x-ratelimit-remaining");
 static X_RATELIMIT_RESET: HeaderName = HeaderName::from_static("x-ratelimit-reset");
+
+// Process-local count of route-level 429s, keyed by the request path label.
+// Bounded: once `MAX_429_PATH_LABELS` distinct paths are held, further new
+// paths fold into `OTHER_429_PATH`, so a Raw-keyed limiter under a path-spray
+// attack cannot grow this map without bound. Read by the abuse summary only.
+const MAX_429_PATH_LABELS: usize = 64;
+const OTHER_429_PATH: &str = "(other)";
+static BLOCKED_BY_PATH: Mutex<BTreeMap<String, u64>> = Mutex::new(BTreeMap::new());
+
+fn record_429(path: &str) {
+    if let Ok(mut map) = BLOCKED_BY_PATH.lock() {
+        count_bounded(&mut map, path, MAX_429_PATH_LABELS);
+    }
+}
+
+fn count_bounded(map: &mut BTreeMap<String, u64>, path: &str, max_labels: usize) {
+    if let Some(n) = map.get_mut(path) {
+        *n += 1;
+        return;
+    }
+    let label = if map.len() < max_labels {
+        path.to_string()
+    } else {
+        OTHER_429_PATH.to_string()
+    };
+    *map.entry(label).or_insert(0) += 1;
+}
+
+/// `(path, count)` pairs of route-level 429s since process start, sorted by
+/// path. Bounded to `MAX_429_PATH_LABELS` labels plus one overflow bucket.
+pub fn blocked_by_path() -> Vec<(String, u64)> {
+    match BLOCKED_BY_PATH.lock() {
+        Ok(map) => map.iter().map(|(k, v)| (k.clone(), *v)).collect(),
+        Err(_) => Vec::new(),
+    }
+}
 
 /// Escalation hook invoked by the outer Quran content limiter only. The
 /// implementation (api crate `EscalationEngine`) resolves the canonical BanUnit,
@@ -249,9 +286,20 @@ where
             // window is NOT touched here, so the ban holds after fixed-window
             // rollover. Escalation store errors are best-effort (log + proceed to
             // fixed limiting); they never 5xx the caller.
+            let path = match layer.path_key {
+                PathKey::Raw => req.uri().path().to_string(),
+                PathKey::Fixed(c) => c.to_string(),
+                PathKey::Matched => req
+                    .extensions()
+                    .get::<axum::extract::MatchedPath>()
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_else(|| req.uri().path().to_string()),
+            };
+
             if let Some(esc) = &layer.escalation {
                 if let Some(id) = identity.as_ref().filter(|i| i.is_external_ip()) {
                     if let Some(retry_after) = esc.active_ban(id).await {
+                        record_429(&path);
                         return Ok(blocked_response(
                             &layer,
                             BlockInfo {
@@ -266,15 +314,6 @@ where
                 }
             }
 
-            let path = match layer.path_key {
-                PathKey::Raw => req.uri().path().to_string(),
-                PathKey::Fixed(c) => c.to_string(),
-                PathKey::Matched => req
-                    .extensions()
-                    .get::<axum::extract::MatchedPath>()
-                    .map(|m| m.as_str().to_string())
-                    .unwrap_or_else(|| req.uri().path().to_string()),
-            };
             let key = format!("ratelimit:{}:{}", id_key, path);
 
             let (count, ttl) = match layer
@@ -305,6 +344,7 @@ where
                             if let Some(retry_after) = esc.on_first_block(id).await {
                                 // A ban was just created; carry its (longer)
                                 // Retry-After instead of the fixed-window ttl.
+                                record_429(&path);
                                 return Ok(blocked_response(
                                     &layer,
                                     BlockInfo {
@@ -320,11 +360,15 @@ where
                     }
                 }
 
-                debug!(
+                // warn!, not debug!: a route-level 429 is the measurable abuse
+                // signal (A5). The identity is the canonical unit key, never a
+                // device or account id.
+                record_429(&path);
+                warn!(
                     identity = %id_key,
                     path,
                     count,
-                    max_requests = layer.max_requests,
+                    limit = layer.max_requests,
                     window_secs = layer.window_secs,
                     "Rate limit exceeded"
                 );
@@ -591,5 +635,69 @@ mod tests {
             0x2001, 0x0db8, 0, 0, 0, 0, 0, 0xabcd,
         )));
         assert_eq!(a, b, "a /64 range must key to one fixed bucket");
+    }
+
+    #[test]
+    fn path_label_map_is_bounded_and_overflow_is_counted() {
+        let mut map = BTreeMap::new();
+        for i in 0..200 {
+            count_bounded(&mut map, &format!("/spray/{i}"), 8);
+        }
+        // 8 distinct labels plus one overflow bucket, nothing dropped.
+        assert_eq!(map.len(), 9);
+        assert_eq!(map.get(OTHER_429_PATH), Some(&192));
+        assert_eq!(map.values().sum::<u64>(), 200);
+    }
+
+    #[derive(Clone)]
+    struct SharedBuf(Arc<std::sync::Mutex<Vec<u8>>>);
+    impl std::io::Write for SharedBuf {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(b);
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn route_level_429_logs_at_warn_and_is_counted() {
+        let buf = Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+        let sink = SharedBuf(buf.clone());
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || sink.clone())
+            .with_ansi(false)
+            .with_max_level(tracing::Level::DEBUG)
+            .finish();
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        let store = Arc::new(InMemoryStore::default()) as Arc<dyn RateLimitStore>;
+        let layer = RateLimitLayer::builder(store, 1, 60)
+            .identity_source(Arc::new(StaticExternal))
+            .path_key(PathKey::Fixed("a5-warn-route"))
+            .build();
+        let mut svc = layer.layer(OkService);
+        let first = svc.call(req()).await.unwrap();
+        assert_eq!(first.status(), axum::http::StatusCode::OK);
+        let second = svc.call(req()).await.unwrap();
+        assert_eq!(second.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
+
+        let logged = String::from_utf8(buf.lock().unwrap().clone()).unwrap();
+        let line = logged
+            .lines()
+            .find(|l| l.contains("Rate limit exceeded"))
+            .unwrap_or_else(|| panic!("no 429 log line in: {logged}"));
+        assert!(line.contains("WARN"), "429 must log at warn: {line}");
+        assert!(line.contains("a5-warn-route"), "path field missing: {line}");
+        assert!(line.contains("limit=1"), "limit field missing: {line}");
+        assert!(line.contains("count=2"), "count field missing: {line}");
+
+        assert!(
+            blocked_by_path()
+                .iter()
+                .any(|(p, n)| p == "a5-warn-route" && *n >= 1),
+            "route 429 not counted"
+        );
     }
 }

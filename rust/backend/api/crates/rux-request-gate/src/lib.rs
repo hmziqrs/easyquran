@@ -16,5 +16,7 @@ pub use ip::{
     ClientIpIdentitySource, ClientIpSource, FnIpSource, IdentitySource, InternalServiceId,
     IpSource, RequestIdentity,
 };
-pub use layer::{BlockInfo, Escalation, PathKey, RateLimitLayer, RateLimitLayerBuilder};
+pub use layer::{
+    blocked_by_path, BlockInfo, Escalation, PathKey, RateLimitLayer, RateLimitLayerBuilder,
+};
 pub use store::{BanStatus, BucketSnapshot, InMemoryStore, QualifyingCounts, RateLimitStore};

@@ -183,6 +183,10 @@ name = "generate_csrf"
 path = "scripts/generate_csrf.rs"
 
 [[bin]]
+name = "abuse_report"
+path = "scripts/abuse_report.rs"
+
+[[bin]]
 name = "archive_changes"
 path = "scripts/archive_changes.rs"
 

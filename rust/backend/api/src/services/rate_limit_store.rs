@@ -8,12 +8,14 @@
 #[path = "escalation.rs"]
 pub mod escalation;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rux_request_gate::{BlockScope, BucketSnapshot, InMemoryStore};
 use sea_orm::{
-    ConnectionTrait, DatabaseBackend, DbErr, Statement, TransactionError, TransactionTrait, Value,
+    ConnectionTrait, DatabaseBackend, DatabaseTransaction, DbErr, Statement, TransactionError,
+    TransactionTrait, Value,
 };
 use tracing::warn;
 
@@ -28,6 +30,13 @@ const CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS rate_limit_state (
 )";
 
 const FLUSH_INTERVAL_SECS: u64 = 10;
+
+/// Retention for `rate_limit_events` rows (abuse measurement, A5). The sweeper
+/// that deletes expired rows ships with A32; until then rows accumulate.
+const LEDGER_RETENTION_SECS: i64 = 180 * 86_400;
+const LEDGER_RETENTION_CLASS: &str = "abuse_180d";
+const EVENT_BLOCK_CREATED: &str = "block_created";
+const EVENT_BLOCK_EXPIRED: &str = "block_expired";
 
 /// A slow companion flush (the translation-popularity snapshot) rides the same
 /// task every Nth tick (~60s at N=6) so the shared SeaORM connection never has a
@@ -51,6 +60,19 @@ fn epoch_now() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+/// Coarse class of a rate-limit key for the block ledger. Keys are the bucket
+/// keys the store already holds; the class adds no new identifier.
+pub(crate) fn key_class(key: &str) -> String {
+    if let Some(unit) = key.strip_prefix("quran-ban:") {
+        return if unit.contains(':') {
+            "ip6_unit".to_string()
+        } else {
+            "ip4_unit".to_string()
+        };
+    }
+    key.split(':').next().unwrap_or("other").to_string()
 }
 
 fn active_ban_max() -> usize {
@@ -136,6 +158,10 @@ pub fn spawn_flush_task<E, EFut>(
         let mut ticker = tokio::time::interval(Duration::from_secs(FLUSH_INTERVAL_SECS));
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut tick = 0u32;
+        // Start of the window the next flush attributes block transitions to.
+        // Advances only after a committed flush, so a failed flush is retried
+        // over the same window and its transitions are not lost.
+        let mut window_start = epoch_now();
         loop {
             ticker.tick().await;
             tick = tick.wrapping_add(1);
@@ -157,10 +183,11 @@ pub fn spawn_flush_task<E, EFut>(
                         store.incr_saturation();
                     }
                 }
-                flush(&db, snaps).await
+                flush_window(&db, snaps, window_start).await
             };
-            if let Err(e) = result {
-                warn!(error = %e, "rate-limit L2 flush failed (non-fatal)");
+            match result {
+                Ok(flushed_at) => window_start = flushed_at,
+                Err(e) => warn!(error = %e, "rate-limit L2 flush failed (non-fatal)"),
             }
             store.prune();
             // Slow companion (translation popularity) shares this task: every
@@ -177,18 +204,47 @@ pub fn spawn_flush_task<E, EFut>(
     });
 }
 
+/// Flush with a default one-tick window, for test fixtures. The periodic task
+/// uses [`flush_window`] so each block transition is attributed to one flush.
+#[cfg(test)]
 pub(crate) async fn flush(
     db: &sea_orm::DatabaseConnection,
     snaps: Vec<BucketSnapshot>,
 ) -> Result<(), DbErr> {
+    flush_window(db, snaps, epoch_now() - FLUSH_INTERVAL_SECS as i64)
+        .await
+        .map(|_| ())
+}
+
+/// One durable flush. `window_start` is the epoch second of the previous
+/// successful flush. Returns the epoch second this flush observed; the caller
+/// passes it back as the next `window_start`.
+///
+/// Block-ledger transitions are read against the rows the PREVIOUS flush left
+/// behind, inside this transaction and before any write:
+/// - `block_created`: a snapshot block is active now and the stored block had
+///   already lapsed (stored `block_until_at <= now`, or no row). Extending a
+///   block that is still active is not a transition.
+/// - `block_expired`: a stored block lapsed inside `(window_start, now]`. Each
+///   expiry falls in exactly one window, so it is recorded once.
+///
+/// Expiries that happen while the process is down are not recorded.
+pub(crate) async fn flush_window(
+    db: &sea_orm::DatabaseConnection,
+    snaps: Vec<BucketSnapshot>,
+    window_start: i64,
+) -> Result<i64, DbErr> {
     let now = epoch_now();
-    // One transaction on the shared connection: a single DELETE of expired
-    // rows followed by the upserts. Per-row autocommits would turn the 10s
-    // flush into a write storm once W3a adds a long-lived row per banned
-    // identity. Expired rows are purged first; active keys remain only until
-    // their fixed or block expiry.
+    // One transaction on the shared connection: the ledger reads, a single
+    // DELETE of expired rows, the upserts and the ledger writes commit or roll
+    // back together. Per-row autocommits would turn the 10s flush into a write
+    // storm once W3a adds a long-lived row per banned identity. Expired rows
+    // are purged first; active keys remain only until their fixed or block
+    // expiry.
     db.transaction::<_, (), DbErr>(|txn| {
         Box::pin(async move {
+            let prior = load_prior_blocks(txn).await?;
+
             txn.execute(Statement::from_sql_and_values(
                 DatabaseBackend::Sqlite,
                 "DELETE FROM rate_limit_state WHERE fixed_expires_at <= ? AND block_until_at <= ?",
@@ -217,7 +273,8 @@ pub(crate) async fn flush(
                 ))
                 .await?;
             }
-            Ok(())
+
+            write_block_transitions(txn, &snaps, &prior, window_start, now).await
         })
     })
     .await
@@ -225,6 +282,100 @@ pub(crate) async fn flush(
         TransactionError::Connection(e) => e,
         TransactionError::Transaction(e) => e,
     })?;
+    Ok(now)
+}
+
+/// A stored block as the previous flush left it.
+struct PriorBlock {
+    key: String,
+    block_until_at: i64,
+    scope: String,
+}
+
+/// One ledger row to write: a transition observed in this flush.
+struct LedgerRow {
+    key: String,
+    scope: String,
+    event: &'static str,
+    issued_at: i64,
+}
+
+async fn load_prior_blocks(txn: &DatabaseTransaction) -> Result<Vec<PriorBlock>, DbErr> {
+    let rows = txn
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Sqlite,
+            "SELECT key, block_until_at, block_scope FROM rate_limit_state \
+             WHERE block_until_at > 0",
+            Vec::<Value>::new(),
+        ))
+        .await?;
+    rows.into_iter()
+        .map(|row| {
+            Ok(PriorBlock {
+                key: row.try_get_by_index(0)?,
+                block_until_at: row.try_get_by_index(1)?,
+                scope: row.try_get_by_index(2)?,
+            })
+        })
+        .collect()
+}
+
+/// Writes one `rate_limit_events` row per block transition (see
+/// [`flush_window`] for the rules). Never called per request.
+async fn write_block_transitions(
+    txn: &DatabaseTransaction,
+    snaps: &[BucketSnapshot],
+    prior: &[PriorBlock],
+    window_start: i64,
+    now: i64,
+) -> Result<(), DbErr> {
+    let prior_until: HashMap<&str, i64> = prior
+        .iter()
+        .map(|p| (p.key.as_str(), p.block_until_at))
+        .collect();
+
+    let mut rows: Vec<LedgerRow> = Vec::new();
+    for s in snaps.iter().filter(|s| s.block_until_at > now) {
+        let was = prior_until.get(s.key.as_str()).copied().unwrap_or(0);
+        if was <= now {
+            rows.push(LedgerRow {
+                key: s.key.clone(),
+                scope: s.block_scope.as_str().to_string(),
+                event: EVENT_BLOCK_CREATED,
+                issued_at: now,
+            });
+        }
+    }
+    for p in prior {
+        if p.block_until_at > window_start && p.block_until_at <= now {
+            rows.push(LedgerRow {
+                key: p.key.clone(),
+                scope: p.scope.clone(),
+                event: EVENT_BLOCK_EXPIRED,
+                issued_at: p.block_until_at,
+            });
+        }
+    }
+
+    for row in rows {
+        let class = key_class(&row.key);
+        txn.execute(Statement::from_sql_and_values(
+            DatabaseBackend::Sqlite,
+            "INSERT INTO rate_limit_events \
+             (key, key_class, scope, event, issued_at, expires_at, retention_class) \
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            vec![
+                Value::from(row.key),
+                Value::from(class),
+                Value::from(row.scope),
+                Value::from(row.event),
+                Value::from(row.issued_at),
+                Value::from(row.issued_at + LEDGER_RETENTION_SECS),
+                Value::from(LEDGER_RETENTION_CLASS),
+            ],
+        ))
+        .await?;
+    }
     Ok(())
 }
 
@@ -440,6 +591,184 @@ mod tests {
             .await
             .unwrap()
             .is_none());
+    }
+
+    async fn ledger_rows(db: &DatabaseConnection) -> Vec<(String, String, String, i64, i64)> {
+        db.query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Sqlite,
+            "SELECT key, event, scope, issued_at, expires_at FROM rate_limit_events ORDER BY id",
+            Vec::<Value>::new(),
+        ))
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|r| {
+            (
+                r.try_get_by_index::<String>(0).unwrap(),
+                r.try_get_by_index::<String>(1).unwrap(),
+                r.try_get_by_index::<String>(2).unwrap(),
+                r.try_get_by_index::<i64>(3).unwrap(),
+                r.try_get_by_index::<i64>(4).unwrap(),
+            )
+        })
+        .collect()
+    }
+
+    fn long_block(key: &str, until: i64) -> BucketSnapshot {
+        BucketSnapshot {
+            key: key.to_string(),
+            fixed_count: 0,
+            fixed_expires_at: 0,
+            block_until_at: until,
+            block_scope: BlockScope::Long,
+        }
+    }
+
+    #[test]
+    fn key_class_separates_unit_families_and_limiter_keys() {
+        assert_eq!(key_class("quran-ban:203.0.113.5/32"), "ip4_unit");
+        assert_eq!(key_class("quran-ban:2001:db8::/64"), "ip6_unit");
+        assert_eq!(key_class("ratelimit:203.0.113.5/32:quran-v1"), "ratelimit");
+        assert_eq!(key_class("email:someone"), "email");
+    }
+
+    #[tokio::test]
+    async fn block_created_writes_exactly_one_ledger_row() {
+        let db = mem_db().await;
+        let now = epoch_now();
+        let until = now + 3600;
+        let key = "quran-ban:203.0.113.40/32";
+
+        // Transition: no stored block -> active block. One row.
+        flush_window(&db, vec![long_block(key, until)], now - 10)
+            .await
+            .unwrap();
+        let rows = ledger_rows(&db).await;
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        let (k, event, scope, issued, expires) = &rows[0];
+        assert_eq!(k, key);
+        assert_eq!(event, "block_created");
+        assert_eq!(scope, "Long");
+        assert_eq!(*issued, now);
+        assert_eq!(*expires, now + LEDGER_RETENTION_SECS);
+
+        // Steady state across many flushes while the block holds: no new rows.
+        for _ in 0..5 {
+            flush_window(&db, vec![long_block(key, until)], now)
+                .await
+                .unwrap();
+        }
+        // Extending a still-active block is not a transition either.
+        flush_window(&db, vec![long_block(key, until + 600)], now)
+            .await
+            .unwrap();
+        assert_eq!(ledger_rows(&db).await.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn block_expiry_writes_exactly_one_ledger_row() {
+        let db = mem_db().await;
+        let now = epoch_now();
+        let key = "quran-ban:203.0.113.41/32";
+        // Stored block lapsed 5 s ago; the previous flush was 20 s ago, so the
+        // expiry falls inside this window.
+        db.execute_unprepared(&format!(
+            "INSERT INTO rate_limit_state \
+             (key, fixed_count, fixed_expires_at, block_until_at, block_scope) \
+             VALUES ('{key}', 0, 0, {}, 'Temp')",
+            now - 5
+        ))
+        .await
+        .unwrap();
+
+        flush_window(&db, Vec::new(), now - 20).await.unwrap();
+        let rows = ledger_rows(&db).await;
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0].1, "block_expired");
+        assert_eq!(rows[0].2, "Temp");
+        assert_eq!(rows[0].3, now - 5, "expiry is stamped with its own time");
+
+        // This flush's DELETE purges the lapsed row, and later windows no
+        // longer contain its expiry, so nothing is written a second time.
+        flush_window(&db, Vec::new(), now).await.unwrap();
+        flush_window(&db, Vec::new(), now + 10).await.unwrap();
+        assert_eq!(ledger_rows(&db).await.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn reblock_after_expiry_records_both_transitions() {
+        let db = mem_db().await;
+        let now = epoch_now();
+        let key = "quran-ban:203.0.113.42/32";
+        db.execute_unprepared(&format!(
+            "INSERT INTO rate_limit_state \
+             (key, fixed_count, fixed_expires_at, block_until_at, block_scope) \
+             VALUES ('{key}', 0, 0, {}, 'Temp')",
+            now - 5
+        ))
+        .await
+        .unwrap();
+
+        // Same window: the old block lapsed and a new one is set. Both are
+        // transitions, so both rows are written.
+        flush_window(&db, vec![long_block(key, now + 3600)], now - 20)
+            .await
+            .unwrap();
+        let mut events: Vec<String> = ledger_rows(&db).await.into_iter().map(|r| r.1).collect();
+        events.sort();
+        assert_eq!(events, vec!["block_created", "block_expired"]);
+    }
+
+    #[tokio::test]
+    async fn limiter_block_writes_one_ledger_row_end_to_end() {
+        // The real L1 store sets the block; the periodic flush loop then runs
+        // several times while it holds. Exactly one ledger row results.
+        let db = mem_db().await;
+        let store = InMemoryStore::default();
+        let key = "quran-ban:203.0.113.60/32";
+        store
+            .set_block(key, BlockScope::Long, Duration::from_secs(3600))
+            .await
+            .unwrap();
+
+        let mut window_start = epoch_now() - FLUSH_INTERVAL_SECS as i64;
+        for _ in 0..4 {
+            window_start = flush_window(&db, store.snapshot(), window_start)
+                .await
+                .unwrap();
+        }
+        let rows = ledger_rows(&db).await;
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0].0, key);
+        assert_eq!(rows[0].1, "block_created");
+        assert_eq!(rows[0].2, "Long");
+    }
+
+    #[tokio::test]
+    async fn plain_fixed_window_traffic_writes_no_ledger_rows() {
+        let db = mem_db().await;
+        let now = epoch_now();
+        let snap = BucketSnapshot {
+            key: "ratelimit:203.0.113.43/32:quran-v1".to_string(),
+            fixed_count: 7,
+            fixed_expires_at: now + 60,
+            block_until_at: 0,
+            block_scope: BlockScope::Temp,
+        };
+        for _ in 0..3 {
+            flush_window(&db, vec![snap.clone()], now - 10)
+                .await
+                .unwrap();
+        }
+        assert!(ledger_rows(&db).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn flush_window_returns_the_observed_second() {
+        let db = mem_db().await;
+        let before = epoch_now();
+        let observed = flush_window(&db, Vec::new(), before).await.unwrap();
+        assert!(observed >= before);
     }
 
     // (name, type, notnull, dflt_value, pk) per column from PRAGMA table_info.

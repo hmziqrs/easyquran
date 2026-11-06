@@ -4,9 +4,11 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use tracing::{error, info, instrument, warn};
 
 use crate::db::sea_models::post::{ActiveModel, Column, Entity, PostStatus};
+use crate::services::job_log::{self, OUTCOME_ERROR, OUTCOME_OK};
 use crate::state::AppState;
 
 const TICK_INTERVAL_SECS: u64 = 60;
+const JOB_NAME: &str = "scheduled_post_publish";
 
 pub fn start_scheduler(state: AppState) {
     tokio::spawn(run(state));
@@ -18,14 +20,43 @@ async fn run(state: AppState) {
 
     loop {
         interval.tick().await;
-        if let Err(err) = publish_due_posts(&state).await {
-            error!(error = %err, "Scheduled post publisher tick failed");
+        let started = job_log::epoch_now();
+        let result = publish_due_posts(&state).await;
+        let finished = job_log::epoch_now();
+        match result {
+            Ok((due, published)) => {
+                let detail = format!("due={due} published={published}");
+                job_log::record(
+                    &state.sea_db,
+                    JOB_NAME,
+                    started,
+                    finished,
+                    OUTCOME_OK,
+                    Some(&detail),
+                )
+                .await;
+            }
+            Err(err) => {
+                error!(error = %err, "Scheduled post publisher tick failed");
+                job_log::record(
+                    &state.sea_db,
+                    JOB_NAME,
+                    started,
+                    finished,
+                    OUTCOME_ERROR,
+                    None,
+                )
+                .await;
+            }
         }
     }
 }
 
+/// Publishes due drafts. Returns `(due, published)`: due rows found this tick
+/// and rows that actually flipped to published (skipped authors and failed
+/// updates are the difference).
 #[instrument(skip_all)]
-async fn publish_due_posts(state: &AppState) -> Result<(), sea_orm::DbErr> {
+async fn publish_due_posts(state: &AppState) -> Result<(usize, usize), sea_orm::DbErr> {
     let now = chrono::Utc::now().fixed_offset();
 
     let due_posts = Entity::find()
@@ -36,10 +67,11 @@ async fn publish_due_posts(state: &AppState) -> Result<(), sea_orm::DbErr> {
         .await?;
 
     if due_posts.is_empty() {
-        return Ok(());
+        return Ok((0, 0));
     }
 
     let count = due_posts.len();
+    let mut published = 0usize;
     for post in due_posts {
         let post_id = post.id;
         let author_id = post.author_id;
@@ -76,10 +108,11 @@ async fn publish_due_posts(state: &AppState) -> Result<(), sea_orm::DbErr> {
                 "Failed to publish scheduled post"
             );
         } else {
+            published += 1;
             info!(post_id, "Scheduled post published");
         }
     }
 
-    info!(count, "Scheduled post publisher tick completed");
-    Ok(())
+    info!(count, published, "Scheduled post publisher tick completed");
+    Ok((count, published))
 }

@@ -97,6 +97,19 @@ upload-sqlite *args='':
     @if [ -f ./.env ]; then set -a && . ./.env && set +a; fi; \
     bun run quran:upload -- {{args}}
 
+# Abuse measurement (A5): the ten numbers from a WAL-safe copy of the app DB. `sqlite3
+# .backup` through a read-only handle copies a consistent snapshot; the live file is only
+# read, never written. Production: copy the DB out of the api_data volume first and pass
+# its path as `db`. Figures that need a running process print "not measurable".
+abuse-report db="rust/data/easyquran.db":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f "{{db}}" ]; then echo "no database at {{db}}" >&2; exit 1; fi
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    sqlite3 -readonly "{{db}}" ".backup '$tmp/copy.db'"
+    cd rust && cargo run -q -p ruxlog --bin abuse_report -- "$tmp/copy.db"
+
 # --- Images -------------------------------------------------------------------------------
 # Both images are packaging-only: everything is compiled outside Docker, and the
 # Dockerfiles just COPY the artifacts in. Nothing installs a toolchain or hits the network

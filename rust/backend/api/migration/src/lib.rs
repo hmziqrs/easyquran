@@ -15,6 +15,7 @@ mod m000012_bookmark_context;
 mod m000013_reading_sessions;
 mod m000014_user_analytics;
 mod m000015_newsletter_subscribers;
+mod m000016_abuse_measurement;
 mod m000017_sync_protocol;
 
 pub struct Migrator;
@@ -73,6 +74,10 @@ impl MigratorTrait for Migrator {
             // m000015 restores newsletter_subscribers, dropped from the chain by
             // the m000001 squash (4876e8e1); the seeder and newsletter_v1 need it.
             Box::new(m000015_newsletter_subscribers::Migration),
+            // m000016 ships abuse measurement: the durable block ledger
+            // (rate_limit_events, transition rows only) and job_runs (one row per
+            // periodic-job run). Both new tables, IF NOT EXISTS, no backfill.
+            Box::new(m000016_abuse_measurement::Migration),
             Box::new(m000017_sync_protocol::Migration),
         ]
     }

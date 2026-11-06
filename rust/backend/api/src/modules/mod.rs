@@ -8,6 +8,7 @@ pub mod post_v1;
 pub mod tag_v1;
 pub mod user_v1;
 
+pub mod admin_abuse_v1;
 pub mod admin_acl_v1;
 pub mod admin_bans_v1;
 pub mod admin_route_v1;

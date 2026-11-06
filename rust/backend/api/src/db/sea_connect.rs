@@ -8,7 +8,7 @@ use tracing::{error, info, instrument};
 const DEFAULT_DB_URL: &str = "sqlite:./data/easyquran.db?mode=rwc";
 
 #[instrument]
-fn get_db_url() -> Result<String, String> {
+pub fn get_db_url() -> Result<String, String> {
     Ok(env::var("DATABASE_URL").unwrap_or_else(|_| DEFAULT_DB_URL.to_string()))
 }
 

@@ -32,6 +32,8 @@ use crate::modules::admin_route_v1;
 
 use crate::modules::admin_bans_v1;
 
+use crate::modules::admin_abuse_v1;
+
 #[cfg(feature = "seed-system")]
 use crate::modules::seed_v1;
 
@@ -151,6 +153,9 @@ pub fn router(state: AppState) -> Router<AppState> {
     // (/admin/bans, /admin/bans/export) are served verbatim. Auth layers and the
     // origin/CSRF/session stack come from the enclosing private router.
     router = router.merge(admin_bans_v1::routes());
+
+    // Abuse measurement summary (A5): session admin ACL, same guard as bans.
+    router = router.merge(admin_abuse_v1::routes());
 
     #[cfg(feature = "seed-system")]
     {

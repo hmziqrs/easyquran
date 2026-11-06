@@ -620,14 +620,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .unwrap_or(0);
                 let snapshot = pool.demand_snapshot();
                 let catalogue_ids = pool.catalogue_ids().clone();
-                match ruxlog::services::translation_popularity_store::flush(
+                let started = now;
+                let result = ruxlog::services::translation_popularity_store::flush(
                     &db,
                     &snapshot,
                     &catalogue_ids,
                     now,
                 )
-                .await
-                {
+                .await;
+                let outcome = match &result {
+                    Ok(_) => ruxlog::services::job_log::OUTCOME_OK,
+                    Err(_) => ruxlog::services::job_log::OUTCOME_ERROR,
+                };
+                match result {
                     Ok(ranked) => {
                         pool.set_top_demand(ranked);
                         // fetch_sub AFTER commit, exactly the snapshotted amount:
@@ -639,6 +644,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         tracing::warn!(error = %e, "translation popularity flush failed (non-fatal)")
                     }
                 }
+                ruxlog::services::job_log::record(
+                    &db,
+                    "translation_popularity_flush",
+                    started,
+                    ruxlog::services::job_log::epoch_now(),
+                    outcome,
+                    None,
+                )
+                .await;
             }
         })
     } else {
@@ -741,8 +755,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 route_blocker_config::set_sync_running(true);
                 let sync_start = chrono::Utc::now();
+                let job_started = ruxlog::services::job_log::epoch_now();
 
-                if let Err(err) = RouteBlockerService::initialize_cache(&state_for_blocker).await {
+                let sync_result = RouteBlockerService::initialize_cache(&state_for_blocker).await;
+                let outcome = match &sync_result {
+                    Ok(_) => ruxlog::services::job_log::OUTCOME_OK,
+                    Err(_) => ruxlog::services::job_log::OUTCOME_ERROR,
+                };
+                if let Err(err) = &sync_result {
                     tracing::error!(
                         error = %err,
                         "Periodic route blocker cache sync failed"
@@ -750,6 +770,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } else {
                     tracing::info!("Periodic route blocker cache sync completed successfully");
                 }
+                ruxlog::services::job_log::record(
+                    &state_for_blocker.sea_db,
+                    "route_blocker_sync",
+                    job_started,
+                    ruxlog::services::job_log::epoch_now(),
+                    outcome,
+                    None,
+                )
+                .await;
 
                 route_blocker_config::set_last_sync_at(sync_start);
                 route_blocker_config::set_sync_running(false);
@@ -763,13 +792,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("SQLite session store established.");
     {
         let sweep_store = session_store.clone();
+        let sweep_db = state.sea_db.clone();
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(Duration::from_secs(3600));
             loop {
                 ticker.tick().await;
-                if let Err(e) = sweep_store.delete_expired().await {
+                let started = ruxlog::services::job_log::epoch_now();
+                let result = sweep_store.delete_expired().await;
+                let outcome = match &result {
+                    Ok(_) => ruxlog::services::job_log::OUTCOME_OK,
+                    Err(_) => ruxlog::services::job_log::OUTCOME_ERROR,
+                };
+                if let Err(e) = &result {
                     tracing::warn!(error = %e, "session store expired-row sweep failed (non-fatal)");
                 }
+                ruxlog::services::job_log::record(
+                    &sweep_db,
+                    "session_store_sweep",
+                    started,
+                    ruxlog::services::job_log::epoch_now(),
+                    outcome,
+                    None,
+                )
+                .await;
             }
         });
     }

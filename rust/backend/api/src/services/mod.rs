@@ -1,4 +1,5 @@
 pub mod abuse_limiter;
+pub mod abuse_report;
 pub mod account_methods;
 pub mod acl_service;
 pub mod auth;
@@ -6,6 +7,7 @@ pub mod billing;
 pub mod fresh_auth;
 pub mod image_moderation;
 pub mod image_optimizer;
+pub mod job_log;
 pub mod mail;
 pub mod media;
 pub mod notification;

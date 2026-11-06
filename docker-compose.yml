@@ -108,6 +108,13 @@ services:
       - "traefik.http.routers.web.middlewares=easyquran-web-compress@docker"
       - "traefik.http.services.web.loadbalancer.server.port=8080"
       - "traefik.http.middlewares.easyquran-web-compress.compress=true"
+    # Rotated json-file logs: 5 x 10 MB per container, so the log window (and the
+    # 429 warn lines the abuse report reads from) is bounded and known.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     restart: unless-stopped
 
   api:
@@ -195,6 +202,12 @@ services:
       - "traefik.http.services.api.loadbalancer.server.port=8888"
       - "traefik.http.middlewares.strip-api.stripprefix.prefixes=/api"
       - "traefik.http.middlewares.strip-api.stripprefix.forceslash=false"
+    # Rotated json-file logs, same bound as web (see the web service).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     restart: unless-stopped
 
 networks:
