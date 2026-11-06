@@ -47,6 +47,27 @@ class CargoAuditGateTests(unittest.TestCase):
                 )
                 self.assertEqual(len(failures), 1)
 
+    def test_accepted_advisory_stays_visible_and_does_not_block(self):
+        audit = {
+            "vulnerabilities": {"list": [{
+                "package": {"name": "zip", "version": "3.0.0"},
+                "advisory": {"id": "RUSTSEC-2026-0429"},
+            }]},
+        }
+        failures, unused = gate.assess(audit, {("zip", "3.0.0")})
+        self.assertEqual(failures, [])
+        self.assertEqual(len(unused), 1)
+
+    def test_accepted_id_on_another_package_blocks(self):
+        audit = {
+            "vulnerabilities": {"list": [{
+                "package": {"name": "other", "version": "1.0.0"},
+                "advisory": {"id": "RUSTSEC-2026-0429"},
+            }]},
+        }
+        failures, _ = gate.assess(audit, {("other", "1.0.0")})
+        self.assertEqual(len(failures), 1)
+
     def test_graph_parser_handles_duplicate_paths(self):
         tree = "app v1.0.0 (/workspace)\nopenssl v0.10.80 (*)\nopenssl v0.10.80\n"
         self.assertEqual(gate.reachable_packages(tree), {("app", "1.0.0"), ("openssl", "0.10.80")})

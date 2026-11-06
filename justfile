@@ -66,7 +66,7 @@ api-check:
     cd rust && cargo check --workspace
 
 api-test:
-    cd rust && cargo test --workspace
+    cd rust && cargo test --workspace -- --test-threads=1
 
 api-migrate: _env
     cd rust && cargo run -p migration --bin migrate -- up

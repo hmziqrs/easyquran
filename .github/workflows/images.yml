@@ -11,8 +11,8 @@
 #
 # db/ is gitignored, so a fresh clone has no databases: deploy/fetch-quran-db.sh pulls them
 # from the public R2 base (see that script), cached between runs because the corpus is
-# immutable. Web needs the Arabic set plus the generated catalogue (the sha-guard test's
-# input); the Rust gates need `all` — cargo test opens the corpus through db/quran.
+# immutable. The web jobs need the Arabic set plus the generated catalogue (the sha-guard
+# test's input); gate-rust needs `all` — cargo test opens the corpus through db/quran.
 name: images
 
 on:
@@ -38,6 +38,106 @@ env:
   REGISTRY: ghcr.io/${{ github.repository_owner }}
 
 jobs:
+  # Every check publication depends on. Both run for fork PRs too: neither holds a
+  # token nor a secret, and publish only ever runs on non-PR events.
+  gate-web:
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: 24
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.4
+
+      - name: Cache Quran databases
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: db/quran
+          key: quran-db-${{ hashFiles('web/src/lib/quran/view/source-profiles.ts') }}
+
+      - name: Provision Quran databases
+        run: |
+          deploy/fetch-quran-db.sh
+          deploy/fetch-quran-db.sh catalogue
+
+      - run: bun install --frozen-lockfile
+
+      - name: Check
+        working-directory: web
+        run: bun run check
+
+      - name: Lint
+        working-directory: web
+        run: bun run lint
+
+      - name: Test
+        working-directory: web
+        run: bun run test
+
+      # Accepted exceptions, both build or dev only, reviewed under owner step O36:
+      # deepmerge via vite-plugin-svelte, zod via puppeteer. A new advisory still fails.
+      - name: Audit dependencies
+        working-directory: web
+        run: bun audit --ignore=GHSA-gcqx-w48m-w2h4 --ignore=GHSA-mrhx-c7xc-m3w5
+
+      - name: Check Quran publisher
+        run: bun run quran:check
+
+  gate-rust:
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      # Pinned: newer clippy adds lints this tree has not been cleaned against.
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f
+        with:
+          toolchain: 1.98.1
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c
+        with:
+          workspaces: rust
+          cache-on-failure: true
+
+      - name: Cache Quran databases
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: db/quran
+          key: quran-db-all-${{ hashFiles('web/src/lib/data/translations.json', 'web/src/lib/quran/view/source-profiles.ts') }}
+
+      - name: Provision Quran databases
+        run: deploy/fetch-quran-db.sh all
+
+      - name: Format
+        working-directory: rust
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        working-directory: rust
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Test
+        working-directory: rust
+        run: cargo test --workspace --locked -- --test-threads=1
+
+      - name: Check seed-system build
+        working-directory: rust
+        run: cargo check -p ruxlog --features seed-system --locked
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Audit dependencies
+        run: python3 scripts/security/cargo-audit-gate.py
+
   meta:
     runs-on: ubuntu-26.04
     outputs:
@@ -71,7 +171,7 @@ jobs:
           persist-credentials: false
 
       # Bun owns the workspace: bun.lock carries catalog + patchedDependencies
-      # (root package.json). Node 24 still runs svelte-check, vitest and tsx.
+      # (root package.json). Node 24 still runs tsx in the build scripts.
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: 24
@@ -167,19 +267,6 @@ jobs:
           # even when a build fails partway.
           cache-on-failure: true
 
-      # cargo test opens the corpus through CARGO_MANIFEST_DIR/../../../db/quran, and db/
-      # is gitignored — the runner needs the full set (arabic + metadata + every
-      # translation sqlite + the generated catalogue) before the gates. Same immutable
-      # files as the web job, so the key tracks the baked maps, not the bytes.
-      - name: Cache Quran databases
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: db/quran
-          key: quran-db-all-${{ hashFiles('web/src/lib/data/translations.json', 'web/src/lib/quran/view/source-profiles.ts') }}
-
-      - name: Provision Quran databases
-        run: deploy/fetch-quran-db.sh all
-
       # `--target` (rather than a bare release build) puts the binary at the path
       # Dockerfile.api COPYs. `vendored-openssl` is not a cross-build workaround here — the
       # runtime image (debian:trixie-slim) carries no libssl, so the binary must not link
@@ -237,7 +324,7 @@ jobs:
   # itself, not anything PR-controlled). Loading an arm64 tar on an amd64
   # runner is fine — pushing is manifest work, not execution.
   publish:
-    needs: [meta, web, api]
+    needs: [meta, gate-web, gate-rust, web, api]
     if: github.event_name != 'pull_request' && needs.meta.outputs.push == 'true'
     runs-on: ubuntu-26.04
     permissions:

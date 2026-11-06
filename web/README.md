@@ -83,5 +83,6 @@ unaffected. These previews return 404 in production and are linked from `/design
 - Firebase config hardcoded `lib/firebase/index.ts` (public by design). Push native in SW, no gstatic `importScripts`.
 - Image CI (`.github/workflows/images.yml`): builds both images on arm64;
   master publication triggers Dokploy redeployment. PRs cannot publish images.
-  Check/lint/test and dependency audits remain local checks.
+  `gate-web` and `gate-rust` run check, lint, tests and dependency audits, and publish
+  needs both.
 - Sidebar lists virtualized (`@tanstack/svelte-virtual`); only visible rows render.

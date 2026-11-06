@@ -10,6 +10,18 @@ UNUSED_ADVISORIES = {
     "RUSTSEC-2023-0071": "rsa",
 }
 
+# Reachable, but only at build time or with no fix upstream. Each stays printed on
+# every run; docs/plans/owner.md O36 holds the review. A new advisory still blocks.
+ACCEPTED_ADVISORIES = {
+    # utoipa-swagger-ui build script unpacks its own pinned asset, never user input.
+    "RUSTSEC-2026-0429": "zip",
+    "RUSTSEC-2026-0367": "zip",
+    "RUSTSEC-2026-0368": "zip",
+    "RUSTSEC-2026-0369": "zip",
+    # Unmaintained notice, pulled in by aws-smithy-http. No newer release to take.
+    "RUSTSEC-2026-0441": "pin-utils",
+}
+
 
 def reachable_packages(tree):
     import re
@@ -43,6 +55,8 @@ def assess(audit, reachable):
             and (package["name"], package["version"]) not in reachable
         ):
             unused.append(item)
+        elif ACCEPTED_ADVISORIES.get(identifier) == package["name"]:
+            unused.append(f"ACCEPTED {item}")
         else:
             failures.append(item)
     return failures, unused
@@ -73,12 +87,12 @@ def main():
         raise RuntimeError("cargo audit reported an operational error")
     failures, unused = assess(result, reachable_packages(tree.stdout))
     for item in unused:
-        print(f"UNUSED LOCKFILE PATH (verified absent from {arguments.target} graph): {item}")
+        print(f"NOT BLOCKING (unused on {arguments.target}, or accepted): {item}")
     for item in failures:
         print(f"BLOCKED: {item}", file=sys.stderr)
     if failures:
         return 1
-    print("Dependency gate passed; unused lockfile findings above remain visible.")
+    print("Dependency gate passed; findings above remain visible.")
     return 0
 
 

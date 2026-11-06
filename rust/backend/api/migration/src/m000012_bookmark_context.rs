@@ -66,7 +66,10 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let conn = manager.get_connection();
-        for stmt in ["DROP TABLE IF EXISTS bookmarks", "DROP TABLE IF EXISTS bookmark_folders"] {
+        for stmt in [
+            "DROP TABLE IF EXISTS bookmarks",
+            "DROP TABLE IF EXISTS bookmark_folders",
+        ] {
             conn.execute_unprepared(stmt).await?;
         }
         Ok(())

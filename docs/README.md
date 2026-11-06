@@ -45,7 +45,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 
 | Item                                                                                                             | Title                                                                         | Blocked by |
 | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------- |
-| [A2](plans/abuse-0-foundations.md#a2-restore-ci-gates-and-fix-the-commit-hook)                                   | Restore CI gates and fix the commit hook                                      | -          |
 | [A3](plans/abuse-0-foundations.md#a3-billing-degrade-the-read-path-and-unmount)                                  | Billing: degrade the read path and unmount                                    | -          |
 | [A4](plans/abuse-0-foundations.md#a4-interim-compliance-truth-consent-default-and-claims-ledger)                 | Interim compliance truth: consent default and claims ledger                   | -          |
 | [A5](plans/abuse-0-foundations.md#a5-measurement-promote-429-logs-durable-block-ledger-job-log-abuse-report)     | Measurement: promote 429 logs, durable block ledger, job log, abuse report    | -          |

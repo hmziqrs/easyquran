@@ -2,25 +2,6 @@
 
 [Back to index](../README.md)
 
-#### A2. Restore CI gates and fix the commit hook
-
-Build:
-
-1. `.github/workflows/images.yml`: add gate jobs and make `publish` `needs:` them. Existing `quran:check` step in the web build job can be reused.
-   - Web (`web/` working dir, bun install --frozen-lockfile): `bun run check`, `bun run lint`, `bun run test`, `bun audit`, `bun run quran:check`.
-   - Rust: `cargo fmt --all --check`; `cargo clippy --workspace --all-targets --locked -- -D warnings`; `cargo test --workspace --locked -- --test-threads=1`; seed-system `cargo check`; `python3 scripts/security/cargo-audit-gate.py`.
-   - Timebox 2 days. If the Rust jobs cannot be provisioned in that time, ship the web jobs only and record the fallback in the commit message. Do not block A3–A6 on this item.
-   - Known local failure: `clippy -D warnings` fails with 16 `double_must_use` under rustc 1.99; CI pins 1.98.1. Use the pinned toolchain in CI.
-2. Commit hook: root `vite.config.ts` currently runs `staged: {"*": "vp check --fix"}`, which applies only the root lint block. Change to `staged: {"web/**": "cd web && vp check --fix"}`.
-3. `justfile` `api-test` target: add `--test-threads=1`.
-4. Fix the false claim in `rust/backend/api/AGENTS.md` about guard coverage. Fix the stale comments in `images.yml`.
-5. `documentation/history.md:36` claims CI runs the suites. That file is owner-only: add the exact replacement sentence under O21.
-6. `DEPLOYMENT.md`: fix the false gates claim (line ~74) and replace pnpm references with bun.
-
-Files: `.github/workflows/images.yml`, `vite.config.ts`, `justfile`, `rust/backend/api/AGENTS.md`, `web/README.md`, `deploy/README.md`, `DEPLOYMENT.md`.
-
-Done when: every gate job is a `needs:` of `publish`, so a nested ternary, an unsorted import, or a failing test stops publication. Owner confirms with a failing PR.
-
 #### A3. Billing: degrade the read path and unmount
 
 Build:

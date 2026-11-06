@@ -369,12 +369,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn full_migrator_run_creates_the_unique_index() {
+    async fn full_migrator_run_keeps_a_unique_verse_index() {
         use crate::Migrator;
         use sea_orm_migration::MigratorTrait;
 
         let db = mem_db().await;
         Migrator::up(&db, None).await.unwrap();
-        assert!(index_exists(&db, "bookmarks", "idx_bookmarks_user_verse").await);
+        // m000012 rebuilds `bookmarks` and carries this rule on as the live-key index.
+        assert!(index_exists(&db, "bookmarks", "idx_bookmarks_live_key").await);
     }
 }

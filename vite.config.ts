@@ -2,7 +2,7 @@ import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   staged: {
-    "*": "vp check --fix",
+    "web/**": "cd web && vp check --fix",
   },
   fmt: {
     // quran.com mirror payloads must stay byte-verbatim (id + byte-size identity;

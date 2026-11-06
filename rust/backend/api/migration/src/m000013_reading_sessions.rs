@@ -61,7 +61,10 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let conn = manager.get_connection();
-        for stmt in ["DROP TABLE IF EXISTS reading_progress", "DROP TABLE IF EXISTS reading_sessions"] {
+        for stmt in [
+            "DROP TABLE IF EXISTS reading_progress",
+            "DROP TABLE IF EXISTS reading_sessions",
+        ] {
             conn.execute_unprepared(stmt).await?;
         }
         Ok(())

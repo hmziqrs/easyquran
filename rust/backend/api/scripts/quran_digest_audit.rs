@@ -30,7 +30,7 @@ fn check(label: &str, got: &str, want: &str) -> bool {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = dotenvy::dotenv();
-    let settings = ruxlog::config::Settings::from_env();
+    let settings = ruxlog::config::Settings::from_env()?;
     let qset = &settings.quran;
     let store = ruxlog::quran::load_quran_store(qset).await?;
 
