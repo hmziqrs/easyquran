@@ -31,28 +31,29 @@ impl Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    // No FK in the schema (m000032): ban rows outlive the account (A19b).
     #[sea_orm(
         belongs_to = "super::super::user::Entity",
         from = "Column::UserId",
         to = "super::super::user::Column::Id",
-        on_update = "Cascade",
-        on_delete = "Cascade"
+        on_update = "NoAction",
+        on_delete = "NoAction"
     )]
     User,
     #[sea_orm(
         belongs_to = "super::super::user::Entity",
         from = "Column::BannedBy",
         to = "super::super::user::Column::Id",
-        on_update = "Cascade",
-        on_delete = "SetNull"
+        on_update = "NoAction",
+        on_delete = "NoAction"
     )]
     BannedByUser,
     #[sea_orm(
         belongs_to = "super::super::user::Entity",
         from = "Column::RevokedBy",
         to = "super::super::user::Column::Id",
-        on_update = "Cascade",
-        on_delete = "SetNull"
+        on_update = "NoAction",
+        on_delete = "NoAction"
     )]
     RevokedByUser,
 }

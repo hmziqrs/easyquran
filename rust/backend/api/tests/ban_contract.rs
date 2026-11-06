@@ -404,3 +404,48 @@ fn ban_contract_source_has_no_delete_or_user_cascade() {
     // The gate itself defaults off.
     assert_eq!(admin_user_bans_v1::controller::MAX_BAN_DAYS, 365);
 }
+
+#[tokio::test]
+async fn ban_history_survives_account_deletion() {
+    let h = admin_harness().await;
+    let (status, _) = send(
+        &h.app,
+        req("POST", "/", &h.cookie_a, Some(create_body(h.uid_b, 1))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    h.state
+        .sea_db
+        .execute_unprepared(&format!("DELETE FROM users WHERE id = {}", h.uid_b))
+        .await
+        .unwrap();
+    assert_eq!(
+        count(
+            &h,
+            &format!("SELECT COUNT(*) FROM user_bans WHERE user_id = {}", h.uid_b)
+        )
+        .await,
+        1,
+        "ban row must outlive the account (A19b)"
+    );
+}
+
+// A19b source guard: the rebuilt user_bans migration (non-test part) and the
+// entity carry no ON DELETE CASCADE / Cascade relation from users.
+#[test]
+fn user_bans_has_no_user_cascade() {
+    let migration = include_str!("../migration/src/m000032_user_bans_evidence_safe.rs");
+    let migration_body = migration.split("#[cfg(test)]").next().unwrap_or_default();
+    assert!(
+        !migration_body
+            .to_ascii_uppercase()
+            .contains("ON DELETE CASCADE"),
+        "m000032 must not add ON DELETE CASCADE"
+    );
+    let model = include_str!("../src/db/sea_models/user_ban/model.rs");
+    assert!(
+        !model.contains("on_delete = \"Cascade\""),
+        "user_ban entity must not declare a cascade on delete"
+    );
+}
+
