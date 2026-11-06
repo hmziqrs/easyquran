@@ -45,7 +45,7 @@
   "account_passkey_add": "Add a passkey",
   "account_generic_error": "Something went wrong. Please try again.",
   "account_delete_heading": "Delete account",
-  "account_delete_description": "Deletion is immediate, with no grace period. Your account data leaves the live database and every session ends. Audit and moderation records, the deletion record and data under a legal hold are kept. Backups keep copies for up to 30 days. Authored posts and uploaded media are not removed.",
+  "account_delete_description": "Deletion is immediate, with no grace period. It removes your account data from the live database and from storage, including your uploaded media and avatar, and ends every session. Posts you wrote stay, without your name attached. Audit and moderation records, the deletion record and any data under a legal hold are kept. This is a logical erasure: it makes no claim of physical deletion, including from backups.",
   "account_delete_export_hint": "Export first if you want a copy. The file holds bookmarks, folders, reading threads, notes, home cards and settings.",
   "account_delete_export": "Export my data",
   "account_delete_field_email": "Type your email to confirm",

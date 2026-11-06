@@ -62,6 +62,8 @@ pub const MAX_BATCHES_PER_TABLE: usize = 20;
 pub const TOMBSTONE_DAYS: i64 = 180;
 const BATCH_PAUSE: Duration = Duration::from_millis(50);
 const ACCOUNT_LIFETIME: &str = "account_lifetime";
+/// Legal-hold subject kind for an account (`legal_hold_subjects.subject_kind`).
+pub const SUBJECT_KIND_USER: &str = "user";
 const BOOKMARKS_DOMAIN: &str = "bookmarks";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -665,7 +667,9 @@ pub async fn run_recorded(db: &DatabaseConnection, requested: Mode, now: i64) ->
 
 pub const ERASURE_RETENTION_DAYS: i64 = 730;
 pub const ERASURE_RETENTION_CLASS: &str = "erasure_24m";
-pub const ERASURE_SCOPE_USER: &str = "user_data";
+/// Receipt scope: user-keyed rows, the subject's uploaded media and avatar (takedown path),
+/// and authored posts (author reference anonymised, post kept).
+pub const ERASURE_SCOPE_USER: &str = "user_data_media_posts";
 pub const WAL_CHECKPOINT_JOB: &str = "wal_checkpoint";
 pub const WAL_CHECKPOINT_INTERVAL_SECS: u64 = 6 * 3_600;
 pub const BACKUP_JOB: &str = "db_backup";
@@ -793,10 +797,11 @@ async fn count_subject_rows<C: ConnectionTrait>(
     .await
 }
 
-/// Latest expiry among the subject's live user holds. `NEVER_EXPIRES` for a hold that
-/// never auto-releases, 0 when none.
-pub(crate) async fn user_hold_expiry<C: ConnectionTrait>(
+/// Latest expiry among the live legal holds on one subject of `kind` (`user`, `media`, ...).
+/// `NEVER_EXPIRES` for a hold that never auto-releases, 0 when none.
+pub(crate) async fn subject_hold_expiry<C: ConnectionTrait>(
     conn: &C,
+    kind: &str,
     subject: &str,
     now: i64,
 ) -> Result<i64, DbErr> {
@@ -809,12 +814,21 @@ pub(crate) async fn user_hold_expiry<C: ConnectionTrait>(
                  ELSE h.expires_at END), 0) FROM legal_holds h \
                  JOIN legal_hold_subjects s ON s.hold_id = h.id \
                  WHERE h.released_at IS NULL AND (h.auto_release = 0 OR h.expires_at > {now}) \
-                 AND s.subject_kind = 'user' AND s.subject_id = ?"
+                 AND s.subject_kind = ? AND s.subject_id = ?"
             ),
-            [subject.into()],
+            [kind.into(), subject.into()],
         ),
     )
     .await
+}
+
+/// Latest expiry among the subject's live user holds (0 when none).
+pub(crate) async fn user_hold_expiry<C: ConnectionTrait>(
+    conn: &C,
+    subject: &str,
+    now: i64,
+) -> Result<i64, DbErr> {
+    subject_hold_expiry(conn, SUBJECT_KIND_USER, subject, now).await
 }
 
 /// Erase one account's user-keyed data (A33). Own transaction. See `erase_subject_in`.
@@ -825,7 +839,7 @@ pub async fn erase_subject(
     now: i64,
 ) -> Result<ErasureReport, DbErr> {
     let txn = db.begin().await?;
-    let report = erase_subject_in(&txn, actor, user_id, now).await?;
+    let report = erase_subject_in(&txn, actor, user_id, now, Vec::new()).await?;
     txn.commit().await?;
     Ok(report)
 }
@@ -833,13 +847,16 @@ pub async fn erase_subject(
 /// Erase one account's user-keyed data inside the caller's transaction (A33, A38). Deletes
 /// the subject's rows across the erase tables that no live hold covers, writes the receipt
 /// (subject ref, scope, what was kept with basis and expiry), and writes one audit row.
-/// The `users` row is never touched here: a live user hold lists it as retained, and
-/// the data-request path (`services::data_request`) scrubs it when no hold applies.
+/// `extra_retained` lists what the caller kept on the subject's behalf (media, posts): each
+/// entry is one receipt line. The `users` row is never touched here: a live user hold lists
+/// it as retained, and the data-request path (`services::data_request`) scrubs it when no
+/// hold applies.
 pub async fn erase_subject_in<C: ConnectionTrait>(
     conn: &C,
     actor: Option<i32>,
     user_id: i32,
     now: i64,
+    extra_retained: Vec<serde_json::Value>,
 ) -> Result<ErasureReport, DbErr> {
     let subject = user_id.to_string();
     let hold_expiry = user_hold_expiry(conn, &subject, now).await?;
@@ -865,6 +882,7 @@ pub async fn erase_subject_in<C: ConnectionTrait>(
             "expires_at": hold_expiry,
         }));
     }
+    retained.extend(extra_retained);
     let retained_tables = retained.len();
     let retained_json = serde_json::Value::Array(retained).to_string();
     let res = conn

@@ -47,10 +47,13 @@ register a device (O12) for push to reach anyone.
    for the report id. Act on the report from the database even if the alert failed.
 2. Read the report row on the api host (read-only query on `reports`: `id`, `target_kind`,
    `target_id`, `reason`, `priority`, `status`, `snapshot`, `created_at`). The snapshot
-   holds the content captured at intake. No admin read route exists in this build.
+   holds the content captured at intake. Operators can also list open reports with
+   `GET /admin/reports/v1?status=open&priority=p0` (session admin, read-only).
 3. Preserve evidence before any removal. For a comment report, on the api host:
    `just incident capture <report-id>` (A25). It copies the comment into `case_evidence`
-   and writes one audit row. Legal holds: `services/legal_hold.rs`.
+   and writes one audit row. Legal holds: `just legal-hold place --rule <class> --authority <t>
+   --reason <t> --owner <t> --subject <kind:id>` or `POST /admin/legal-holds/v1` (admin session).
+   Each place and renew writes a `legal_hold.*` audit row; `just legal-hold list` shows holds.
 4. Hide or remove the content through the existing comment or post controls. Each action
    writes its own audit row.
 5. Account action, if the evidence supports one: follow `deploy/moderation-sop.md`
@@ -60,9 +63,10 @@ register a device (O12) for push to reach anyone.
    needs follow-up with the resend route.
 6. CSAM: the code does not refer material to any authority. The referral step is a
    legal and operational duty outside this build. See `deploy/legal-debt.md` item 1.
-7. Record the case note: steps taken, times, reason code, who decided. No report
-   status route exists yet, so `status` stays `open` after handling. Open counts in the
-   digest will not drop until a later item adds the status change.
+7. Set the review status: `POST /admin/reports/v1/{id}/status` with `{"status": "reviewing" |
+   "actioned" | "dismissed"}` (admin session). Each change writes one `report.status_set`
+   audit row. Open P0 and P1 counts in the digest fall only when the status leaves `open`.
+8. Record the case note: steps taken, times, reason code, who decided.
 
 ## Upload screening and CSAM triage (A37)
 
@@ -75,15 +79,19 @@ What the code does, automatically:
   `resource_id` = SHA-256 of the image bytes and `user_id` = uploader. No bytes are kept.
 - Known-hash matching has no provider in this build. The refusal path exists; the match
   source does not, so it is inactive until the owner registers a provider (O29).
-- A refusal raises no P0 alert: A26 dispatch needs a report row, and reports do not target
-  media in this build. Until that changes, check `audit_logs` for `media.hash_match` daily.
+- A known-hash match sends one operator alert by mail (`EasyQuran: known-hash match blocked`),
+  fire-and-forget after the refusal. It names no image, uploader or hash. Its result is one
+  `alert.dispatch` audit row with `priority = hash_match` and the mail status. A moderator
+  refusal (`media.moderation_reject`) raises no alert: check `audit_logs` for it daily.
 
 Triage. Human-confirmed violating content only. The code never removes stored content.
 
 1. A human confirms the content violates policy. A match alone is not a decision. Quran
    text is never violating content.
-2. Preserve before any removal: place an A25 legal hold (`rust/backend/api/src/services/legal_hold.rs`).
-   Gap: no route or CLI places a media hold in this build. Record the hold id.
+2. Preserve before any removal: place an A25 legal hold on the media id
+   (`just legal-hold place --rule enforcement_12m --subject media:<id> ...` or
+   `POST /admin/legal-holds/v1`). A held item survives erasure and is listed in the receipt.
+   Record the hold id.
 3. Remove: `DELETE /media/v1/{id}` (A30 takedown: storage objects, CDN purge when
    `CDN_PURGE_ZONE_ID` and `CDN_PURGE_API_TOKEN` are set, tombstone and audit row).
 4. Report to NCMEC: outside this build. The code makes no referral. Owner (O29) and
@@ -98,9 +106,12 @@ Triage. Human-confirmed violating content only. The code never removes stored co
   enforcement notice (A35). Report intake is `POST /report/v1/submit`. Decision
   clock: 7 days (`DECISION_CLOCK_SECS`). The digest's `open_appeals` counts every open
   appeal; overdue ones are in `appeals.due_at`.
-- No decision route exists in this build. Record the decision in the case note and the
-  audit row, and revoke the ban through `POST /admin/users/bans/{id}/revoke` if it is
-  reversed. Flag this gap to the owner before the first real appeal.
+- Decision: `POST /admin/appeals/v1/{id}/decision` with `{"decision": "upheld" | "overturned"}`
+  (admin session, open appeals only). It writes one `appeal.decision` audit row and stops the
+  decision clock: the appeal leaves `open`, so it no longer counts as overdue or open. The
+  decision does not change the ban. If the appeal is overturned, revoke the ban through
+  `POST /admin/users/bans/{id}/revoke`, a separate audited step. Open appeals:
+  `GET /admin/appeals/v1`.
 
 ## Drill (owner runs, O13)
 

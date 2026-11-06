@@ -1,4 +1,4 @@
-import { idbGet, idbPut, openIdb } from "#lib/workers/idb.js";
+import { idbDelete, idbGet, idbPut, openIdb } from "#lib/workers/idb.js";
 
 import type { PublicJwk } from "./keys";
 
@@ -70,6 +70,14 @@ export function memoryKeyStore(): DeviceKeyStore {
       records.set(owner, record);
     },
   };
+}
+
+/**
+ * Account deletion (F7): removes this owner's device key. Nothing in the browser can sign for
+ * the deleted account afterwards.
+ */
+export async function deleteDeviceKey(owner: string): Promise<void> {
+  await idbDelete(await openIdb(DB_NAME, STORE), STORE, owner);
 }
 
 /** A new P-256 key. The private half never leaves the browser; the public half is exportable. */

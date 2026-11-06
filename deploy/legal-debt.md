@@ -5,18 +5,19 @@ makes it due. Do not publish a claim the code does not enforce while its row is 
 Owner decisions live in `docs/plans/owner.md`; this file is the trigger list for them.
 Reference: `docs/research/abuse-prevention/R2-legal-privacy.md`.
 
-Status as of this commit: no item is closed.
+Status as of this commit: no item is closed. Rows 7 and 8 have routes now; their triggers
+still stand until the first real case is handled.
 
 | # | Item | Owner ref | Trigger (due before) | Status |
 | --- | --- | --- | --- | --- |
-| 1 | CSAM referral path. Code captures and alerts P0 reports (A24, A26). No automated or manual referral step exists in the build. Hash-match provider and NCMEC registration not done. | O29, A37 | First live P0 csam report, or any image upload path | Open |
+| 1 | CSAM referral path. Code captures and alerts P0 reports (A24, A26). No automated or manual referral step exists in the build. A known-hash match mails the operator (A37 close), but no hash-match provider is bound and NCMEC registration is not done. | O29, A37 | First live P0 csam report, or any image upload path | Open |
 | 2 | Named owner for DPIA, LIA, ROPA, retention schedule and quarterly measurement. Unowned until named. | O11 | Any enforcement ban in production | Open |
 | 3 | Privacy and terms text written, signed, and dated in `deploy/legal/`. | O11, A34 | Public launch of report or appeal pages | Open |
-| 4 | Erasure wording. Default claim: removed from the live database; removed from backups within 30 days. Confirm before publishing. | O15, A33 | Publishing any erasure claim | Open |
+| 4 | Erasure wording. Published copy (account, privacy, terms) claims logical erasure only: account data and uploaded media leave the live database and storage; authored posts keep their text without the author; no claim of physical deletion, including from backups. Owner confirms the wording. | O15, A33, A38 | Publishing any erasure claim | Open (copy matches code; owner sign-off pending) |
 | 5 | Custody document: where the pepper and other secrets live, who answers DSARs, what happens on restore or change of control. | O16, A34 | Publishing the privacy text | Open |
 | 6 | Minors: no accounts under 18 in India (default, unconfirmed). Decide whether the rule covers the account device list. | O6, A34 | First India signup, or minors path | Open |
-| 7 | Appeal decision route. Intake exists (A35). No API records a decision, so decisions live only in case notes. The 7-day decision clock (DECISION_CLOCK_SECS) has no enforcement. | A35 follow-up | First real appeal | Open |
-| 8 | Report status change. No route sets `reports.status`; open counts never fall. Retention of reports is 12 months (`report_12m`). | A24 follow-up, A38 | First P0 handled | Open |
+| 7 | Appeal decision route. Intake exists (A35). `POST /admin/appeals/v1/{id}/decision` records `upheld` or `overturned` (audited, `appeal.decision`) and stops the 7-day decision clock (`DECISION_CLOCK_SECS`). The decision does not revoke the ban; that stays a separate audited step. | A35 follow-up | First real appeal | Route built; owner decides ban effect |
+| 8 | Report status change. `POST /admin/reports/v1/{id}/status` sets `open`, `reviewing`, `actioned` or `dismissed` (audited, `report.status_set`); open counts fall when a report leaves `open`. Retention of reports is 12 months (`report_12m`). | A24 follow-up, A38 | First P0 handled | Route built; first P0 not yet handled |
 | 9 | Store rules for device identity. Android: no persistent device id claim (confirm). Apple: no derived device data (confirm). | O31 | Each first store release | Open |
 | 10 | Font and translation licences inside app bundles. Mehr Nastaliq Web is not OFL. | O35 | Native client release (M5, G2, N3) | Open |
 | 11 | Recitation licence and source. | O22 | Reciter catalogue or radio (F19, F20) | Open |
@@ -34,23 +35,24 @@ Admin procedure (routes under `/user/v1/admin/`, admin role, all `POST`):
 1. Confirm the requester controls the account. The code has no in-app identity check; do it out of band.
 2. `data_request/open` with `{"user_id": N}`. Writes `data_request.open` to `audit_logs`. Note `due_at`.
 3. `POST data_request/list` shows the open queue, earliest deadline first.
-4. Before erasing, check the subject for legal holds (`legal_holds`, `legal_hold_subjects`). A live user hold keeps every user-keyed row and the `users` row. The receipt lists what was kept. Tell the subject what was kept and why (owner wording).
-5. `POST data_request/erase/{request_id}` with `{"confirm_email": "..."}`. Returns `receipt_id`, `deleted`, `retained_tables`, `user_row_erased`.
-6. Check the `erasure_receipts` row and the closed `data_requests` row.
+4. Before erasing, check the subject for legal holds (`legal_holds`, `legal_hold_subjects`, or `just legal-hold list`). A live user hold keeps every user-keyed row, the `users` row, the subject's media and the author link on their posts. Held media and posts are listed in the receipt. Tell the subject what was kept and why (owner wording).
+5. `POST data_request/erase/{request_id}` with `{"confirm_email": "..."}`. Returns `receipt_id`, `deleted`, `retained_tables`, `user_row_erased`, `media_deleted`, `posts_anonymized`. If the response is a storage error, nothing for this request was committed: the request stays open. Retry the same call; storage deletes are idempotent.
+6. Check the `erasure_receipts` row (scope `user_data_media_posts`) and the closed `data_requests` row.
 
-What the erase does (code: `services/data_request.rs`, `services/retention.rs`):
+What the erase does (code: `services/data_request.rs`, `services/retention.rs`, `services/media_takedown.rs`):
 
+- Media first: every upload of the subject and their avatar goes through the A30 takedown (storage objects and variants, CDN purge when configured, tombstone and `media.delete` audit row), unless a live hold covers the subject or the item.
+- Authored posts stay. Their author reference moves to a fixed anonymous author row (`Former member`, id -1, cannot sign in), unless a live user hold applies.
 - Deletes the subject's rows in every user-keyed table not in the evidence list (`ERASE_EVIDENCE`, `ERASE_EXTRA_TABLES`), except rows under a live hold.
 - Scrubs the `users` row when no live user hold applies: name, mailbox (set to `erased-<id>@erased.invalid`), password, 2FA, OAuth link, mailbox hash. Rotates the session secret. The id stays.
-- Writes the receipt (A33) and closes the request, in one transaction.
+- Writes the receipt (A33) and closes the request, in one transaction after the media step.
 
 What it does not do. Do not publish a claim about these:
 
 - Keeps evidence: `audit_logs`, `user_bans`, `enforcement_notices`, `media_deletions`, `reports`, `case_evidence`.
-- Does not delete authored posts or uploaded media or avatar files.
-- Does not physically remove data. Rows leave the live database. Backups keep them until the 30-day cap (A33). The public erasure wording stays unpublished until row 4 closes (O15).
+- Does not physically remove data. This is a logical erasure: live rows and stored objects are removed; backups are not addressed by the code. The public erasure wording stays unpublished until row 4 closes (O15).
 
-Self-service deletion (F7) reuses the same path: `POST /user/v1/delete` (`user_v1::controller::self_delete_account`) checks fresh auth and the typed email, ends every session, then calls `data_request::erase_self`. Immediate, no grace period. Web entry: `DeleteAccountControls` on the Account page.
+Self-service deletion (F7) reuses the same path: `POST /user/v1/delete` (`user_v1::controller::self_delete_account`) checks fresh auth and the typed email, ends every session, then calls `data_request::erase_self`, which opens or reuses the request, committed first, then erases. Immediate, no grace period. Web entry: `DeleteAccountControls` on the Account page, which then clears this browser's account data (`web/src/lib/auth/account-purge.ts`: sync outbox, device key, account-keyed storage; device-only reading data stays).
 
 ## Policy sentence ledger (A34)
 
@@ -78,7 +80,7 @@ Every sentence on `/privacy` and `/terms` and the code that makes it true. A sen
 | P-A6 | Delete your account yourself from Account page | `DeleteAccountControls` (`web/src/routes/(account)/account/+page.svelte`); `POST /user/v1/delete` | Kept |
 | P-A7 | Deletion removes live data straight away: sign-in, sessions, devices, bookmarks, history, comments | `self_delete_account` to `data_request::erase_self`; `retention.rs` `erase_tables` (every `user_col` table plus `ERASE_EXTRA_TABLES`; `post_comments` has `user_id`) | Kept |
 | P-A8 | Audit, moderation and enforcement records, deletion record and legal holds kept | `retention.rs` `ERASE_EVIDENCE` (`audit_logs`, `user_bans`, `enforcement_notices`, `media_deletions`); `reports`, `case_evidence` have no `user_col`; `erasure_receipts`; holds | Kept |
-| P-A9 | Authored posts and uploaded media not removed | Erase path excludes posts and media (A38, `legal-debt.md` above) | Kept |
+| P-A9 | Authored posts stay without your name; uploaded media and avatar are removed from storage | `data_request::erase` anonymises `posts.author_id` to `ANONYMOUS_AUTHOR_ID`; `data_request::takedown_subject_media` runs the A30 takedown (A38) | Kept (new) |
 | P-A10 | Database backups keep copies for 30 days | Backups dark and owner-gated (A33) | Removed (not live) |
 | P-D1 | Before sign-in, bookmarks, notes, history, insights stored in browser | Local stores in `web/src/lib/bookmarks/store.svelte.ts` and reader state | Kept |
 | P-D2 | Signing in adds the bookmarks on this device to your account | `bookmarks/store.svelte.ts` (sign-in join) | Narrowed (was: and history and insights) |
@@ -94,6 +96,7 @@ Every sentence on `/privacy` and `/terms` and the code that makes it true. A sen
 | P-K5 | Third-party sign-in not asked for date of birth | `user::Entity::create_from_google` leaves `is_minor` false | Kept (new). Gap: O6 |
 | P-Ch1 | Use without account, analytics off, decline notifications, delete your own account | P-A1, P-S1, P-N2, P-A6 | Kept |
 | P-Ch2 | Clearing browser data removes local data | Browser storage. Platform behaviour | Kept |
+| P-Ch3 | Deleting your account clears this browser's account data (sync queue, device key, account-keyed storage); device-only reading data stays | `web/src/lib/auth/account-purge.ts` (called by `DeleteAccountControls` after logout); `destroyAllSyncRecords` in `sync/outbox.ts`; `deleteDeviceKey` in `device/key-store.ts` | Kept (new). Other browsers and profiles keep their copies |
 | P-G1 | Policy changes update the date at the top | Page `copy.updated` | Kept |
 | T-1 | Acceptance and use of the app | No code claim | Kept (owner review, O11) |
 | T-2 | Reader, search, bookmarks, personal notes, without warranty | `quran_v1`, `search_v1`, `bookmark_v1`, local notes | Kept |
@@ -111,6 +114,7 @@ Every sentence on `/privacy` and `/terms` and the code that makes it true. A sen
 | T-12 | Provided as is; no liability for loss of local notes or bookmarks | Local-only storage (P-D1) | Kept (owner review) |
 | T-13 | Questions to salam@easyquran.app | Owner-supplied mailbox. Response-time promise removed | Kept (owner) |
 | T-13b | Respond within a few days | None | Removed |
+| T-14 | Deleting your account: your posts stay without your name attached | `data_request::erase` anonymises `posts.author_id` (A38) | Kept (new) |
 
 ### Gaps the ledger records (not closed here)
 

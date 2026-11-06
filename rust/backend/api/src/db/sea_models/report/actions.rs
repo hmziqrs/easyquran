@@ -1,4 +1,4 @@
-use sea_orm::{entity::prelude::*, Set};
+use sea_orm::{entity::prelude::*, QueryOrder, QuerySelect, Set};
 
 use crate::error::DbResult;
 
@@ -50,4 +50,44 @@ impl Entity {
             .count(conn)
             .await?)
     }
+
+    /// Reports for the operator review list, newest first. Filters apply when set.
+    pub async fn list_for_review<C: ConnectionTrait>(
+        conn: &C,
+        status: Option<&str>,
+        priority: Option<&str>,
+        limit: u64,
+    ) -> DbResult<Vec<Model>> {
+        let mut query = Self::find()
+            .order_by_desc(Column::CreatedAt)
+            .order_by_desc(Column::Id);
+        if let Some(status) = status {
+            query = query.filter(Column::Status.eq(status));
+        }
+        if let Some(priority) = priority {
+            query = query.filter(Column::Priority.eq(priority));
+        }
+        Ok(query.limit(limit).all(conn).await?)
+    }
+
+    /// Sets the review status of one report. None when the report does not exist.
+    pub async fn set_status<C: ConnectionTrait>(
+        conn: &C,
+        id: i64,
+        status: &str,
+    ) -> DbResult<Option<Model>> {
+        let Some(existing) = Self::find_by_id(id).one(conn).await? else {
+            return Ok(None);
+        };
+        let mut active: ActiveModel = existing.into();
+        active.status = Set(status.to_string());
+        Ok(Some(active.update(conn).await?))
+    }
+}
+
+/// Review statuses an operator may set. `open` is the intake state; the rest close review.
+pub const REPORT_STATUSES: &[&str] = &["open", "reviewing", "actioned", "dismissed"];
+
+pub fn is_report_status(raw: &str) -> bool {
+    REPORT_STATUSES.contains(&raw)
 }

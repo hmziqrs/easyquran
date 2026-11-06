@@ -11,6 +11,8 @@ pub mod user_v1;
 pub mod admin_abuse_v1;
 pub mod admin_acl_v1;
 pub mod admin_bans_v1;
+pub mod admin_legal_hold_v1;
+pub mod admin_review_v1;
 pub mod admin_route_v1;
 pub mod admin_user_bans_v1;
 pub mod analytics_v1;

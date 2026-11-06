@@ -1,4 +1,4 @@
-use sea_orm::{entity::prelude::*, Set};
+use sea_orm::{entity::prelude::*, QueryOrder, QuerySelect, Set};
 
 use crate::db::sea_models::enforcement_notice;
 use crate::error::DbResult;
@@ -64,4 +64,55 @@ impl Entity {
             .count(conn)
             .await?)
     }
+
+    /// Open appeals, oldest first, for the operator review list. `status` filters when set.
+    pub async fn list_for_review<C: ConnectionTrait>(
+        conn: &C,
+        status: Option<&str>,
+        limit: u64,
+    ) -> DbResult<Vec<Model>> {
+        let mut query = Self::find()
+            .order_by_asc(Column::DueAt)
+            .order_by_asc(Column::Id);
+        if let Some(status) = status {
+            query = query.filter(Column::Status.eq(status));
+        }
+        Ok(query.limit(limit).all(conn).await?)
+    }
+
+    /// Records the decision on one open appeal. Setting `decided_at` and leaving `open`
+    /// stops the decision clock: `overdue_count` and `open_count` only see open rows.
+    pub async fn decide<C: ConnectionTrait>(
+        conn: &C,
+        id: i64,
+        decision: &str,
+        now: i64,
+    ) -> DbResult<DecideOutcome> {
+        let Some(existing) = Self::find_by_id(id).one(conn).await? else {
+            return Ok(DecideOutcome::NotFound);
+        };
+        if existing.status != STATUS_OPEN {
+            return Ok(DecideOutcome::AlreadyDecided);
+        }
+        let mut active: ActiveModel = existing.into();
+        active.status = Set(decision.to_string());
+        active.decided_at = Set(Some(now));
+        let updated = active.update(conn).await?;
+        Ok(DecideOutcome::Decided(updated))
+    }
+}
+
+pub const DECISION_UPHELD: &str = "upheld";
+pub const DECISION_OVERTURNED: &str = "overturned";
+
+/// Decisions an operator may record. Anything else is refused before the row is read.
+pub fn is_decision(raw: &str) -> bool {
+    matches!(raw, DECISION_UPHELD | DECISION_OVERTURNED)
+}
+
+#[derive(Debug)]
+pub enum DecideOutcome {
+    Decided(Model),
+    NotFound,
+    AlreadyDecided,
 }

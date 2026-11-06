@@ -1,39 +1,51 @@
 //! Data-request procedure (A38). A subject's erasure request is opened with a one-month
 //! response clock (`due_at` = `received_at` + 30 days). It is answered by `erase`, which
-//! runs the A33 erase in the same transaction, writes the receipt, scrubs the `users` row
-//! when no legal hold applies, and closes the request. A background clock alerts the
-//! operator when a request is past its deadline.
+//! first takes down the subject's uploaded media and avatar through the A30 takedown path
+//! (storage, CDN purge, tombstone), then in one transaction anonymises the subject's
+//! authored posts, runs the A33 erase, scrubs the `users` row when no legal hold applies,
+//! writes the receipt and closes the request.
 //!
-//! The claim is logical only: rows leave the live database. Backups keep them until the
-//! backup cap (A33). What a live legal hold keeps stays, and the receipt lists it.
+//! Storage comes first and is idempotent. A storage failure returns before any row of the
+//! request is written: the request stays open, its clock keeps running, and a retry picks up
+//! the media that is still there. Self-service deletion (F7) opens and commits the request
+//! before it erases, so a failed storage step leaves an open request, not a lost one.
 //!
-//! Self-service deletion (F7) calls `open` with origin `self`, then `erase` with the
-//! subject's own id as actor. Nothing here assumes an admin caller.
+//! The claim is logical only: rows leave the live database and objects leave storage. The
+//! receipt lists what a live legal hold kept. Backups are not addressed here.
 //!
 //! Counts and ids only reach logs, `job_runs` and alerts. Mail text carries no subject ids.
 
 use std::time::Duration;
 
+use chrono::Utc;
 use sea_orm::{
     ConnectionTrait, DatabaseBackend, DatabaseConnection, DbErr, Statement, TransactionTrait,
 };
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{json, Value};
 use tracing::{info, warn};
 
+use crate::db::sea_models::media;
+use crate::error::ErrorResponse;
 use crate::services::audit::{self, AuditAction, AuditEvent};
 use crate::services::job_log::{self, OUTCOME_ERROR, OUTCOME_OK};
-use crate::services::{operator_alert, retention};
+use crate::services::{media_takedown, operator_alert, retention};
 use crate::state::AppState;
 
 pub const ORIGIN_ADMIN: &str = "admin";
 pub const ORIGIN_SELF: &str = "self";
 const SUBJECT_USER: &str = "user";
+const SUBJECT_MEDIA: &str = "media";
 /// One-month response clock (GDPR Art 12(3)).
 pub const RESPONSE_SECS: i64 = 30 * 86_400;
 pub const CLOCK_JOB: &str = "data_request_clock";
 pub const CLOCK_INTERVAL_SECS: u64 = 6 * 3_600;
 const ERASED_NAME: &str = "Erased user";
+/// Owner of authored posts after erasure. A fixed row that can never sign in: no password,
+/// unverified, and an email no account can register.
+pub const ANONYMOUS_AUTHOR_ID: i32 = -1;
+const ANONYMOUS_AUTHOR_NAME: &str = "Former member";
+const ANONYMOUS_AUTHOR_EMAIL: &str = "former-member@erased.invalid";
 const QUEUE_LIMIT: u64 = 200;
 
 #[derive(Debug)]
@@ -42,6 +54,8 @@ pub enum RequestError {
     AlreadyOpen,
     NotFound,
     Closed,
+    /// Storage or CDN step failed. Nothing for this request is committed; retry later.
+    Storage(ErrorResponse),
 }
 
 impl From<DbErr> for RequestError {
@@ -79,6 +93,17 @@ pub struct EraseOutcome {
     pub deleted: i64,
     pub retained_tables: usize,
     pub user_row_erased: bool,
+    /// Media items (uploads and avatar) taken down from storage and removed from the database.
+    pub media_deleted: usize,
+    /// Authored posts whose author reference was anonymised.
+    pub posts_anonymized: i64,
+}
+
+/// Result of the media step: items removed, and receipt lines for items a hold kept.
+#[derive(Debug, Clone, Default)]
+pub struct MediaPass {
+    pub removed: usize,
+    pub retained: Vec<Value>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -143,14 +168,14 @@ pub async fn open(
     Ok(id)
 }
 
-/// Self-service erasure (F7): open and answer in one transaction, through the same
-/// `open_in` and `erase_in` the operator path uses. An open request already on file for
-/// the subject is answered as is, so its clock is never restarted.
-pub async fn erase_self(
+/// The subject's open request, or a new one opened as `self`. Committed before any erase
+/// step runs, so a later storage failure leaves the request open for a retry. An open
+/// request already on file is returned as is, so its clock is never restarted.
+pub async fn open_or_existing(
     db: &DatabaseConnection,
     user_id: i32,
     now: i64,
-) -> Result<EraseOutcome, RequestError> {
+) -> Result<i64, RequestError> {
     let txn = db.begin().await?;
     let existing = scalar_i64(
         &txn,
@@ -163,9 +188,19 @@ pub async fn erase_self(
         Some(id) => id,
         None => open_in(&txn, Some(user_id), ORIGIN_SELF, user_id, now).await?,
     };
-    let out = erase_in(&txn, Some(user_id), id, now).await?;
     txn.commit().await?;
-    Ok(out)
+    Ok(id)
+}
+
+/// Self-service erasure (F7): open or reuse the subject's request, then answer it through
+/// the same `erase` the operator path uses. The subject is the actor.
+pub async fn erase_self(
+    state: &AppState,
+    user_id: i32,
+    now: i64,
+) -> Result<EraseOutcome, RequestError> {
+    let id = open_or_existing(&state.sea_db, user_id, now).await?;
+    erase(state, Some(user_id), id, now).await
 }
 
 async fn open_in<C: ConnectionTrait>(
@@ -243,18 +278,196 @@ async fn scrub_user_row<C: ConnectionTrait>(conn: &C, user_id: i32) -> Result<()
     Ok(())
 }
 
-/// Answer an open request by erasing its subject. One transaction: A33 erase (rows,
-/// receipt, audit), `users` scrub unless a live user hold applies, request closed with
-/// its receipt, one `data_request.close` audit row. `actor` is the admin, or the subject
-/// on the self-service path.
+/// Insert the anonymous author row if it is not there yet. Posts point at it after erasure.
+async fn ensure_anonymous_author<C: ConnectionTrait>(conn: &C) -> Result<(), DbErr> {
+    let now = Utc::now().to_rfc3339();
+    let secret = uuid::Uuid::new_v4().to_string();
+    conn.execute(Statement::from_sql_and_values(
+        DatabaseBackend::Sqlite,
+        "INSERT OR IGNORE INTO users (id, name, email, password, is_verified, role, \
+         two_fa_enabled, session_auth_secret, created_at, updated_at) \
+         VALUES (?, ?, ?, NULL, 0, 'user', 0, ?, ?, ?)",
+        [
+            ANONYMOUS_AUTHOR_ID.into(),
+            ANONYMOUS_AUTHOR_NAME.into(),
+            ANONYMOUS_AUTHOR_EMAIL.into(),
+            secret.into(),
+            now.clone().into(),
+            now.into(),
+        ],
+    ))
+    .await?;
+    Ok(())
+}
+
+/// Authored posts: the post stays, its author reference moves to the anonymous author.
+/// Under a live user hold the author stays linked and the post is listed in the receipt.
+/// Returns the count changed and any receipt line.
+async fn anonymize_authored_posts<C: ConnectionTrait>(
+    conn: &C,
+    user_id: i32,
+    hold_expiry: i64,
+) -> Result<(i64, Vec<Value>), DbErr> {
+    let count = scalar_i64(
+        conn,
+        "SELECT COUNT(*) FROM posts WHERE author_id = ?",
+        vec![user_id.into()],
+    )
+    .await?
+    .unwrap_or(0);
+    if count == 0 {
+        return Ok((0, Vec::new()));
+    }
+    if hold_expiry != 0 {
+        let line = json!({
+            "table": "posts",
+            "rows": count,
+            "basis": "legal_hold",
+            "expires_at": hold_expiry,
+        });
+        return Ok((0, vec![line]));
+    }
+    ensure_anonymous_author(conn).await?;
+    conn.execute(Statement::from_sql_and_values(
+        DatabaseBackend::Sqlite,
+        "UPDATE posts SET author_id = ? WHERE author_id = ?",
+        [ANONYMOUS_AUTHOR_ID.into(), user_id.into()],
+    ))
+    .await?;
+    Ok((count, Vec::new()))
+}
+
+/// Receipt line for one media item a hold keeps. None when no hold covers it.
+pub fn held_media_entry(media_id: i32, hold_expiry: i64) -> Option<Value> {
+    if hold_expiry == 0 {
+        return None;
+    }
+    Some(json!({
+        "table": "media",
+        "rows": 1,
+        "id": media_id,
+        "basis": "legal_hold",
+        "expires_at": hold_expiry,
+    }))
+}
+
+/// Ids of the subject's uploads and avatar, ascending.
+async fn subject_media_ids(db: &DatabaseConnection, user_id: i32) -> Result<Vec<i32>, DbErr> {
+    let rows = db
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Sqlite,
+            "SELECT id FROM media WHERE uploader_id = ? \
+             OR id IN (SELECT avatar_id FROM users WHERE id = ? AND avatar_id IS NOT NULL) \
+             ORDER BY id",
+            [user_id.into(), user_id.into()],
+        ))
+        .await?;
+    rows.iter()
+        .map(|row| row.try_get_by_index::<i32>(0))
+        .collect()
+}
+
+/// Takedown for one media row: objects and variants out of storage, CDN purge, then the rows
+/// and tombstone in one transaction (A30). Any storage step failing returns before the rows go.
+async fn remove_media_object(
+    state: &AppState,
+    row: &media::Model,
+    actor_id: i32,
+) -> Result<(), RequestError> {
+    let db = &state.sea_db;
+    let bucket = row
+        .bucket
+        .clone()
+        .unwrap_or_else(|| state.storage.config.bucket.clone());
+    let row_keys = media_takedown::variant_keys(db, row.id)
+        .await
+        .map_err(RequestError::Storage)?;
+    let keys =
+        media_takedown::takedown_keys(&state.storage.client, &bucket, &row.object_key, &row_keys)
+            .await
+            .map_err(RequestError::Storage)?;
+    media_takedown::delete_objects(&state.storage.client, &bucket, &keys)
+        .await
+        .map_err(RequestError::Storage)?;
+    media_takedown::purge_cdn(
+        &state.http_client,
+        &state.storage.config.public_url,
+        &bucket,
+        &keys,
+    )
+    .await
+    .map_err(RequestError::Storage)?;
+    media_takedown::remove_rows(db, row, &keys, actor_id)
+        .await
+        .map_err(RequestError::Storage)?;
+    Ok(())
+}
+
+/// Media step of an erase. For each upload and the avatar: removed through the takedown path
+/// unless a live hold covers the subject or the item; a held item becomes a receipt line.
+pub async fn takedown_subject_media(
+    state: &AppState,
+    user_id: i32,
+    actor: Option<i32>,
+    now: i64,
+) -> Result<MediaPass, RequestError> {
+    let db = &state.sea_db;
+    let subject = user_id.to_string();
+    let user_hold = retention::user_hold_expiry(db, &subject, now).await?;
+    let mut pass = MediaPass::default();
+    for media_id in subject_media_ids(db, user_id).await? {
+        let media_hold =
+            retention::subject_hold_expiry(db, SUBJECT_MEDIA, &media_id.to_string(), now).await?;
+        if let Some(line) = held_media_entry(media_id, user_hold.max(media_hold)) {
+            pass.retained.push(line);
+            continue;
+        }
+        let Some(row) = media::Entity::find_by_id(db, media_id)
+            .await
+            .map_err(RequestError::Storage)?
+        else {
+            continue;
+        };
+        remove_media_object(state, &row, actor.unwrap_or(user_id)).await?;
+        pass.removed += 1;
+    }
+    Ok(pass)
+}
+
+/// Answer an open request by erasing its subject. Media first (storage, then rows), then one
+/// transaction: posts anonymised, A33 erase (rows, receipt, audit), `users` scrub unless a live
+/// user hold applies, request closed with its receipt, one `data_request.close` audit row.
+/// `actor` is the admin, or the subject on the self-service path.
 pub async fn erase(
-    db: &DatabaseConnection,
+    state: &AppState,
     actor: Option<i32>,
     request_id: i64,
     now: i64,
 ) -> Result<EraseOutcome, RequestError> {
+    let Some(req) = load(&state.sea_db, request_id).await? else {
+        return Err(RequestError::NotFound);
+    };
+    if req.closed_at.is_some() {
+        return Err(RequestError::Closed);
+    }
+    let Some(user_id) = req.user_id() else {
+        return Err(RequestError::NotFound);
+    };
+    let media = takedown_subject_media(state, user_id, actor, now).await?;
+    commit_erasure(&state.sea_db, actor, request_id, &media, now).await
+}
+
+/// Rows half of an erase, in one transaction. `media` is the result of `takedown_subject_media`
+/// (empty when the caller has no storage handle).
+pub async fn commit_erasure(
+    db: &DatabaseConnection,
+    actor: Option<i32>,
+    request_id: i64,
+    media: &MediaPass,
+    now: i64,
+) -> Result<EraseOutcome, RequestError> {
     let txn = db.begin().await?;
-    let out = erase_in(&txn, actor, request_id, now).await?;
+    let out = erase_in(&txn, actor, request_id, media, now).await?;
     txn.commit().await?;
     Ok(out)
 }
@@ -263,6 +476,7 @@ async fn erase_in<C: ConnectionTrait>(
     txn: &C,
     actor: Option<i32>,
     request_id: i64,
+    media: &MediaPass,
     now: i64,
 ) -> Result<EraseOutcome, RequestError> {
     let Some(req) = load(txn, request_id).await? else {
@@ -274,8 +488,13 @@ async fn erase_in<C: ConnectionTrait>(
     let Some(user_id) = req.user_id() else {
         return Err(RequestError::NotFound);
     };
-    let report = retention::erase_subject_in(txn, actor, user_id, now).await?;
-    let held = retention::user_hold_expiry(txn, &user_id.to_string(), now).await? != 0;
+    let hold_expiry = retention::user_hold_expiry(txn, &user_id.to_string(), now).await?;
+    let (posts_anonymized, post_lines) =
+        anonymize_authored_posts(txn, user_id, hold_expiry).await?;
+    let mut extra = media.retained.clone();
+    extra.extend(post_lines);
+    let report = retention::erase_subject_in(txn, actor, user_id, now, extra).await?;
+    let held = hold_expiry != 0;
     if !held {
         scrub_user_row(txn, user_id).await?;
     }
@@ -296,6 +515,8 @@ async fn erase_in<C: ConnectionTrait>(
                 "deleted": report.deleted,
                 "retained_tables": report.retained_tables,
                 "user_row_erased": !held,
+                "media_deleted": media.removed,
+                "posts_anonymized": posts_anonymized,
             }),
         },
     )
@@ -303,6 +524,8 @@ async fn erase_in<C: ConnectionTrait>(
     info!(
         request_id,
         receipt_id = report.receipt_id,
+        media_deleted = media.removed,
+        posts_anonymized,
         "data request answered"
     );
     Ok(EraseOutcome {
@@ -310,6 +533,8 @@ async fn erase_in<C: ConnectionTrait>(
         deleted: report.deleted,
         retained_tables: report.retained_tables,
         user_row_erased: !held,
+        media_deleted: media.removed,
+        posts_anonymized,
     })
 }
 
@@ -453,6 +678,53 @@ mod tests {
         .await;
     }
 
+    async fn insert_media(db: &DatabaseConnection, id: i32, uploader: i32) {
+        exec(
+            db,
+            &format!(
+                "INSERT INTO media (id, bucket, object_key, mime_type, size, uploader_id, \
+                 is_optimized, created_at, updated_at) VALUES \
+                 ({id}, 'bucket', 'media/2019/01/{id}.png', 'image/png', 10, {uploader}, 0, \
+                 '2019-01-01 00:00:00', '2019-01-01 00:00:00')"
+            ),
+        )
+        .await;
+    }
+
+    async fn insert_post(db: &DatabaseConnection, id: i32, author: i32) {
+        exec(
+            db,
+            &format!(
+                "INSERT INTO posts (id, title, slug, content, status, author_id, category_id, \
+                 tag_ids, created_at, updated_at) VALUES \
+                 ({id}, 't', 's{id}', '{{}}', 'draft', {author}, 1, '[]', \
+                 '2019-01-01 00:00:00', '2019-01-01 00:00:00')"
+            ),
+        )
+        .await;
+    }
+
+    async fn place_user_hold(db: &DatabaseConnection, user: i32) {
+        actions::place(
+            db,
+            NewHold {
+                rule: HoldRule::Enforcement12m,
+                authority: "test".into(),
+                reason: "test".into(),
+                owner: "test".into(),
+                case_ref: None,
+                subjects: vec![HoldSubject {
+                    kind: "user".into(),
+                    id: user.to_string(),
+                    user_id: Some(user),
+                }],
+            },
+            Utc::now(),
+        )
+        .await
+        .unwrap();
+    }
+
     #[tokio::test]
     async fn second_open_request_for_same_subject_is_refused() {
         let db = test_db().await;
@@ -470,7 +742,9 @@ mod tests {
         insert_notification(&db, 71).await;
         let id = open(&db, Some(1), ORIGIN_ADMIN, 71, now).await.unwrap();
 
-        let out = erase(&db, Some(1), id, now).await.unwrap();
+        let out = commit_erasure(&db, Some(1), id, &MediaPass::default(), now)
+            .await
+            .unwrap();
 
         assert!(out.user_row_erased);
         assert!(out.deleted >= 1);
@@ -491,11 +765,12 @@ mod tests {
         assert_eq!(closed, 1);
         let receipts = count(
             &db,
-            "SELECT COUNT(*) FROM erasure_receipts WHERE subject_id = '71' AND retention_class = 'erasure_24m'",
+            "SELECT COUNT(*) FROM erasure_receipts WHERE subject_id = '71' AND retention_class = 'erasure_24m' \
+             AND scope = 'user_data_media_posts'",
         )
         .await;
         assert_eq!(receipts, 1);
-        let again = erase(&db, Some(1), id, now).await;
+        let again = commit_erasure(&db, Some(1), id, &MediaPass::default(), now).await;
         assert!(matches!(again, Err(RequestError::Closed)));
     }
 
@@ -517,7 +792,10 @@ mod tests {
         )
         .await;
 
-        let out = erase_self(&db, 77, now).await.unwrap();
+        let id = open_or_existing(&db, 77, now).await.unwrap();
+        let out = commit_erasure(&db, Some(77), id, &MediaPass::default(), now)
+            .await
+            .unwrap();
 
         assert!(out.user_row_erased);
         let open = count(
@@ -555,7 +833,11 @@ mod tests {
             .await
             .unwrap();
 
-        let out = erase_self(&db, 78, now).await.unwrap();
+        let id = open_or_existing(&db, 78, now).await.unwrap();
+        assert_eq!(id, admin_id, "the open operator request is reused");
+        let out = commit_erasure(&db, Some(78), id, &MediaPass::default(), now)
+            .await
+            .unwrap();
 
         assert!(out.user_row_erased);
         let closed = count(
@@ -590,27 +872,12 @@ mod tests {
         )
         .await
         .unwrap();
-        actions::place(
-            &db,
-            NewHold {
-                rule: HoldRule::Enforcement12m,
-                authority: "test".into(),
-                reason: "test".into(),
-                owner: "test".into(),
-                case_ref: None,
-                subjects: vec![HoldSubject {
-                    kind: "user".into(),
-                    id: "72".into(),
-                    user_id: Some(72),
-                }],
-            },
-            Utc::now(),
-        )
-        .await
-        .unwrap();
+        place_user_hold(&db, 72).await;
         let id = open(&db, Some(1), ORIGIN_ADMIN, 72, now).await.unwrap();
 
-        let out = erase(&db, Some(1), id, now).await.unwrap();
+        let out = commit_erasure(&db, Some(1), id, &MediaPass::default(), now)
+            .await
+            .unwrap();
 
         assert!(!out.user_row_erased);
         let kept = count(&db, "SELECT COUNT(*) FROM notifications WHERE user_id = 72").await;
@@ -632,6 +899,122 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn authored_posts_keep_the_post_and_lose_the_author_reference() {
+        let db = test_db().await;
+        let now = job_log::epoch_now();
+        // Posts reference a category row; the fixture does not seed one.
+        exec(&db, "PRAGMA foreign_keys = OFF").await;
+        insert_user(&db, 80).await;
+        insert_post(&db, 900, 80).await;
+        insert_post(&db, 901, 80).await;
+        let id = open(&db, Some(1), ORIGIN_ADMIN, 80, now).await.unwrap();
+
+        let out = commit_erasure(&db, Some(1), id, &MediaPass::default(), now)
+            .await
+            .unwrap();
+
+        assert_eq!(out.posts_anonymized, 2);
+        let kept = count(&db, "SELECT COUNT(*) FROM posts WHERE id IN (900, 901)").await;
+        assert_eq!(kept, 2, "posts stay");
+        let linked = count(&db, "SELECT COUNT(*) FROM posts WHERE author_id = 80").await;
+        assert_eq!(linked, 0, "no post points at the erased subject");
+        let anon = count(
+            &db,
+            &format!(
+                "SELECT COUNT(*) FROM posts WHERE id IN (900, 901) AND author_id = {ANONYMOUS_AUTHOR_ID}"
+            ),
+        )
+        .await;
+        assert_eq!(anon, 2);
+        let anon_row = count(
+            &db,
+            &format!(
+                "SELECT COUNT(*) FROM users WHERE id = {ANONYMOUS_AUTHOR_ID} AND password IS NULL AND is_verified = 0"
+            ),
+        )
+        .await;
+        assert_eq!(anon_row, 1, "anonymous author cannot sign in");
+    }
+
+    #[tokio::test]
+    async fn posts_stay_linked_under_a_user_hold_and_appear_in_the_receipt() {
+        let db = test_db().await;
+        let now = job_log::epoch_now();
+        exec(&db, "PRAGMA foreign_keys = OFF").await;
+        insert_user(&db, 81).await;
+        insert_post(&db, 910, 81).await;
+        place_user_hold(&db, 81).await;
+        let id = open(&db, Some(1), ORIGIN_ADMIN, 81, now).await.unwrap();
+
+        let out = commit_erasure(&db, Some(1), id, &MediaPass::default(), now)
+            .await
+            .unwrap();
+
+        assert_eq!(out.posts_anonymized, 0);
+        let linked = count(
+            &db,
+            "SELECT COUNT(*) FROM posts WHERE id = 910 AND author_id = 81",
+        )
+        .await;
+        assert_eq!(linked, 1, "held author link stays");
+        let listed = count(
+            &db,
+            "SELECT COUNT(*) FROM erasure_receipts WHERE subject_id = '81' AND retained LIKE '%\"table\":\"posts\"%'",
+        )
+        .await;
+        assert_eq!(listed, 1, "receipt lists the held posts");
+    }
+
+    #[test]
+    fn held_media_becomes_a_receipt_line_and_free_media_does_not() {
+        assert!(held_media_entry(5, 0).is_none());
+        let line = held_media_entry(5, 123).expect("held");
+        assert_eq!(line["table"], "media");
+        assert_eq!(line["id"], 5);
+        assert_eq!(line["basis"], "legal_hold");
+        assert_eq!(line["expires_at"], 123);
+    }
+
+    #[tokio::test]
+    async fn media_held_by_its_own_hold_is_listed_while_the_rest_of_the_subject_is_not_held() {
+        let db = test_db().await;
+        let now = job_log::epoch_now();
+        insert_user(&db, 82).await;
+        insert_media(&db, 500, 82).await;
+        actions::place(
+            &db,
+            NewHold {
+                rule: HoldRule::Enforcement12m,
+                authority: "test".into(),
+                reason: "test".into(),
+                owner: "test".into(),
+                case_ref: None,
+                subjects: vec![HoldSubject {
+                    kind: SUBJECT_MEDIA.into(),
+                    id: "500".into(),
+                    user_id: Some(82),
+                }],
+            },
+            Utc::now(),
+        )
+        .await
+        .unwrap();
+
+        let media_hold = retention::subject_hold_expiry(&db, SUBJECT_MEDIA, "500", now)
+            .await
+            .unwrap();
+        let user_hold = retention::user_hold_expiry(&db, "82", now).await.unwrap();
+        assert_ne!(media_hold, 0);
+        assert_eq!(user_hold, 0);
+        assert!(held_media_entry(500, media_hold).is_some());
+        assert_eq!(
+            subject_media_ids(&db, 82).await.unwrap(),
+            vec![500],
+            "the upload is in the subject's media set"
+        );
+    }
+
+    #[tokio::test]
     async fn overdue_counts_only_open_requests_past_deadline() {
         let db = test_db().await;
         let now = job_log::epoch_now();
@@ -645,7 +1028,9 @@ mod tests {
         assert_eq!(before.oldest_due_at, Some(late + RESPONSE_SECS));
 
         let late_id = count(&db, "SELECT id FROM data_requests WHERE subject_id = '74'").await;
-        erase(&db, None, late_id, now).await.unwrap();
+        commit_erasure(&db, None, late_id, &MediaPass::default(), now)
+            .await
+            .unwrap();
         let after = overdue(&db, now).await.unwrap();
         assert_eq!(
             after,

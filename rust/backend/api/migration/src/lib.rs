@@ -41,6 +41,7 @@ mod m000160_erasure_receipts;
 mod m000170_data_requests;
 mod m000200_user_is_minor;
 mod m000210_user_age_declared;
+mod m000220_retention_sweep_indexes;
 
 pub struct Migrator;
 
@@ -161,6 +162,8 @@ impl MigratorTrait for Migrator {
             Box::new(m000200_user_is_minor::Migration),
             // m000210 adds users.age_declared_at (A34): when the account recorded its age. NULL = never.
             Box::new(m000210_user_age_declared::Migration),
+            // m000220 adds expression indexes on the age columns the A32 sweeper filters on.
+            Box::new(m000220_retention_sweep_indexes::Migration),
         ]
     }
 }

@@ -138,6 +138,11 @@ incident action ref:
 media-sweep *args:
     cd rust && cargo run -q -p ruxlog --bin media_sweep -- {{args}}
 
+# Legal holds (A25): list | place --rule <class> --authority <t> --reason <t> --owner <t>
+# [--case-ref <t>] --subject <kind:id>... | renew --id <n>. Each write is audited.
+legal-hold *args:
+    cd rust && cargo run -q -p ruxlog --bin legal_hold -- {{args}}
+
 # --- Images -------------------------------------------------------------------------------
 # Both images are packaging-only: everything is compiled outside Docker, and the
 # Dockerfiles just COPY the artifacts in. Nothing installs a toolchain or hits the network

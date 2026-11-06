@@ -6,6 +6,7 @@
   import { Label } from "#lib/components/ui/label/index.js";
   import { authState } from "#lib/auth/auth-state.svelte.js";
   import { accountClient } from "#lib/auth/account-client.js";
+  import { purgeAccountLocalData } from "#lib/auth/account-purge.js";
   import { createLogoutFlow } from "#lib/auth/flows.svelte.js";
   import { isFreshAuthenticationRequired } from "#lib/auth/fresh-auth-client.js";
   import { getAccountCopy } from "#lib/i18n/account-copy.js";
@@ -18,12 +19,13 @@
   let pending = $state(false);
   let error = $state<string | null>(null);
 
-  // The server ends every session before it erases. This clears the local account view and
-  // sync partition (logout hook); device-local reading data stays, per the survives-logout policy.
+  // The server ends every session before it erases. On success this removes the account's
+  // browser data (outbox, device key, account-keyed storage); device-only reading data stays.
   async function remove(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     if (pending) return;
     const email = authState.user?.email ?? "";
+    const userId = authState.user?.id ?? null;
     if (typed.trim().toLowerCase() !== email.trim().toLowerCase()) {
       error = copy.deleteMismatch;
       return;
@@ -36,6 +38,8 @@
         typed = "";
         toast.success(copy.deleteDone);
         await logout.run();
+        // After logout: the logout hook may still write account-keyed state; purge runs last.
+        if (userId !== null) await purgeAccountLocalData(userId);
         await goto("/");
         return;
       }

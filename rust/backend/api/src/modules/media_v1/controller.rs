@@ -36,6 +36,7 @@ use crate::services::audit::{self, AuditAction, AuditEvent};
 use crate::services::image_moderation::{screen_upload, ScreenRejection};
 use crate::services::image_optimizer;
 use crate::services::media_takedown;
+use crate::services::operator_alert;
 use tracing::{debug, error, info, instrument, warn};
 
 use super::validator::is_allowed_mime;
@@ -283,6 +284,9 @@ pub async fn create(
     {
         tracing::Span::current().record("result", "refused_by_screening");
         refuse_upload(&state.sea_db, uploader.id, &content_hash, rejection).await?;
+        if rejection == ScreenRejection::KnownHash {
+            operator_alert::spawn_hash_match(&state);
+        }
         return Err(refusal_error(rejection));
     }
 

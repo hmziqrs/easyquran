@@ -331,6 +331,56 @@ export function resilientQueueStorage(
   };
 }
 
+/**
+ * Opens the sync database only if it already exists at the current version. Creating it here
+ * would leave a store-less database that the queue storage can never upgrade. The upgrade is
+ * aborted, so a missing database resolves to null.
+ */
+function openExistingSyncDb(): Promise<IDBDatabase | null> {
+  return new Promise<IDBDatabase | null>((resolve) => {
+    const req = indexedDB.open(SYNC_DB, SYNC_DB_VERSION);
+    req.onupgradeneeded = () => {
+      req.transaction?.abort();
+    };
+    req.onsuccess = () => {
+      const opened = req.result;
+      if (
+        opened.objectStoreNames.contains(OUTBOX_STORE) &&
+        opened.objectStoreNames.contains(DEAD_STORE)
+      ) {
+        resolve(opened);
+        return;
+      }
+      opened.close();
+      resolve(null);
+    };
+    req.onerror = () => resolve(null);
+  });
+}
+
+/**
+ * Account deletion (F7): empties the outbox and the dead-letter store. Logout never does this:
+ * the partition is quarantined (EC-48). Deletion does, because the account the queue belonged to
+ * no longer exists. A missing database is already empty.
+ */
+export async function destroyAllSyncRecords(): Promise<void> {
+  if (!browser || !("indexedDB" in globalThis)) return;
+  const opened = await openExistingSyncDb();
+  if (opened === null) return;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = opened.transaction([OUTBOX_STORE, DEAD_STORE], "readwrite");
+      tx.objectStore(OUTBOX_STORE).clear();
+      tx.objectStore(DEAD_STORE).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(idbError(tx.error, "sync destroy"));
+      tx.onabort = () => reject(idbError(tx.error, "sync destroy abort"));
+    });
+  } finally {
+    opened.close();
+  }
+}
+
 function defaultQueueStorage(): QueueStorage {
   // `in` (not typeof): feature-detects the global without tripping on undeclared access.
   if (browser && "indexedDB" in globalThis) return resilientQueueStorage(idbQueueStorage());

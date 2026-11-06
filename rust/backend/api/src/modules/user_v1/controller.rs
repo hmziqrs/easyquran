@@ -512,6 +512,8 @@ fn data_request_error(err: RequestError) -> ErrorResponse {
             .with_message("Data request does not exist"),
         RequestError::Closed => ErrorResponse::new(ErrorCode::OperationNotAllowed)
             .with_message("Data request is already answered"),
+        // Nothing for the request is committed; it stays open and can be answered again.
+        RequestError::Storage(e) => e,
     }
 }
 
@@ -604,7 +606,7 @@ pub async fn admin_erase_data_request(
             .with_message("Confirmation does not match the user's email"));
     }
     let now = crate::services::job_log::epoch_now();
-    let out = data_request::erase(&state.sea_db, Some(caller.id), request_id, now)
+    let out = data_request::erase(&state, Some(caller.id), request_id, now)
         .await
         .map_err(data_request_error)?;
     info!(request_id, "Admin answered data request");
@@ -615,6 +617,8 @@ pub async fn admin_erase_data_request(
             "deleted": out.deleted,
             "retained_tables": out.retained_tables,
             "user_row_erased": out.user_row_erased,
+            "media_deleted": out.media_deleted,
+            "posts_anonymized": out.posts_anonymized,
         })),
     ))
 }
@@ -650,8 +654,9 @@ pub async fn declare_age(
 }
 
 /// Self-service account deletion (F7). Fresh auth first, then the typed email, then every
-/// session of the caller ends, then the A38 self path erases the account in one
-/// transaction. Immediate: no grace period. Authored posts and uploaded media stay.
+/// session of the caller ends, then the A38 self path erases the account: uploaded media and
+/// avatar leave storage, authored posts keep their text without the author link. Immediate:
+/// no grace period. A held item stays and is listed in the receipt.
 #[debug_handler]
 #[instrument(skip(auth, state, payload), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
 pub async fn self_delete_account(
@@ -679,7 +684,7 @@ pub async fn self_delete_account(
         crate::modules::auth_v1::controller::terminate_session(&state, &auth, session.id).await?;
     }
     let now = crate::services::job_log::epoch_now();
-    let out = data_request::erase_self(&state.sea_db, user.id, now)
+    let out = data_request::erase_self(&state, user.id, now)
         .await
         .map_err(data_request_error)?;
     if let Err(err) = auth.logout().await {
@@ -697,6 +702,8 @@ pub async fn self_delete_account(
             "deleted": out.deleted,
             "retained_tables": out.retained_tables,
             "user_row_erased": out.user_row_erased,
+            "media_deleted": out.media_deleted,
+            "posts_anonymized": out.posts_anonymized,
         })),
     ))
 }

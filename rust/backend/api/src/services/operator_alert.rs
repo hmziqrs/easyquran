@@ -292,6 +292,46 @@ pub async fn send_overdue_alert(state: &AppState, overdue: i64, oldest_days: i64
     mail
 }
 
+/// Operator text for a known-hash match (A37). Names no image, uploader or hash.
+pub const HASH_MATCH_TEXT: &str = "A known-hash match blocked an upload. Open the operator tools. \
+     No image, uploader or hash is included.";
+
+/// Known-hash match alert (A37). Fires for hash matches only: a moderator refusal does not
+/// page the operator. Fire-and-forget from the upload handler; the refusal is already decided.
+pub fn spawn_hash_match(state: &AppState) {
+    let state = state.clone();
+    tokio::spawn(async move {
+        dispatch_hash_match(&state).await;
+    });
+}
+
+/// Mails the hash-match alert and writes one `alert.dispatch` audit row with the mail status.
+pub async fn dispatch_hash_match(state: &AppState) -> MailStatus {
+    let cfg = OperatorConfig::from_env();
+    let mail = send_mail(
+        &state.mailer,
+        &cfg,
+        "EasyQuran: known-hash match blocked",
+        HASH_MATCH_TEXT,
+    )
+    .await;
+    let row = audit::record(
+        &state.sea_db,
+        AuditEvent {
+            actor_id: None,
+            action: AuditAction::AlertDispatch,
+            resource_id: "media.hash_match".to_string(),
+            metadata: json!({ "priority": "hash_match", "mail": mail.to_json() }),
+        },
+    )
+    .await;
+    if let Err(err) = row {
+        error!(error = %err, "hash-match alert result not audited");
+    }
+    info!(mail = mail.label(), "hash-match alert dispatched");
+    mail
+}
+
 /// Counts only. No ids, no content.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Digest {
@@ -396,6 +436,12 @@ mod tests {
             next_digest_at(at),
             Utc.with_ymd_and_hms(2026, 11, 7, 8, 0, 0).unwrap()
         );
+    }
+
+    #[test]
+    fn hash_match_text_names_no_upload_or_uploader() {
+        assert!(HASH_MATCH_TEXT.contains("No image, uploader or hash is included."));
+        assert!(!HASH_MATCH_TEXT.chars().any(|c| c.is_ascii_digit()));
     }
 
     #[test]
