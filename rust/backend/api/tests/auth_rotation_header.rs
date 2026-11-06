@@ -52,7 +52,7 @@ use ruxlog::config::{
     HttpSettings, ObjectStorageConfig, OptimizerConfig, QuranSettings, RateLimitSettings, Settings,
     SiteSettings,
 };
-use ruxlog::middlewares::{client_ip::resolve_client_ip, static_csrf::csrf_guard};
+use ruxlog::middlewares::{auth_marker, client_ip::resolve_client_ip, static_csrf::csrf_guard};
 use ruxlog::modules::google_auth_v1;
 use ruxlog::modules::{apple_auth_v1, auth_v1, csrf_v1, facebook_auth_v1, github_auth_v1};
 use ruxlog::quran::load_quran_store;
@@ -132,6 +132,7 @@ async fn state() -> AppState {
             port: "0".into(),
             ip_source: "ConnectInfo".parse().unwrap(),
             cookie_secure: false,
+            session_cookie_path: "/".into(),
             trusted_proxy_cidrs: Vec::new(),
         },
         site: SiteSettings {
@@ -439,7 +440,10 @@ fn login_router(state: AppState) -> Router {
         .with_private(cookie_key);
     let state_ext = state.clone();
     Router::new()
-        .nest("/auth/v1", auth_v1::routes())
+        .nest(
+            "/auth/v1",
+            auth_v1::routes().layer(middleware::from_fn(auth_marker::emit_marker)),
+        )
         .route("/csrf/v1/generate", post(csrf_v1::controller::generate))
         .layer(middleware::from_fn(csrf_guard))
         .layer(middleware::from_fn(resolve_client_ip))
@@ -748,4 +752,102 @@ async fn oauth_login_allows_non_banned_user() {
     oauth::finish_oauth_login(&state, &mut auth, &user, OAuthProvider::Github)
         .await
         .expect("non-banned user must complete OAuth login (guard must not fire)");
+    // Every OAuth provider completes through create_bound_session, which stages the marker.
+    let staged = auth
+        .session()
+        .get::<bool>(ruxlog::middlewares::auth_marker::STAGED_KEY)
+        .await
+        .expect("session readable");
+    assert_eq!(
+        staged,
+        Some(true),
+        "OAuth login must stage the ruxlog.auth marker"
+    );
+}
+
+// ============================================================================
+// A14: login-only marker cookie `ruxlog.auth`
+// ============================================================================
+
+// Drives POST /auth/v1/log_in with a fresh CSRF bootstrap. Returns the response so
+// each test can read status and Set-Cookie headers.
+async fn post_log_in(
+    app: &Router,
+    cookie: String,
+    token: String,
+    email: &str,
+    password: &str,
+) -> axum::response::Response {
+    let body = serde_json::json!({ "email": email, "password": password }).to_string();
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/v1/log_in")
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::CONTENT_LENGTH, body.len())
+                .header(header::COOKIE, cookie)
+                .header("csrf-token", token)
+                .header("cf-connecting-ip", "203.0.113.51")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+fn marker_cookies(res: &axum::response::Response) -> Vec<String> {
+    res.headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .filter(|s| s.starts_with("ruxlog.auth="))
+        .map(str::to_string)
+        .collect()
+}
+
+// A successful password login stages the marker, and the auth-nest layer writes it
+// exactly once. Path=/ keeps it visible to the web origin; ruxlog.sid keeps its own path.
+#[tokio::test]
+async fn successful_login_sets_auth_marker_cookie_once() {
+    let state = state().await;
+    let email = "marker-ok@test.local";
+    let password = "super-secret-password";
+    seed_user(&state, email, password).await;
+
+    let app = login_router(state);
+    let (cookie, token) = csrf_bootstrap(&app).await;
+    let res = post_log_in(&app, cookie, token, email, password).await;
+    assert_eq!(res.status(), StatusCode::OK, "login must succeed");
+
+    let markers = marker_cookies(&res);
+    assert_eq!(
+        markers.len(),
+        1,
+        "exactly one marker per login: {markers:?}"
+    );
+    assert!(markers[0].starts_with("ruxlog.auth=1;"), "{markers:?}");
+    assert!(markers[0].contains("Path=/"), "{markers:?}");
+    assert!(
+        !markers[0].contains("Secure"),
+        "cookie_secure=false in this harness"
+    );
+}
+
+// A rejected password stages nothing: no marker for a signed-out visitor.
+#[tokio::test]
+async fn failed_login_sets_no_auth_marker_cookie() {
+    let state = state().await;
+    let email = "marker-bad@test.local";
+    seed_user(&state, email, "super-secret-password").await;
+
+    let app = login_router(state);
+    let (cookie, token) = csrf_bootstrap(&app).await;
+    let res = post_log_in(&app, cookie, token, email, "wrong-password-entirely").await;
+    assert_ne!(
+        res.status(),
+        StatusCode::OK,
+        "wrong password must not log in"
+    );
+    assert!(marker_cookies(&res).is_empty(), "no marker on failed login");
 }

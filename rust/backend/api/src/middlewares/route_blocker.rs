@@ -189,6 +189,7 @@ mod tests {
                 port: "0".into(),
                 ip_source: axum_client_ip::ClientIpSource::ConnectInfo,
                 cookie_secure: false,
+                session_cookie_path: "/".into(),
                 trusted_proxy_cidrs: Vec::new(),
             },
             site: SiteSettings {

@@ -301,21 +301,36 @@ describe("server localized reader integration", () => {
     expect(resolve).not.toHaveBeenCalled();
   });
 
-  it("bypasses shared translated cache for cookie-bearing requests", async () => {
+  it("keeps shared translated cache for anonymous cookies (GA, sid) and never marks them private", async () => {
     const event = requestEvent(
       "/al-fatihah/t/en/sahih",
       "/(application)/[surah]/t/[lang]/[translator]",
       { surah: "al-fatihah", lang: "en", translator: "sahih" },
-      { cookie: "session=private" },
+      { cookie: "_ga=GA1.2.345.678; ruxlog.sid=anon" },
     );
-    expect(event.request.headers.get("cookie")).toBe("session=private");
     const response = await handle({
       event,
       resolve: htmlResolve(),
     });
 
-    expect(cache.get).not.toHaveBeenCalled();
-    expect(cache.set).not.toHaveBeenCalled();
-    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(cache.get).toHaveBeenCalled();
+    expect(cache.set).toHaveBeenCalled();
+    expect(response.headers.get("cache-control")).not.toBe("private, no-store");
+  });
+
+  it("serves a signed-in reader from the shared translated cache, not private, no-store", async () => {
+    const event = requestEvent(
+      "/al-fatihah/t/en/sahih",
+      "/(application)/[surah]/t/[lang]/[translator]",
+      { surah: "al-fatihah", lang: "en", translator: "sahih" },
+      { cookie: "ruxlog.auth=1; ruxlog.sid=session" },
+    );
+    const response = await handle({
+      event,
+      resolve: htmlResolve(),
+    });
+
+    expect(cache.get).toHaveBeenCalled();
+    expect(response.headers.get("cache-control")).not.toBe("private, no-store");
   });
 });

@@ -11,7 +11,9 @@ use tower_http::{
 };
 use tracing::Level;
 
-use crate::middlewares::{http_metrics, rate_limit, request_id_middleware, security_headers};
+use crate::middlewares::{
+    auth_marker, http_metrics, rate_limit, request_id_middleware, security_headers,
+};
 use crate::modules::{
     auth_v1, category_v1, csrf_v1, feed_v1, mail_v1, media_v1, post_v1, search_v1, tag_v1, user_v1,
 };
@@ -76,11 +78,15 @@ pub fn router(state: AppState) -> Router<AppState> {
     if web_auth_enabled {
         router = router.nest(
             "/auth/v1",
-            auth_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
+            auth_v1::routes()
+                .layer(rate_limit::rate_limit_layer(&state, 100, 60))
+                .layer(middleware::from_fn(auth_marker::emit_marker)),
         );
         router = router.nest(
             "/auth/google/v1",
-            google_auth_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+            google_auth_v1::routes()
+                .layer(rate_limit::rate_limit_layer(&state, 60, 60))
+                .layer(middleware::from_fn(auth_marker::emit_marker)),
         );
         router = router
             .nest("/email_verification/v1", email_verification_v1::routes())
@@ -90,24 +96,34 @@ pub fn router(state: AppState) -> Router<AppState> {
             );
         router = router.nest(
             "/passkey/v1",
-            passkey_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+            passkey_v1::routes()
+                .layer(rate_limit::rate_limit_layer(&state, 60, 60))
+                .layer(middleware::from_fn(auth_marker::emit_marker)),
         );
         router = router
             .nest(
                 "/auth/facebook/v1",
-                facebook_auth_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+                facebook_auth_v1::routes()
+                    .layer(rate_limit::rate_limit_layer(&state, 60, 60))
+                    .layer(middleware::from_fn(auth_marker::emit_marker)),
             )
             .nest(
                 "/auth/github/v1",
-                github_auth_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+                github_auth_v1::routes()
+                    .layer(rate_limit::rate_limit_layer(&state, 60, 60))
+                    .layer(middleware::from_fn(auth_marker::emit_marker)),
             )
             .nest(
                 "/auth/discord/v1",
-                discord_auth_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+                discord_auth_v1::routes()
+                    .layer(rate_limit::rate_limit_layer(&state, 60, 60))
+                    .layer(middleware::from_fn(auth_marker::emit_marker)),
             )
             .nest(
                 "/auth/apple/v1",
-                apple_auth_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+                apple_auth_v1::routes()
+                    .layer(rate_limit::rate_limit_layer(&state, 60, 60))
+                    .layer(middleware::from_fn(auth_marker::emit_marker)),
             );
     }
 

@@ -81,6 +81,7 @@ async fn state() -> AppState {
             port: "0".into(),
             ip_source: "ConnectInfo".parse().unwrap(),
             cookie_secure: false,
+            session_cookie_path: "/".into(),
             trusted_proxy_cidrs: Vec::new(),
         },
         site: SiteSettings {

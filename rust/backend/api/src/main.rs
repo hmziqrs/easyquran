@@ -838,6 +838,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_same_site(SameSite::Lax)
         .with_secure(cookie_secure)
         .with_http_only(true)
+        // Production serves the API under the edge `/api` strip; the path keeps the
+        // session cookie off the web origin (see config::settings::session_cookie_path).
+        .with_path(settings.http.session_cookie_path.clone())
         // Cookie name must stay hardcoded — the CSRF guard and frontend depend on it; a configurable name widens the cookie-fixing surface.
         .with_name("ruxlog.sid")
         .with_private(cookie_key);

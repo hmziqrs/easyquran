@@ -133,7 +133,11 @@ pub async fn log_out(
                 }
             }
             info!("Logout successful");
-            Ok((StatusCode::OK, Json(json!({"message": "Logged out"}))))
+            Ok((
+                StatusCode::OK,
+                crate::middlewares::auth_marker::clear_headers(state.settings.http.cookie_secure),
+                Json(json!({"message": "Logged out"})),
+            ))
         }
         Err(e) => {
             error!(error = %e, "Logout failed");
@@ -1318,6 +1322,10 @@ pub(crate) async fn create_bound_session(
         let _ = user_session::Entity::revoke(db, audit_row.id).await;
         let _ = auth.logout().await;
         return Err(err);
+    }
+    // Stage the `ruxlog.auth` marker; the auth-nest layer writes it onto the response.
+    if let Err(err) = crate::middlewares::auth_marker::stage_login(auth.session()).await {
+        warn!(error = %err, user_id, "login marker not staged; reader cache falls back to the no-marker path");
     }
     Ok(())
 }

@@ -113,6 +113,18 @@ export function hasNoStore(response: Response): boolean {
   return !!cc && /no-store/i.test(cc);
 }
 
+/** Login-only marker the API sets on login and clears on logout (`ruxlog.auth`). */
+const AUTH_COOKIE_RE = /(?:^|;)\s*ruxlog\.auth=[^;\s]/u;
+
+/**
+ * Signed-in signal for cache policy. Matches the marker by name with a value, never by
+ * cookie presence: GA `_ga`, Cloudflare `__cf_bm` and the anonymous `ruxlog.sid` must not
+ * make a returning reader look signed in.
+ */
+export function hasAuthMarker(cookieHeader: string | null): boolean {
+  return cookieHeader !== null && AUTH_COOKIE_RE.test(cookieHeader);
+}
+
 function responseSetsCookie(response: Response): boolean {
   if (response.headers.get("set-cookie")) return true;
   // SAFETY: getSetCookie exists at runtime on modern Headers implementations
@@ -126,7 +138,7 @@ function responseSetsCookie(response: Response): boolean {
 export function applyHeaders(
   response: Response,
   pathname: string,
-  requestHasCookie = false,
+  requestHasAuthCookie = false,
   nonce?: string,
 ): void {
   response.headers.set("Content-Security-Policy", buildCsp(nonce));
@@ -136,7 +148,11 @@ export function applyHeaders(
   response.headers.set("Permissions-Policy", "camera=(), microphone=(self), geolocation=()");
   response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   const translationPending = response.headers.get("x-eq-translation-pending");
-  const privateMode = requestHasCookie || responseSetsCookie(response);
+  // Translated reader HTML is auth-neutral (the SSR never reads request cookies), so a
+  // signed-in reader still gets the shared, cacheable policy. Only the disk-cache marker
+  // (`x-easyquran-quran-cache`) exempts a response here; every other route stays private.
+  const readerCacheable = response.headers.has("x-easyquran-quran-cache");
+  const privateMode = (requestHasAuthCookie && !readerCacheable) || responseSetsCookie(response);
   const isRedirect = response.status >= 300 && response.status < 400;
   const isImmutableAsset =
     pathname.startsWith("/_app/immutable/") ||
@@ -381,14 +397,14 @@ async function resolveRequest(
   resolve: Parameters<Handle>[0]["resolve"],
   uiLocale: UiLocale | null,
   readerRoute: ParsedReaderRoute | null,
-  requestHasCookie: boolean,
 ): Promise<{ response: Response; nonce: string }> {
   const key = translationRouteCacheKey(readerRoute, uiLocale);
+  // Request cookies do not gate the reader cache: the SSR output does not depend on them,
+  // and a response that sets a cookie is never written (`responseSetsCookie` below).
   const cacheable =
     event.request.method === "GET" &&
     !event.isDataRequest &&
     key !== null &&
-    !requestHasCookie &&
     !event.url.pathname.endsWith(".md");
   const attributes = documentAttributes(uiLocale);
   const nonce = freshNonce();
@@ -472,7 +488,7 @@ const PRODUCT_ROUTE_IDS: ReadonlySet<string> = new Set([
 
 export const handle: Handle = async ({ event, resolve }) => {
   const { pathname } = event.url;
-  const requestHasCookie = !!event.request.headers.get("cookie");
+  const requestHasAuthCookie = hasAuthMarker(event.request.headers.get("cookie"));
   const mdSibling = mdSiblingRequest(pathname);
   let response: Response | null = null;
   let nonce: string | undefined;
@@ -546,7 +562,7 @@ export const handle: Handle = async ({ event, resolve }) => {
         // `event.request.url` (only method + headers, which the localized
         // clone preserves verbatim), so the assignment is dropped, not replaced.
         const readerRoute = readerLocale ? parseReaderRoute(event.route.id, event.params) : null;
-        const out = await resolveRequest(event, resolve, locale, readerRoute, requestHasCookie);
+        const out = await resolveRequest(event, resolve, locale, readerRoute);
         resolved.nonce = out.nonce;
         return out.response;
       });
@@ -560,7 +576,6 @@ export const handle: Handle = async ({ event, resolve }) => {
         resolve,
         "en",
         parseReaderRoute(event.route.id, event.params),
-        requestHasCookie,
       );
       response = resolved.response;
       nonce = resolved.nonce;
@@ -587,6 +602,6 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
   }
 
-  applyHeaders(response, pathname, requestHasCookie, nonce);
+  applyHeaders(response, pathname, requestHasAuthCookie, nonce);
   return response;
 };

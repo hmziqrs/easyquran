@@ -184,6 +184,8 @@ pub struct HttpSettings {
     pub port: String,
     pub ip_source: ClientIpSource,
     pub cookie_secure: bool,
+    /// `Path` attribute of the `ruxlog.sid` session cookie. See `session_cookie_path`.
+    pub session_cookie_path: String,
     pub trusted_proxy_cidrs: Vec<IpNet>,
 }
 
@@ -222,13 +224,43 @@ impl HttpSettings {
         if is_prod && !cookie_secure {
             return Err("COOKIE_SECURE must be true in production".into());
         }
+        let session_cookie_path = session_cookie_path(is_prod)?;
         Ok(Self {
             host,
             port,
             ip_source,
             cookie_secure,
+            session_cookie_path,
             trusted_proxy_cidrs,
         })
+    }
+}
+
+/// `Path` for the session cookie. Production is served through the edge that strips
+/// `/api`, so the browser must send `ruxlog.sid` only under `/api`. Local compose serves
+/// the API at the origin root, so the default there is `/`. `SESSION_COOKIE_PATH` overrides.
+fn session_cookie_path(is_prod: bool) -> Result<String, String> {
+    let default = if is_prod { "/api" } else { "/" };
+    let raw = std::env::var("SESSION_COOKIE_PATH").unwrap_or_else(|_| default.to_string());
+    validate_session_cookie_path(&raw)
+}
+
+fn validate_session_cookie_path(raw: &str) -> Result<String, String> {
+    let shape_ok = raw.starts_with('/')
+        && (raw == "/" || !raw.ends_with('/'))
+        && !raw.contains("//")
+        && !raw.contains("..")
+        && raw.len() <= 64
+        && raw
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'-' | b'_' | b'.'));
+    if shape_ok {
+        Ok(raw.to_string())
+    } else {
+        Err(format!(
+            "Invalid SESSION_COOKIE_PATH {raw:?}: expected an absolute path of [A-Za-z0-9/._-] \
+             with no trailing slash, or \"/\""
+        ))
     }
 }
 
@@ -1342,6 +1374,7 @@ mod tests {
         allowed_origins: Option<String>,
         trusted_proxy_cidrs: Option<String>,
         cookie_secure: Option<String>,
+        session_cookie_path: Option<String>,
     }
 
     fn snapshot_env() -> EnvSnapshot {
@@ -1354,6 +1387,7 @@ mod tests {
             allowed_origins: std::env::var("ALLOWED_ORIGINS").ok(),
             trusted_proxy_cidrs: std::env::var("TRUSTED_PROXY_CIDRS").ok(),
             cookie_secure: std::env::var("COOKIE_SECURE").ok(),
+            session_cookie_path: std::env::var("SESSION_COOKIE_PATH").ok(),
         }
     }
 
@@ -1367,6 +1401,7 @@ mod tests {
             "ALLOWED_ORIGINS",
             "TRUSTED_PROXY_CIDRS",
             "COOKIE_SECURE",
+            "SESSION_COOKIE_PATH",
         ] {
             std::env::remove_var(k);
         }
@@ -1404,6 +1439,10 @@ mod tests {
         match snap.cookie_secure {
             Some(v) => std::env::set_var("COOKIE_SECURE", v),
             None => std::env::remove_var("COOKIE_SECURE"),
+        }
+        match snap.session_cookie_path {
+            Some(v) => std::env::set_var("SESSION_COOKIE_PATH", v),
+            None => std::env::remove_var("SESSION_COOKIE_PATH"),
         }
     }
 
@@ -1684,6 +1723,61 @@ mod tests {
         restore_env(snap);
         drop(_g);
         assert!(result.unwrap_err().contains("COOKIE_SECURE"));
+    }
+
+    #[test]
+    fn session_cookie_path_defaults_by_environment() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        let prod = session_cookie_path(true);
+        let local = session_cookie_path(false);
+        restore_env(snap);
+        drop(_g);
+        assert_eq!(
+            prod.unwrap(),
+            "/api",
+            "production sits behind the edge /api strip"
+        );
+        assert_eq!(
+            local.unwrap(),
+            "/",
+            "local compose serves the API at the root"
+        );
+    }
+
+    #[test]
+    fn session_cookie_path_env_overrides_default() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let snap = snapshot_env();
+        clear_env_vars();
+        std::env::set_var("SESSION_COOKIE_PATH", "/v2/api");
+        let got = session_cookie_path(true);
+        restore_env(snap);
+        drop(_g);
+        assert_eq!(got.unwrap(), "/v2/api");
+    }
+
+    #[test]
+    fn session_cookie_path_rejects_malformed_values() {
+        for bad in [
+            "",
+            "api",
+            "/api/",
+            "//api",
+            "/a/../b",
+            "/a;Domain=x",
+            "/a b",
+            "/\"x",
+        ] {
+            assert!(
+                validate_session_cookie_path(bad).is_err(),
+                "{bad:?} must be rejected"
+            );
+        }
+        for good in ["/", "/api", "/api/v1", "/a.b_c-d"] {
+            assert_eq!(validate_session_cookie_path(good).unwrap(), good);
+        }
     }
 
     #[test]

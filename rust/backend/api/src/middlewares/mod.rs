@@ -1,4 +1,5 @@
 pub mod auth_guard;
+pub mod auth_marker;
 pub mod client_ip;
 pub mod cors;
 pub mod http_metrics;

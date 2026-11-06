@@ -84,7 +84,7 @@ vi.mock("#lib/server/quran-disk-cache.js", () => ({
   },
 }));
 
-import { applyHeaders, handle } from "../../../hooks.server";
+import { applyHeaders, handle, hasAuthMarker } from "../../../hooks.server";
 import {
   DATA_CACHE,
   deleteDataMeta,
@@ -381,7 +381,7 @@ describe("W8a applyHeaders isolates cookie-bearing and session-setting web respo
     expect(res.headers.get("cache-control")).toBe("private, no-store");
   });
 
-  it("forces private, no-store on a cookie-bearing __data.json response", () => {
+  it("forces private, no-store on a signed-in __data.json response", () => {
     const res = new Response("x");
     applyHeaders(res, "/t/en/test/juz/5/__data.json", true);
     expect(res.headers.get("cache-control")).toBe("private, no-store");
@@ -403,10 +403,42 @@ describe("W8a applyHeaders isolates cookie-bearing and session-setting web respo
     expect(tanzil.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
   });
 
+  it("keeps a signed-in reader document shared-cacheable when the disk cache served it", () => {
+    const res = new Response("x", { headers: { "x-easyquran-quran-cache": "hit" } });
+    applyHeaders(res, "/t/en/test/juz/5", true);
+    expect(res.headers.get("cache-control")).toBe("no-cache");
+  });
+
+  it("keeps a signed-in non-reader page private, no-store", () => {
+    const res = new Response("x");
+    applyHeaders(res, "/settings", true);
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+  });
+
   it("leaves an anonymous, non-session-setting document cacheable as no-cache", () => {
     const res = new Response("x");
     applyHeaders(res, "/t/en/test/juz/5", false);
     expect(res.headers.get("cache-control")).toBe("no-cache");
+  });
+});
+
+describe("A14 signed-in predicate uses the ruxlog.auth marker only", () => {
+  it.each([
+    ["_ga=GA1.2.345.678", false],
+    ["__cf_bm=abc", false],
+    ["ruxlog.sid=abc", false],
+    ["_ga=1; ruxlog.sid=abc; __cf_bm=x", false],
+    ["ruxlog.auth=", false],
+    ["xruxlog.auth=1", false],
+    ["ruxlog.auth=1", true],
+    ["_ga=1; ruxlog.sid=abc; ruxlog.auth=1", true],
+    ["ruxlog.auth=1; ruxlog.sid=abc", true],
+  ])("cookie %j signed-in=%s", (cookie, expected) => {
+    expect(hasAuthMarker(cookie)).toBe(expected);
+  });
+
+  it("is false with no Cookie header", () => {
+    expect(hasAuthMarker(null)).toBe(false);
   });
 });
 
@@ -437,17 +469,27 @@ describe("W8a handle bypasses the SSR disk cache for cookie-bearing requests", (
     return Promise.resolve(handle(args));
   }
 
-  it("never reads from the disk cache when the request carries a cookie", async () => {
+  it("serves a signed-in reader from the disk cache without private, no-store", async () => {
     disk.cachedHtml = "<html>cached anonymous</html>";
     const res = await runHandle(
-      { pathname: "/ar/t/en/sahih/juz/5", cookie: "ruxlog.sid=abc" },
+      { pathname: "/ar/t/en/sahih/juz/5", cookie: "ruxlog.auth=1; ruxlog.sid=abc" },
       new Response("<html>fresh anonymous</html>", {
         headers: { "content-type": "text/html" },
       }),
     );
-    expect(disk.reads).toBe(0);
-    expect(await res.text()).toBe("<html>fresh anonymous</html>");
-    expect(res.headers.get("cache-control")).toBe("private, no-store");
+    expect(disk.reads).toBe(1);
+    expect(await res.text()).toBe("<html>cached anonymous</html>");
+    expect(res.headers.get("cache-control")).not.toBe("private, no-store");
+  });
+
+  it("treats GA and Cloudflare cookies as anonymous: disk cache still serves the reader", async () => {
+    disk.cachedHtml = "<html>cached anonymous</html>";
+    const res = await runHandle(
+      { pathname: "/ar/t/en/sahih/juz/5", cookie: "_ga=GA1.2.345.678; __cf_bm=abc" },
+      new Response("<html>fresh</html>", { headers: { "content-type": "text/html" } }),
+    );
+    expect(disk.reads).toBe(1);
+    expect(await res.text()).toBe("<html>cached anonymous</html>");
   });
 
   it("serves the disk cache hit for an anonymous request", async () => {
@@ -460,13 +502,13 @@ describe("W8a handle bypasses the SSR disk cache for cookie-bearing requests", (
     expect(await res.text()).toBe("<html>cached anonymous</html>");
   });
 
-  it("never writes the disk cache when the request carries a cookie", async () => {
+  it("writes the disk cache for a GA-only request when the SSR sets no cookie", async () => {
     disk.cachedHtml = null;
     await runHandle(
-      { pathname: "/ar/t/en/sahih/juz/5", cookie: "ruxlog.sid=abc" },
+      { pathname: "/t/en/sahih/juz/5", cookie: "_ga=GA1.2.345.678" },
       new Response("<html>fresh</html>", { headers: { "content-type": "text/html" } }),
     );
-    expect(disk.writes).toHaveLength(0);
+    expect(disk.writes).toEqual(["k__ui-en"]);
   });
 
   it("skips the disk write when an anonymous SSR response sets a cookie", async () => {
@@ -487,12 +529,12 @@ describe("W8a handle bypasses the SSR disk cache for cookie-bearing requests", (
     expect(disk.writes).toEqual(["k__ui-en"]);
   });
 
-  it("marks a cookie-bearing __data.json response private, no-store and bypasses the disk cache", async () => {
+  it("marks a signed-in __data.json response private, no-store and bypasses the disk cache", async () => {
     disk.cachedHtml = "<html>cached</html>";
     const res = await runHandle(
       {
         pathname: "/ar/t/en/sahih/juz/5/__data.json",
-        cookie: "ruxlog.sid=abc",
+        cookie: "ruxlog.auth=1",
         isDataRequest: true,
       },
       new Response("{}", { headers: { "content-type": "application/json" } }),
