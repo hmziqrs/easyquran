@@ -46,7 +46,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 | Item                                                                                                             | Title                                                                         | Blocked by |
 | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------- |
 | [A4b](plans/abuse-0-foundations.md#a4b-contact-addresses) | Contact addresses | O3 |
-| [A5](plans/abuse-0-foundations.md#a5-measurement-promote-429-logs-durable-block-ledger-job-log-abuse-report)     | Measurement: promote 429 logs, durable block ledger, job log, abuse report    | -          |
 | [A6](plans/abuse-0-foundations.md#a6-subject-keyed-limiters-for-authenticated-write-routes)                      | Subject-keyed limiters for authenticated write routes                         | -          |
 | [A7](plans/abuse-0-foundations.md#a7-daily-cross-domain-ceiling-sync-envelope-snapshot-guard-subject_score-seam) | Daily cross-domain ceiling, sync envelope, snapshot guard, subject_score seam | A5, S6     |
 
