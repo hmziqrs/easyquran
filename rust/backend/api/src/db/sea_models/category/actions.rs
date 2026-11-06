@@ -246,7 +246,14 @@ impl Entity {
         }
     }
 
-    pub async fn delete(conn: &DbConn, category_id: i32) -> DbResult<u64> {
+    /// Deletes the category (its posts cascade) and writes the `category.delete`
+    /// audit row with the pre-state `snapshot` in the same transaction.
+    pub async fn delete(
+        conn: &DbConn,
+        category_id: i32,
+        actor_id: i32,
+        snapshot: serde_json::Value,
+    ) -> DbResult<u64> {
         let txn = conn.begin().await?;
 
         super::super::media_usage::Entity::delete_by_entity(
@@ -257,6 +264,19 @@ impl Entity {
         .await?;
 
         let result = Self::delete_by_id(category_id).exec(&txn).await?;
+
+        if result.rows_affected > 0 {
+            crate::services::audit::record(
+                &txn,
+                crate::services::audit::AuditEvent {
+                    actor_id: Some(actor_id),
+                    action: crate::services::audit::AuditAction::CategoryDelete,
+                    resource_id: category_id.to_string(),
+                    metadata: snapshot,
+                },
+            )
+            .await?;
+        }
 
         txn.commit().await?;
 

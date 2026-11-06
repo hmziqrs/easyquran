@@ -10,13 +10,22 @@ pub fn routes() -> Router<AppState> {
         .route("/create", post(controller::create))
         .layer(DefaultBodyLimit::max(config::body_limits::MEDIA));
 
-    Router::<AppState>::new()
+    let author = Router::<AppState>::new()
         .route("/view/{media_id}", post(controller::view))
         .route("/list/query", post(controller::find_with_query))
         .route("/usage/details", post(controller::list_usage_details))
-        .route("/delete/{media_id}", post(controller::delete))
         .merge(media_limited)
         .route_layer(middleware::from_fn(
             auth_guard::verified_with_role::<{ auth_guard::ROLE_AUTHOR }>,
-        ))
+        ));
+
+    // Delete is Admin-only (A28): a Moderator keeps read, not removal. Removing a
+    // media row also removes its R2 objects and variants, so it is not an Author action.
+    let admin = Router::<AppState>::new()
+        .route("/delete/{media_id}", post(controller::delete))
+        .route_layer(middleware::from_fn(
+            auth_guard::verified_with_role::<{ auth_guard::ROLE_ADMIN }>,
+        ));
+
+    author.merge(admin)
 }

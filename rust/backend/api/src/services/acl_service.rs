@@ -93,6 +93,9 @@ impl AclService {
             "PRIVATE",
             "SIGNING",
             "APIKEY",
+            // A28: R2_ACCESS_KEY_ID ends in _ID, so the suffix rules missed it.
+            // A bare _ID needle would also refuse GOOGLE_CLIENT_ID, so match the key itself.
+            "ACCESS_KEY",
             "DATABASE_URL",
             "DB_URL",
             "DSN",
@@ -314,5 +317,24 @@ mod tests {
     fn guess_sensitive_value_containing_keyword() {
         assert!(AclService::guess_sensitive("my_password_123"));
         assert!(AclService::guess_sensitive("bearer_token_value"));
+    }
+
+    #[test]
+    fn known_secret_env_names_are_refused() {
+        // A28: R2_ACCESS_KEY_ID ends in _ID and slipped past the denylist.
+        assert!(AclService::looks_like_secret_key("R2_ACCESS_KEY_ID"));
+        assert!(AclService::looks_like_secret_key("R2_SECRET_ACCESS_KEY"));
+        assert!(AclService::looks_like_secret_key("AWS_ACCESS_KEY_ID"));
+        assert!(AclService::looks_like_secret_key(
+            "CLOUDFLARE_EMAIL_WEBHOOK_SECRET"
+        ));
+    }
+
+    #[test]
+    fn harmless_id_names_are_not_refused() {
+        // A blanket _ID needle would refuse these; the ACCESS_KEY needle must not.
+        assert!(!AclService::looks_like_secret_key("GOOGLE_CLIENT_ID"));
+        assert!(!AclService::looks_like_secret_key("FIREBASE_PROJECT_ID"));
+        assert!(!AclService::looks_like_secret_key("PUBLIC_SITE_URL"));
     }
 }

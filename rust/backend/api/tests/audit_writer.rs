@@ -331,17 +331,19 @@ async fn admin_user_delete_writes_one_row_and_keeps_it() {
         "POST",
         &format!("/admin/delete/{}", victim.id),
         Some(cookie.as_str()),
-        None,
+        Some(&json!({ "confirmEmail": victim.email })),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_one_row(
+    let row = assert_one_row(
         &h.state.sea_db,
         AuditAction::UserDelete,
         h.uid_a,
         &victim.id.to_string(),
     )
     .await;
+    let snapshot = row.metadata.expect("pre-state snapshot");
+    assert_eq!(snapshot["user"]["email"], json!(victim.email));
     assert_eq!(
         count_sql(
             &h.state.sea_db,

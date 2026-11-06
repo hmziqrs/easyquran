@@ -56,6 +56,35 @@ impl SeedOutcome {
 pub enum SeedError {
     #[error("database error: {0}")]
     Db(String),
+    #[error("seeding refused: {0}")]
+    Refused(String),
+}
+
+/// Random password for a seeded account, from OS entropy. Never derived from the
+/// email and never reproducible from the seed mode (A28).
+pub fn random_seed_password() -> String {
+    use rand::distr::Alphanumeric;
+    use rand::Rng;
+    rand::rng()
+        .sample_iter(Alphanumeric)
+        .take(24)
+        .map(char::from)
+        .collect()
+}
+
+/// Pure gate for every seed and undo entry point (A28). Refuses in production
+/// and when the environment cannot be classified.
+pub fn refuse_seed_in_production(env: Result<bool, String>) -> SeedResult<()> {
+    match env {
+        Ok(false) => Ok(()),
+        Ok(true) => Err(SeedError::Refused("APP_ENV is production".to_string())),
+        Err(reason) => Err(SeedError::Refused(reason)),
+    }
+}
+
+/// Runs the production gate against the live environment.
+pub fn ensure_not_production() -> SeedResult<()> {
+    refuse_seed_in_production(crate::config::settings::is_production())
 }
 
 impl From<sea_orm::DbErr> for SeedError {
@@ -65,6 +94,34 @@ impl From<sea_orm::DbErr> for SeedError {
 }
 
 pub type SeedResult<T> = Result<T, SeedError>;
+
+#[cfg(test)]
+mod a28_gate_tests {
+    use super::*;
+
+    // Runs only with `--features seed-system` (the seed module is feature-gated).
+    #[test]
+    fn seeder_refuses_in_production_and_when_env_is_unclassified() {
+        assert!(refuse_seed_in_production(Ok(false)).is_ok());
+        assert!(matches!(
+            refuse_seed_in_production(Ok(true)),
+            Err(SeedError::Refused(_))
+        ));
+        assert!(matches!(
+            refuse_seed_in_production(Err("APP_ENV is unset".into())),
+            Err(SeedError::Refused(_))
+        ));
+    }
+
+    #[test]
+    fn seed_passwords_are_random_and_not_the_email() {
+        let a = random_seed_password();
+        let b = random_seed_password();
+        assert_eq!(a.len(), 24);
+        assert_ne!(a, b);
+        assert!(!a.contains('@'));
+    }
+}
 
 pub type ProgressCallback = Box<dyn Fn(String) + Send + Sync>;
 

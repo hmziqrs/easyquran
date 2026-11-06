@@ -6,6 +6,14 @@ use crate::{
     utils::SortParam,
 };
 
+/// Typed confirmation for category delete: must equal the category slug.
+#[derive(Debug, Deserialize, Validate)]
+#[serde(rename_all = "camelCase")]
+pub struct V1DeleteCategoryPayload {
+    #[validate(length(min = 1, max = 255))]
+    pub confirm_slug: String,
+}
+
 #[derive(Debug, Deserialize, Serialize, Validate)]
 pub struct V1CreateCategoryPayload {
     #[validate(length(min = 1, max = 255))]

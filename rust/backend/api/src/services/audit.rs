@@ -31,6 +31,7 @@ pub enum AuditAction {
     BanRenew,
     BanNoticeResend,
     UserDelete,
+    CategoryDelete,
     MediaDelete,
     NewsletterSend,
     SuppressionAdd,
@@ -60,6 +61,7 @@ impl AuditAction {
         Self::BanRenew,
         Self::BanNoticeResend,
         Self::UserDelete,
+        Self::CategoryDelete,
         Self::MediaDelete,
         Self::NewsletterSend,
         Self::SuppressionAdd,
@@ -89,6 +91,7 @@ impl AuditAction {
             Self::BanRenew => "ban.renew",
             Self::BanNoticeResend => "ban.notice_resend",
             Self::UserDelete => "user.delete",
+            Self::CategoryDelete => "category.delete",
             Self::MediaDelete => "media.delete",
             Self::NewsletterSend => "newsletter.send",
             Self::SuppressionAdd => "suppression.add",
@@ -116,6 +119,7 @@ impl AuditAction {
                 "user_ban"
             }
             Self::UserDelete => "user",
+            Self::CategoryDelete => "category",
             Self::MediaDelete => "media",
             Self::NewsletterSend => "newsletter",
             Self::SuppressionAdd | Self::SuppressionDelete | Self::SuppressionReview => {

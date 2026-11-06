@@ -122,7 +122,7 @@ pub async fn collect(
     );
 
     // 6. Open comment flags. A flag row exists until its comment is cleared
-    //    (`comment_flag::clear_flags`), so the row count is the open count.
+    //    (flags are cleared by the comment flags-clear action), so the row count is the open count.
     out.insert(
         "openCommentFlags".into(),
         figure(

@@ -594,13 +594,35 @@ impl Entity {
         }
     }
 
-    pub async fn admin_delete(conn: &DbConn, user_id: i32) -> DbResult<u64> {
+    /// Deletes the user and writes the `user.delete` audit row (carrying the
+    /// pre-state `snapshot`) in the same transaction. The cascade removes bans,
+    /// sessions and reports, so the snapshot is the only record of them. Returns
+    /// 0 and writes nothing when the user does not exist.
+    pub async fn admin_delete(
+        conn: &DbConn,
+        user_id: i32,
+        actor_id: i32,
+        snapshot: serde_json::Value,
+    ) -> DbResult<u64> {
         let txn = conn.begin().await?;
 
         super::super::media_usage::Entity::delete_by_entity(&txn, EntityType::User, user_id)
             .await?;
 
         let result = Self::delete_by_id(user_id).exec(&txn).await?;
+
+        if result.rows_affected > 0 {
+            crate::services::audit::record(
+                &txn,
+                crate::services::audit::AuditEvent {
+                    actor_id: Some(actor_id),
+                    action: crate::services::audit::AuditAction::UserDelete,
+                    resource_id: user_id.to_string(),
+                    metadata: snapshot,
+                },
+            )
+            .await?;
+        }
 
         txn.commit().await?;
 

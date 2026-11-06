@@ -23,7 +23,6 @@ use crate::{
     services::{
         abuse_limiter,
         account_methods::{can_unlink, total_sign_in_methods},
-        audit::{self, AuditAction, AuditEvent},
         auth::AuthSession,
     },
     AppState,
@@ -406,6 +405,7 @@ pub async fn admin_delete(
     auth: AuthSession,
     state: State<AppState>,
     Path(user_id): Path<i32>,
+    payload: ValidatedJson<V1AdminDeleteUserPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     // Route guard only checks ROLE_ADMIN: block self-deletion and deletion of equal/higher-rank users (privilege escalation / self-lockout).
     let caller = auth.user.ok_or_else(|| {
@@ -416,19 +416,32 @@ pub async fn admin_delete(
         return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
             .with_message("You cannot delete your own account via the admin path"));
     }
-    if let Some(target) = User::get_by_id(&state.sea_db, user_id).await? {
-        if target.role.to_i32() >= caller_level {
-            warn!(
-                caller_level,
-                target_level = target.role.to_i32(),
-                "Admin attempted to delete an equal/higher-role user"
-            );
-            return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
-                .with_message("You cannot delete a user at or above your own role"));
-        }
+    let Some(target) = User::get_by_id(&state.sea_db, user_id).await? else {
+        warn!(user_id, "Admin tried to delete non-existent user");
+        return Err(
+            ErrorResponse::new(ErrorCode::RecordNotFound).with_message("User does not exist")
+        );
+    };
+    if target.role.to_i32() >= caller_level {
+        warn!(
+            caller_level,
+            target_level = target.role.to_i32(),
+            "Admin attempted to delete an equal/higher-role user"
+        );
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("You cannot delete a user at or above your own role"));
     }
-    // User::admin_delete opens its own transaction, so the audit row follows it.
-    let deleted = match User::admin_delete(&state.sea_db, user_id).await {
+    // Typed confirmation: the caller retypes the target's email (case-insensitive).
+    let typed = crate::utils::email::normalize_email(&payload.0.confirm_email);
+    if typed != crate::utils::email::normalize_email(&target.email) {
+        return Err(ErrorResponse::new(ErrorCode::InvalidInput)
+            .with_message("Confirmation does not match the user's email"));
+    }
+    // Pre-state snapshot, written in the delete transaction. The cascade destroys
+    // bans, sessions and reports, so the snapshot is their only record. Session
+    // rows carry raw IP and UA, so only their count is kept.
+    let snapshot = user_delete_snapshot(&state.sea_db, &target).await?;
+    let deleted = match User::admin_delete(&state.sea_db, user_id, caller.id, snapshot).await {
         Ok(affected) => affected,
         Err(err) => {
             error!(user_id, "Failed to delete user: {}", err);
@@ -441,21 +454,51 @@ pub async fn admin_delete(
             ErrorResponse::new(ErrorCode::RecordNotFound).with_message("User does not exist")
         );
     }
-    audit::record(
-        &state.sea_db,
-        AuditEvent {
-            actor_id: Some(caller.id),
-            action: AuditAction::UserDelete,
-            resource_id: user_id.to_string(),
-            metadata: json!({}),
-        },
-    )
-    .await?;
     info!(user_id, "Admin deleted user");
     Ok((
         StatusCode::OK,
         Json(json!({ "message": "User deleted successfully" })),
     ))
+}
+
+/// Evidence snapshot of a user about to be deleted. No password hash, no session
+/// secret, no device identity, no session IP or UA.
+async fn user_delete_snapshot(
+    db: &sea_orm::DatabaseConnection,
+    target: &UserModel,
+) -> Result<serde_json::Value, ErrorResponse> {
+    use crate::db::sea_models::{report, user_ban, user_session};
+    use sea_orm::{ColumnTrait, PaginatorTrait, QueryFilter};
+
+    let bans = user_ban::Entity::find()
+        .filter(user_ban::Column::UserId.eq(target.id))
+        .all(db)
+        .await?;
+    let session_count = user_session::Entity::find()
+        .filter(user_session::Column::UserId.eq(target.id))
+        .count(db)
+        .await?;
+    let report_ids: Vec<i64> = report::Entity::find()
+        .filter(report::Column::ReporterUserId.eq(target.id))
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|r| r.id)
+        .collect();
+
+    Ok(json!({
+        "user": {
+            "id": target.id,
+            "name": target.name,
+            "email": target.email,
+            "role": target.role.to_i32(),
+            "is_verified": target.is_verified,
+            "created_at": target.created_at,
+        },
+        "bans": bans,
+        "session_count": session_count,
+        "report_ids": report_ids,
+    }))
 }
 
 #[debug_handler]

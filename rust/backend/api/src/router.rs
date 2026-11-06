@@ -92,7 +92,10 @@ pub fn router(state: AppState) -> Router<AppState> {
                 .layer(middleware::from_fn(auth_marker::emit_marker)),
         );
         router = router
-            .nest("/email_verification/v1", email_verification_v1::routes())
+            .nest(
+                "/email_verification/v1",
+                email_verification_v1::routes().layer(rate_limit::rate_limit_layer(&state, 20, 60)),
+            )
             .nest(
                 "/forgot_password/v1",
                 forgot_password_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
@@ -148,15 +151,29 @@ pub fn router(state: AppState) -> Router<AppState> {
         post_comment_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
     );
 
+    // Every nest below is metered (A28). `tests/admin_safety.rs` scans this file
+    // and fails when a nest call or admin merge lacks a rate-limit layer.
     router = router
-        .nest("/category/v1", category_v1::routes())
-        .nest("/tag/v1", tag_v1::routes())
-        .nest("/mail/v1", mail_v1::routes())
+        .nest(
+            "/category/v1",
+            category_v1::routes().layer(rate_limit::rate_limit_layer(&state, 120, 60)),
+        )
+        .nest(
+            "/tag/v1",
+            tag_v1::routes().layer(rate_limit::rate_limit_layer(&state, 120, 60)),
+        )
+        .nest(
+            "/mail/v1",
+            mail_v1::routes().layer(rate_limit::rate_limit_layer(&state, 30, 60)),
+        )
         .nest(
             "/media/v1",
             media_v1::routes().layer(rate_limit::rate_limit_layer(&state, 30, 60)),
         )
-        .nest("/feed/v1", feed_v1::routes())
+        .nest(
+            "/feed/v1",
+            feed_v1::routes().layer(rate_limit::rate_limit_layer(&state, 120, 60)),
+        )
         .nest(
             "/search/v1",
             search_v1::routes().layer(rate_limit::rate_limit_layer(&state, 30, 60)),
@@ -168,26 +185,43 @@ pub fn router(state: AppState) -> Router<AppState> {
     );
 
     // Incident intake (A24): public, CSRF from the global stack, rate limited in the controller.
-    router = router.nest("/report/v1", report_v1::routes());
+    router = router.nest(
+        "/report/v1",
+        report_v1::routes().layer(rate_limit::rate_limit_layer(&state, 30, 60)),
+    );
 
-    router = router.nest("/analytics/v1", analytics_v1::routes());
+    router = router.nest(
+        "/analytics/v1",
+        analytics_v1::routes().layer(rate_limit::rate_limit_layer(&state, 120, 60)),
+    );
 
-    router = router.nest("/admin/route/v1", admin_route_v1::routes());
+    router = router.nest(
+        "/admin/route/v1",
+        admin_route_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+    );
 
-    router = router.nest("/admin/acl/v1", admin_acl_v1::routes());
+    router = router.nest(
+        "/admin/acl/v1",
+        admin_acl_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+    );
 
     // Merged (not nested) so the module's absolute, spec-exact operator URLs
     // (/admin/bans, /admin/bans/export) are served verbatim. Auth layers and the
     // origin/CSRF/session stack come from the enclosing private router.
-    router = router.merge(admin_bans_v1::routes());
+    router =
+        router.merge(admin_bans_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)));
 
     // Abuse measurement summary (A5): session admin ACL, same guard as bans.
-    router = router.merge(admin_abuse_v1::routes());
+    router =
+        router.merge(admin_abuse_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)));
 
     // Account ban contract (A19). Ships dark: nothing mounts unless
     // ABUSE_BAN_WRITES_ENABLED=true. Flip only with A20, A21, A22, A35 deployed.
     if admin_user_bans_v1::controller::writes_enabled() {
-        router = router.nest("/admin/users/bans", admin_user_bans_v1::routes());
+        router = router.nest(
+            "/admin/users/bans",
+            admin_user_bans_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+        );
         // Appeal intake (A35) ships with the bans: one release, same flag.
         router = router.nest(
             "/appeal/v1",
@@ -197,7 +231,10 @@ pub fn router(state: AppState) -> Router<AppState> {
 
     #[cfg(feature = "seed-system")]
     {
-        router = router.nest("/admin/seed/v1", seed_v1::routes());
+        router = router.nest(
+            "/admin/seed/v1",
+            seed_v1::routes().layer(rate_limit::rate_limit_layer(&state, 20, 60)),
+        );
     }
 
     router = router

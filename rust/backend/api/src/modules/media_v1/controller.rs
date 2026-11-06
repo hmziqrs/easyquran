@@ -541,10 +541,11 @@ pub fn can_view_media(viewer: &user::Model, uploader_id: Option<i32>) -> bool {
     uploader_id == Some(viewer.id) || viewer.is_moderator()
 }
 
+/// Delete is Admin-only (A28). Owner or Admin may delete; a Moderator may not.
 pub fn can_delete_media(actor: &user::Model, uploader_id: Option<i32>) -> bool {
     match uploader_id {
-        Some(owner_id) => owner_id == actor.id || actor.is_moderator(),
-        None => actor.is_moderator(),
+        Some(owner_id) => owner_id == actor.id || actor.is_admin(),
+        None => actor.is_admin(),
     }
 }
 
@@ -761,7 +762,8 @@ pub async fn list_usage_details(
             media_usage::EntityType::User => {
                 let summary = user_map
                     .get(&entity_id)
-                    .map(|model| UserSummary::from_model(model, caller.is_moderator()));
+                    // A28: only Admin sees a user's email in usage details.
+                    .map(|model| UserSummary::from_model(model, caller.is_admin()));
                 entry.users.push(UserUsage {
                     usage_id,
                     field_name,
@@ -991,7 +993,8 @@ mod tests {
     fn admin_can_delete_null_owner_media() {
         let moderator = make_user(100, UserRole::Moderator);
         let admin = make_user(101, UserRole::Admin);
-        assert!(can_delete_media(&moderator, None));
+        // A28: delete is Admin-only; a Moderator keeps read but cannot remove media.
+        assert!(!can_delete_media(&moderator, None));
         assert!(can_delete_media(&admin, None));
     }
 

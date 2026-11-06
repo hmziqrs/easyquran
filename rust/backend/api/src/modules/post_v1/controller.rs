@@ -34,7 +34,8 @@ use super::validator::{
 
 fn viewer_bypasses_paywall(viewer: Option<&user::Model>, author_id: i32) -> bool {
     match viewer {
-        Some(u) => u.is_moderator() || u.id == author_id,
+        // A28: a Moderator does not bypass the paywall. Author and Admin do.
+        Some(u) => u.id == author_id || u.is_admin(),
         None => false,
     }
 }
@@ -55,7 +56,8 @@ async fn require_featured_image_access<C: ConnectionTrait>(
         .one(conn)
         .await?
         .ok_or_else(|| ErrorResponse::new(ErrorCode::RecordNotFound))?;
-    if image.uploader_id != Some(viewer.id) && !viewer.is_moderator() {
+    // A28: a Moderator cannot attach another user's media to a post.
+    if image.uploader_id != Some(viewer.id) && !viewer.is_admin() {
         return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
             .with_message("You do not have permission to use this image"));
     }
@@ -118,7 +120,8 @@ async fn apply_paywall_list(
     let ids: Vec<i32> = posts.iter().map(|p| p.id).collect();
     let policies = paywall::load_post_access_map(&state.sea_db, &ids).await?;
 
-    let is_staff = viewer.map(|u| u.is_moderator()).unwrap_or(false);
+    // A28: staff for paywall purposes is Admin only, not Moderator.
+    let is_staff = viewer.map(|u| u.is_admin()).unwrap_or(false);
     let (purchased, has_active_sub) = if let Some(u) = viewer.filter(|_| !is_staff) {
         (
             paywall::user_purchased_post_ids(&state.sea_db, u.id, &ids).await?,

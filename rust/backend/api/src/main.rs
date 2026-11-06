@@ -727,6 +727,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tracing::info!("Initial route blocker cache sync completed successfully");
         }
 
+        // Rehydrate an admin pause persisted before the last redeploy (A28).
+        match RouteBlockerService::load_sync_paused(&state.sea_db).await {
+            Ok(Some(true)) => {
+                route_blocker_config::pause_sync();
+                tracing::info!("Route blocker sync loop paused (persisted admin pause)");
+            }
+            Ok(_) => {}
+            Err(err) => {
+                tracing::error!(error = %err, "Failed to load persisted route blocker pause")
+            }
+        }
+
         let state_for_blocker = state.clone();
         tokio::spawn(async move {
             let notify = route_blocker_config::notifier();

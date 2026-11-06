@@ -184,13 +184,4 @@ impl Entity {
         }
         Ok(count)
     }
-
-    pub async fn clear_flags(conn: &DbConn, comment_id: i32) -> DbResult<u64> {
-        let res = Entity::delete_many()
-            .filter(Column::CommentId.eq(comment_id))
-            .exec(conn)
-            .await?;
-        let _ = Self::sync_flags_count(conn, comment_id).await?;
-        Ok(res.rows_affected)
-    }
 }

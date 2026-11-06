@@ -8,15 +8,20 @@ use axum_macros::debug_handler;
 use serde_json::json;
 use tracing::{error, info, instrument, warn};
 
+use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
+
 use crate::{
-    db::sea_models::category::Entity as Category,
+    db::sea_models::{category::Entity as Category, post},
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
     services::auth::AuthSession,
     AppState,
 };
 
-use super::validator::{V1CategoryQueryParams, V1CreateCategoryPayload, V1UpdateCategoryPayload};
+use super::validator::{
+    V1CategoryQueryParams, V1CreateCategoryPayload, V1DeleteCategoryPayload,
+    V1UpdateCategoryPayload,
+};
 
 #[debug_handler]
 #[instrument(skip(state, _auth, payload), fields(category_id))]
@@ -81,20 +86,44 @@ pub async fn update(
 }
 
 #[debug_handler]
-#[instrument(skip(state, _auth), fields(category_id))]
+#[instrument(skip(state, auth, payload), fields(category_id))]
 pub async fn delete(
     State(state): State<AppState>,
-    _auth: AuthSession,
+    auth: AuthSession,
     Path(category_id): Path<i32>,
+    payload: ValidatedJson<V1DeleteCategoryPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    match Category::delete(&state.sea_db, category_id).await {
-        Ok(1) => {
-            info!(category_id, "Category deleted");
-            Ok((
-                StatusCode::OK,
-                Json(json!({ "message": "Category deleted successfully" })),
-            ))
-        }
+    let actor = auth.user_required()?;
+    let Some(category) = Category::find_by_id(category_id)
+        .one(&state.sea_db)
+        .await
+        .map_err(ErrorResponse::from)?
+    else {
+        warn!(category_id, "Category not found for delete");
+        return Err(
+            ErrorResponse::new(ErrorCode::RecordNotFound).with_message("Category does not exist")
+        );
+    };
+    // Deleting a category cascades every post in it: the caller must retype the slug.
+    if payload.0.confirm_slug != category.slug {
+        return Err(ErrorResponse::new(ErrorCode::InvalidInput)
+            .with_message("Confirmation does not match the category slug"));
+    }
+    let post_count = post::Entity::find()
+        .filter(post::Column::CategoryId.eq(category_id))
+        .count(&state.sea_db)
+        .await
+        .map_err(ErrorResponse::from)?;
+    let snapshot = json!({
+        "category": {
+            "id": category.id,
+            "name": category.name,
+            "slug": category.slug,
+            "parent_id": category.parent_id,
+        },
+        "post_count": post_count,
+    });
+    match Category::delete(&state.sea_db, category_id, actor.id, snapshot).await {
         Ok(0) => {
             warn!(category_id, "Category not found for delete");
             Err(ErrorResponse::new(ErrorCode::RecordNotFound)

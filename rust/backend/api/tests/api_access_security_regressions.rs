@@ -419,14 +419,15 @@ async fn unrelated_reader_cannot_create_comments_on_hidden_posts() {
 }
 
 #[tokio::test]
-async fn hidden_post_comments_remain_accessible_to_author_and_moderator() {
+async fn hidden_post_comments_visible_to_author_and_admin_not_moderator() {
     let state = fixture().await;
     let author = seed_user(&state, "author", UserRole::Author).await;
     let moderator = seed_user(&state, "moderator", UserRole::Moderator).await;
+    let admin = seed_user(&state, "admin", UserRole::Admin).await;
     let category = seed_category(&state).await;
     let post = seed_post(&state, &author, &category, post::PostStatus::Archived).await;
     let app = router_with_state(state.clone());
-    for user in [&author, &moderator] {
+    for user in [&author, &admin, &moderator] {
         let cookie = login_cookie(&state, user).await;
         let (status, body) = post_json(
             &app,
@@ -435,6 +436,15 @@ async fn hidden_post_comments_remain_accessible_to_author_and_moderator() {
             json!({"post_id": post.id, "content": "Allowed discussion"}),
         )
         .await;
+        // A28: a Moderator can neither comment on nor read hidden-post comments.
+        if user.id == moderator.id {
+            assert_eq!(
+                status,
+                StatusCode::NOT_FOUND,
+                "moderator commented on hidden post: {body}"
+            );
+            continue;
+        }
         assert_eq!(status, StatusCode::CREATED, "{body}");
         let (status, body) = post_json(
             &app,
@@ -512,14 +522,29 @@ async fn author_cannot_update_post_to_another_users_media() {
 }
 
 #[tokio::test]
-async fn owned_media_and_moderator_media_assignment_remain_allowed() {
+async fn owned_media_and_admin_media_assignment_remain_allowed() {
     let state = fixture().await;
     let author = seed_user(&state, "author", UserRole::Author).await;
     let moderator = seed_user(&state, "moderator", UserRole::Moderator).await;
+    let admin = seed_user(&state, "admin", UserRole::Admin).await;
     let category = seed_category(&state).await;
     let media = seed_media(&state, Some(author.id)).await;
     let app = router_with_state(state.clone());
-    for (user, slug) in [(&author, "owned-image"), (&moderator, "moderated-image")] {
+    // A28: a Moderator cannot attach another user's media; an Admin still can.
+    let moderator_cookie = login_cookie(&state, &moderator).await;
+    let (status, body) = post_json(
+        &app,
+        "/post/v1/create",
+        Some(&moderator_cookie),
+        create_payload(category.id, Some(media.id), "moderated-image"),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "moderator attached foreign media: {body}"
+    );
+    for (user, slug) in [(&author, "owned-image"), (&admin, "admin-image")] {
         let cookie = login_cookie(&state, user).await;
         let (status, body) = post_json(
             &app,

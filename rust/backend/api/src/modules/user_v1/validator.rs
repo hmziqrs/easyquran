@@ -122,6 +122,14 @@ pub struct V1ConfirmEmailChangePayload {
     pub code: String,
 }
 
+/// Typed confirmation for admin user delete: must equal the target's email.
+#[derive(Debug, Deserialize, Validate)]
+#[serde(rename_all = "camelCase")]
+pub struct V1AdminDeleteUserPayload {
+    #[validate(length(min = 3, max = 320))]
+    pub confirm_email: String,
+}
+
 #[derive(Debug, Deserialize, Validate)]
 pub struct V1UnlinkIdentityPayload {
     #[validate(length(min = 1, max = 32))]

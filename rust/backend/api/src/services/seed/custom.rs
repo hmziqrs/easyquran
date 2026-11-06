@@ -32,6 +32,7 @@ pub async fn seed_custom(
     custom_count: Option<u32>,
     progress: Option<ProgressCallback>,
 ) -> SeedResult<SeedOutcome> {
+    super::types::ensure_not_production()?;
     let mut ranges = HashMap::new();
     let errors = Vec::new();
     let warnings = Vec::new();
@@ -132,11 +133,8 @@ where
         .map(|m| m.id)
         .unwrap_or(0);
 
-    let roles = [
-        user::UserRole::Admin,
-        user::UserRole::Author,
-        user::UserRole::User,
-    ];
+    // A28: seeding never mints Admin accounts.
+    let roles = [user::UserRole::Author, user::UserRole::User];
 
     for i in 0..count {
         let name: String = Name().fake_with_rng(&mut rng);
@@ -148,7 +146,7 @@ where
         let new_user = user::AdminCreateUser {
             name: name.clone(),
             email: email.clone(),
-            password: email.clone(),
+            password: super::types::random_seed_password(),
             role,
             avatar_id: None,
             is_verified: Some(true),

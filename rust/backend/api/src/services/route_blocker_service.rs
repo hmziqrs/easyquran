@@ -1,3 +1,4 @@
+use crate::db::sea_models::app_constant::Entity as AppConstant;
 use crate::db::sea_models::route_status::Entity as RouteStatus;
 use crate::error::ErrorResponse;
 use crate::services::audit::{self, AuditAction, AuditEvent};
@@ -67,11 +68,21 @@ fn seed_snapshot_for_tests(blocked: HashMap<String, bool>, refreshed_at: Option<
     snap.refreshed_at = refreshed_at;
 }
 
+const ADMIN_ROUTE_PREFIX: &str = "/admin/route/v1";
+
+/// The route-blocker admin nest, including its own unblock route. Blocking it
+/// would leave no admin path to unblock it, so block requests for it are refused.
+pub fn is_protected_route(pattern: &str) -> bool {
+    let p = pattern.trim().trim_end_matches('/');
+    p == ADMIN_ROUTE_PREFIX || p.starts_with(&format!("{ADMIN_ROUTE_PREFIX}/"))
+}
+
 pub struct RouteBlockerService;
 
 impl RouteBlockerService {
     pub const BLOCKED_ROUTES_KEY: &'static str = "blocked_routes";
     pub const KNOWN_ROUTES_KEY: &'static str = "known_routes";
+    pub const SYNC_PAUSED_KEY: &'static str = "route_blocker_sync_paused";
 
     pub async fn record_route_pattern(
         db: &DatabaseConnection,
@@ -132,6 +143,12 @@ impl RouteBlockerService {
         pattern: String,
         reason: Option<String>,
     ) -> Result<serde_json::Value, ErrorResponse> {
+        if is_protected_route(&pattern) {
+            return Err(
+                ErrorResponse::new(crate::error::ErrorCode::OperationNotAllowed)
+                    .with_message("The route blocker cannot block its own admin routes"),
+            );
+        }
         let route = RouteStatus::create_or_update(&state.sea_db, pattern.clone(), true, reason)
             .await
             .map_err(|e| {
@@ -222,6 +239,34 @@ impl RouteBlockerService {
                 ErrorResponse::new(crate::error::ErrorCode::InternalServerError)
                     .with_message(e.to_string())
             })
+    }
+
+    /// Persist the sync-loop pause in `app_constants` so a redeploy keeps it (A28).
+    /// The in-memory flag stays the runtime source; this row is read once at boot.
+    pub async fn persist_sync_paused(
+        db: &DatabaseConnection,
+        paused: bool,
+        actor_id: i32,
+    ) -> Result<(), sea_orm::DbErr> {
+        AppConstant::upsert_value(
+            db,
+            Self::SYNC_PAUSED_KEY,
+            if paused { "true" } else { "false" },
+            Some("bool".to_string()),
+            Some("Route blocker sync loop paused by an admin".to_string()),
+            false,
+            "admin",
+            Some(actor_id),
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// The persisted pause, `None` when no admin has ever set it.
+    pub async fn load_sync_paused(db: &DatabaseConnection) -> Result<Option<bool>, sea_orm::DbErr> {
+        Ok(AppConstant::find_by_key(db, Self::SYNC_PAUSED_KEY)
+            .await?
+            .map(|row| row.value == "true"))
     }
 
     pub async fn sync_all_routes_to_cache(

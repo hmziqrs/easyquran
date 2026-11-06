@@ -242,24 +242,46 @@ pub async fn update_sync_interval(
 }
 
 #[debug_handler(state = AppState)]
-#[instrument(skip(_auth))]
-pub async fn pause_sync_interval(_auth: AuthSession) -> Result<impl IntoResponse, ErrorResponse> {
+#[instrument(skip(state, auth))]
+pub async fn pause_sync_interval(
+    State(state): State<AppState>,
+    auth: AuthSession,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let actor_id = auth.user_required()?.id;
+    // Persist first: a failed write leaves the runtime state unchanged.
+    RouteBlockerService::persist_sync_paused(&state.sea_db, true, actor_id)
+        .await
+        .map_err(ErrorResponse::from)?;
     route_blocker_config::pause_sync();
     info!("Paused route blocker sync loop");
     Ok((StatusCode::OK, Json(get_sync_status_json())))
 }
 
 #[debug_handler(state = AppState)]
-#[instrument(skip(_auth))]
-pub async fn resume_sync_interval(_auth: AuthSession) -> Result<impl IntoResponse, ErrorResponse> {
+#[instrument(skip(state, auth))]
+pub async fn resume_sync_interval(
+    State(state): State<AppState>,
+    auth: AuthSession,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let actor_id = auth.user_required()?.id;
+    RouteBlockerService::persist_sync_paused(&state.sea_db, false, actor_id)
+        .await
+        .map_err(ErrorResponse::from)?;
     route_blocker_config::resume_sync();
     info!("Resumed route blocker sync loop");
     Ok((StatusCode::OK, Json(get_sync_status_json())))
 }
 
 #[debug_handler(state = AppState)]
-#[instrument(skip(_auth))]
-pub async fn restart_sync_interval(_auth: AuthSession) -> Result<impl IntoResponse, ErrorResponse> {
+#[instrument(skip(state, auth))]
+pub async fn restart_sync_interval(
+    State(state): State<AppState>,
+    auth: AuthSession,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let actor_id = auth.user_required()?.id;
+    RouteBlockerService::persist_sync_paused(&state.sea_db, false, actor_id)
+        .await
+        .map_err(ErrorResponse::from)?;
     route_blocker_config::resume_sync();
     route_blocker_config::request_immediate_sync();
     info!("Restarted route blocker sync loop");

@@ -42,6 +42,7 @@ pub async fn seed_all_with_progress(
     progress: Option<ProgressCallback>,
     seed_mode: Option<SeedMode>,
 ) -> SeedResult<SeedOutcome> {
+    super::types::ensure_not_production()?;
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
 
@@ -171,14 +172,13 @@ pub async fn seed_all_with_progress(
     for i in 0..50 {
         let user: FakeUser = Faker.fake_with_rng(&mut rng);
         let email = user.email.clone();
-        let password = user.email.clone();
+        // A28: no password derived from the email, and no Admin role minted by seeding.
+        let password = super::types::random_seed_password();
         let new_user = user::AdminCreateUser {
             name: user.name,
             email: email.clone(),
             password: password.clone(),
-            role: if rng.random_bool(0.1) {
-                user::UserRole::Admin
-            } else if rng.random_bool(0.5) {
+            role: if rng.random_bool(0.5) {
                 user::UserRole::Author
             } else {
                 user::UserRole::User

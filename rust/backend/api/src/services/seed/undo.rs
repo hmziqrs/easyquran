@@ -16,6 +16,7 @@ pub struct UndoOutcome {
 }
 
 pub async fn undo_seed_run(db: &DatabaseConnection, run_id: i32) -> SeedResult<UndoOutcome> {
+    super::types::ensure_not_production()?;
     let run = seed_run::Entity::find_by_id(run_id)
         .one(db)
         .await?
@@ -99,7 +100,8 @@ pub async fn undo_seed_run(db: &DatabaseConnection, run_id: i32) -> SeedResult<U
         route_status::Entity,
         route_status::Column::Id
     );
-    del_range!("users", user::Entity, user::Column::Id);
+    // A28: users are never removed by undo. Accounts carry bans, reports and audit
+    // evidence, so a range delete here destroys records the admin path must keep.
 
     Ok(UndoOutcome { deleted })
 }

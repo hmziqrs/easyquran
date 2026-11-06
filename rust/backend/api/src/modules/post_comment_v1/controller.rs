@@ -73,7 +73,8 @@ async fn require_post_visibility<C: ConnectionTrait>(
         .await?
         .ok_or_else(|| ErrorResponse::new(ErrorCode::RecordNotFound))?;
     let can_view_hidden = viewer
-        .map(|viewer| viewer.id == post.author_id || viewer.is_moderator())
+        // A28: hidden-post comments are visible to the author and Admin, not Moderator.
+        .map(|viewer| viewer.id == post.author_id || viewer.is_admin())
         .unwrap_or(false);
     if post.status != post::PostStatus::Published && !can_view_hidden {
         return Err(ErrorResponse::new(ErrorCode::RecordNotFound));

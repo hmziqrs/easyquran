@@ -48,4 +48,21 @@ pub fn routes() -> Router<AppState> {
         .route_layer(middleware::from_fn(
             auth_guard::verified_with_role::<{ auth_guard::ROLE_SUPER_ADMIN }>,
         ))
+        // A28: refuse in production on every seed route, before any handler runs.
+        .route_layer(middleware::from_fn(refuse_in_production))
+}
+
+async fn refuse_in_production(
+    request: axum::extract::Request,
+    next: middleware::Next,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    match crate::services::seed::ensure_not_production() {
+        Ok(()) => next.run(request).await,
+        Err(err) => (
+            axum::http::StatusCode::FORBIDDEN,
+            axum::Json(serde_json::json!({ "message": err.to_string() })),
+        )
+            .into_response(),
+    }
 }
