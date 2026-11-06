@@ -18,6 +18,7 @@ use tower::ServiceExt;
 use reading_common::{harness, login_cookie, router_with_state, seed_user, Harness};
 use rux_request_gate::{AbuseLimiterConfig, GateDecision, RateLimitStore};
 use ruxlog::db::sea_models::appeal;
+use ruxlog::db::sea_models::audit_log;
 use ruxlog::db::sea_models::email_suppression::{self, SuppressionUpsert};
 use ruxlog::db::sea_models::enforcement_notice;
 use ruxlog::db::sea_models::user::{self, UserRole};
@@ -33,7 +34,10 @@ use ruxlog::services::mail::provider::{
 use ruxlog::services::mail::router::{MailRouter, MailRouterLimits};
 use ruxlog::AppState;
 use ruxlog_types::enums::SuppressionReason;
-use sea_orm::{ActiveModelTrait, ConnectionTrait, DbBackend, EntityTrait, Set, Statement};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, Set,
+    Statement,
+};
 
 fn req(method: &str, path: &str, cookie: &str, body: Option<Value>) -> Request<Body> {
     let builder = Request::builder()
@@ -659,6 +663,14 @@ async fn resend_records_the_new_attempt() {
     assert_eq!(calls.load(Ordering::SeqCst), 2, "create + resend");
     let (state, _, _) = notice_row_state(&h).await;
     assert_eq!(state.as_deref(), Some("sent"));
+    let audited = audit_log::Entity::find()
+        .filter(audit_log::Column::Action.eq("ban.notice_resend"))
+        .all(&h.state.sea_db)
+        .await
+        .unwrap();
+    assert_eq!(audited.len(), 1, "resend writes one audit row");
+    assert_eq!(audited[0].resource_id, ban_id.to_string());
+    assert_eq!(audited[0].user_id, Some(h.uid_a));
 }
 
 #[tokio::test]

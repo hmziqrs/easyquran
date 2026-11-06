@@ -29,6 +29,7 @@ pub enum AuditAction {
     BanCreate,
     BanRevoke,
     BanRenew,
+    BanNoticeResend,
     UserDelete,
     MediaDelete,
     NewsletterSend,
@@ -39,7 +40,7 @@ pub enum AuditAction {
 }
 
 impl AuditAction {
-    pub const ALL: [AuditAction; 17] = [
+    pub const ALL: [AuditAction; 18] = [
         Self::RouteBlock,
         Self::RouteUnblock,
         Self::RouteDelete,
@@ -50,6 +51,7 @@ impl AuditAction {
         Self::BanCreate,
         Self::BanRevoke,
         Self::BanRenew,
+        Self::BanNoticeResend,
         Self::UserDelete,
         Self::MediaDelete,
         Self::NewsletterSend,
@@ -71,6 +73,7 @@ impl AuditAction {
             Self::BanCreate => "ban.create",
             Self::BanRevoke => "ban.revoke",
             Self::BanRenew => "ban.renew",
+            Self::BanNoticeResend => "ban.notice_resend",
             Self::UserDelete => "user.delete",
             Self::MediaDelete => "media.delete",
             Self::NewsletterSend => "newsletter.send",
@@ -88,7 +91,9 @@ impl AuditAction {
             | Self::CommentUnhide
             | Self::CommentDelete
             | Self::CommentFlagsClear => "comment",
-            Self::BanCreate | Self::BanRevoke | Self::BanRenew => "user_ban",
+            Self::BanCreate | Self::BanRevoke | Self::BanRenew | Self::BanNoticeResend => {
+                "user_ban"
+            }
             Self::UserDelete => "user",
             Self::MediaDelete => "media",
             Self::NewsletterSend => "newsletter",

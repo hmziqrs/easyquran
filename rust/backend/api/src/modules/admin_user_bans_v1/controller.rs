@@ -373,16 +373,18 @@ pub async fn resend_notice(
         .one(&state.sea_db)
         .await?;
     let delivery = deliver_notice(&state, &notice, target.as_ref()).await?;
-    write_audit(
+    audit::record(
         &state.sea_db,
-        admin.id,
-        "ban.notice_resend",
-        ban_id,
-        json!({
-            "noticeId": notice.id,
-            "userId": ban.user_id,
-            "deliveryState": delivery.as_str(),
-        }),
+        AuditEvent {
+            actor_id: Some(admin.id),
+            action: AuditAction::BanNoticeResend,
+            resource_id: ban_id.to_string(),
+            metadata: json!({
+                "noticeId": notice.id,
+                "userId": ban.user_id,
+                "deliveryState": delivery.as_str(),
+            }),
+        },
     )
     .await?;
     Ok((

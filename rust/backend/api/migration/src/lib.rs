@@ -25,10 +25,10 @@ mod m000026_email_change_pending;
 mod m000030_user_ban_contract;
 mod m000031_reminder_schedules;
 mod m000032_user_bans_evidence_safe;
-mod m000050_audit_logs_evidence;
 mod m000033_notice_channel;
 mod m000034_appeals;
 mod m000035_shared_device_check;
+mod m000050_audit_logs_evidence;
 
 pub struct Migrator;
 

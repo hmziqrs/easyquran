@@ -109,6 +109,7 @@ fn ban_body(user_id: i32) -> Value {
         "reasonCode": "spam",
         "reasonText": "repeated spam",
         "corroborator": "credential_reuse",
+        "sharedDeviceChecked": true,
         "expiresAt": (Utc::now() + chrono::Duration::days(1)).fixed_offset().to_rfc3339(),
     })
 }
