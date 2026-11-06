@@ -23,6 +23,8 @@ const UNVERIFIED: UserProfile = {
   role: "user",
   two_fa_enabled: false,
   oauth_provider: null,
+  is_minor: false,
+  age_declared: false,
 };
 
 const VERIFIED: UserProfile = { ...UNVERIFIED, id: 10, is_verified: true };

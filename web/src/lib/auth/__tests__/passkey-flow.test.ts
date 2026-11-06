@@ -20,6 +20,8 @@ const PROFILE: UserProfile = {
   role: "user",
   two_fa_enabled: false,
   oauth_provider: null,
+  is_minor: false,
+  age_declared: false,
 };
 
 const LOGIN_HANDLE = "login-state-handle";

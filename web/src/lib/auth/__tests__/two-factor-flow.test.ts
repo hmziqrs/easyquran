@@ -24,6 +24,8 @@ const PROFILE: UserProfile = {
   role: "user",
   two_fa_enabled: false,
   oauth_provider: null,
+  is_minor: false,
+  age_declared: false,
 };
 const ENABLED: UserProfile = { ...PROFILE, two_fa_enabled: true };
 const DISABLED: UserProfile = { ...PROFILE, two_fa_enabled: false };

@@ -31,6 +31,8 @@ const PROFILE: UserProfile = {
   role: "user",
   two_fa_enabled: false,
   oauth_provider: "google",
+  is_minor: false,
+  age_declared: false,
 };
 
 function mockClient(): AuthClient & {
