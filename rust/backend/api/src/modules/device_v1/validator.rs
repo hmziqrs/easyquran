@@ -2,12 +2,16 @@ use serde::{Deserialize, Serialize};
 use unicode_normalization::UnicodeNormalization;
 use validator::{Validate, ValidationError};
 
+use super::keys::{decode_exact, valid_hint, PublicJwk, RAW_SIGNATURE_BYTES};
+
 /// Closed enums. Clients send these exact strings; anything else is refused.
 pub const PLATFORMS: &[&str] = &["web", "ios", "android", "macos", "windows", "linux"];
 pub const CLIENTS: &[&str] = &["web", "react_native", "gpui"];
 /// Same values as `reading_sessions.device`.
 pub const FORM_FACTORS: &[&str] = &["phone", "tablet", "desktop"];
 pub const BROWSERS: &[&str] = &["chrome", "firefox", "safari", "edge", "other"];
+/// Where the key lives. Self-reported, a display label only (devices.md D3, rule 13).
+pub const KEY_STORES: &[&str] = &["browser", "secure_hardware", "os_keystore", "file", "none"];
 
 pub const NAME_MAX_CHARS: usize = 40;
 
@@ -33,6 +37,19 @@ pub struct V1RegisterDevicePayload {
     /// Push token, when the device has notification permission. Optional.
     #[validate(length(min = 1, max = 4096))]
     pub token: Option<String>,
+    #[validate(custom(function = "valid_key_store"))]
+    pub key_store: String,
+    /// Public half of the device key. Present exactly when `key_store` is not `none`.
+    pub public_key: Option<PublicJwk>,
+    /// The session nonce the key signed (`POST /device/v1/challenge`).
+    #[validate(length(equal = 43))]
+    pub nonce: Option<String>,
+    /// Raw `r||s` signature over the proof message, base64url.
+    #[validate(length(equal = 86))]
+    pub signature: Option<String>,
+    /// Per-account continuity hint. Sent only with a key, and compared, never trusted.
+    #[validate(length(equal = 43))]
+    pub continuity_hint: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Validate)]
@@ -99,6 +116,10 @@ fn valid_browser(v: &str) -> Result<(), ValidationError> {
     one_of(v, BROWSERS, "invalid_browser")
 }
 
+fn valid_key_store(v: &str) -> Result<(), ValidationError> {
+    one_of(v, KEY_STORES, "invalid_key_store")
+}
+
 fn one_of(value: &str, allowed: &[&str], code: &'static str) -> Result<(), ValidationError> {
     if allowed.contains(&value) {
         Ok(())
@@ -121,10 +142,49 @@ pub fn check_registration_shape(p: &V1RegisterDevicePayload) -> Result<(), &'sta
         return Err("platform does not match client");
     }
     let browser_ok = (p.client == "web") == p.browser.is_some();
-    if browser_ok {
-        Ok(())
-    } else {
-        Err("browser is only sent by the web client")
+    if !browser_ok {
+        return Err("browser is only sent by the web client");
+    }
+    check_key_shape(p)
+}
+
+/// Store label per client, and the key fields that must travel together.
+fn check_key_shape(p: &V1RegisterDevicePayload) -> Result<(), &'static str> {
+    let store_ok = match p.client.as_str() {
+        "web" => matches!(p.key_store.as_str(), "browser" | "none"),
+        "react_native" => matches!(p.key_store.as_str(), "secure_hardware" | "none"),
+        "gpui" => matches!(p.key_store.as_str(), "os_keystore" | "file" | "none"),
+        _ => false,
+    };
+    if !store_ok {
+        return Err("key_store does not match client");
+    }
+    let has_key = p.public_key.is_some();
+    if (p.key_store == "none") == has_key {
+        return Err("key_store and public_key disagree");
+    }
+    if !has_key {
+        // Without a key nothing is proven, so no proof fields may ride along.
+        return if p.nonce.is_none() && p.signature.is_none() {
+            Ok(())
+        } else {
+            Err("nonce and signature need a public_key")
+        };
+    }
+    let (Some(nonce), Some(signature)) = (p.nonce.as_deref(), p.signature.as_deref()) else {
+        return Err("a public_key needs a nonce and a signature");
+    };
+    if decode_exact(nonce, 32).is_none() {
+        return Err("nonce is not 32 bytes of base64url");
+    }
+    if decode_exact(signature, RAW_SIGNATURE_BYTES).is_none() {
+        return Err("signature must be 64 raw bytes of base64url");
+    }
+    // A hint without a key is ignored, so a client with a broken keystore still
+    // registers. A hint with a key must be well formed.
+    match p.continuity_hint.as_deref() {
+        Some(hint) if !valid_hint(hint) => Err("continuity_hint must be 32 bytes of base64url"),
+        _ => Ok(()),
     }
 }
 
@@ -172,7 +232,74 @@ mod tests {
             os_major: None,
             app_version: None,
             token: None,
+            key_store: "none".into(),
+            public_key: None,
+            nonce: None,
+            signature: None,
+            continuity_hint: None,
         }
+    }
+
+    fn keyed(client: &str, platform: &str, store: &str) -> V1RegisterDevicePayload {
+        let mut p = reg(client, platform, None);
+        p.key_store = store.into();
+        p.public_key = Some(PublicJwk {
+            kty: "EC".into(),
+            crv: "P-256".into(),
+            x: "A".repeat(43),
+            y: "A".repeat(43),
+        });
+        p.nonce = Some("A".repeat(43));
+        p.signature = Some("A".repeat(86));
+        p
+    }
+
+    #[test]
+    fn key_store_is_closed_and_fits_the_client() {
+        assert!(check_registration_shape(&keyed("react_native", "ios", "secure_hardware")).is_ok());
+        assert!(check_registration_shape(&keyed("gpui", "linux", "file")).is_ok());
+        assert!(check_registration_shape(&keyed("react_native", "ios", "browser")).is_err());
+        assert!(check_registration_shape(&keyed("gpui", "linux", "secure_hardware")).is_err());
+        assert!(valid_key_store("keychain").is_err());
+    }
+
+    #[test]
+    fn a_public_key_and_its_store_travel_together() {
+        let mut p = keyed("gpui", "linux", "os_keystore");
+        p.key_store = "none".into();
+        assert!(check_registration_shape(&p).is_err());
+
+        let mut none_with_proof = reg("gpui", "linux", None);
+        none_with_proof.nonce = Some("A".repeat(43));
+        assert!(check_registration_shape(&none_with_proof).is_err());
+
+        let mut no_signature = keyed("gpui", "linux", "os_keystore");
+        no_signature.signature = None;
+        assert!(check_registration_shape(&no_signature).is_err());
+    }
+
+    #[test]
+    fn proof_fields_have_exact_wire_lengths() {
+        let mut short_nonce = keyed("gpui", "linux", "os_keystore");
+        short_nonce.nonce = Some("A".repeat(42));
+        assert!(check_registration_shape(&short_nonce).is_err());
+
+        let mut der_sized = keyed("gpui", "linux", "os_keystore");
+        der_sized.signature = Some("A".repeat(84));
+        assert!(check_registration_shape(&der_sized).is_err());
+    }
+
+    #[test]
+    fn a_hint_needs_a_well_formed_value_only_with_a_key() {
+        let mut bad = keyed("gpui", "linux", "os_keystore");
+        bad.continuity_hint = Some("A".repeat(43));
+        assert!(check_registration_shape(&bad).is_ok());
+        bad.continuity_hint = Some("+".repeat(43));
+        assert!(check_registration_shape(&bad).is_err());
+
+        let mut ignored = reg("gpui", "linux", None);
+        ignored.continuity_hint = Some("+".repeat(43));
+        assert!(check_registration_shape(&ignored).is_ok());
     }
 
     #[test]

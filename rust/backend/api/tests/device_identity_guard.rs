@@ -1,10 +1,23 @@
-// Source-scan guard (devices.md D2, rule 9): device identity never reaches
+// Source-scan guard (devices.md D2 rule 9; D3 adds the key and hint fields): device identity never reaches
 // analytics, rate-limit keys, ban tables, the reader's quran routes, or logs.
 // Sync tables are the one allowed carrier of a device id, so they are not scanned.
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const FORBIDDEN: &[&str] = &["device_id", "user_devices", "user_device::", "UserDevice"];
+const FORBIDDEN: &[&str] = &[
+    "device_id",
+    "user_devices",
+    "user_device::",
+    "UserDevice",
+    "public_key",
+    "key_thumbprint",
+    "continuity_hint",
+    "merged_key_thumbprint",
+    "hint_conflict",
+    "user_device_salt",
+    "device_v1::keys",
+    "device_v1::challenge",
+];
 
 /// Files whose job is analytics, rate limiting, abuse or bans, plus the reader
 /// routes. Matched by path fragment against `src/`-relative paths.

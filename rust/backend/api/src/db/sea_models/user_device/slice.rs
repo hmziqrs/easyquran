@@ -8,6 +8,13 @@ pub const DEVICE_RETENTION_DAYS: i64 = 90;
 
 pub const DEVICE_RETENTION_CLASS: &str = "device_registry";
 
+/// Key material of a verified register: the public JWK text and its thumbprint.
+#[derive(Clone, Debug)]
+pub struct NewDeviceKey {
+    pub public_key: String,
+    pub thumbprint: String,
+}
+
 /// Fields a client sends on register. Every enum is validated before this exists.
 #[derive(Clone, Debug)]
 pub struct NewUserDevice {
@@ -19,4 +26,9 @@ pub struct NewUserDevice {
     pub browser: Option<String>,
     pub os_major: Option<i32>,
     pub app_version: Option<String>,
+    pub key_store: String,
+    /// Present only after the signature proof verified.
+    pub key: Option<NewDeviceKey>,
+    /// Present only with a verified key. Compared, never trusted.
+    pub continuity_hint: Option<String>,
 }

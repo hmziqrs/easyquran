@@ -18,6 +18,7 @@ mod m000015_newsletter_subscribers;
 mod m000016_abuse_measurement;
 mod m000017_sync_protocol;
 mod m000018_device_registry;
+mod m000019_device_keys;
 mod m000021_user_preferences;
 
 pub struct Migrator;
@@ -84,6 +85,9 @@ impl MigratorTrait for Migrator {
             // m000018 ships the device registry (devices.md D2): user_devices, plus a
             // nullable device_id on devices and user_sessions. Additive, IF NOT EXISTS.
             Box::new(m000018_device_registry::Migration),
+            // m000019 ships device keys and continuity (devices.md D3): key columns on
+            // user_devices, the conflict flag, and user_device_salts. Additive, IF NOT EXISTS.
+            Box::new(m000019_device_keys::Migration),
             Box::new(m000021_user_preferences::Migration),
         ]
     }

@@ -3,16 +3,30 @@ import { browser } from "$app/env";
 import { authClient } from "#lib/auth/auth-client.js";
 import { deviceKind } from "#lib/sessions/device.js";
 import { asNumber, asObject, asString, readJSON, writeJSON } from "#lib/storage/index.js";
+import { newEntityId } from "#lib/sync/ids.js";
 
-import { deviceIdFor } from "./identity";
+import { deviceIdFor, setDeviceIdFor } from "./identity";
+import {
+  type DeviceKeyStore,
+  ensureDeviceKey,
+  generateDeviceKey,
+  idbKeyStore,
+  repairDeviceKey,
+  type StoredDeviceKey,
+} from "./key-store";
+import { base64UrlEncode, type PublicJwk, proofMessage } from "./keys";
 
 /**
- * Account device registration (devices.md D2). Sign-in and push-token refresh are
+ * Account device registration (devices.md D2, D3). Sign-in and push-token refresh are
  * the only triggers. At most one register per device per 24 h, one tab at a time,
  * and a failure never blocks reading or sync: callers ignore the result.
  *
- * Nothing here reaches analytics, rate-limit keys or logs. The device id is sent
- * to `/device/v1/register` and nowhere else.
+ * A register carries the browser key's public half and a signature over a session
+ * nonce (D3). With no key available the register goes out with `key_store: none`.
+ * On a 409 the client mints a new id and key and registers once more.
+ *
+ * Nothing here reaches analytics, rate-limit keys or logs. The device id, key and
+ * signature go to `/device/v1/*` and nowhere else.
  */
 
 export const REGISTER_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -29,12 +43,27 @@ export interface DeviceRegistration {
   client: "web";
   form_factor: "phone" | "tablet" | "desktop";
   browser: BrowserFamily;
+  key_store: "browser" | "none";
+  public_key?: PublicJwk;
+  nonce?: string;
+  signature?: string;
   token?: string;
 }
 
 interface RegisteredRecord {
   at: number;
   token: string | null;
+}
+
+interface Identity {
+  deviceId: string;
+  key: StoredDeviceKey | null;
+}
+
+interface Attempt {
+  ok: boolean;
+  status: number;
+  deviceId: string | null;
 }
 
 /** Closed set the server accepts. Anything else in the UA is "other". */
@@ -46,15 +75,21 @@ export function browserFamily(ua: string): BrowserFamily {
   return "other";
 }
 
-export function registrationFor(owner: number, token: string | null = null): DeviceRegistration {
+/** The keyless body. The keyed body adds the public key, the nonce and the signature. */
+export function registrationFor(
+  owner: number,
+  deviceId: string = deviceIdFor(String(owner)),
+  token: string | null = null,
+): DeviceRegistration {
   const ua = browser && "navigator" in globalThis ? navigator.userAgent : "";
   const body: DeviceRegistration = {
     expected_user_id: owner,
-    device_id: deviceIdFor(String(owner)),
+    device_id: deviceId,
     platform: "web",
     client: "web",
     form_factor: deviceKind(),
     browser: browserFamily(ua),
+    key_store: "none",
   };
   if (token !== null) body.token = token;
   return body;
@@ -84,18 +119,147 @@ export function registrationDue(owner: number, token: string | null, now = Date.
   return now - last.at >= REGISTER_INTERVAL_MS;
 }
 
-async function postRegistration(body: DeviceRegistration, signal?: AbortSignal): Promise<boolean> {
+let storeOverride: DeviceKeyStore | null = null;
+
+/** Test seam: swap the key store. Production always uses IndexedDB. */
+export function setDeviceKeyStore(store: DeviceKeyStore | null): void {
+  storeOverride = store;
+}
+
+function keyStore(): DeviceKeyStore {
+  return storeOverride ?? idbKeyStore();
+}
+
+/** Best effort. A browser that refuses persistence still gets a key for this session. */
+async function requestPersistence(): Promise<void> {
   try {
-    const res = await authClient.unsafeRequest("/device/v1/register", {
+    if ("storage" in navigator) await navigator.storage.persist();
+  } catch {
+    // Persistence is a hint to the browser, never a requirement.
+  }
+}
+
+/** The stored key for this id, or a fresh one. A failure means no key, not a blocked register. */
+async function resolveIdentity(owner: number): Promise<Identity> {
+  const id = deviceIdFor(String(owner));
+  void requestPersistence();
+  try {
+    const key = await ensureDeviceKey(keyStore(), String(owner), id);
+    if (key.deviceId !== id) setDeviceIdFor(String(owner), key.deviceId);
+    return { deviceId: key.deviceId, key };
+  } catch (err) {
+    console.warn("[device] no device key, registering without one:", err);
+    return { deviceId: id, key: null };
+  }
+}
+
+/** New id and new key, after the server refused the old id with a 409. */
+async function mintIdentity(owner: number): Promise<Identity> {
+  const id = newEntityId();
+  setDeviceIdFor(String(owner), id);
+  try {
+    const key = await generateDeviceKey(id);
+    await keyStore().put(String(owner), key);
+    return { deviceId: id, key };
+  } catch (err) {
+    console.warn("[device] no device key, registering without one:", err);
+    return { deviceId: id, key: null };
+  }
+}
+
+interface Challenge {
+  nonce: string;
+  salt: string;
+}
+
+/** `POST /device/v1/challenge`. Null on any failure, and the register then waits. */
+async function fetchChallenge(signal?: AbortSignal): Promise<Challenge | null> {
+  const res = await authClient.unsafeRequest<unknown>("/device/v1/challenge", {
+    method: "POST",
+    body: {},
+    signal,
+  });
+  const data = asObject(res.data);
+  const nonce = asString(data?.nonce);
+  const salt = asString(data?.salt);
+  if (!res.ok || nonce === undefined || salt === undefined) return null;
+  return { nonce, salt };
+}
+
+/** The body for this identity. Null when the key cannot sign a fresh challenge. */
+async function bodyFor(
+  owner: number,
+  token: string | null,
+  identity: Identity,
+  signal?: AbortSignal,
+): Promise<DeviceRegistration | null> {
+  const base = registrationFor(owner, identity.deviceId, token);
+  if (identity.key === null) return base;
+  const challenge = await fetchChallenge(signal);
+  if (challenge === null) return null;
+  const signature = await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" },
+    identity.key.privateKey,
+    proofMessage(challenge.nonce, identity.deviceId, owner),
+  );
+  return {
+    ...base,
+    key_store: "browser",
+    public_key: identity.key.publicJwk,
+    nonce: challenge.nonce,
+    signature: base64UrlEncode(new Uint8Array(signature)),
+  };
+}
+
+async function attempt(
+  owner: number,
+  token: string | null,
+  identity: Identity,
+  signal?: AbortSignal,
+): Promise<Attempt> {
+  const failed: Attempt = { ok: false, status: 0, deviceId: null };
+  const body = await bodyFor(owner, token, identity, signal);
+  if (body === null) return failed;
+  try {
+    const res = await authClient.unsafeRequest<unknown>("/device/v1/register", {
       method: "POST",
       body,
       signal,
     });
-    return res.ok;
+    const data = asObject(res.data);
+    return { ok: res.ok, status: res.status, deviceId: asString(data?.device_id) ?? null };
   } catch (err) {
     console.warn("[device] register failed:", err);
-    return false;
+    return failed;
   }
+}
+
+/**
+ * One register, including the 409 retry. The server's id wins: a different id in the
+ * reply is adopted locally, and the key is re-paired with it.
+ */
+async function registerOnce(
+  owner: number,
+  token: string | null,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  let identity = await resolveIdentity(owner);
+  let result = await attempt(owner, token, identity, signal);
+  if (result.status === 409) {
+    identity = await mintIdentity(owner);
+    result = await attempt(owner, token, identity, signal);
+  }
+  if (!result.ok) return false;
+  // The server always echoes the id it kept. A reply without one means the id sent.
+  const kept = result.deviceId ?? identity.deviceId;
+  if (kept !== identity.deviceId) {
+    setDeviceIdFor(String(owner), kept);
+    if (identity.key !== null) {
+      await repairDeviceKey(keyStore(), String(owner), identity.key, kept);
+    }
+  }
+  writeRecord(owner, { at: Date.now(), token });
+  return true;
 }
 
 /**
@@ -112,9 +276,7 @@ export async function ensureDeviceRegistered(
 
   const run = async (): Promise<boolean> => {
     if (!registrationDue(owner, token)) return true;
-    const ok = await postRegistration(registrationFor(owner, token), signal);
-    if (ok) writeRecord(owner, { at: Date.now(), token });
-    return ok;
+    return registerOnce(owner, token, signal);
   };
 
   const locks: LockManager | null = "locks" in navigator ? navigator.locks : null;

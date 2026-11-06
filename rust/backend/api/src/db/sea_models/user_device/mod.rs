@@ -4,8 +4,10 @@
 
 mod actions;
 mod model;
+mod salt;
 mod slice;
 
 pub use actions::*;
 pub use model::*;
+pub use salt::*;
 pub use slice::*;

@@ -17,6 +17,17 @@ pub struct Model {
     pub app_version: Option<String>,
     pub name_stamp: Option<String>,
     pub merged_into: Option<String>,
+    /// JWK text of the device key, public half only. Null for `key_store = none`.
+    pub public_key: Option<String>,
+    /// RFC 7638 thumbprint of `public_key`. The match key for recognition.
+    pub key_thumbprint: Option<String>,
+    /// Self-reported store label (`browser`, `secure_hardware`, `os_keystore`, `file`, `none`).
+    pub key_store: String,
+    /// Per-account HMAC continuity hint. Never logged, never a limiter or ban key.
+    pub continuity_hint: Option<String>,
+    pub hint_conflict: bool,
+    /// Thumbprint of the key this row held before a rung-3 merge.
+    pub merged_key_thumbprint: Option<String>,
     pub created_at: DateTimeWithTimeZone,
     pub last_seen_at: DateTimeWithTimeZone,
     pub retired_at: Option<DateTimeWithTimeZone>,

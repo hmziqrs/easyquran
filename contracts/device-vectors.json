@@ -1,0 +1,192 @@
+{
+  "version": 1,
+  "proof_domain": "easyquran-device-v1",
+  "signatures": [
+    {
+      "name": "fresh P-256 proof, raw form",
+      "public_jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "HAohYrcJLvcT_YbxJQ9uisF8r5vYIcuTHPOmQ5tZG-A",
+        "y": "FcxNrqc8i_gcRrbO-4yRXsPADBggYpuD35kZzaSSo7M"
+      },
+      "nonce": "Z0K47RB1uzngqa1y5C4VTdK-_018-Rsfy-mqtNLTbhs",
+      "device_id": "0190f2c4-7b1a-7c3d-9e4f-0123456789ab",
+      "user_id": 7,
+      "message_utf8": "easyquran-device-v1\nZ0K47RB1uzngqa1y5C4VTdK-_018-Rsfy-mqtNLTbhs\n0190f2c4-7b1a-7c3d-9e4f-0123456789ab\n7",
+      "raw_b64u": "Abl1GtrIWvkqztY5Kk-bGkrikyNgvXhu30Ft84cd19FGl0kcamd1jVbv7see9D-1aeRrarR5sKv30j8LM8lg2Q",
+      "der_b64u": "MEQCIAG5dRrayFr5Ks7WOSpPmxpK4pMjYL14bt9BbfOHHdfRAiBGl0kcamd1jVbv7see9D-1aeRrarR5sKv30j8LM8lg2Q",
+      "valid": true
+    },
+    {
+      "name": "second account, short device id",
+      "public_jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "fdwrM7G0jt4NnTyBACKMgu6ReBAfICEeizFst7N9vo4",
+        "y": "15lzthsBtM0vozFl0gErxd29AbP6jQ4IVnBJZACN2KU"
+      },
+      "nonce": "UjLOULW67EPhSyYm5WlN88VbP3InqYZXpQVGFwGIEM8",
+      "device_id": "dev-b.1_x",
+      "user_id": 42,
+      "message_utf8": "easyquran-device-v1\nUjLOULW67EPhSyYm5WlN88VbP3InqYZXpQVGFwGIEM8\ndev-b.1_x\n42",
+      "raw_b64u": "WaQBwkUbMh6FzQkLbTbn1rPow3TQXB5RGytP_5uoIkaLesufzGGVZ7Me4VUC6xDL_-JSdLk8Z1Z246n6AxdS8g",
+      "der_b64u": "MEUCIFmkAcJFGzIehc0JC20259az6MN00FweURsrT_-bqCJGAiEAi3rLn8xhlWezHuFVAusQy__iUnS5PGdWduOp-gMXUvI",
+      "valid": true
+    },
+    {
+      "name": "same signature, other user id",
+      "public_jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "HAohYrcJLvcT_YbxJQ9uisF8r5vYIcuTHPOmQ5tZG-A",
+        "y": "FcxNrqc8i_gcRrbO-4yRXsPADBggYpuD35kZzaSSo7M"
+      },
+      "nonce": "Z0K47RB1uzngqa1y5C4VTdK-_018-Rsfy-mqtNLTbhs",
+      "device_id": "0190f2c4-7b1a-7c3d-9e4f-0123456789ab",
+      "user_id": 8,
+      "message_utf8": "easyquran-device-v1\nZ0K47RB1uzngqa1y5C4VTdK-_018-Rsfy-mqtNLTbhs\n0190f2c4-7b1a-7c3d-9e4f-0123456789ab\n8",
+      "raw_b64u": "Abl1GtrIWvkqztY5Kk-bGkrikyNgvXhu30Ft84cd19FGl0kcamd1jVbv7see9D-1aeRrarR5sKv30j8LM8lg2Q",
+      "der_b64u": "MEQCIAG5dRrayFr5Ks7WOSpPmxpK4pMjYL14bt9BbfOHHdfRAiBGl0kcamd1jVbv7see9D-1aeRrarR5sKv30j8LM8lg2Q",
+      "valid": false
+    },
+    {
+      "name": "same signature, other device id",
+      "public_jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "HAohYrcJLvcT_YbxJQ9uisF8r5vYIcuTHPOmQ5tZG-A",
+        "y": "FcxNrqc8i_gcRrbO-4yRXsPADBggYpuD35kZzaSSo7M"
+      },
+      "nonce": "Z0K47RB1uzngqa1y5C4VTdK-_018-Rsfy-mqtNLTbhs",
+      "device_id": "dev-x",
+      "user_id": 7,
+      "message_utf8": "easyquran-device-v1\nZ0K47RB1uzngqa1y5C4VTdK-_018-Rsfy-mqtNLTbhs\ndev-x\n7",
+      "raw_b64u": "Abl1GtrIWvkqztY5Kk-bGkrikyNgvXhu30Ft84cd19FGl0kcamd1jVbv7see9D-1aeRrarR5sKv30j8LM8lg2Q",
+      "der_b64u": "MEQCIAG5dRrayFr5Ks7WOSpPmxpK4pMjYL14bt9BbfOHHdfRAiBGl0kcamd1jVbv7see9D-1aeRrarR5sKv30j8LM8lg2Q",
+      "valid": false
+    },
+    {
+      "name": "same signature, other nonce",
+      "public_jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "HAohYrcJLvcT_YbxJQ9uisF8r5vYIcuTHPOmQ5tZG-A",
+        "y": "FcxNrqc8i_gcRrbO-4yRXsPADBggYpuD35kZzaSSo7M"
+      },
+      "nonce": "5kAEWNfPGs0Ezx3-l9nFxqSlpzyWBDnQt8YDDCVie7o",
+      "device_id": "0190f2c4-7b1a-7c3d-9e4f-0123456789ab",
+      "user_id": 7,
+      "message_utf8": "easyquran-device-v1\n5kAEWNfPGs0Ezx3-l9nFxqSlpzyWBDnQt8YDDCVie7o\n0190f2c4-7b1a-7c3d-9e4f-0123456789ab\n7",
+      "raw_b64u": "Abl1GtrIWvkqztY5Kk-bGkrikyNgvXhu30Ft84cd19FGl0kcamd1jVbv7see9D-1aeRrarR5sKv30j8LM8lg2Q",
+      "der_b64u": "MEQCIAG5dRrayFr5Ks7WOSpPmxpK4pMjYL14bt9BbfOHHdfRAiBGl0kcamd1jVbv7see9D-1aeRrarR5sKv30j8LM8lg2Q",
+      "valid": false
+    },
+    {
+      "name": "valid signature under another key",
+      "public_jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "fdwrM7G0jt4NnTyBACKMgu6ReBAfICEeizFst7N9vo4",
+        "y": "15lzthsBtM0vozFl0gErxd29AbP6jQ4IVnBJZACN2KU"
+      },
+      "nonce": "Z0K47RB1uzngqa1y5C4VTdK-_018-Rsfy-mqtNLTbhs",
+      "device_id": "0190f2c4-7b1a-7c3d-9e4f-0123456789ab",
+      "user_id": 7,
+      "message_utf8": "easyquran-device-v1\nZ0K47RB1uzngqa1y5C4VTdK-_018-Rsfy-mqtNLTbhs\n0190f2c4-7b1a-7c3d-9e4f-0123456789ab\n7",
+      "raw_b64u": "Abl1GtrIWvkqztY5Kk-bGkrikyNgvXhu30Ft84cd19FGl0kcamd1jVbv7see9D-1aeRrarR5sKv30j8LM8lg2Q",
+      "der_b64u": "MEQCIAG5dRrayFr5Ks7WOSpPmxpK4pMjYL14bt9BbfOHHdfRAiBGl0kcamd1jVbv7see9D-1aeRrarR5sKv30j8LM8lg2Q",
+      "valid": false
+    }
+  ],
+  "der_to_raw": [
+    {
+      "name": "r high bit set, 0x00 pad",
+      "der_hex": "3045022100a7a848cbadde5c879e82a1a96f5b5023e3f35a05dc00f2d4dcbece101aac1855022045f972fc9e834ab2cda86065e147cc2946481de5e2776948b71a515484a8c3ca",
+      "raw_b64u": "p6hIy63eXIeegqGpb1tQI-PzWgXcAPLU3L7OEBqsGFVF-XL8noNKss2oYGXhR8wpRkgd5eJ3aUi3GlFUhKjDyg"
+    },
+    {
+      "name": "no pad, leading byte kept",
+      "der_hex": "3044022001b9751adac85af92aced6392a4f9b1a4ae2932360bd786edf416df3871dd7d102204697491c6a67758d56efeec79ef43fb569e46b6ab479b0abf7d23f0b33c960d9",
+      "raw_b64u": "Abl1GtrIWvkqztY5Kk-bGkrikyNgvXhu30Ft84cd19FGl0kcamd1jVbv7see9D-1aeRrarR5sKv30j8LM8lg2Q"
+    },
+    {
+      "name": "leading zero stripped",
+      "der_hex": "3043021f60f121a4892b83f4609d462a26cf894fdd90617e2128eae835f94f833047dd02202c3f9af7713abc95838857fafe1fbaccf6e65f9e936c04331b359f93cfba4e80",
+      "raw_b64u": "AGDxIaSJK4P0YJ1GKibPiU_dkGF-ISjq6DX5T4MwR90sP5r3cTq8lYOIV_r-H7rM9uZfnpNsBDMbNZ-Tz7pOgA"
+    }
+  ],
+  "der_invalid": [
+    {
+      "name": "outer tag not SEQUENCE",
+      "der_hex": "3144022001b9751adac85af92aced6392a4f9b1a4ae2932360bd786edf416df3871dd7d102204697491c6a67758d56efeec79ef43fb569e46b6ab479b0abf7d23f0b33c960d9"
+    },
+    {
+      "name": "trailing bytes after s",
+      "der_hex": "3044022001b9751adac85af92aced6392a4f9b1a4ae2932360bd786edf416df3871dd7d102204697491c6a67758d56efeec79ef43fb569e46b6ab479b0abf7d23f0b33c960d900"
+    },
+    {
+      "name": "length byte too small",
+      "der_hex": "3043022001b9751adac85af92aced6392a4f9b1a4ae2932360bd786edf416df3871dd7d102204697491c6a67758d56efeec79ef43fb569e46b6ab479b0abf7d23f0b33c960d9"
+    },
+    {
+      "name": "negative integer (no 0x00 pad)",
+      "der_hex": "3006020180020101"
+    },
+    {
+      "name": "non-minimal leading zero",
+      "der_hex": "30070202007f020101"
+    },
+    {
+      "name": "missing s",
+      "der_hex": "3003020101"
+    }
+  ],
+  "thumbprints": [
+    {
+      "name": "key A",
+      "public_jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "HAohYrcJLvcT_YbxJQ9uisF8r5vYIcuTHPOmQ5tZG-A",
+        "y": "FcxNrqc8i_gcRrbO-4yRXsPADBggYpuD35kZzaSSo7M"
+      },
+      "canonical": "{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"HAohYrcJLvcT_YbxJQ9uisF8r5vYIcuTHPOmQ5tZG-A\",\"y\":\"FcxNrqc8i_gcRrbO-4yRXsPADBggYpuD35kZzaSSo7M\"}",
+      "thumbprint": "GLxQA-D5Vm3DBmzn0xmgslgyjTRoSkdgdJljFQgUM-4"
+    },
+    {
+      "name": "key B",
+      "public_jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "fdwrM7G0jt4NnTyBACKMgu6ReBAfICEeizFst7N9vo4",
+        "y": "15lzthsBtM0vozFl0gErxd29AbP6jQ4IVnBJZACN2KU"
+      },
+      "canonical": "{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"fdwrM7G0jt4NnTyBACKMgu6ReBAfICEeizFst7N9vo4\",\"y\":\"15lzthsBtM0vozFl0gErxd29AbP6jQ4IVnBJZACN2KU\"}",
+      "thumbprint": "mrXXrIbiwKstpcGf-U9XgL9v0bxw-juFPLEzcwmUBKs"
+    }
+  ],
+  "hints": [
+    {
+      "name": "normalised: trimmed and lower-cased",
+      "salt_b64u": "VtYurOAr2TrRQ06BiWDxTK9fv6qiN_EcVyINcvSRKqg",
+      "os_id": "  0A1B2C-Machine.Guid  ",
+      "normalised": "0a1b2c-machine.guid",
+      "hint": "J1OW7j_YRN6otlhX6li4-Qbdj8JK89nD7y8cXUpYaAA"
+    },
+    {
+      "name": "same OS id, same account salt",
+      "salt_b64u": "VtYurOAr2TrRQ06BiWDxTK9fv6qiN_EcVyINcvSRKqg",
+      "os_id": "0a1b2c-machine.guid",
+      "normalised": "0a1b2c-machine.guid",
+      "hint": "J1OW7j_YRN6otlhX6li4-Qbdj8JK89nD7y8cXUpYaAA"
+    },
+    {
+      "name": "same OS id, other account salt",
+      "salt_b64u": "f_1w8g1L3m3ARqEAWXEo8uULWGr1zytufmlHHlOuzuo",
+      "os_id": "0a1b2c-machine.guid",
+      "normalised": "0a1b2c-machine.guid",
+      "hint": "gpDCWknoGUbudOQHoaG1n4flx23-Tmme6FYUSTkS_xc"
+    }
+  ]
+}

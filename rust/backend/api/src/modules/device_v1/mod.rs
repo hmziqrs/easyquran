@@ -1,4 +1,7 @@
+pub mod challenge;
 pub mod controller;
+pub mod keys;
+pub mod recognise;
 pub mod validator;
 
 use axum::{middleware, routing::post, Router};
@@ -15,6 +18,11 @@ pub const REGISTER_USER_MAX: u64 = 10;
 pub const REGISTER_IP_MAX: u64 = 100;
 pub const REGISTER_WINDOW_SECS: u64 = 3600;
 
+/// A challenge is issued once per register attempt, so the ceiling sits well above
+/// the register one. It bounds how fast a session can fill the challenge map.
+pub const CHALLENGE_USER_MAX: u64 = 60;
+pub const CHALLENGE_IP_MAX: u64 = 600;
+
 pub fn routes(state: &AppState) -> Router<AppState> {
     let register = rate_limit::authenticated_write_limits(
         Router::<AppState>::new().route("/register", post(controller::register)),
@@ -24,8 +32,17 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         REGISTER_IP_MAX,
         REGISTER_WINDOW_SECS,
     );
+    let challenge = rate_limit::authenticated_write_limits(
+        Router::<AppState>::new().route("/challenge", post(controller::issue_challenge)),
+        state,
+        "device:challenge",
+        CHALLENGE_USER_MAX,
+        CHALLENGE_IP_MAX,
+        REGISTER_WINDOW_SECS,
+    );
     Router::<AppState>::new()
         .merge(register)
+        .merge(challenge)
         .route("/list", post(controller::list))
         .route("/rename", post(controller::rename))
         .route("/delete", post(controller::delete))

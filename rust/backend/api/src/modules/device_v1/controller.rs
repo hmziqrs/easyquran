@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::time::Instant;
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use axum_macros::debug_handler;
@@ -12,7 +13,7 @@ use tracing::{instrument, warn};
 use crate::{
     db::sea_models::{
         device,
-        user_device::{self, NewUserDevice},
+        user_device::{self, NewDeviceKey, NewUserDevice},
         user_session,
     },
     error::{ErrorCode, ErrorResponse},
@@ -22,9 +23,14 @@ use crate::{
     AppState,
 };
 
-use super::validator::{
-    check_registration_shape, normalise_device_name, V1DeleteTokenPayload, V1DeviceRefPayload,
-    V1RegisterDevicePayload, V1RenameDevicePayload,
+use super::{
+    challenge::{self, ChallengeError},
+    keys,
+    recognise::{recognise, session_device_row},
+    validator::{
+        check_registration_shape, normalise_device_name, V1DeleteTokenPayload, V1DeviceRefPayload,
+        V1RegisterDevicePayload, V1RenameDevicePayload,
+    },
 };
 
 /// Stamps further ahead of the server than this are rewritten to server + 60 s,
@@ -142,8 +148,63 @@ fn ensure_expected_owner(user_id: i32, expected_user_id: i32) -> Result<(), Erro
     Ok(())
 }
 
-/// Idempotent upsert of the caller's device, the optional push token, and the
-/// current session's binding. Logs nothing that identifies the device.
+/// What a verified register brings to recognition. Empty for `key_store: none`.
+struct KeyProof {
+    key: Option<NewDeviceKey>,
+    hint: Option<String>,
+}
+
+/// One refusal for every proof failure, so the reply says nothing about which check
+/// failed.
+fn proof_refused() -> ErrorResponse {
+    invalid("Device key proof failed")
+}
+
+fn session_key(auth: &AuthSession) -> Option<String> {
+    auth.session().id().map(|id| id.to_string())
+}
+
+/// Verify the key proof: the nonce is this session's and unused, the signature
+/// verifies over the proof message, then the key and hint go on. The nonce is
+/// spent on every attempt.
+async fn verify_key_proof(
+    auth: &AuthSession,
+    user_id: i32,
+    payload: &V1RegisterDevicePayload,
+) -> Result<KeyProof, ErrorResponse> {
+    let Some(jwk) = payload.public_key.as_ref() else {
+        return Ok(KeyProof {
+            key: None,
+            hint: None,
+        });
+    };
+    let parsed = keys::parse_public_key(jwk).ok_or_else(proof_refused)?;
+    let (Some(nonce), Some(signature)) = (payload.nonce.as_deref(), payload.signature.as_deref())
+    else {
+        return Err(proof_refused());
+    };
+    let session = session_key(auth).ok_or_else(proof_refused)?;
+    challenge::store()
+        .consume(&session, user_id, nonce, Instant::now())
+        .map_err(|_: ChallengeError| proof_refused())?;
+    let raw = keys::decode_exact(signature, keys::RAW_SIGNATURE_BYTES).ok_or_else(proof_refused)?;
+    let message = keys::proof_message(nonce, &payload.device_id, user_id);
+    if !keys::verify_raw(&parsed.point, &message, &raw) {
+        return Err(proof_refused());
+    }
+    Ok(KeyProof {
+        key: Some(NewDeviceKey {
+            public_key: parsed.jwk_text,
+            thumbprint: parsed.thumbprint,
+        }),
+        hint: payload.continuity_hint.clone(),
+    })
+}
+
+/// Recognise the device (devices.md D3, rules 6 to 8), then upsert the optional push
+/// token and bind the current session to the canonical row. The reply carries the
+/// id the client must keep, which can differ from the one it sent. The key and hint
+/// are never logged or returned.
 #[debug_handler]
 #[instrument(skip(state, auth, payload), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
 pub async fn register(
@@ -154,16 +215,13 @@ pub async fn register(
     let user = auth.user_required()?;
     ensure_expected_owner(user.id, payload.expected_user_id)?;
     check_registration_shape(&payload).map_err(invalid)?;
+    let proof = verify_key_proof(&auth, user.id, &payload).await?;
 
     let db = &state.sea_db;
-    let existing = user_device::Entity::find_row(db, user.id, &payload.device_id).await?;
-    if existing
-        .as_ref()
-        .is_some_and(|row| row.revoked_at.is_some())
-    {
-        return Err(removed_device());
-    }
-    let row = user_device::Entity::register(
+    let session_id = current_session_id(&state, &auth).await;
+    let session_row = session_device_row(db, user.id, session_id).await?;
+    let live_devices = user_session::Entity::live_device_ids(db, user.id).await?;
+    let canonical = recognise(
         db,
         NewUserDevice {
             user_id: user.id,
@@ -174,8 +232,12 @@ pub async fn register(
             browser: payload.browser.clone(),
             os_major: payload.os_major,
             app_version: payload.app_version.clone(),
+            key_store: payload.key_store.clone(),
+            key: proof.key,
+            continuity_hint: proof.hint,
         },
-        existing,
+        session_row,
+        &live_devices,
     )
     .await?;
 
@@ -186,18 +248,44 @@ pub async fn register(
                 user_id: user.id,
                 token,
                 platform: payload.platform.clone(),
-                device_id: Some(row.id.clone()),
+                device_id: Some(canonical.clone()),
             },
         )
         .await?;
     }
 
-    if let Some(session_id) = current_session_id(&state, &auth).await {
-        user_session::Entity::bind_device(db, session_id, user.id, &row.id).await?;
+    if let Some(session_id) = session_id {
+        user_session::Entity::bind_device(db, session_id, user.id, &canonical).await?;
     }
 
-    enforce_cap(&state, &auth, user.id, &row.id).await;
-    Ok((StatusCode::OK, Json(json!({ "registered": true }))))
+    enforce_cap(&state, &auth, user.id, &canonical).await;
+    Ok((
+        StatusCode::OK,
+        Json(json!({ "registered": true, "device_id": canonical })),
+    ))
+}
+
+/// Issue this session's nonce and the account's continuity salt (devices.md D3,
+/// step 5). Both are random per request and per account; the salt is stored once.
+#[debug_handler]
+#[instrument(skip(state, auth), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
+pub async fn issue_challenge(
+    State(state): State<AppState>,
+    auth: AuthSession,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let user = auth.user_required()?;
+    let session = session_key(&auth).ok_or_else(|| ErrorResponse::new(ErrorCode::Unauthorized))?;
+    let salt = user_device::salt_for(&state.sea_db, user.id, &keys::random_b64()).await?;
+    let nonce = challenge::store()
+        .issue(&session, user.id, Instant::now())
+        .map_err(|_: ChallengeError| {
+            ErrorResponse::new(ErrorCode::ServiceUnavailable)
+                .with_message("Too many device challenges pending. Try again shortly.")
+        })?;
+    Ok((
+        StatusCode::OK,
+        Json(json!({ "nonce": nonce, "salt": salt })),
+    ))
 }
 
 /// The caller's devices that still have a live session. Retired and revoked rows

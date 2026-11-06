@@ -4737,6 +4737,7 @@ dependencies = [
  "ammonia",
  "async-trait",
  "aws-config",
+ "aws-lc-rs",
  "aws-sdk-s3",
  "axum",
  "axum-client-ip",

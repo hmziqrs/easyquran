@@ -17,9 +17,17 @@ use ruxlog::db::sea_models::user_session::{self, NewUserSession};
 use ruxlog::modules::device_v1;
 use ruxlog::services::auth::AuthBackend;
 use ruxlog::state::AppState;
-use sea_orm::EntityTrait;
+use sea_orm::{ConnectionTrait, EntityTrait};
 
+use aws_lc_rs::{
+    hmac,
+    rand::SystemRandom,
+    signature::{EcdsaKeyPair, KeyPair, ECDSA_P256_SHA256_FIXED_SIGNING},
+};
+use base64::prelude::*;
 use rux_auth::AuthSession as GenAuthSession;
+use ruxlog::modules::device_v1::keys::proof_message;
+use sha2::{Digest, Sha256};
 
 const DEV_A: &str = "0190f2c4-7b1a-7c3d-9e4f-0123456789ab";
 
@@ -93,6 +101,7 @@ fn web_registration(uid: i32, device_id: &str) -> Value {
         "client": "web",
         "form_factor": "desktop",
         "browser": "chrome",
+        "key_store": "none",
     })
 }
 
@@ -115,7 +124,7 @@ async fn register_lists_the_device_as_current_with_no_raw_fields() {
     let ctx = setup().await;
     let (status, body) = register(&ctx, &ctx.cookie_a, &web_registration(ctx.uid_a, DEV_A)).await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body, json!({ "registered": true }));
+    assert_eq!(body, json!({ "registered": true, "device_id": DEV_A }));
 
     let devices = list(&ctx, &ctx.cookie_a).await;
     assert_eq!(devices.len(), 1);
@@ -130,6 +139,11 @@ async fn register_lists_the_device_as_current_with_no_raw_fields() {
         "device",
         "screen",
         "model",
+        "public_key",
+        "key_thumbprint",
+        "key_store",
+        "continuity_hint",
+        "merged_into",
     ] {
         assert!(row.get(banned).is_none(), "{banned} must not be listed");
     }
@@ -403,6 +417,12 @@ fn dated_row(user_id: i32, id: &str, seen_secs_ago: i64) -> user_device::Model {
         revoked_at: None,
         expires_at: 0,
         retention_class: user_device::DEVICE_RETENTION_CLASS.into(),
+        public_key: None,
+        key_thumbprint: None,
+        key_store: "none".into(),
+        continuity_hint: None,
+        hint_conflict: false,
+        merged_key_thumbprint: None,
     }
 }
 
@@ -435,6 +455,9 @@ async fn cap_retirement_keeps_twenty_live_rows_in_the_database() {
                 browser: Some("chrome".into()),
                 os_major: None,
                 app_version: None,
+                key_store: "none".into(),
+                key: None,
+                continuity_hint: None,
             },
             None,
         )
@@ -459,4 +482,490 @@ async fn cap_retirement_keeps_twenty_live_rows_in_the_database() {
         .unwrap();
     assert_eq!(left.len(), user_device::LIVE_DEVICE_CAP);
     assert!(left.iter().any(|row| row.id == "cap-20"));
+}
+
+// ---- Device keys and recognition (devices.md D3) ----
+
+/// A P-256 key per install, the way a native client holds one. The test keeps the
+/// key pair; the server only ever sees the public JWK.
+struct Device {
+    pair: EcdsaKeyPair,
+    jwk: Value,
+}
+
+fn new_device() -> Device {
+    let pair = EcdsaKeyPair::generate(&ECDSA_P256_SHA256_FIXED_SIGNING).expect("key pair");
+    let point = pair.public_key().as_ref().to_vec();
+    let jwk = json!({
+        "kty": "EC",
+        "crv": "P-256",
+        "x": BASE64_URL_SAFE_NO_PAD.encode(&point[1..33]),
+        "y": BASE64_URL_SAFE_NO_PAD.encode(&point[33..]),
+    });
+    Device { pair, jwk }
+}
+
+fn thumbprint_of(jwk: &Value) -> String {
+    let canonical = format!(
+        r#"{{"crv":"P-256","kty":"EC","x":"{}","y":"{}"}}"#,
+        jwk["x"].as_str().unwrap(),
+        jwk["y"].as_str().unwrap()
+    );
+    BASE64_URL_SAFE_NO_PAD.encode(Sha256::digest(canonical.as_bytes()))
+}
+
+fn sign_proof(dev: &Device, nonce: &str, device_id: &str, uid: i32) -> String {
+    let sig = dev
+        .pair
+        .sign(&SystemRandom::new(), &proof_message(nonce, device_id, uid))
+        .expect("signature");
+    BASE64_URL_SAFE_NO_PAD.encode(sig.as_ref())
+}
+
+/// The continuity hint a native client sends: HMAC-SHA256(account salt, OS id).
+fn hint_for(salt_b64: &str, os_id: &str) -> String {
+    let salt = BASE64_URL_SAFE_NO_PAD.decode(salt_b64).expect("salt");
+    let key = hmac::Key::new(hmac::HMAC_SHA256, &salt);
+    BASE64_URL_SAFE_NO_PAD.encode(hmac::sign(&key, os_id.as_bytes()).as_ref())
+}
+
+async fn challenge(ctx: &Ctx, cookie: &str) -> (String, String) {
+    let (status, body) = send(
+        &ctx.app,
+        "POST",
+        "/challenge",
+        Some(cookie),
+        Some(&json!({})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    (
+        body["nonce"].as_str().unwrap().to_string(),
+        body["salt"].as_str().unwrap().to_string(),
+    )
+}
+
+/// A keyed Android register: the shape a hint-bearing native client sends.
+fn keyed(uid: i32, device_id: &str, dev: &Device, nonce: &str, hint: Option<&str>) -> Value {
+    let mut body = json!({
+        "expected_user_id": uid,
+        "device_id": device_id,
+        "platform": "android",
+        "client": "react_native",
+        "form_factor": "phone",
+        "key_store": "secure_hardware",
+        "public_key": dev.jwk,
+        "nonce": nonce,
+        "signature": sign_proof(dev, nonce, device_id, uid),
+    });
+    if let Some(hint) = hint {
+        body["continuity_hint"] = json!(hint);
+    }
+    body
+}
+
+/// The same device shape with no key, as a client whose keystore failed sends it.
+fn keyless(uid: i32, device_id: &str) -> Value {
+    json!({
+        "expected_user_id": uid,
+        "device_id": device_id,
+        "platform": "android",
+        "client": "react_native",
+        "form_factor": "phone",
+        "key_store": "none",
+    })
+}
+
+async fn login_as(ctx: &Ctx, uid: i32) -> String {
+    let owner = user::Entity::find_by_id(uid)
+        .one(&ctx.state.sea_db)
+        .await
+        .unwrap()
+        .unwrap();
+    bound_login(&ctx.state, &owner).await
+}
+
+async fn row(ctx: &Ctx, uid: i32, id: &str) -> user_device::Model {
+    user_device::Entity::find_row(&ctx.state.sea_db, uid, id)
+        .await
+        .unwrap()
+        .unwrap()
+}
+
+#[tokio::test]
+async fn keyed_register_keeps_the_id_and_the_salt_is_stable_per_account() {
+    let ctx = setup().await;
+    let dev = new_device();
+    let (nonce, salt) = challenge(&ctx, &ctx.cookie_a).await;
+    let (status, body) = register(
+        &ctx,
+        &ctx.cookie_a,
+        &keyed(ctx.uid_a, "dev-k1", &dev, &nonce, None),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["device_id"], "dev-k1");
+
+    let (nonce2, salt2) = challenge(&ctx, &ctx.cookie_a).await;
+    assert_ne!(nonce, nonce2, "every challenge is fresh");
+    assert_eq!(salt, salt2, "one salt per account, never rotated");
+
+    let stored = row(&ctx, ctx.uid_a, "dev-k1").await;
+    assert_eq!(
+        stored.key_thumbprint.as_deref(),
+        Some(thumbprint_of(&dev.jwk).as_str())
+    );
+    assert_eq!(stored.key_store, "secure_hardware");
+}
+
+#[tokio::test]
+async fn the_same_machine_hints_differently_under_two_accounts() {
+    let ctx = setup().await;
+    let (_, salt_a) = challenge(&ctx, &ctx.cookie_a).await;
+    let (_, salt_b) = challenge(&ctx, &ctx.cookie_b).await;
+    assert_ne!(salt_a, salt_b, "each account gets its own salt");
+    let os = "0a1b2c-machine.guid";
+    assert_ne!(hint_for(&salt_a, os), hint_for(&salt_b, os));
+}
+
+#[tokio::test]
+async fn proof_failures_are_refused_and_spend_the_nonce() {
+    let ctx = setup().await;
+    let dev = new_device();
+    let other = new_device();
+
+    // Wrong signer.
+    let (nonce, _) = challenge(&ctx, &ctx.cookie_a).await;
+    let mut forged = keyed(ctx.uid_a, "dev-f", &dev, &nonce, None);
+    forged["signature"] = json!(sign_proof(&other, &nonce, "dev-f", ctx.uid_a));
+    let (status, _) = register(&ctx, &ctx.cookie_a, &forged).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // Signed for another device id.
+    let (nonce, _) = challenge(&ctx, &ctx.cookie_a).await;
+    let mut wrong_id = keyed(ctx.uid_a, "dev-f", &dev, &nonce, None);
+    wrong_id["signature"] = json!(sign_proof(&dev, &nonce, "dev-other", ctx.uid_a));
+    let (status, _) = register(&ctx, &ctx.cookie_a, &wrong_id).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // A good proof, then the same nonce again: single use.
+    let (nonce, _) = challenge(&ctx, &ctx.cookie_a).await;
+    let good = keyed(ctx.uid_a, "dev-f", &dev, &nonce, None);
+    assert_eq!(register(&ctx, &ctx.cookie_a, &good).await.0, StatusCode::OK);
+    let (status, _) = register(&ctx, &ctx.cookie_a, &good).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "reused nonce");
+
+    // A nonce issued to another session does not count.
+    let (nonce, _) = challenge(&ctx, &ctx.cookie_b).await;
+    let stolen = keyed(ctx.uid_a, "dev-g", &dev, &nonce, None);
+    let (status, _) = register(&ctx, &ctx.cookie_a, &stolen).await;
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "nonce from another session"
+    );
+
+    // Nothing was stored by any refused attempt.
+    assert_eq!(list(&ctx, &ctx.cookie_a).await.len(), 1);
+}
+
+#[tokio::test]
+async fn key_store_and_key_presence_must_agree() {
+    let ctx = setup().await;
+    let dev = new_device();
+    let (nonce, _) = challenge(&ctx, &ctx.cookie_a).await;
+    let mut claims_none = keyed(ctx.uid_a, "dev-n", &dev, &nonce, None);
+    claims_none["key_store"] = json!("none");
+    let (status, _) = register(&ctx, &ctx.cookie_a, &claims_none).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (status, _) = register(&ctx, &ctx.cookie_a, &keyless(ctx.uid_a, "dev-n")).await;
+    assert_eq!(status, StatusCode::OK, "no key is a valid register");
+}
+
+#[tokio::test]
+async fn rung_one_same_key_and_hint_is_the_same_row() {
+    let ctx = setup().await;
+    let dev = new_device();
+    let (_, salt) = challenge(&ctx, &ctx.cookie_a).await;
+    let hint = hint_for(&salt, "0a1b2c-machine.guid");
+    for _ in 0..2 {
+        let (nonce, _) = challenge(&ctx, &ctx.cookie_a).await;
+        let (status, body) = register(
+            &ctx,
+            &ctx.cookie_a,
+            &keyed(ctx.uid_a, "dev-r1", &dev, &nonce, Some(&hint)),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["device_id"], "dev-r1");
+    }
+    assert_eq!(list(&ctx, &ctx.cookie_a).await.len(), 1);
+}
+
+#[tokio::test]
+async fn rung_one_valid_key_with_a_different_hint_is_a_conflict() {
+    let ctx = setup().await;
+    let dev = new_device();
+    let (nonce, salt) = challenge(&ctx, &ctx.cookie_a).await;
+    let hint = hint_for(&salt, "0a1b2c-machine.guid");
+    register(
+        &ctx,
+        &ctx.cookie_a,
+        &keyed(ctx.uid_a, "dev-r2", &dev, &nonce, Some(&hint)),
+    )
+    .await;
+    let (nonce, _) = challenge(&ctx, &ctx.cookie_a).await;
+    let other = hint_for(&salt, "ffffff-other.machine");
+    let (status, body) = register(
+        &ctx,
+        &ctx.cookie_a,
+        &keyed(ctx.uid_a, "dev-r2", &dev, &nonce, Some(&other)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+}
+
+#[tokio::test]
+async fn rung_one_known_id_with_a_wrong_key_is_a_conflict_without_the_session() {
+    let ctx = setup().await;
+    let first = new_device();
+    let (nonce, _) = challenge(&ctx, &ctx.cookie_a).await;
+    register(
+        &ctx,
+        &ctx.cookie_a,
+        &keyed(ctx.uid_a, "dev-r3", &first, &nonce, None),
+    )
+    .await;
+
+    // Another session of the same account holds no binding to this row.
+    let other_session = login_as(&ctx, ctx.uid_a).await;
+    let imposter = new_device();
+    let (nonce, _) = challenge(&ctx, &other_session).await;
+    let (status, body) = register(
+        &ctx,
+        &other_session,
+        &keyed(ctx.uid_a, "dev-r3", &imposter, &nonce, None),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+}
+
+#[tokio::test]
+async fn rung_two_session_holds_the_row_so_a_lost_key_keeps_the_row() {
+    let ctx = setup().await;
+    let phone = new_device();
+    let (nonce, salt) = challenge(&ctx, &ctx.cookie_a).await;
+    let hint = hint_for(&salt, "0a1b2c-machine.guid");
+    register(
+        &ctx,
+        &ctx.cookie_a,
+        &keyed(ctx.uid_a, "dev-z", &phone, &nonce, Some(&hint)),
+    )
+    .await;
+
+    // The keystore was wiped: a new id and a new key from the same session.
+    let replacement = new_device();
+    let (nonce, _) = challenge(&ctx, &ctx.cookie_a).await;
+    let (status, body) = register(
+        &ctx,
+        &ctx.cookie_a,
+        &keyed(ctx.uid_a, "dev-lost", &replacement, &nonce, Some(&hint)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["device_id"], "dev-z", "the client takes the row's id");
+
+    let devices = list(&ctx, &ctx.cookie_a).await;
+    assert_eq!(devices.len(), 1);
+    assert_eq!(devices[0]["id"], "dev-z");
+    assert_eq!(
+        row(&ctx, ctx.uid_a, "dev-z")
+            .await
+            .key_thumbprint
+            .as_deref(),
+        Some(thumbprint_of(&replacement.jwk).as_str())
+    );
+}
+
+#[tokio::test]
+async fn rung_two_key_none_on_a_bound_session_keeps_the_row() {
+    let ctx = setup().await;
+    let dev = new_device();
+    let (nonce, _) = challenge(&ctx, &ctx.cookie_a).await;
+    register(
+        &ctx,
+        &ctx.cookie_a,
+        &keyed(ctx.uid_a, "dev-w", &dev, &nonce, None),
+    )
+    .await;
+    let (status, body) = register(&ctx, &ctx.cookie_a, &keyless(ctx.uid_a, "dev-w")).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["device_id"], "dev-w");
+    assert_eq!(list(&ctx, &ctx.cookie_a).await.len(), 1);
+}
+
+#[tokio::test]
+async fn rung_three_new_id_with_a_live_hint_takes_over_the_old_row() {
+    let ctx = setup().await;
+    let old_phone = new_device();
+    let (nonce, salt) = challenge(&ctx, &ctx.cookie_a).await;
+    let hint = hint_for(&salt, "0a1b2c-machine.guid");
+    register(
+        &ctx,
+        &ctx.cookie_a,
+        &keyed(ctx.uid_a, "dev-old", &old_phone, &nonce, Some(&hint)),
+    )
+    .await;
+
+    // A reinstall: a fresh session, a new id and key, the same hint.
+    let reinstalled = login_as(&ctx, ctx.uid_a).await;
+    let new_phone = new_device();
+    let (nonce, _) = challenge(&ctx, &reinstalled).await;
+    let (status, body) = register(
+        &ctx,
+        &reinstalled,
+        &keyed(ctx.uid_a, "dev-new", &new_phone, &nonce, Some(&hint)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["device_id"], "dev-new");
+
+    let devices = list(&ctx, &reinstalled).await;
+    assert_eq!(devices.len(), 1, "one device, one row");
+    assert_eq!(devices[0]["id"], "dev-new");
+
+    let old = row(&ctx, ctx.uid_a, "dev-old").await;
+    assert_eq!(old.merged_into.as_deref(), Some("dev-new"));
+    assert!(old.retired_at.is_some());
+    assert_eq!(
+        row(&ctx, ctx.uid_a, "dev-new")
+            .await
+            .merged_key_thumbprint
+            .as_deref(),
+        Some(thumbprint_of(&old_phone.jwk).as_str()),
+        "the old key is kept through the merge"
+    );
+}
+
+#[tokio::test]
+async fn rule_seven_a_shared_hint_is_detected_and_neither_machine_is_signed_out() {
+    let ctx = setup().await;
+    let phone = new_device();
+    let (nonce, salt) = challenge(&ctx, &ctx.cookie_a).await;
+    let hint = hint_for(&salt, "0a1b2c-machine.guid");
+    register(
+        &ctx,
+        &ctx.cookie_a,
+        &keyed(ctx.uid_a, "dev-old", &phone, &nonce, Some(&hint)),
+    )
+    .await;
+    // A second machine cloned from the first: new id and key, same hint.
+    let clone_session = login_as(&ctx, ctx.uid_a).await;
+    let clone = new_device();
+    let (nonce, _) = challenge(&ctx, &clone_session).await;
+    register(
+        &ctx,
+        &clone_session,
+        &keyed(ctx.uid_a, "dev-new", &clone, &nonce, Some(&hint)),
+    )
+    .await;
+
+    // The first machine comes back with its old key: the shared hint is found.
+    let (nonce, _) = challenge(&ctx, &ctx.cookie_a).await;
+    let (status, body) = register(
+        &ctx,
+        &ctx.cookie_a,
+        &keyed(ctx.uid_a, "dev-old", &phone, &nonce, Some(&hint)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["device_id"], "dev-old");
+    assert!(row(&ctx, ctx.uid_a, "dev-old").await.hint_conflict);
+    assert!(row(&ctx, ctx.uid_a, "dev-new").await.hint_conflict);
+    assert!(row(&ctx, ctx.uid_a, "dev-old").await.merged_into.is_none());
+
+    // Both sessions still work, and both devices list.
+    assert_eq!(list(&ctx, &ctx.cookie_a).await.len(), 2);
+    assert_eq!(list(&ctx, &clone_session).await.len(), 2);
+
+    // A flagged hint never matches again: a third install is a new row.
+    let third_session = login_as(&ctx, ctx.uid_a).await;
+    let third = new_device();
+    let (nonce, _) = challenge(&ctx, &third_session).await;
+    let (status, body) = register(
+        &ctx,
+        &third_session,
+        &keyed(ctx.uid_a, "dev-third", &third, &nonce, Some(&hint)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["device_id"], "dev-third");
+    assert_eq!(list(&ctx, &third_session).await.len(), 3);
+}
+
+#[tokio::test]
+async fn rung_four_two_sessions_without_a_hint_are_two_devices() {
+    let ctx = setup().await;
+    let (status, _) = register(&ctx, &ctx.cookie_a, &keyless(ctx.uid_a, "dev-p")).await;
+    assert_eq!(status, StatusCode::OK);
+    let second = login_as(&ctx, ctx.uid_a).await;
+    let (status, _) = register(&ctx, &second, &keyless(ctx.uid_a, "dev-q")).await;
+    assert_eq!(status, StatusCode::OK);
+    // Same platform, client, form factor: not merged on coarse traits alone.
+    assert_eq!(list(&ctx, &second).await.len(), 2);
+}
+
+#[tokio::test]
+async fn rung_four_retires_an_old_look_alike_with_no_live_session() {
+    let ctx = setup().await;
+    register(&ctx, &ctx.cookie_a, &keyless(ctx.uid_a, "dev-r")).await;
+    // The session that registered dev-r is dead.
+    ctx.state
+        .sea_db
+        .execute_unprepared(
+            "UPDATE user_sessions SET revoked_at = '2026-01-01T00:00:00+00:00' WHERE device_id = 'dev-r'",
+        )
+        .await
+        .unwrap();
+
+    let next = login_as(&ctx, ctx.uid_a).await;
+    let (status, _) = register(&ctx, &next, &keyless(ctx.uid_a, "dev-s")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(row(&ctx, ctx.uid_a, "dev-r").await.retired_at.is_some());
+    let devices = list(&ctx, &next).await;
+    assert_eq!(devices.len(), 1);
+    assert_eq!(devices[0]["id"], "dev-s");
+}
+
+#[tokio::test]
+async fn an_account_only_ever_sees_its_own_rows_for_recognition() {
+    let ctx = setup().await;
+    let dev = new_device();
+    let (nonce, salt_a) = challenge(&ctx, &ctx.cookie_a).await;
+    let hint = hint_for(&salt_a, "0a1b2c-machine.guid");
+    register(
+        &ctx,
+        &ctx.cookie_a,
+        &keyed(ctx.uid_a, "dev-shared", &dev, &nonce, Some(&hint)),
+    )
+    .await;
+
+    // Account B, same machine, same key and hint bytes: no match, separate row.
+    let (nonce_b, salt_b) = challenge(&ctx, &ctx.cookie_b).await;
+    let hint_b = hint_for(&salt_b, "0a1b2c-machine.guid");
+    let (status, body) = register(
+        &ctx,
+        &ctx.cookie_b,
+        &keyed(ctx.uid_b, "dev-shared", &dev, &nonce_b, Some(&hint_b)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["device_id"], "dev-shared");
+    assert_eq!(list(&ctx, &ctx.cookie_b).await.len(), 1);
+    assert_eq!(list(&ctx, &ctx.cookie_a).await.len(), 1);
+    assert!(row(&ctx, ctx.uid_b, "dev-shared")
+        .await
+        .merged_into
+        .is_none());
 }

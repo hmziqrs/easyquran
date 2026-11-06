@@ -23,3 +23,10 @@ export function deviceIdFor(owner: string): string {
   writeRaw("local", key, minted);
   return minted;
 }
+
+/** Adopt the id the server kept: rungs 2 and 3 hand back the row's id, not the one sent. */
+export function setDeviceIdFor(owner: string, id: string): void {
+  const key = keyFor(owner);
+  memory.set(key, id);
+  writeRaw("local", key, id);
+}
