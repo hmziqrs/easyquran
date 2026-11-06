@@ -10,6 +10,8 @@
     type VerseKey,
   } from "#lib/data/quran.js";
   import { reader } from "#lib/stores/reader.svelte.js";
+  import { pins, PINS_MAX, type PinnedLane } from "#lib/stores/pins.svelte.js";
+  import type { StackedTranslation } from "#lib/data/quran-types.js";
   import { Icon, type IconName } from "#lib/components/icon/index.js";
   import { Tooltip, TooltipTrigger, TooltipContent } from "#lib/components/ui/tooltip/index.js";
   import { Textarea } from "#lib/components/ui/textarea/index.js";
@@ -19,6 +21,9 @@
     reader_reading_bookmark_here,
     reader_reading_bookmark_saved,
     reader_reading_bookmark_set,
+    reader_pin_verse,
+    reader_pins_full,
+    reader_unpin_verse,
     reader_verse_note,
     reader_verse_note_close,
     reader_verse_note_open,
@@ -34,7 +39,16 @@
 
   const COPY_FEEDBACK_MS = 1500;
 
-  let { text, vKey }: { text: string; vKey: string } = $props();
+  let {
+    text,
+    vKey,
+    lanes = [],
+  }: {
+    text: string;
+    vKey: string;
+    /** The stacked translations this row shows; snapshotted when the verse is pinned. */
+    lanes?: readonly StackedTranslation[];
+  } = $props();
 
   const copy = getReaderUiCopy();
   const noteMsg = { locale: appLocale() };
@@ -42,6 +56,7 @@
   const verseKeyValue = $derived(vKey as VerseKey);
   // One store for everyone (device-local signed out, synced signed in).
   const bookmarked = $derived(bookmarks.isMarkedKey(vKey));
+  const pinned = $derived(pins.has(vKey));
   const noteOpen = $derived(reader.openNote === verseKeyValue);
   const hasNote = $derived(reader.getNote(verseKeyValue).length > 0);
 
@@ -69,6 +84,19 @@
         onClick: () => restoreReadingBookmark(previous),
       },
     });
+  // Pins keep the row's main text and the lanes it shows, device-local, in pin order.
+  function onPin(): void {
+    const result = pins.toggle({
+      key: vKey,
+      sourceId: currentSourceId(),
+      text,
+      lanes: lanes.map(
+        (t): PinnedLane => ({ sourceId: t.sourceId, name: t.name ?? "", text: t.text }),
+      ),
+    });
+    if (result === "full") {
+      flashShareNote(reader_pins_full({ max: PINS_MAX }, { locale: copy.locale }));
+    }
   }
 
   // Bookmarks reopen in the translation they were saved from.
@@ -172,6 +200,14 @@
            announced, not just the silent icon swap the old code had. -->
       <span role="status" class="share-note">{shareNote}</span>
     {/if}
+    {@render verseAction({
+      onclick: onPin,
+      label: pinned ? reader_unpin_verse(undefined, noteMsg) : reader_pin_verse(undefined, noteMsg),
+      ariaLabel: pinned ? reader_unpin_verse(undefined, noteMsg) : reader_pin_verse(undefined, noteMsg),
+      icon: "pin",
+      activeClass: pinned ? "text-primary" : undefined,
+      pressed: pinned,
+    })}
     {@render verseAction({
       onclick: onBookmark,
       label: bookmarked ? copy.verse.removeBookmark : copy.verse.bookmark,

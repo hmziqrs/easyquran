@@ -13,6 +13,7 @@
   import PositionIndicator from "./PositionIndicator.svelte";
   import TranslationButton from "./TranslationButton.svelte";
   import ReaderModeToggle from "./ReaderModeToggle.svelte";
+  import PinsDrawer from "./PinsDrawer.svelte";
 
   let {
     header,
@@ -66,6 +67,9 @@
           <SidebarTrigger aria-label={copy.nav.sidebarToggle} title={copy.nav.sidebarToggle} />
           {#if textTools || translationsTool}
             <TranslationButton {routeTranslationId} {onStackChanged} />
+          {/if}
+          {#if textTools}
+            <PinsDrawer />
           {/if}
         {/if}
         <!-- Title + live position may clip and truncate, never push the text-size

@@ -31,7 +31,8 @@ export type IconName =
   | "shield"
   | "swatches"
   | "arrows-clockwise"
-  | "dots";
+  | "dots"
+  | "pin";
 
 export const ICONS = {
   sun: {
@@ -142,5 +143,10 @@ export const ICONS = {
   dots: {
     viewBox: "0 0 256 256",
     d: "M140 48a12 12 0 1 1-24 0 12 12 0 0 1 24 0Zm0 80a12 12 0 1 1-24 0 12 12 0 0 1 24 0Zm0 80a12 12 0 1 1-24 0 12 12 0 0 1 24 0Z",
+  },
+  // Push-pin outline: the verse pin toggle (pinned verses, compare).
+  pin: {
+    viewBox: "0 0 256 256",
+    d: "M168 24H88a8 8 0 0 0 0 16h8v64l-24 32a8 8 0 0 0 6.4 12.8H128v56a8 8 0 0 0 16 0v-56h49.6a8 8 0 0 0 6.4-12.8L176 104V40h8a8 8 0 0 0 0-16Z",
   },
 } satisfies Record<IconName, IconDef>;

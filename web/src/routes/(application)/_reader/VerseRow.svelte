@@ -71,7 +71,11 @@
     virtualGap?: number;
     measure?: Attachment<HTMLElement>;
   } = $props();
-  let Tools = $state<Component<{ text: string; vKey: string }> | null>(null);
+  let Tools = $state<Component<{
+    text: string;
+    vKey: string;
+    lanes?: readonly StackedTranslation[];
+  }> | null>(null);
 
   const ayahId = $derived(`ayah-${vKey.replace(":", "-")}`);
   const tajweedSegments = $derived.by(() =>
@@ -217,7 +221,7 @@
   {/if}
 
   {#if Tools}
-    <Tools text={stripTransliterationMarkup(text)} {vKey} />
+    <Tools text={stripTransliterationMarkup(text)} {vKey} lanes={stacked} />
   {/if}
 </li>
 
