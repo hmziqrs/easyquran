@@ -1,4 +1,6 @@
-use sea_orm::{entity::prelude::*, Order, PaginatorTrait, QueryFilter, QueryOrder, Set};
+use sea_orm::{
+    entity::prelude::*, sea_query::Expr, Order, PaginatorTrait, QueryFilter, QueryOrder, Set,
+};
 
 use crate::error::DbResult;
 use ruxlog_types::PaginatedList;
@@ -8,7 +10,7 @@ use super::*;
 impl Entity {
     pub const PER_PAGE: u64 = 20;
 
-    pub async fn create(conn: &DbConn, new_ban: NewUserBan) -> DbResult<Model> {
+    pub async fn create<C: ConnectionTrait>(conn: &C, new_ban: NewUserBan) -> DbResult<Model> {
         let now = chrono::Utc::now().fixed_offset();
 
         let ban = ActiveModel {
@@ -28,8 +30,36 @@ impl Entity {
         }
     }
 
-    pub async fn revoke(
-        conn: &DbConn,
+    /// Revoke every ban of `user_id` whose expiry has passed and that is still
+    /// unrevoked. Runs before a new ban so the one-active-ban index is free.
+    pub async fn revoke_expired_for_user<C: ConnectionTrait>(
+        conn: &C,
+        user_id: i32,
+        now: DateTimeWithTimeZone,
+    ) -> DbResult<u64> {
+        let res = Self::update_many()
+            .col_expr(Column::RevokedAt, Expr::value(now))
+            .filter(Column::UserId.eq(user_id))
+            .filter(Column::RevokedAt.is_null())
+            .filter(Column::ExpiresAt.lte(now))
+            .exec(conn)
+            .await?;
+        Ok(res.rows_affected)
+    }
+
+    /// Extend an active ban's expiry. Caller checks bounds and writes the review row.
+    pub async fn set_expiry<C: ConnectionTrait>(
+        conn: &C,
+        ban: Model,
+        expires_at: DateTimeWithTimeZone,
+    ) -> DbResult<Model> {
+        let mut active: ActiveModel = ban.into();
+        active.expires_at = Set(Some(expires_at));
+        Ok(active.update(conn).await?)
+    }
+
+    pub async fn revoke<C: ConnectionTrait>(
+        conn: &C,
         ban_id: i32,
         revoked_by: Option<i32>,
     ) -> DbResult<Option<Model>> {
@@ -53,7 +83,10 @@ impl Entity {
         }
     }
 
-    pub async fn get_active_ban(conn: &DbConn, user_id: i32) -> DbResult<Option<Model>> {
+    pub async fn get_active_ban<C: ConnectionTrait>(
+        conn: &C,
+        user_id: i32,
+    ) -> DbResult<Option<Model>> {
         let now = chrono::Utc::now().fixed_offset();
 
         let ban = Self::find()

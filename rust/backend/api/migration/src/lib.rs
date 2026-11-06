@@ -22,6 +22,7 @@ mod m000019_device_keys;
 mod m000021_user_preferences;
 mod m000022_verification_identity;
 mod m000026_email_change_pending;
+mod m000030_user_ban_contract;
 
 pub struct Migrator;
 
@@ -97,6 +98,10 @@ impl MigratorTrait for Migrator {
             // m000026 parks a requested email change until its code is proven (A12).
             // m000023 to m000025 are reserved.
             Box::new(m000026_email_change_pending::Migration),
+            // m000030 ships the ban contract core (A19): one active ban per account
+            // (partial unique index), the enforcement_notices case record, and audit
+            // indices. Additive; down() drops only the active-ban index.
+            Box::new(m000030_user_ban_contract::Migration),
         ]
     }
 }

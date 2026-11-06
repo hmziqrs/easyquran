@@ -4,6 +4,7 @@ pub mod discount_code;
 pub mod email_change_pending;
 pub mod email_suppression;
 pub mod email_verification;
+pub mod enforcement_notice;
 pub mod forgot_password;
 pub mod invoice;
 pub mod newsletter_subscriber;

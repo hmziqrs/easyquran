@@ -31,6 +31,7 @@ use crate::modules::admin_acl_v1;
 use crate::modules::admin_route_v1;
 
 use crate::modules::admin_bans_v1;
+use crate::modules::admin_user_bans_v1;
 
 use crate::modules::admin_abuse_v1;
 
@@ -160,6 +161,12 @@ pub fn router(state: AppState) -> Router<AppState> {
 
     // Abuse measurement summary (A5): session admin ACL, same guard as bans.
     router = router.merge(admin_abuse_v1::routes());
+
+    // Account ban contract (A19). Ships dark: nothing mounts unless
+    // ABUSE_BAN_WRITES_ENABLED=true. Flip only with A20, A21, A22, A35 deployed.
+    if admin_user_bans_v1::controller::writes_enabled() {
+        router = router.nest("/admin/users/bans", admin_user_bans_v1::routes());
+    }
 
     #[cfg(feature = "seed-system")]
     {
