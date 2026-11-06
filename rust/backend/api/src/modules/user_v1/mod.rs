@@ -12,6 +12,7 @@ use crate::{middlewares::auth_guard, AppState};
 pub fn routes() -> Router<AppState> {
     let base = Router::<AppState>::new()
         .route("/update", post(controller::update_profile))
+        .route("/email/confirm", post(controller::confirm_email_change))
         .route_layer(middleware::from_fn(auth_guard::verified))
         .merge(
             Router::<AppState>::new()

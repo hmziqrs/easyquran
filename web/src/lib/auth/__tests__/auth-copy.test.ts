@@ -7,7 +7,6 @@ import {
   extractFieldErrors,
   isRateLimited,
   isTransportFailure,
-  NO_ACCOUNT_EXISTS,
   RESET_CODE_SENT,
   VERIFY_EMAIL_NEXT,
 } from "#lib/auth/auth-copy.js";
@@ -122,8 +121,8 @@ describe("classifyAuthError", () => {
     expect(c.kind).toBe("server");
   });
 
-  it("forgot-password copy: affirmative send + explicit no-account (flow concern, classifier pass-through)", () => {
-    expect(RESET_CODE_SENT).toMatch(/reset code/i);
-    expect(NO_ACCOUNT_EXISTS).toMatch(/no account exists/i);
+  it("forgot-password copy: one neutral answer for every address (no existence claim)", () => {
+    expect(RESET_CODE_SENT).toMatch(/if an account exists/i);
+    expect(RESET_CODE_SENT).not.toMatch(/no account exists/i);
   });
 });

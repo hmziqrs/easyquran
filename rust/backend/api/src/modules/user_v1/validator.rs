@@ -115,6 +115,13 @@ pub struct AdminChangePassword {
     pub password: String,
 }
 
+/// Same eight-character code as email verification (`email_verification_v1`).
+#[derive(Debug, Deserialize, Validate)]
+pub struct V1ConfirmEmailChangePayload {
+    #[validate(length(min = 8, max = 8))]
+    pub code: String,
+}
+
 #[derive(Debug, Deserialize, Validate)]
 pub struct V1UnlinkIdentityPayload {
     #[validate(length(min = 1, max = 32))]

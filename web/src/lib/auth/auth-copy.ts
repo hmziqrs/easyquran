@@ -1,8 +1,7 @@
 import type { AuthErrorEnvelope } from "#lib/auth/auth-client.js";
 
 export const CREDENTIAL_FAILURE = "Email or password is incorrect.";
-export const RESET_CODE_SENT = "A reset code is on its way to your email.";
-export const NO_ACCOUNT_EXISTS = "No account exists for that email.";
+export const RESET_CODE_SENT = "If an account exists for that email, a reset code is on its way.";
 export const ALREADY_SIGNED_IN_RESET =
   "You're already signed in. Sign out first to reset your password.";
 export const ACCOUNT_EXISTS_RESEND =

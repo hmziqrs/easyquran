@@ -21,6 +21,7 @@ mod m000018_device_registry;
 mod m000019_device_keys;
 mod m000021_user_preferences;
 mod m000022_verification_identity;
+mod m000026_email_change_pending;
 
 pub struct Migrator;
 
@@ -93,6 +94,9 @@ impl MigratorTrait for Migrator {
             // m000022 ships the verification identity column (A10): a nullable keyed
             // HMAC per account, filled by the boot backfill. Additive, IF NOT EXISTS.
             Box::new(m000022_verification_identity::Migration),
+            // m000026 parks a requested email change until its code is proven (A12).
+            // m000023 to m000025 are reserved.
+            Box::new(m000026_email_change_pending::Migration),
         ]
     }
 }

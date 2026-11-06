@@ -67,17 +67,17 @@ describe("ForgotPasswordFlow request (explicit account-existence contract)", () 
     expect(flow.genericError).toBeNull();
   });
 
-  it("unknown email (404) -> no-account error, stays on request step", async () => {
+  it("unknown email gets the same accepted answer as a known one (no existence signal)", async () => {
     const client = mockClient();
     const state = mockState();
-    client.unsafeRequest.mockResolvedValueOnce(err(404, { type: "DB_002" }));
+    client.unsafeRequest.mockResolvedValueOnce(ok({ message: "A password reset code..." }));
     const flow = createForgotPasswordFlow({ client, state });
     flow.email = "no-such-account@eq.test";
     const res = await flow.request();
-    expect(res).toBe(false);
-    expect(flow.step).toBe("request");
-    expect(flow.genericError).toBe("No account exists for that email.");
-    expect(flow.successMessage).toBeNull();
+    expect(res).toBe(true);
+    expect(flow.step).toBe("verify");
+    expect(flow.successMessage).toMatch(/if an account exists/i);
+    expect(flow.genericError).toBeNull();
   });
 
   it("409 AUTH_ALREADY_AUTHENTICATED -> already-signed-in copy, stays on request step", async () => {

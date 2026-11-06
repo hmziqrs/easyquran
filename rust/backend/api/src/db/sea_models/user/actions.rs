@@ -209,6 +209,71 @@ impl Entity {
         }
     }
 
+    /// Completes a parked email change (A12). The code must match the live row
+    /// for this user. The address switches here, not at request time, so a
+    /// mistyped address never takes the account over. Verified on the new
+    /// mailbox, so `is_verified` is true; the session secret rotates like any
+    /// credential change.
+    pub async fn confirm_email_change(
+        conn: &DbConn,
+        user_id: i32,
+        code_hash: &str,
+    ) -> DbResult<Model> {
+        let invalid = || {
+            ErrorResponse::new(ErrorCode::InvalidInput)
+                .with_message("The verification code is invalid or has expired")
+        };
+        let transaction = conn.begin().await?;
+        let pending = super::super::email_change_pending::Entity::live_for(&transaction, user_id)
+            .await?
+            .ok_or_else(invalid)?;
+        if !super::super::email_change_pending::Entity::code_matches(&pending, code_hash) {
+            return Err(invalid());
+        }
+        if let Some(identity_hash) = pending.identity_hash.as_deref() {
+            registration_admission::ensure_identity_capacity(
+                &transaction,
+                identity_hash,
+                Some(user_id),
+            )
+            .await?;
+        }
+        let account = Self::find_by_id(user_id)
+            .one(&transaction)
+            .await?
+            .ok_or_else(|| {
+                ErrorResponse::new(ErrorCode::RecordNotFound).with_message("User not found")
+            })?;
+        let mut active: ActiveModel = account.into();
+        active.email = Set(pending.new_email.clone());
+        active.is_verified = Set(true);
+        active.session_auth_secret =
+            Set(super::model::new_session_auth_secret().map_err(|err| {
+                error!(
+                    user_id,
+                    "session_auth_secret rotation failed during email change: {err}"
+                );
+                ErrorResponse::new(ErrorCode::InternalServerError)
+                    .with_message(format!("session_auth_secret rotation failed: {err}"))
+            })?);
+        active.updated_at = Set(chrono::Utc::now().fixed_offset());
+        let updated = active.update(&transaction).await?;
+        email_verification::Entity::delete_many()
+            .filter(email_verification::Column::UserId.eq(user_id))
+            .exec(&transaction)
+            .await?;
+        super::super::forgot_password::Entity::delete_many()
+            .filter(super::super::forgot_password::Column::UserId.eq(user_id))
+            .exec(&transaction)
+            .await?;
+        super::super::email_change_pending::Entity::delete_by_id(user_id)
+            .exec(&transaction)
+            .await?;
+        transaction.commit().await?;
+        info!(user_id, "Email change confirmed");
+        Ok(updated)
+    }
+
     /// Fills `verification_identity_hash` for rows written before m000022. Runs
     /// once at boot after migrations and touches only NULL rows, so it is safe to
     /// repeat. Returns how many rows it filled.

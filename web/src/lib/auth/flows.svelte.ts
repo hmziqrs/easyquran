@@ -16,7 +16,6 @@ import {
   GENERIC_TRY_AGAIN,
   isVerifiedOnlyError,
   NETWORK_ERROR,
-  NO_ACCOUNT_EXISTS,
   RESET_CODE_SENT,
   RESET_SUCCESS,
   TWO_FA_NEXT,
@@ -25,7 +24,6 @@ import {
 import { authState } from "#lib/auth/auth-state.svelte.js";
 import type { AuthTransitionContext } from "#lib/auth/auth-state.svelte.js";
 import { FRESH_AUTH_REQUIRED, isFreshAuthenticationRequired } from "#lib/auth/fresh-auth-client.js";
-import { armSignOutNotice } from "#lib/auth/sign-out-notice.svelte.js";
 import {
   createOAuthFlow,
   type OAuthFlow,
@@ -37,6 +35,7 @@ import {
   type PasskeyFlow,
   type PasskeyFlowDeps,
 } from "#lib/auth/passkey-flow.svelte.js";
+import { armSignOutNotice } from "#lib/auth/sign-out-notice.svelte.js";
 import { notifications } from "#lib/stores/notifications.svelte.js";
 
 export interface FlowStateLike {
@@ -560,12 +559,6 @@ export class ForgotPasswordFlow {
         // step that can never verify.
         if (res.status === 409 && res.error?.type === "AUTH_ALREADY_AUTHENTICATED") {
           this.genericError = ALREADY_SIGNED_IN_RESET;
-          return false;
-        }
-        // The API answers unknown emails with an explicit RecordNotFound (404) —
-        // surface it instead of the generic classifier copy.
-        if (res.status === 404) {
-          this.genericError = NO_ACCOUNT_EXISTS;
           return false;
         }
         const c = classifyAuthError(res.status, res.error, FORGOT_REQUEST_FIELDS);

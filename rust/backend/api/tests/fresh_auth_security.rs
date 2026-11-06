@@ -360,14 +360,27 @@ async fn http_email_change_requires_fresh_proof_but_name_edit_keeps_existing_ses
             ruxlog::modules::user_v1::validator::V1UpdateProfilePayload,
         >,
     ) -> Response {
+        let mailer = std::sync::Arc::new(ruxlog::services::mail::MailRouter::new(
+            std::collections::HashMap::new(),
+            String::new(),
+            std::sync::Arc::new(rux_request_gate::InMemoryStore::default()),
+            backend.pool.clone(),
+            ruxlog::services::mail::router::MailRouterLimits::default(),
+            false,
+        ));
+        let delivery = ruxlog::modules::user_v1::controller::EmailChangeDelivery {
+            secret_key: b"fresh-auth-http-test-secret",
+            mailer,
+        };
         let result = ruxlog::modules::user_v1::controller::update_profile_with_auth(
             &backend.pool,
             &auth,
             payload.0,
+            delivery,
         )
         .await;
         match result {
-            Ok(model) => Json(model).into_response(),
+            Ok(outcome) => Json(outcome.map(|outcome| outcome.user)).into_response(),
             Err(error) => error.into_response(),
         }
     }
@@ -444,6 +457,14 @@ async fn http_email_change_requires_fresh_proof_but_name_edit_keeps_existing_ses
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(updated.email, "new-owner@example.com");
-    assert_ne!(updated.session_auth_secret, owner.session_auth_secret);
+    // A12: the change parks until the code on the new mailbox is proven. The
+    // address and the session secret stay put until then.
+    assert_eq!(updated.email, "owner@example.com");
+    assert_eq!(updated.session_auth_secret, owner.session_auth_secret);
+    let parked = ruxlog::db::sea_models::email_change_pending::Entity::find_by_id(owner.id)
+        .one(&db)
+        .await
+        .unwrap()
+        .expect("email change is parked");
+    assert_eq!(parked.new_email, "new-owner@example.com");
 }

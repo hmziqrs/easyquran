@@ -7,19 +7,21 @@ use axum::{
 use axum_macros::debug_handler;
 use sea_orm::{EntityTrait, TransactionError, TransactionTrait};
 use serde_json::json;
+use std::sync::Arc;
 use tracing::{error, info, instrument, warn};
 
 use super::validator::*;
 use crate::{
     config::settings::{web_auth, ProviderStatus},
     db::sea_models::{
-        passkey_credential,
+        email_change_pending, email_verification, passkey_credential,
         user::{Entity as User, Model as UserModel, UserRole},
         user_oauth_identity,
     },
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
     services::{
+        abuse_limiter,
         account_methods::{can_unlink, total_sign_in_methods},
         auth::AuthSession,
     },
@@ -202,10 +204,16 @@ pub async fn update_profile(
             .with_message("You must be logged in to access this resource")
     })?;
 
-    match update_profile_with_auth(&state.sea_db, &auth, payload.0).await {
-        Ok(Some(user)) => {
-            info!(user_id = user.id, "Profile updated");
-            Ok((StatusCode::OK, Json(json!(user))))
+    let delivery = EmailChangeDelivery {
+        secret_key: &state.secret_key,
+        mailer: state.mailer.clone(),
+    };
+    match update_profile_with_auth(&state.sea_db, &auth, payload.0, delivery).await {
+        Ok(Some(outcome)) => {
+            info!(user_id = outcome.user.id, "Profile updated");
+            let mut body = json!(outcome.user);
+            body["email_change_pending"] = json!(outcome.email_change_pending);
+            Ok((StatusCode::OK, Json(body)))
         }
         Ok(None) => {
             warn!(user_id = user.id, "User not found during update");
@@ -219,21 +227,148 @@ pub async fn update_profile(
     }
 }
 
+/// What a profile update did. `email_change_pending` means the new address
+/// is parked and waits for a code; `user.email` still holds the old one.
+pub struct ProfileUpdate {
+    pub user: UserModel,
+    pub email_change_pending: bool,
+}
+
+/// Where a parked email change sends its code, and the key that makes the code
+/// hash. Built from `AppState` by the handler.
+pub struct EmailChangeDelivery<'a> {
+    pub secret_key: &'a [u8],
+    pub mailer: std::sync::Arc<crate::services::mail::MailRouter>,
+}
+
 pub async fn update_profile_with_auth(
     db: &sea_orm::DatabaseConnection,
     auth: &AuthSession,
     payload: V1UpdateProfilePayload,
-) -> Result<Option<UserModel>, ErrorResponse> {
+    delivery: EmailChangeDelivery<'_>,
+) -> Result<Option<ProfileUpdate>, ErrorResponse> {
     let owner = auth.user_required()?;
-    if payload
+    let requested_email = payload
         .email
         .as_ref()
-        .is_some_and(|email| crate::utils::email::normalize_email(email) != owner.email)
-    {
+        .map(|email| crate::utils::email::normalize_email(email))
+        .filter(|email| *email != owner.email);
+    if requested_email.is_some() {
         crate::services::fresh_auth::consume(auth, db).await?;
     }
-    User::update(db, owner.id, payload.into_update_user()).await
+    // The address never switches in the profile write. It parks until the
+    // code on the new mailbox is confirmed (A12).
+    let mut update = payload.into_update_user();
+    update.email = None;
+    let Some(user) = User::update(db, owner.id, update).await? else {
+        return Ok(None);
+    };
+    let email_change_pending = match requested_email {
+        Some(new_email) => {
+            request_email_change(db, &delivery, owner.id, &new_email).await?;
+            true
+        }
+        None => false,
+    };
+    Ok(Some(ProfileUpdate {
+        user,
+        email_change_pending,
+    }))
 }
+
+/// Parks a change to `new_email` and sends its code there. Non-production logs
+/// the code (dev has no SMTP); production sends detached, so a transport error
+/// is logged and does not reveal anything to the requester.
+async fn request_email_change(
+    db: &sea_orm::DatabaseConnection,
+    delivery: &EmailChangeDelivery<'_>,
+    user_id: i32,
+    new_email: &str,
+) -> Result<(), ErrorResponse> {
+    let identity_hash = crate::utils::email::verification_identity_hash(new_email);
+    crate::services::registration_admission::ensure_identity_capacity(
+        db,
+        &identity_hash,
+        Some(user_id),
+    )
+    .await?;
+    let code = email_verification::Entity::generate_code();
+    let code_hash = crate::utils::code_hash::hash_code(delivery.secret_key, &code);
+    email_change_pending::Entity::park(db, user_id, new_email, Some(identity_hash), code_hash)
+        .await?;
+
+    // ── DELIVERY: email-change code hand-off ──────────────────────────────────
+    // Same contract as the other DELIVERY blocks: the plaintext code leaves here
+    // and nowhere else. NEVER log the code on the production branch.
+    if matches!(crate::config::settings::is_production(), Ok(false)) {
+        info!(
+            user_id,
+            verification_code = %code,
+            "DEV delivery: email-change code (non-production build)"
+        );
+    } else {
+        let mailer: Arc<crate::services::mail::MailRouter> = delivery.mailer.clone();
+        let new_email = new_email.to_owned();
+        tokio::spawn(async move {
+            if let Err(err) =
+                crate::services::mail::send_email_verification_code(&mailer, &new_email, &code)
+                    .await
+            {
+                error!(
+                    user_id,
+                    error_kind = crate::services::mail::mail_error_kind(&err),
+                    "Failed to send email-change code"
+                );
+            }
+        });
+    }
+    Ok(())
+}
+
+#[debug_handler]
+#[instrument(skip(auth, state, payload), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
+pub async fn confirm_email_change(
+    auth: AuthSession,
+    state: State<AppState>,
+    payload: ValidatedJson<V1ConfirmEmailChangePayload>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let user_id = auth.user_required()?.id;
+    let key_prefix = format!("email_change:{}", user_id);
+    abuse_limiter::gate(
+        &state.gate_store,
+        &key_prefix,
+        ABUSE_LIMITER_CONFIG,
+        abuse_limiter::FailureMode::Credential,
+    )
+    .await?;
+    let code_hash = crate::utils::code_hash::hash_code(&state.secret_key, &payload.0.code);
+    let confirmed = User::confirm_email_change(&state.sea_db, user_id, &code_hash).await;
+    abuse_limiter::settle(
+        &state.gate_store,
+        &key_prefix,
+        ABUSE_LIMITER_CONFIG,
+        abuse_limiter::FailureMode::Credential,
+        abuse_limiter::attempt_of_code(&confirmed),
+    )
+    .await;
+    confirmed?;
+    // The session secret rotated, so this session ends with the next request.
+    Ok((
+        StatusCode::OK,
+        Json(json!({
+            "message": "Email address updated. Sign in again with the new address.",
+        })),
+    ))
+}
+
+const ABUSE_LIMITER_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::AbuseLimiterConfig {
+    temp_block_attempts: 3,
+    temp_block_range: 360,
+    temp_block_duration: 3600,
+    block_retry_limit: 5,
+    block_range: 900,
+    block_duration: 86400,
+};
 
 #[debug_handler]
 #[instrument(skip(auth, state, payload))]
