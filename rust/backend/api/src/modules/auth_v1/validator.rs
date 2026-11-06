@@ -1,3 +1,4 @@
+use chrono::{Datelike, NaiveDate};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use validator::{Validate, ValidationError};
@@ -33,6 +34,10 @@ pub struct V1RegisterPayload {
     pub email: String,
     #[validate(length(min = PASSWORD_MIN, max = PASSWORD_MAX))]
     pub password: String,
+    /// Self-declared date of birth, `YYYY-MM-DD`. Read once to set `is_minor`
+    /// (A34), never stored. Parsed by `parse_date_of_birth` in the controller.
+    #[validate(length(min = 10, max = 10))]
+    pub date_of_birth: String,
     /// Cloudflare Turnstile widget token; required only when the server has
     /// `TURNSTILE_SECRET_KEY` configured (see services::turnstile).
     #[serde(default)]
@@ -41,13 +46,71 @@ pub struct V1RegisterPayload {
 }
 
 impl V1RegisterPayload {
-    pub fn into_new_user(self) -> NewUser {
+    pub fn into_new_user(self, is_minor: bool) -> NewUser {
         NewUser {
             name: self.name,
             email: crate::utils::email::normalize_email(&self.email),
             password: self.password,
             role: UserRole::User,
+            is_minor,
         }
+    }
+}
+
+/// Age under which a self-declared account is flagged as a minor (A34).
+pub const MINOR_AGE_YEARS: i32 = 18;
+/// Oldest plausible self-declared birth year span, in years.
+const MAX_AGE_YEARS: i32 = 120;
+
+/// True when someone born on `dob` is under `MINOR_AGE_YEARS` on `today`.
+/// Pure: the caller supplies the clock. A birthday counts on its own day.
+pub fn is_minor_on(dob: NaiveDate, today: NaiveDate) -> bool {
+    let mut years = today.year() - dob.year();
+    if (today.month(), today.day()) < (dob.month(), dob.day()) {
+        years -= 1;
+    }
+    years < MINOR_AGE_YEARS
+}
+
+/// Parse the self-declared `YYYY-MM-DD` date of birth. Rejects a non-date,
+/// a future date, and a span over `MAX_AGE_YEARS`, so junk input cannot set
+/// or clear the minor flag by accident.
+pub fn parse_date_of_birth(raw: &str, today: NaiveDate) -> Result<NaiveDate, ValidationError> {
+    let dob = NaiveDate::parse_from_str(raw, "%Y-%m-%d")
+        .map_err(|_| ValidationError::new("Invalid date of birth"))?;
+    if dob > today || today.year() - dob.year() > MAX_AGE_YEARS {
+        return Err(ValidationError::new("Invalid date of birth"));
+    }
+    Ok(dob)
+}
+
+#[cfg(test)]
+mod minor_flag_tests {
+    use super::{is_minor_on, parse_date_of_birth};
+    use chrono::NaiveDate;
+
+    fn d(y: i32, m: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, day).unwrap()
+    }
+
+    #[test]
+    fn under_eighteen_is_minor_until_birthday() {
+        let today = d(2026, 11, 6);
+        assert!(is_minor_on(d(2008, 11, 7), today));
+        assert!(!is_minor_on(d(2008, 11, 6), today));
+        assert!(!is_minor_on(d(2000, 1, 1), today));
+    }
+
+    #[test]
+    fn parse_rejects_future_ancient_and_malformed() {
+        let today = d(2026, 11, 6);
+        assert!(parse_date_of_birth("2026-11-07", today).is_err());
+        assert!(parse_date_of_birth("1800-01-01", today).is_err());
+        assert!(parse_date_of_birth("06/11/2010", today).is_err());
+        assert_eq!(
+            parse_date_of_birth("2010-05-20", today).unwrap(),
+            d(2010, 5, 20)
+        );
     }
 }
 
@@ -142,9 +205,10 @@ mod tests {
             name: "Alice".to_string(),
             email: "alice@example.com".to_string(),
             password: "s3cret".to_string(),
+            date_of_birth: "1990-01-01".to_string(),
             turnstile_token: None,
         };
-        let new_user = payload.into_new_user();
+        let new_user = payload.into_new_user(false);
         assert_eq!(new_user.name, "Alice");
         assert_eq!(new_user.email, "alice@example.com");
         assert_eq!(new_user.password, "s3cret");
@@ -157,6 +221,7 @@ mod tests {
             name: "Bob".to_string(),
             email: "bob@test.com".to_string(),
             password: "strongpassword123".to_string(),
+            date_of_birth: "1990-01-01".to_string(),
             turnstile_token: None,
         };
         assert!(payload.validate().is_ok());
@@ -168,6 +233,7 @@ mod tests {
             name: "".to_string(),
             email: "bob@test.com".to_string(),
             password: "strongpassword123".to_string(),
+            date_of_birth: "1990-01-01".to_string(),
             turnstile_token: None,
         };
         assert!(payload.validate().is_err());
@@ -179,6 +245,7 @@ mod tests {
             name: "Bob".to_string(),
             email: "bob@test.com".to_string(),
             password: "".to_string(),
+            date_of_birth: "1990-01-01".to_string(),
             turnstile_token: None,
         };
         assert!(payload.validate().is_err());
@@ -190,6 +257,7 @@ mod tests {
             name: "Bob".to_string(),
             email: "not-an-email".to_string(),
             password: "strongpassword123".to_string(),
+            date_of_birth: "1990-01-01".to_string(),
             turnstile_token: None,
         };
         assert!(payload.validate().is_err());
@@ -249,6 +317,7 @@ mod tests {
             name: "Bob".to_string(),
             email: "bob@test.com".to_string(),
             password: "a".repeat((PASSWORD_MAX + 1) as usize),
+            date_of_birth: "1990-01-01".to_string(),
             turnstile_token: None,
         };
         assert!(payload.validate().is_err());
@@ -266,6 +335,7 @@ mod tests {
             name: "Bob".to_string(),
             email: "bob@test.com".to_string(),
             password: over_max,
+            date_of_birth: "1990-01-01".to_string(),
             turnstile_token: None,
         }
         .validate();

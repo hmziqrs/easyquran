@@ -91,6 +91,7 @@ impl Entity {
             password: Set(Some(hash)),
             role: Set(new_user.role),
             is_verified: Set(false),
+            is_minor: Set(new_user.is_minor),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()

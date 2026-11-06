@@ -55,13 +55,14 @@ export interface FlowDeps {
 }
 
 const LOGIN_FIELDS = ["email", "password"] as const;
-const REGISTER_FIELDS = ["name", "email", "password", "confirm_password"] as const;
+const REGISTER_FIELDS = ["name", "email", "password", "confirm_password", "date_of_birth"] as const;
 
 interface RegisterBody {
   name: string;
   email: string;
   password: string;
   confirm_password: string;
+  date_of_birth: string;
   turnstile_token?: string;
 }
 const VERIFY_EMAIL_FIELDS = ["code"] as const;
@@ -319,6 +320,8 @@ export class RegisterFlow {
   email = $state("");
   password = $state("");
   confirmPassword = $state("");
+  /** Self-declared YYYY-MM-DD. The API keeps only the under-18 flag, never this value. */
+  dateOfBirth = $state("");
   turnstileToken = $state<string | null>(null);
   pending = $state(false);
   genericError = $state<string | null>(null);
@@ -355,6 +358,7 @@ export class RegisterFlow {
         email: this.email,
         password: this.password,
         confirm_password: this.confirmPassword,
+        date_of_birth: this.dateOfBirth,
       };
       if (this.turnstileToken) body.turnstile_token = this.turnstileToken;
       const res = await this.client.unsafeRequest<unknown>("/auth/v1/register", {

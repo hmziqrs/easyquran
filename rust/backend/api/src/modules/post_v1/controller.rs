@@ -947,6 +947,7 @@ mod tests {
             oauth_provider: None,
             session_auth_secret: format!("test-secret-{id}"),
             verification_identity_hash: None,
+            is_minor: false,
             created_at: now,
             updated_at: now,
         }

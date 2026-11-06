@@ -500,6 +500,7 @@ async fn seed_user(state: &AppState, email: &str, password: &str) {
             email: email.to_string(),
             password: password.to_string(),
             role: UserRole::User,
+            is_minor: false,
         },
         code_hash,
     )

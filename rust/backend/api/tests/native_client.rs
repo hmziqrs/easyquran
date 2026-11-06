@@ -102,6 +102,7 @@ async fn seed_account(state: &AppState, name: &str) -> user::Model {
             email: format!("{name}@example.com"),
             password: PASSWORD.into(),
             role: UserRole::User,
+            is_minor: false,
         },
         code_hash,
     )

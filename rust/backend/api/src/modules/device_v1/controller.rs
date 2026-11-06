@@ -219,6 +219,15 @@ pub async fn register(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user = auth.user_required()?;
     ensure_expected_owner(user.id, payload.expected_user_id)?;
+    // Minors (A34): no device record, no push token, no session binding. The reply
+    // is a fresh random id that is never stored, so the client keeps working
+    // without anything to correlate. Nothing is logged for this path.
+    if user.is_minor {
+        return Ok((
+            StatusCode::OK,
+            Json(json!({ "registered": true, "device_id": uuid::Uuid::new_v4().to_string() })),
+        ));
+    }
     check_registration_shape(&payload).map_err(invalid)?;
     let proof = verify_key_proof(&auth, user.id, &payload).await?;
     let keyed = proof.key.is_some();
@@ -306,6 +315,11 @@ pub async fn issue_challenge(
     auth: AuthSession,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user = auth.user_required()?;
+    // Minors (A34): no device challenge and no per-account device salt is written.
+    if user.is_minor {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("Device features are not available for this account"));
+    }
     let session = session_key(&auth).ok_or_else(|| ErrorResponse::new(ErrorCode::Unauthorized))?;
     let salt = user_device::salt_for(&state.sea_db, user.id, &keys::random_b64()).await?;
     let nonce = challenge::store()

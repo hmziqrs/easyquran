@@ -33,6 +33,9 @@ pub struct Model {
     /// `email`, by `before_save`. Never returned to clients.
     #[serde(skip_serializing)]
     pub verification_identity_hash: Option<String>,
+    /// Self-declared under 18 at sign-up (A34). Gates device, push, analytics and
+    /// comments. The date of birth itself is never stored.
+    pub is_minor: bool,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }

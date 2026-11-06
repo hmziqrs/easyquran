@@ -6,6 +6,8 @@ import {
   auth_error_code_required,
   auth_error_confirm_mismatch,
   auth_error_confirm_required,
+  auth_error_dob_invalid,
+  auth_error_dob_required,
   auth_error_email_invalid,
   auth_error_email_required,
   auth_error_name_max,
@@ -26,6 +28,8 @@ export interface AuthValidationCopy {
   passwordMax: string;
   confirmRequired: string;
   confirmMismatch: string;
+  dobRequired: string;
+  dobInvalid: string;
   codeRequired: string;
   codeDigits: string;
   codeLength8: string;
@@ -46,6 +50,8 @@ export function getAuthValidationCopy(
     passwordMax: auth_error_password_max(undefined, { locale }),
     confirmRequired: auth_error_confirm_required(undefined, { locale }),
     confirmMismatch: auth_error_confirm_mismatch(undefined, { locale }),
+    dobRequired: auth_error_dob_required(undefined, { locale }),
+    dobInvalid: auth_error_dob_invalid(undefined, { locale }),
     codeRequired: auth_error_code_required(undefined, { locale }),
     codeDigits: auth_error_code_digits(undefined, { locale }),
     codeLength8: auth_error_code_length_8(undefined, { locale }),

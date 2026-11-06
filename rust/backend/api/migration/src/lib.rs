@@ -39,6 +39,7 @@ mod m000140_media_upload_indexes;
 mod m000150_retention_sweep;
 mod m000160_erasure_receipts;
 mod m000170_data_requests;
+mod m000200_user_is_minor;
 
 pub struct Migrator;
 
@@ -155,6 +156,8 @@ impl MigratorTrait for Migrator {
             Box::new(m000160_erasure_receipts::Migration),
             // m000170 adds data_requests (A38): one-month erasure request clock. No FK, 24-month class.
             Box::new(m000170_data_requests::Migration),
+            // m000200 adds users.is_minor (A34): constant-default flag from self-declared age at sign-up.
+            Box::new(m000200_user_is_minor::Migration),
         ]
     }
 }

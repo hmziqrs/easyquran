@@ -20,6 +20,7 @@ import { getAuthValidationCopy, type AuthValidationCopy } from "#lib/i18n/auth-v
 // Kept identical so the client never accepts an address the API will reject.
 const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]+$/;
 const SIX_DIGITS_RE = /^[0-9]{6}$/;
+const DATE_OF_BIRTH_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Server bounds: PASSWORD_MIN/PASSWORD_MAX in auth_v1 + forgot_password_v1 validators.
 export const PASSWORD_MIN = 12;
@@ -76,6 +77,22 @@ export function totpSchema(copy: AuthValidationCopy = getAuthValidationCopy()) {
   return object({ code: totpCodeSchema(copy) });
 }
 
+// A real calendar date written YYYY-MM-DD, not in the future. The API applies the same rule.
+function isValidDateOfBirth(value: string): boolean {
+  if (!DATE_OF_BIRTH_RE.test(value)) return false;
+  // SAFETY: DATE_OF_BIRTH_RE just matched, so the split yields exactly three numeric parts.
+  const [year, month, day] = value.split("-").map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return false;
+  }
+  return date.getTime() <= Date.now();
+}
+
 export function registerSchema(copy: AuthValidationCopy = getAuthValidationCopy()) {
   return pipe(
     object({
@@ -83,6 +100,11 @@ export function registerSchema(copy: AuthValidationCopy = getAuthValidationCopy(
       email: emailSchema(copy),
       password: passwordSchema(copy),
       confirm_password: confirmPasswordSchema(copy),
+      date_of_birth: pipe(
+        string(),
+        nonEmpty(copy.dobRequired),
+        check(isValidDateOfBirth, copy.dobInvalid),
+      ),
     }),
     forward(
       partialCheck(

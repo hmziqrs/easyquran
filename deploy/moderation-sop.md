@@ -51,3 +51,47 @@ Work through the steps in order. Stop at the first step that rules the account o
 - Ban length is at most 365 days and always expires. Extending a ban needs a written
   self-review note (**server**: `renew` requires `singleOperatorControl` and a note).
 - Revoke a ban the moment the evidence no longer supports it. The revoke is audited.
+
+## Statement of reasons (Art 17 template)
+
+Send with every ban, restriction, comment hide or content removal. Every field is
+required. A field left blank means do not send yet. Store the sent text in the case
+note.
+
+```
+Decision:        [account ban | account restriction | comment hidden | comment removed]
+Decided at (UTC): [YYYY-MM-DD HH:MM]
+Ground:          [closed reason code: spam | harassment | credential_abuse | policy_violation | other]
+Terms section:   [section number and sentence in the Terms, section 5 "Acceptable use"]
+Facts relied on: [one short paragraph. Name no other user. No device or network identifiers.]
+Automated:       No decision is made by automated means alone. A device or network signal
+                 can only challenge, never ban (precedence rules, this document).
+Effect:          [what stops, from when]
+Ends:            [YYYY-MM-DD, at most 365 days after the decision; or "until revoked"]
+Appeal:          You can appeal this decision through the appeal form on the site
+                 (appeal intake, A35). Give the reference below.
+Reference:       [case or notice id]
+Redress:         [owner text, O11. Left blank until the owner signs it.]
+```
+
+Operator checks before sending: the facts match the case note; the reason code is
+one of the five closed codes; the notice `deliveryState` is `sent` (see After the
+decision above).
+
+## Appeal handling
+
+Operator procedure for an appeal received through the intake (A35, `appeal_v1`).
+
+1. Read the original decision, its notice, and the evidence on the case. Do not
+   read anything the appellant did not submit beyond the case.
+2. Check the shared-device step again if the decision used one. A shared device
+   cannot support an account ban.
+3. Decide: uphold, reverse, or change the effect. Write the reason in the case note.
+4. Reverse a ban by revoke. The revoke is audited.
+5. Send the decision to the appellant using the same template fields above, with
+   the reason and the outcome.
+
+**Clock.** Internal target is 7 days (`DECISION_CLOCK_SECS`). The code records
+the appeal but does not enforce that clock, and no API records the decision yet.
+Decisions live in the case notes until `legal-debt.md` row 7 closes. Do not publish
+a seven-day promise until then.

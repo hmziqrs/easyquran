@@ -284,6 +284,7 @@ fn user_json_never_leaks_secret_fields() {
         oauth_provider: None,
         session_auth_secret: "test-secret".into(),
         verification_identity_hash: None,
+        is_minor: false,
         created_at: now,
         updated_at: now,
     };
@@ -871,6 +872,7 @@ async fn tracing_capture_asserts_no_pii_in_register_db_create_path() {
         email: pii_email.into(),
         password: pii_password.into(),
         role: UserRole::User,
+        is_minor: false,
     };
 
     // Empty in-memory SQLite: no schema -> user.insert fails ->

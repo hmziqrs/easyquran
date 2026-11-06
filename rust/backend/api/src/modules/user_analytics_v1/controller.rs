@@ -292,6 +292,11 @@ pub async fn events(
         return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
             .with_message("Reading analytics account changed"));
     }
+    // Minors (A34): no reading events are stored. Answered as accepted 0 so the
+    // client drops its outbox instead of retrying; nothing is written or logged.
+    if user.is_minor {
+        return Ok((StatusCode::OK, Json(json!({ "accepted": 0 }))));
+    }
     let accepted = ingest_events(
         &state.sea_db,
         &state.quran,

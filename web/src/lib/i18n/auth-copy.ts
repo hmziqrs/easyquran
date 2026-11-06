@@ -9,6 +9,8 @@ import {
   auth_email_placeholder,
   auth_field_authentication_code,
   auth_field_confirm_password,
+  auth_field_date_of_birth,
+  auth_field_date_of_birth_hint,
   auth_field_display_name,
   auth_field_email,
   auth_field_password,
@@ -77,6 +79,8 @@ export interface AuthCopy {
   useDifferentAccount: string;
   signInSubheading: string;
   fieldEmail: string;
+  fieldDateOfBirth: string;
+  fieldDateOfBirthHint: string;
   emailPlaceholder: string;
   fieldPassword: string;
   passwordPlaceholder: string;
@@ -142,6 +146,8 @@ export function getAuthCopy(locale: UiLocale = getLocale() as UiLocale): AuthCop
     useDifferentAccount: auth_use_different_account(undefined, { locale }),
     signInSubheading: auth_sign_in_subheading(undefined, { locale }),
     fieldEmail: auth_field_email(undefined, { locale }),
+    fieldDateOfBirth: auth_field_date_of_birth(undefined, { locale }),
+    fieldDateOfBirthHint: auth_field_date_of_birth_hint(undefined, { locale }),
     emailPlaceholder: auth_email_placeholder(undefined, { locale }),
     fieldPassword: auth_field_password(undefined, { locale }),
     passwordPlaceholder: auth_password_placeholder(undefined, { locale }),

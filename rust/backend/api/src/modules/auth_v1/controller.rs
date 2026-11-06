@@ -557,6 +557,17 @@ pub async fn register(
 
     let email = crate::utils::email::normalize_email(&payload.email);
 
+    // Self-declared age (A34). Validated before admission so a bad date does not
+    // spend a creation slot. Only the derived flag is stored, never the date.
+    let today = chrono::Utc::now().date_naive();
+    let dob =
+        crate::modules::auth_v1::validator::parse_date_of_birth(&payload.date_of_birth, today)
+            .map_err(|_| {
+                ErrorResponse::new(ErrorCode::InvalidInput)
+                    .with_message("Enter a valid date of birth")
+            })?;
+    let is_minor = crate::modules::auth_v1::validator::is_minor_on(dob, today);
+
     if registration_admission::is_disposable_email(&email) {
         return Err(ErrorResponse::new(ErrorCode::InvalidInput)
             .with_message("Use a permanent email address"));
@@ -576,7 +587,8 @@ pub async fn register(
     let code = email_verification::Entity::generate_code();
     let code_hash = crate::utils::code_hash::hash_code(&state.secret_key, &code);
 
-    let outcome = user::Entity::create(&state.sea_db, payload.into_new_user(), code_hash).await;
+    let outcome =
+        user::Entity::create(&state.sea_db, payload.into_new_user(is_minor), code_hash).await;
 
     match classify_register_outcome(outcome) {
         RegisterOutcome::Created(user) => {
@@ -1546,6 +1558,7 @@ mod tests {
             oauth_provider: None,
             session_auth_secret: "s".repeat(64),
             verification_identity_hash: None,
+            is_minor: false,
             created_at: chrono::Utc::now().fixed_offset(),
             updated_at: chrono::Utc::now().fixed_offset(),
         }
@@ -1656,6 +1669,7 @@ mod tests {
             oauth_provider: None,
             session_auth_secret: "s".repeat(64),
             verification_identity_hash: None,
+            is_minor: false,
             created_at: chrono::Utc::now().fixed_offset(),
             updated_at: chrono::Utc::now().fixed_offset(),
         }

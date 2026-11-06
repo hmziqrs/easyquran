@@ -365,6 +365,7 @@ mod tests {
             oauth_provider: None,
             session_auth_secret: "test-secret".to_string(),
             verification_identity_hash: None,
+            is_minor: false,
             created_at: now,
             updated_at: now,
         }

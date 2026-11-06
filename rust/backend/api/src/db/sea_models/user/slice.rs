@@ -91,6 +91,7 @@ pub struct NewUser {
     pub email: String,
     pub password: String,
     pub role: UserRole,
+    pub is_minor: bool,
 }
 
 #[derive(Deserialize, Debug)]

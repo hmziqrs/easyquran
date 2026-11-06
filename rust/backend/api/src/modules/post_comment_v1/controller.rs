@@ -239,6 +239,12 @@ pub async fn create(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user = auth.user.unwrap();
 
+    // Minors (A34): commenting is closed for self-declared under-18 accounts.
+    if user.is_minor {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("Comments are not available for this account"));
+    }
+
     abuse_limiter::limiter(
         &state.gate_store,
         &format!("comment:create:user:{}", user.id),

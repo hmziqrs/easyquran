@@ -39,6 +39,7 @@
       email: flow.email,
       password: flow.password,
       confirm_password: flow.confirmPassword,
+      date_of_birth: flow.dateOfBirth,
     },
     validationLogic: revalidateLogic({ mode: "submit", modeAfterSubmission: "change" }),
     validators: { onDynamic: dynamicValidator(registerSchema(validationCopy)) },
@@ -48,6 +49,7 @@
       flow.email = value.email.trim();
       flow.password = value.password;
       flow.confirmPassword = value.confirm_password;
+      flow.dateOfBirth = value.date_of_birth;
       if (turnstileEnabled() && !captchaToken) {
         flow.genericError = copy.captchaRequired;
         return;
@@ -207,6 +209,25 @@
           error={fieldError(field.state.meta.errors) ??
             registerErrors.current.confirm_password ??
             null}
+          oninput={(next) => {
+            registerErrors.clearField(field.name);
+            field.handleChange(next);
+          }}
+          onblur={field.handleBlur}
+        />
+      {/snippet}
+    </form.Field>
+    <form.Field name="date_of_birth">
+      {#snippet children(field)}
+        <AuthField
+          id="register-dob"
+          name={field.name}
+          label={copy.fieldDateOfBirth}
+          type="date"
+          autocomplete="bday"
+          hint={copy.fieldDateOfBirthHint}
+          value={field.state.value}
+          error={fieldError(field.state.meta.errors) ?? registerErrors.current.date_of_birth ?? null}
           oninput={(next) => {
             registerErrors.clearField(field.name);
             field.handleChange(next);
