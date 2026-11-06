@@ -34,6 +34,7 @@ mod m000061_case_evidence;
 mod m000070_mail_budget;
 mod m000100_comment_notice_hardening;
 mod m000110_device_token_hygiene;
+mod m000120_media_deletions;
 
 pub struct Migrator;
 
@@ -140,6 +141,8 @@ impl MigratorTrait for Migrator {
             Box::new(m000100_comment_notice_hardening::Migration),
             // m000110 adds devices.invalid_strikes and devices.invalid_at (A36). Constant default 0.
             Box::new(m000110_device_token_hygiene::Migration),
+            // m000120 adds media_deletions (A30): media takedown tombstones. No FK, 12-month class.
+            Box::new(m000120_media_deletions::Migration),
         ]
     }
 }

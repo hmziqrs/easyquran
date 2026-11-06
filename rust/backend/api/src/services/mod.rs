@@ -13,6 +13,7 @@ pub mod job_log;
 pub mod legal_hold;
 pub mod mail;
 pub mod media;
+pub mod media_takedown;
 pub mod notification;
 pub mod oauth;
 pub mod operator_alert;

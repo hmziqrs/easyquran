@@ -123,6 +123,11 @@ incident action ref:
     if [ "{{action}}" != "capture" ]; then echo "usage: just incident capture <report-id>" >&2; exit 2; fi
     cd rust && cargo run -q -p ruxlog --bin incident_capture -- "{{ref}}"
 
+# Media sweep (A30): lists stored media objects no row references. Dry run by default;
+# `just media-sweep --apply` deletes orphans older than 24 h and writes one audit row.
+media-sweep *args:
+    cd rust && cargo run -q -p ruxlog --bin media_sweep -- {{args}}
+
 # --- Images -------------------------------------------------------------------------------
 # Both images are packaging-only: everything is compiled outside Docker, and the
 # Dockerfiles just COPY the artifacts in. Nothing installs a toolchain or hits the network

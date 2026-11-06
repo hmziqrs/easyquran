@@ -34,6 +34,7 @@ pub enum AuditAction {
     UserDelete,
     CategoryDelete,
     MediaDelete,
+    MediaSweep,
     NewsletterSend,
     SuppressionAdd,
     SuppressionDelete,
@@ -66,6 +67,7 @@ impl AuditAction {
         Self::UserDelete,
         Self::CategoryDelete,
         Self::MediaDelete,
+        Self::MediaSweep,
         Self::NewsletterSend,
         Self::SuppressionAdd,
         Self::SuppressionDelete,
@@ -98,6 +100,7 @@ impl AuditAction {
             Self::UserDelete => "user.delete",
             Self::CategoryDelete => "category.delete",
             Self::MediaDelete => "media.delete",
+            Self::MediaSweep => "media.sweep",
             Self::NewsletterSend => "newsletter.send",
             Self::SuppressionAdd => "suppression.add",
             Self::SuppressionDelete => "suppression.delete",
@@ -127,7 +130,7 @@ impl AuditAction {
             }
             Self::UserDelete => "user",
             Self::CategoryDelete => "category",
-            Self::MediaDelete => "media",
+            Self::MediaDelete | Self::MediaSweep => "media",
             Self::NewsletterSend => "newsletter",
             Self::SuppressionAdd | Self::SuppressionDelete | Self::SuppressionReview => {
                 "mail_suppression"

@@ -32,8 +32,8 @@ use crate::{
 };
 
 use crate::db::sea_models::media_variant::{Entity as MediaVariant, NewMediaVariant};
-use crate::services::audit::{self, AuditAction, AuditEvent};
 use crate::services::image_optimizer;
+use crate::services::media_takedown;
 use tracing::{debug, error, info, instrument, warn};
 
 use super::validator::is_allowed_mime;
@@ -423,6 +423,7 @@ pub async fn create(
         .key(&object_key)
         .body(byte_stream)
         .content_type(&content_type)
+        .cache_control(media_takedown::CACHE_CONTROL_IMMUTABLE)
         .send()
         .await
         .map_err(|err| {
@@ -431,6 +432,9 @@ pub async fn create(
                 .with_details(err.to_string())
         })?;
 
+    // A variant that fails to store fails the whole upload (A30 item 2). Keys written so far
+    // are removed before the error, so a failed upload leaves no original behind.
+    let mut uploaded_keys: Vec<String> = vec![object_key.clone()];
     for variant in variants_to_upload {
         let suffix = match variant.label {
             image_optimizer::VariantLabel::Width(width) => format!("@{}w", width),
@@ -477,14 +481,26 @@ pub async fn create(
             .key(&variant_key)
             .body(ByteStream::from(variant.bytes.to_vec()))
             .content_type(&variant.mime_type)
+            .cache_control(media_takedown::CACHE_CONTROL_IMMUTABLE)
             .send()
             .await
         {
-            warn!(
-                "failed to upload optimized variant {}: {}",
-                variant_key, err
-            );
+            error!(variant_key = %variant_key, error = %err, "failed to upload optimized variant; rolling back");
+            let rollback: BTreeSet<String> = uploaded_keys.iter().cloned().collect();
+            if let Err(cleanup) = media_takedown::delete_objects(
+                &state.storage.client,
+                &state.storage.config.bucket,
+                &rollback,
+            )
+            .await
+            {
+                error!(error = ?cleanup, "upload rollback incomplete; sweep reclaims leftovers");
+            }
+            return Err(ErrorResponse::new(ErrorCode::StorageError)
+                .with_message("Failed to store optimized image variant")
+                .with_details(err.to_string()));
         }
+        uploaded_keys.push(variant_key.clone());
     }
 
     let new_media = NewMedia {
@@ -832,36 +848,25 @@ pub async fn delete(
         );
     }
 
-    state
-        .storage
-        .client
-        .delete_object()
-        .bucket(
-            media
-                .bucket
-                .as_deref()
-                .unwrap_or(state.storage.config.bucket.as_str()),
-        )
-        .key(&media.object_key)
-        .send()
-        .await
-        .map_err(|err| {
-            ErrorResponse::new(ErrorCode::FileDeletionError)
-                .with_message("Failed to delete media from storage")
-                .with_details(err.to_string())
-        })?;
-
-    Media::delete_by_id(&state.sea_db, media_id).await?;
-    audit::record(
-        &state.sea_db,
-        AuditEvent {
-            actor_id: Some(uploader.id),
-            action: AuditAction::MediaDelete,
-            resource_id: media.id.to_string(),
-            metadata: json!({ "uploaderId": media.uploader_id }),
-        },
+    // Takedown (A30): storage objects first, CDN purge, then rows + tombstone + audit in one
+    // transaction. Any storage step failing leaves the rows, so the request can be retried.
+    let bucket = media
+        .bucket
+        .clone()
+        .unwrap_or_else(|| state.storage.config.bucket.clone());
+    let row_keys = media_takedown::variant_keys(&state.sea_db, media.id).await?;
+    let object_keys =
+        media_takedown::takedown_keys(&state.storage.client, &bucket, &media.object_key, &row_keys)
+            .await?;
+    media_takedown::delete_objects(&state.storage.client, &bucket, &object_keys).await?;
+    media_takedown::purge_cdn(
+        &state.http_client,
+        &state.storage.config.public_url,
+        &bucket,
+        &object_keys,
     )
     .await?;
+    media_takedown::remove_rows(&state.sea_db, &media, &object_keys, uploader.id).await?;
 
     Ok((
         StatusCode::OK,

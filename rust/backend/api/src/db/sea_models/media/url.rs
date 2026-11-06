@@ -27,3 +27,29 @@ pub fn public_file_url_expr(public_url: &str, table_alias: &str) -> SimpleExpr {
         END"
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::build_public_file_url;
+
+    // Pins the served URL shape: media is `{public_url}/{bucket}/{key}`, Quran has no bucket.
+    #[test]
+    fn media_url_includes_bucket_and_quran_url_does_not() {
+        assert_eq!(
+            build_public_file_url(
+                "https://cdn.example/",
+                Some("media-bucket"),
+                "/media/2026/11/a.png"
+            ),
+            "https://cdn.example/media-bucket/media/2026/11/a.png"
+        );
+        assert_eq!(
+            build_public_file_url("https://cdn.example", None, "quran/ar.json"),
+            "https://cdn.example/quran/ar.json"
+        );
+        assert_eq!(
+            build_public_file_url("https://cdn.example", Some("  "), "quran/ar.json"),
+            "https://cdn.example/quran/ar.json"
+        );
+    }
+}
