@@ -10,7 +10,7 @@ use crate::{
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
     services::{
-        abuse_limiter,
+        abuse_limiter::{self, FailureMode},
         mail::{mail_error_kind, mail_error_to_response, send_forgot_password_email},
     },
     AppState,
@@ -426,13 +426,44 @@ pub async fn verify(
     ClientIp(secure_ip): ClientIp,
     payload: ValidatedJson<V1VerifyPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let key_prefix = format!("forgot_password_verify:{}", secure_ip);
-    abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
+    let ip_key = format!("forgot_password_verify:{}", secure_ip);
+    abuse_limiter::gate(
+        &state.gate_store,
+        &ip_key,
+        ABUSE_LIMITER_CONFIG,
+        FailureMode::Ip,
+    )
+    .await?;
     let email = crate::utils::email::normalize_email(&payload.email);
-    limit_account_verification(&state.gate_store, &email).await?;
+    let account_key = account_verification_key(&email);
+    abuse_limiter::gate(
+        &state.gate_store,
+        &account_key,
+        ABUSE_LIMITER_CONFIG,
+        FailureMode::Credential,
+    )
+    .await?;
 
     let code_hash = crate::utils::code_hash::hash_code(&state.secret_key, &payload.code);
-    let account = forgot_password::Entity::verify_code(&state.sea_db, &email, &code_hash).await?;
+    let verified = forgot_password::Entity::verify_code(&state.sea_db, &email, &code_hash).await;
+    let attempt = abuse_limiter::attempt_of_code(&verified);
+    abuse_limiter::settle(
+        &state.gate_store,
+        &ip_key,
+        ABUSE_LIMITER_CONFIG,
+        FailureMode::Ip,
+        attempt,
+    )
+    .await;
+    abuse_limiter::settle(
+        &state.gate_store,
+        &account_key,
+        ABUSE_LIMITER_CONFIG,
+        FailureMode::Credential,
+        attempt,
+    )
+    .await;
+    let account = verified?;
     let user_id = account.id;
     let reset_token = reset_token::mint(&account).await?;
 
@@ -452,7 +483,13 @@ pub async fn reset(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     // Intentionally shares the verify bucket — do not rename to a reset-specific key.
     let key_prefix = format!("forgot_password_verify:{}", secure_ip);
-    abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
+    abuse_limiter::gate(
+        &state.gate_store,
+        &key_prefix,
+        ABUSE_LIMITER_CONFIG,
+        FailureMode::Ip,
+    )
+    .await?;
 
     if payload.password != payload.confirm_password {
         warn!("Password mismatch");
@@ -495,39 +532,52 @@ pub async fn reset(
     }
 }
 
-async fn limit_account_verification(
-    store: &rux_request_gate::InMemoryStore,
-    email: &str,
-) -> Result<(), ErrorResponse> {
-    let email = crate::utils::email::normalize_email(email);
-    abuse_limiter::limiter(
-        store,
-        &format!("forgot_password_verify:account:{email}"),
-        ABUSE_LIMITER_CONFIG,
+fn account_verification_key(email: &str) -> String {
+    format!(
+        "forgot_password_verify:account:{}",
+        crate::utils::email::normalize_email(email)
     )
-    .await
 }
 
 #[cfg(test)]
 mod tests {
     #[tokio::test]
     async fn recovery_verification_budget_follows_account_across_clients() {
+        use rux_request_gate::{FailureMode, GateDecision, RateLimitStore};
         let store = rux_request_gate::InMemoryStore::default();
-        for _ in 0..2 {
-            super::limit_account_verification(&store, "Owner@Example.com")
+        // Failures only: three wrong codes for one account, however it is cased.
+        for email in [
+            "Owner@Example.com",
+            "owner@example.com",
+            "OWNER@example.com",
+        ] {
+            store
+                .abuse_record(
+                    &super::account_verification_key(email),
+                    super::ABUSE_LIMITER_CONFIG,
+                    FailureMode::Credential,
+                )
                 .await
                 .unwrap();
         }
-        assert_eq!(
-            super::limit_account_verification(&store, "owner@example.com")
-                .await
-                .unwrap_err()
-                .code,
-            crate::error::ErrorCode::TooManyAttempts,
-        );
-        super::limit_account_verification(&store, "another@example.com")
+        let same = store
+            .abuse_peek(
+                &super::account_verification_key("owner@example.com"),
+                super::ABUSE_LIMITER_CONFIG,
+                FailureMode::Credential,
+            )
             .await
             .unwrap();
+        assert!(matches!(same, GateDecision::Delay { .. }));
+        let other = store
+            .abuse_peek(
+                &super::account_verification_key("another@example.com"),
+                super::ABUSE_LIMITER_CONFIG,
+                FailureMode::Credential,
+            )
+            .await
+            .unwrap();
+        assert_eq!(other, GateDecision::Pass);
     }
 
     fn handler_src() -> &'static str {

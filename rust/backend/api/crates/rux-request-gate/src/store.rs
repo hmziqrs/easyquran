@@ -5,7 +5,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 
-use crate::abuse::{AbuseLimiterConfig, BlockScope, LimiterDecision};
+use crate::abuse::{
+    credential_delay_secs, AbuseLimiterConfig, BlockScope, FailureMode, GateDecision,
+    LimiterDecision, IP_RETRY_CAP_SECS,
+};
 use crate::error::GateError;
 
 type Epoch = i64;
@@ -42,6 +45,25 @@ pub trait RateLimitStore: Send + Sync {
     async fn set_nx_ex(&self, key: &str, ttl: Duration) -> Result<bool, GateError>;
 
     async fn del(&self, key: &str) -> Result<(), GateError>;
+
+    // Failure-only path (A8). abuse_peek is read-only and runs before a
+    // credential or IP check. abuse_record appends one failed attempt and
+    // evaluates the threshold; it never appends on the blocked path. A success
+    // is cleared with clear_limit. abuse_check above keeps the count-every-call
+    // semantics for senders and limiters that are not login-shaped.
+    async fn abuse_peek(
+        &self,
+        key: &str,
+        cfg: AbuseLimiterConfig,
+        mode: FailureMode,
+    ) -> Result<GateDecision, GateError>;
+
+    async fn abuse_record(
+        &self,
+        key: &str,
+        cfg: AbuseLimiterConfig,
+        mode: FailureMode,
+    ) -> Result<GateDecision, GateError>;
 
     // Read-only active-ban lookup; unlike abuse_check it MUST NOT append an
     // attempt event (W3a escalation calls this on every request before the
@@ -264,6 +286,26 @@ impl InMemoryStore {
     }
 }
 
+fn prune_failures(b: &mut Bucket, cfg: AbuseLimiterConfig, now_e: Epoch) {
+    let cutoff = now_e.saturating_sub(cfg.block_range as i64);
+    while b.attempts.front().is_some_and(|&t| t < cutoff) {
+        b.attempts.pop_front();
+    }
+}
+
+fn active_block_remaining(b: &Bucket, now: SystemTime) -> Option<u64> {
+    b.block_until
+        .filter(|&until| until > now)
+        .map(|until| remaining_secs_with_future(Some(until), Duration::ZERO))
+}
+
+fn credential_decision(failures: u64, cfg: AbuseLimiterConfig) -> GateDecision {
+    match credential_delay_secs(failures, cfg.temp_block_attempts as u64) {
+        0 => GateDecision::Pass,
+        secs => GateDecision::Delay { secs },
+    }
+}
+
 fn count_since(attempts: &VecDeque<Epoch>, now: Epoch, window: Duration) -> u64 {
     let threshold = now.saturating_sub(window.as_secs() as i64);
     attempts.iter().filter(|&&t| t >= threshold).count() as u64
@@ -302,7 +344,8 @@ impl RateLimitStore for InMemoryStore {
 
         if let Some(until) = b.block_until {
             if until > now {
-                b.attempts.push_back(now_e);
+                // Blocked retries never append: a blocked identity must not
+                // extend its own block (A8).
                 let short_count = count_since(&b.attempts, now_e, short_window);
                 let long_count = b.attempts.len() as u64;
                 let remaining = remaining_secs_with_future(Some(until), Duration::ZERO);
@@ -346,6 +389,67 @@ impl RateLimitStore for InMemoryStore {
                 short_count,
                 long_count,
             })
+        }
+    }
+
+    async fn abuse_peek(
+        &self,
+        key: &str,
+        cfg: AbuseLimiterConfig,
+        mode: FailureMode,
+    ) -> Result<GateDecision, GateError> {
+        let now = SystemTime::now();
+        let now_e = now_epoch();
+        let mut map = self.limits.lock().expect("rate-limit map poisoned");
+        let Some(b) = map.get_mut(key) else {
+            return Ok(GateDecision::Pass);
+        };
+        prune_failures(b, cfg, now_e);
+        match mode {
+            FailureMode::Ip => match active_block_remaining(b, now) {
+                Some(retry) => Ok(GateDecision::Blocked {
+                    retry_after_secs: retry.min(IP_RETRY_CAP_SECS),
+                }),
+                None => Ok(GateDecision::Pass),
+            },
+            FailureMode::Credential => Ok(credential_decision(b.attempts.len() as u64, cfg)),
+        }
+    }
+
+    async fn abuse_record(
+        &self,
+        key: &str,
+        cfg: AbuseLimiterConfig,
+        mode: FailureMode,
+    ) -> Result<GateDecision, GateError> {
+        let now = SystemTime::now();
+        let now_e = now_epoch();
+        let mut map = self.limits.lock().expect("rate-limit map poisoned");
+        let b = map.entry(key.to_string()).or_default();
+        if mode == FailureMode::Ip {
+            if let Some(retry) = active_block_remaining(b, now) {
+                // Blocked path: report the block, append nothing (A8).
+                return Ok(GateDecision::Blocked {
+                    retry_after_secs: retry.min(IP_RETRY_CAP_SECS),
+                });
+            }
+        }
+        prune_failures(b, cfg, now_e);
+        b.attempts.push_back(now_e);
+        let failures = b.attempts.len() as u64;
+        match mode {
+            FailureMode::Credential => Ok(credential_decision(failures, cfg)),
+            FailureMode::Ip => {
+                if failures < cfg.temp_block_attempts as u64 {
+                    return Ok(GateDecision::Pass);
+                }
+                let secs = (cfg.temp_block_duration as u64).min(IP_RETRY_CAP_SECS);
+                b.block_until = Some(now + Duration::from_secs(secs));
+                b.block_scope = Some(BlockScope::Temp);
+                Ok(GateDecision::Blocked {
+                    retry_after_secs: secs,
+                })
+            }
         }
     }
 
@@ -458,6 +562,22 @@ impl<T: RateLimitStore> RateLimitStore for std::sync::Arc<T> {
         cfg: AbuseLimiterConfig,
     ) -> Result<LimiterDecision, GateError> {
         (**self).abuse_check(key, cfg).await
+    }
+    async fn abuse_peek(
+        &self,
+        key: &str,
+        cfg: AbuseLimiterConfig,
+        mode: FailureMode,
+    ) -> Result<GateDecision, GateError> {
+        (**self).abuse_peek(key, cfg, mode).await
+    }
+    async fn abuse_record(
+        &self,
+        key: &str,
+        cfg: AbuseLimiterConfig,
+        mode: FailureMode,
+    ) -> Result<GateDecision, GateError> {
+        (**self).abuse_record(key, cfg, mode).await
     }
     async fn set_nx_ex(&self, key: &str, ttl: Duration) -> Result<bool, GateError> {
         (**self).set_nx_ex(key, ttl).await
@@ -826,5 +946,171 @@ mod tests {
         // Stale unit gone.
         let snaps = s.snapshot();
         assert!(!snaps.iter().any(|s| s.key == "quran-ban:10.0.0.2/32"));
+    }
+
+    // Login-shaped limits (auth ABUSE_LIMITER_CONFIG): 3 failures, 900 s window.
+    const AUTH_CFG: AbuseLimiterConfig = AbuseLimiterConfig {
+        temp_block_attempts: 3,
+        temp_block_range: 360,
+        temp_block_duration: 3600,
+        block_retry_limit: 5,
+        block_range: 900,
+        block_duration: 86400,
+    };
+
+    fn attempts_len(s: &InMemoryStore, key: &str) -> usize {
+        s.limits
+            .lock()
+            .unwrap()
+            .get(key)
+            .map(|b| b.attempts.len())
+            .unwrap_or(0)
+    }
+
+    #[tokio::test]
+    async fn credential_failures_delay_and_never_block() {
+        let s = InMemoryStore::default();
+        let mut seen = Vec::new();
+        for _ in 0..10 {
+            let d = s
+                .abuse_record("login:a@x.io", AUTH_CFG, FailureMode::Credential)
+                .await
+                .unwrap();
+            assert!(!matches!(d, GateDecision::Blocked { .. }));
+            seen.push(d);
+        }
+        let expected = [
+            GateDecision::Pass,
+            GateDecision::Pass,
+            GateDecision::Delay { secs: 1 },
+            GateDecision::Delay { secs: 2 },
+            GateDecision::Delay { secs: 4 },
+            GateDecision::Delay { secs: 8 },
+            GateDecision::Delay { secs: 8 },
+            GateDecision::Delay { secs: 8 },
+            GateDecision::Delay { secs: 8 },
+            GateDecision::Delay { secs: 8 },
+        ];
+        assert_eq!(seen, expected);
+        assert_eq!(
+            s.abuse_peek("login:a@x.io", AUTH_CFG, FailureMode::Credential)
+                .await
+                .unwrap(),
+            GateDecision::Delay { secs: 8 }
+        );
+    }
+
+    #[tokio::test]
+    async fn credential_peek_never_appends() {
+        let s = InMemoryStore::default();
+        for _ in 0..3 {
+            s.abuse_record("totp:7", AUTH_CFG, FailureMode::Credential)
+                .await
+                .unwrap();
+        }
+        let before = attempts_len(&s, "totp:7");
+        for _ in 0..20 {
+            let _ = s
+                .abuse_peek("totp:7", AUTH_CFG, FailureMode::Credential)
+                .await
+                .unwrap();
+        }
+        assert_eq!(attempts_len(&s, "totp:7"), before);
+    }
+
+    #[tokio::test]
+    async fn credential_success_clear_resets_delay() {
+        let s = InMemoryStore::default();
+        for _ in 0..4 {
+            s.abuse_record("reauth:9", AUTH_CFG, FailureMode::Credential)
+                .await
+                .unwrap();
+        }
+        s.clear_limit("reauth:9").await.unwrap();
+        assert_eq!(
+            s.abuse_peek("reauth:9", AUTH_CFG, FailureMode::Credential)
+                .await
+                .unwrap(),
+            GateDecision::Pass
+        );
+    }
+
+    #[tokio::test]
+    async fn ip_mode_blocks_with_capped_retry_and_no_append_while_blocked() {
+        let s = InMemoryStore::default();
+        let key = "forgot_password_verify:203.0.113.9";
+        let mut last = GateDecision::Pass;
+        for _ in 0..3 {
+            last = s
+                .abuse_record(key, AUTH_CFG, FailureMode::Ip)
+                .await
+                .unwrap();
+        }
+        // temp_block_duration 3600 is capped to the 900 s IP ceiling.
+        assert_eq!(
+            last,
+            GateDecision::Blocked {
+                retry_after_secs: 900
+            }
+        );
+        let until = s.limits.lock().unwrap().get(key).unwrap().block_until;
+        let appended = attempts_len(&s, key);
+
+        for _ in 0..5 {
+            let peek = s.abuse_peek(key, AUTH_CFG, FailureMode::Ip).await.unwrap();
+            assert!(
+                matches!(peek, GateDecision::Blocked { retry_after_secs } if retry_after_secs <= 900)
+            );
+            let rec = s
+                .abuse_record(key, AUTH_CFG, FailureMode::Ip)
+                .await
+                .unwrap();
+            assert!(matches!(rec, GateDecision::Blocked { .. }));
+        }
+        // Blocked retries neither extend the block nor append attempts.
+        assert_eq!(attempts_len(&s, key), appended);
+        assert_eq!(
+            s.limits.lock().unwrap().get(key).unwrap().block_until,
+            until
+        );
+    }
+
+    #[tokio::test]
+    async fn ip_mode_has_no_long_tier() {
+        let s = InMemoryStore::default();
+        // block_retry_limit 5 across the whole window must not produce a 24 h block.
+        let key = "forgot_password:198.51.100.4";
+        for _ in 0..2 {
+            assert_eq!(
+                s.abuse_record(key, AUTH_CFG, FailureMode::Ip)
+                    .await
+                    .unwrap(),
+                GateDecision::Pass
+            );
+        }
+        assert!(matches!(
+            s.abuse_record(key, AUTH_CFG, FailureMode::Ip)
+                .await
+                .unwrap(),
+            GateDecision::Blocked {
+                retry_after_secs: 900
+            }
+        ));
+    }
+
+    #[tokio::test]
+    async fn abuse_check_blocked_path_does_not_append() {
+        let s = InMemoryStore::default();
+        for _ in 0..3 {
+            let _ = s.abuse_check("ip-blocked", CFG).await.unwrap();
+        }
+        let appended = attempts_len(&s, "ip-blocked");
+        for _ in 0..5 {
+            assert!(matches!(
+                s.abuse_check("ip-blocked", CFG).await.unwrap(),
+                LimiterDecision::Blocked { .. }
+            ));
+        }
+        assert_eq!(attempts_len(&s, "ip-blocked"), appended);
     }
 }

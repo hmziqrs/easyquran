@@ -9,7 +9,10 @@ mod ip;
 mod layer;
 mod store;
 
-pub use abuse::{check, dedup_nx, release_dedup, AbuseLimiterConfig, BlockScope, LimiterDecision};
+pub use abuse::{
+    check, credential_delay_secs, dedup_nx, release_dedup, AbuseLimiterConfig, BlockScope,
+    FailureMode, GateDecision, LimiterDecision, CREDENTIAL_DELAY_CAP_SECS, IP_RETRY_CAP_SECS,
+};
 pub use error::GateError;
 pub use hooks::{LimiterHooks, NoHooks};
 pub use ip::{

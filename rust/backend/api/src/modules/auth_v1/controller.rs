@@ -23,7 +23,12 @@ use crate::{
         V1LoginPayload, V1LoginTotpPayload, V1ReauthenticatePayload, V1RegisterPayload,
         V1TwoFADisablePayload, V1TwoFASetupPayload, V1TwoFAVerifyPayload,
     },
-    services::{abuse_limiter, auth::AuthSession, mail::send_email_verification_code, turnstile},
+    services::{
+        abuse_limiter::{self, Attempt, FailureMode},
+        auth::AuthSession,
+        mail::send_email_verification_code,
+        turnstile,
+    },
     utils::twofa,
     AppState,
 };
@@ -39,6 +44,19 @@ const ABUSE_LIMITER_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::A
 
 fn totp_limiter_key(user_id: i32) -> String {
     format!("totp:{user_id}")
+}
+
+// Failure-only settle for credential-keyed buckets (login, totp, reauth). A
+// rejection counts; a success clears the bucket (A8).
+async fn settle_credential(gate: &rux_request_gate::InMemoryStore, key: &str, attempt: Attempt) {
+    abuse_limiter::settle(
+        gate,
+        key,
+        ABUSE_LIMITER_CONFIG,
+        FailureMode::Credential,
+        attempt,
+    )
+    .await;
 }
 
 fn totp_setup_limiter_key(user_id: i32) -> String {
@@ -131,11 +149,12 @@ pub async fn log_in(
     let payload = payload.0;
 
     // AUTH-BF-1: per-account throttle on the password step; the per-IP cap can't stop an attacker rotating IPs to grind one account. Keyed on normalized email; fail-closed.
-    let login_key = payload.email.trim().to_lowercase();
-    abuse_limiter::limiter(
+    let login_key = format!("login:{}", payload.email.trim().to_lowercase());
+    abuse_limiter::gate(
         &state.gate_store,
-        &format!("login:{login_key}"),
+        &login_key,
         ABUSE_LIMITER_CONFIG,
+        FailureMode::Credential,
     )
     .await?;
 
@@ -143,6 +162,12 @@ pub async fn log_in(
         .backend()
         .authenticate_password(payload.email, payload.password)
         .await;
+    let password_attempt = match &user {
+        Ok(Some(_)) => Attempt::Succeeded,
+        Ok(None) => Attempt::Rejected,
+        Err(_) => Attempt::Neutral,
+    };
+    settle_credential(&state.gate_store, &login_key, password_attempt).await;
 
     match user {
         Ok(Some(user)) => {
@@ -295,8 +320,13 @@ pub async fn complete_pending_totp_login(
         }
     }
 
-    let key_prefix = totp_limiter_key(user.id);
-    abuse_limiter::limiter(gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
+    abuse_limiter::gate(
+        gate_store,
+        &totp_limiter_key(user.id),
+        ABUSE_LIMITER_CONFIG,
+        FailureMode::Credential,
+    )
+    .await?;
 
     let secret = match user.two_fa_secret_plain() {
         Ok(Some(s)) => s,
@@ -320,6 +350,7 @@ pub async fn complete_pending_totp_login(
         Some(m) => m,
         None => {
             warn!(user_id = user.id, "login/totp: invalid TOTP code");
+            settle_credential(gate_store, &totp_limiter_key(user.id), Attempt::Rejected).await;
             return Err(
                 ErrorResponse::new(ErrorCode::Unauthorized).with_message("Invalid 2FA code")
             );
@@ -332,6 +363,7 @@ pub async fn complete_pending_totp_login(
             matched_counter = matched,
             "login/totp: TOTP code replayed (counter already used)"
         );
+        settle_credential(gate_store, &totp_limiter_key(user.id), Attempt::Rejected).await;
         return Err(ErrorResponse::new(ErrorCode::Unauthorized).with_message("Invalid 2FA code"));
     }
     let advanced = advance_totp_for_unchanged_user(db, &user, matched).await?;
@@ -358,6 +390,7 @@ pub async fn complete_pending_totp_login(
             tracing::Span::current().record("result", "success");
 
             create_bound_session(db, auth, user.id, device, ip).await?;
+            settle_credential(gate_store, &totp_limiter_key(user.id), Attempt::Succeeded).await;
 
             Ok(user)
         }
@@ -408,12 +441,19 @@ pub async fn confirm_password_authentication(
     payload: V1ReauthenticatePayload,
 ) -> Result<(), ErrorResponse> {
     let owner = auth.user_required()?;
-    abuse_limiter::limiter(gate, &format!("reauth:{}", owner.id), ABUSE_LIMITER_CONFIG).await?;
+    let reauth_key = format!("reauth:{}", owner.id);
+    abuse_limiter::gate(
+        gate,
+        &reauth_key,
+        ABUSE_LIMITER_CONFIG,
+        FailureMode::Credential,
+    )
+    .await?;
     let existing = user::Entity::find_by_id_with_404(db, owner.id).await?;
     if existing.session_auth_secret != owner.session_auth_secret {
         return Err(crate::services::fresh_auth::required());
     }
-    let authenticated = auth
+    let password_match = auth
         .backend()
         .authenticate_password(existing.email.clone(), payload.password)
         .await
@@ -424,8 +464,11 @@ pub async fn confirm_password_authentication(
                 && user.password == existing.password
                 && user.two_fa_enabled == existing.two_fa_enabled
                 && user.two_fa_secret == existing.two_fa_secret
-        })
-        .ok_or_else(|| ErrorResponse::new(ErrorCode::InvalidCredentials))?;
+        });
+    let Some(authenticated) = password_match else {
+        settle_credential(gate, &reauth_key, Attempt::Rejected).await;
+        return Err(ErrorResponse::new(ErrorCode::InvalidCredentials));
+    };
     if auth
         .backend()
         .check_ban(&owner.id)
@@ -440,8 +483,21 @@ pub async fn confirm_password_authentication(
             ErrorResponse::new(ErrorCode::MissingRequiredField)
                 .with_message("Authentication code required")
         })?;
-        abuse_limiter::limiter(gate, &totp_limiter_key(owner.id), ABUSE_LIMITER_CONFIG).await?;
-        verify_current_second_factor(db, &authenticated, &code).await?;
+        abuse_limiter::gate(
+            gate,
+            &totp_limiter_key(owner.id),
+            ABUSE_LIMITER_CONFIG,
+            FailureMode::Credential,
+        )
+        .await?;
+        let second_factor = verify_current_second_factor(db, &authenticated, &code).await;
+        settle_credential(
+            gate,
+            &totp_limiter_key(owner.id),
+            abuse_limiter::attempt_of(&second_factor),
+        )
+        .await;
+        second_factor?;
     }
     let current = user::Entity::find_by_id_with_404(db, owner.id).await?;
     if current.session_auth_secret != authenticated.session_auth_secret
@@ -451,6 +507,7 @@ pub async fn confirm_password_authentication(
     {
         return Err(crate::services::fresh_auth::required());
     }
+    settle_credential(gate, &reauth_key, Attempt::Succeeded).await;
     crate::services::fresh_auth::issue(auth, &current).await
 }
 
@@ -805,16 +862,38 @@ pub async fn twofa_verify(
     mut auth: AuthSession,
     payload: ValidatedJson<V1TwoFAVerifyPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user_required()?;
+    let user_id = auth.user_required()?.id;
     let payload = payload.0;
 
-    // Fail-closed per-account TOTP brute-force throttle.
-    let key_prefix = totp_limiter_key(user.id);
-    abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
+    // Fail-closed per-account TOTP throttle. Failures only: a wrong code counts,
+    // a success clears the bucket (A8).
+    let totp_key = totp_limiter_key(user_id);
+    abuse_limiter::gate(
+        &state.gate_store,
+        &totp_key,
+        ABUSE_LIMITER_CONFIG,
+        FailureMode::Credential,
+    )
+    .await?;
+    let outcome = twofa_verify_inner(&state, &mut auth, user_id, payload).await;
+    settle_credential(
+        &state.gate_store,
+        &totp_key,
+        abuse_limiter::attempt_of(&outcome),
+    )
+    .await;
+    outcome
+}
 
-    let existing = user::Entity::find_by_id_with_404(&state.sea_db, user.id).await?;
+async fn twofa_verify_inner(
+    state: &AppState,
+    auth: &mut AuthSession,
+    user_id: i32,
+    payload: V1TwoFAVerifyPayload,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let existing = user::Entity::find_by_id_with_404(&state.sea_db, user_id).await?;
     if !existing.two_fa_enabled
-        && !crate::services::fresh_auth::setup_available(&auth, &state.sea_db).await?
+        && !crate::services::fresh_auth::setup_available(auth, &state.sea_db).await?
     {
         return Err(crate::services::fresh_auth::required());
     }
@@ -841,7 +920,7 @@ pub async fn twofa_verify(
                 advance_totp_for_unchanged_user(&state.sea_db, &existing, matched).await?;
             if !advanced {
                 warn!(
-                    user_id = user.id,
+                    user_id = user_id,
                     matched_counter = matched,
                     "TOTP code lost the watermark race (concurrent advance); rejecting as replay"
                 );
@@ -851,10 +930,10 @@ pub async fn twofa_verify(
             }
             // Counter already persisted by the atomic gate above; keep Unchanged — a Set here could clobber a concurrent advance and reopen replay.
             if !existing.two_fa_enabled {
-                crate::services::fresh_auth::consume_setup(&auth, &state.sea_db).await?;
+                crate::services::fresh_auth::consume_setup(auth, &state.sea_db).await?;
             }
             let updated = enable_twofa_for_unchanged_user(&state.sea_db, &existing, None).await?;
-            let rotated = rotate_session_after_trust_change(&state.sea_db, &mut auth).await?;
+            let rotated = rotate_session_after_trust_change(&state.sea_db, auth).await?;
             return Ok((
                 StatusCode::OK,
                 session_rotated_headers(rotated),
@@ -862,7 +941,7 @@ pub async fn twofa_verify(
             ));
         } else {
             warn!(
-                user_id = user.id,
+                user_id = user_id,
                 matched_counter = matched,
                 "TOTP code replayed (counter already used); rejecting"
             );
@@ -886,12 +965,12 @@ pub async fn twofa_verify(
             };
             if let Some(updated_hashes) = consume_result {
                 if !existing.two_fa_enabled {
-                    crate::services::fresh_auth::consume_setup(&auth, &state.sea_db).await?;
+                    crate::services::fresh_auth::consume_setup(auth, &state.sea_db).await?;
                 }
                 let updated =
                     enable_twofa_for_unchanged_user(&state.sea_db, &existing, Some(updated_hashes))
                         .await?;
-                let rotated = rotate_session_after_trust_change(&state.sea_db, &mut auth).await?;
+                let rotated = rotate_session_after_trust_change(&state.sea_db, auth).await?;
                 return Ok((
                     StatusCode::OK,
                     session_rotated_headers(rotated),
@@ -910,14 +989,36 @@ pub async fn twofa_disable(
     mut auth: AuthSession,
     payload: ValidatedJson<V1TwoFADisablePayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let user = auth.user_required()?;
+    let user_id = auth.user_required()?.id;
     let payload = payload.0;
 
-    // Fail-closed per-account TOTP brute-force throttle.
-    let key_prefix = totp_limiter_key(user.id);
-    abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
+    // Fail-closed per-account TOTP throttle. Failures only: a wrong code counts,
+    // a success clears the bucket (A8).
+    let totp_key = totp_limiter_key(user_id);
+    abuse_limiter::gate(
+        &state.gate_store,
+        &totp_key,
+        ABUSE_LIMITER_CONFIG,
+        FailureMode::Credential,
+    )
+    .await?;
+    let outcome = twofa_disable_inner(&state, &mut auth, user_id, payload).await;
+    settle_credential(
+        &state.gate_store,
+        &totp_key,
+        abuse_limiter::attempt_of(&outcome),
+    )
+    .await;
+    outcome
+}
 
-    let existing = user::Entity::find_by_id_with_404(&state.sea_db, user.id).await?;
+async fn twofa_disable_inner(
+    state: &AppState,
+    auth: &mut AuthSession,
+    user_id: i32,
+    payload: V1TwoFADisablePayload,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let existing = user::Entity::find_by_id_with_404(&state.sea_db, user_id).await?;
 
     // V-MED-6 (via verify_current_second_factor): advance_totp_counter_if_higher is the authoritative replay gate; the final UPDATE below leaves the counter Unchanged (no racy re-write); backup-code path skips it.
     if existing.two_fa_enabled {
@@ -928,7 +1029,7 @@ pub async fn twofa_disable(
         verify_current_second_factor(&state.sea_db, &existing, &code).await?;
     }
 
-    crate::services::fresh_auth::consume(&auth, &state.sea_db).await?;
+    crate::services::fresh_auth::consume(auth, &state.sea_db).await?;
 
     let factor_matches = match &existing.two_fa_secret {
         Some(secret) => user::Column::TwoFaSecret.eq(secret.clone()),
@@ -963,7 +1064,7 @@ pub async fn twofa_disable(
     }
     let updated = user::Entity::find_by_id_with_404(&state.sea_db, existing.id).await?;
 
-    let rotated = rotate_session_after_trust_change(&state.sea_db, &mut auth).await?;
+    let rotated = rotate_session_after_trust_change(&state.sea_db, auth).await?;
 
     Ok((
         StatusCode::OK,

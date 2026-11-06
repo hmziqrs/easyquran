@@ -1,7 +1,11 @@
 pub mod controller;
 pub mod dto;
 
-use axum::{middleware, routing::get, Router};
+use axum::{
+    middleware,
+    routing::{delete, get},
+    Router,
+};
 
 use crate::{middlewares::auth_guard, AppState};
 
@@ -19,6 +23,10 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/admin/bans",
             get(controller::list_bans).delete(controller::delete_ban),
+        )
+        .route(
+            "/admin/bans/identity-limits",
+            delete(controller::clear_identity_limits),
         )
         .route_layer(middleware::from_fn(
             auth_guard::verified_with_role::<{ auth_guard::ROLE_ADMIN }>,

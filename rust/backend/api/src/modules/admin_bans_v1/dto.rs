@@ -80,6 +80,13 @@ pub struct BanListResponse {
     pub per_page: u32,
 }
 
+/// Clears one account's login-shaped limiter buckets (A8).
+#[derive(Debug, Deserialize, Validate)]
+#[serde(rename_all = "camelCase")]
+pub struct ClearIdentityLimitsPayload {
+    pub user_id: i32,
+}
+
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteBanPayload {

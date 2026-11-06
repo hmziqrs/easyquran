@@ -411,6 +411,40 @@ pub async fn delete_ban_rows(
     Ok(())
 }
 
+// Durable clear for an identity's login-shaped buckets (A8 admin clear). Same
+// contract as delete_ban_rows: call while holding PERSISTENCE_LOCK, and clear L1
+// only after this commits.
+pub async fn delete_limit_rows(
+    db: &sea_orm::DatabaseConnection,
+    keys: &[String],
+) -> Result<(), DbErr> {
+    if keys.is_empty() {
+        return Ok(());
+    }
+    let sql = format!(
+        "DELETE FROM rate_limit_state WHERE key IN ({})",
+        vec!["?"; keys.len()].join(", ")
+    );
+    let values: Vec<Value> = keys.iter().cloned().map(Value::from).collect();
+    db.transaction::<_, (), DbErr>(|txn| {
+        Box::pin(async move {
+            txn.execute(Statement::from_sql_and_values(
+                DatabaseBackend::Sqlite,
+                sql,
+                values,
+            ))
+            .await?;
+            Ok(())
+        })
+    })
+    .await
+    .map_err(|e| match e {
+        TransactionError::Connection(e) => e,
+        TransactionError::Transaction(e) => e,
+    })?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -630,6 +664,31 @@ mod tests {
         assert_eq!(key_class("quran-ban:2001:db8::/64"), "ip6_unit");
         assert_eq!(key_class("ratelimit:203.0.113.5/32:quran-v1"), "ratelimit");
         assert_eq!(key_class("email:someone"), "email");
+    }
+
+    #[tokio::test]
+    async fn delete_limit_rows_removes_only_the_listed_keys() {
+        let db = mem_db().await;
+        let until = epoch_now() + 900;
+        let snap = |key: &str| BucketSnapshot {
+            key: key.to_string(),
+            fixed_count: 1,
+            fixed_expires_at: until,
+            block_until_at: 0,
+            block_scope: BlockScope::Temp,
+        };
+        flush(
+            &db,
+            vec![snap("login:a@x.io"), snap("totp:1"), snap("totp:2")],
+        )
+        .await
+        .unwrap();
+        delete_limit_rows(&db, &["login:a@x.io".to_string(), "totp:1".to_string()])
+            .await
+            .unwrap();
+        let mut left: Vec<String> = load(&db).await.into_iter().map(|r| r.key).collect();
+        left.sort();
+        assert_eq!(left, vec!["totp:2".to_string()]);
     }
 
     #[tokio::test]

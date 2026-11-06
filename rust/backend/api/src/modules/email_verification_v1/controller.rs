@@ -46,13 +46,29 @@ pub async fn verify(
     let user_id = user.id;
 
     let key_prefix = format!("email_verify:{}", user_id);
-    abuse_limiter::limiter(&state.gate_store, &key_prefix, ABUSE_LIMITER_CONFIG).await?;
+    abuse_limiter::gate(
+        &state.gate_store,
+        &key_prefix,
+        ABUSE_LIMITER_CONFIG,
+        abuse_limiter::FailureMode::Credential,
+    )
+    .await?;
 
     let code = payload.0.code;
     let code_hash = crate::utils::code_hash::hash_code(&state.secret_key, &code);
 
-    email_verification::Entity::verify_code(&state.sea_db, user_id, &user.email, &code_hash)
-        .await?;
+    let verified =
+        email_verification::Entity::verify_code(&state.sea_db, user_id, &user.email, &code_hash)
+            .await;
+    abuse_limiter::settle(
+        &state.gate_store,
+        &key_prefix,
+        ABUSE_LIMITER_CONFIG,
+        abuse_limiter::FailureMode::Credential,
+        abuse_limiter::attempt_of_code(&verified),
+    )
+    .await;
+    verified?;
     info!(user_id, "Email verified successfully");
     Ok((
         StatusCode::OK,

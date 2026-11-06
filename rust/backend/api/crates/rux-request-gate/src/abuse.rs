@@ -40,6 +40,49 @@ impl BlockScope {
     }
 }
 
+/// Cap on any IP-keyed block duration, and so on its Retry-After (A8).
+pub const IP_RETRY_CAP_SECS: u64 = 900;
+
+/// Cap on the progressive credential delay (A8).
+pub const CREDENTIAL_DELAY_CAP_SECS: u64 = 8;
+
+/// How a failure-only limiter treats a bucket (A8).
+///
+/// `Credential` covers credential-keyed checks (password, TOTP, reauth). A
+/// failure only delays the next attempt, never refuses it, and a success clears
+/// the bucket. `Ip` covers IP-keyed checks: after `temp_block_attempts` failures
+/// in `block_range` the caller gets a 429 whose Retry-After is capped at
+/// [`IP_RETRY_CAP_SECS`]. Neither mode has a long tier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailureMode {
+    Credential,
+    Ip,
+}
+
+/// Answer from [`RateLimitStore::abuse_peek`] / [`RateLimitStore::abuse_record`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GateDecision {
+    /// No delay, no block.
+    Pass,
+    /// Credential mode: wait this long before verifying.
+    Delay { secs: u64 },
+    /// IP mode: refuse until the block ends.
+    Blocked { retry_after_secs: u64 },
+}
+
+/// Progressive delay after `failures` failures in the window, where the first
+/// delayed attempt is the one after `threshold` failures. The delay doubles
+/// from 1 s and is capped at [`CREDENTIAL_DELAY_CAP_SECS`]: 1, 2, 4, 8, 8, ...
+pub fn credential_delay_secs(failures: u64, threshold: u64) -> u64 {
+    if failures < threshold {
+        return 0;
+    }
+    let exp = (failures - threshold).min(63) as u32;
+    1u64.checked_shl(exp)
+        .unwrap_or(u64::MAX)
+        .min(CREDENTIAL_DELAY_CAP_SECS)
+}
+
 #[derive(Debug, Clone)]
 pub enum LimiterDecision {
     Allowed {
@@ -161,6 +204,22 @@ mod tests {
     struct DeadStore;
     #[async_trait::async_trait]
     impl RateLimitStore for DeadStore {
+        async fn abuse_peek(
+            &self,
+            _: &str,
+            _: AbuseLimiterConfig,
+            _: FailureMode,
+        ) -> Result<GateDecision, GateError> {
+            Err(GateError::StoreUnavailable("dead".into()))
+        }
+        async fn abuse_record(
+            &self,
+            _: &str,
+            _: AbuseLimiterConfig,
+            _: FailureMode,
+        ) -> Result<GateDecision, GateError> {
+            Err(GateError::StoreUnavailable("dead".into()))
+        }
         async fn incr_expire(&self, _: &str, _: Duration) -> Result<(u64, u64), GateError> {
             Err(GateError::StoreUnavailable("dead".into()))
         }
@@ -199,6 +258,12 @@ mod tests {
         ) -> Result<crate::store::QualifyingCounts, GateError> {
             Err(GateError::StoreUnavailable("dead".into()))
         }
+    }
+
+    #[test]
+    fn credential_delay_is_progressive_from_threshold_and_capped() {
+        let seq: Vec<u64> = (0..=7).map(|n| credential_delay_secs(n, 3)).collect();
+        assert_eq!(seq, vec![0, 0, 0, 1, 2, 4, 8, 8]);
     }
 
     #[tokio::test]

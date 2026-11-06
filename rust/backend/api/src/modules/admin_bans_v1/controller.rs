@@ -21,7 +21,10 @@ use crate::extractors::ValidatedJson;
 use crate::services::auth::AuthBackend;
 use crate::AppState;
 
-use super::dto::{BanListResponse, BanRow, BanUnit, DeleteBanPayload, ExportResponse, ExportRow};
+use super::dto::{
+    BanListResponse, BanRow, BanUnit, ClearIdentityLimitsPayload, DeleteBanPayload, ExportResponse,
+    ExportRow,
+};
 
 const BAN_KEY_PREFIX: &str = "quran-ban:";
 
@@ -157,6 +160,59 @@ pub async fn delete_ban(
         StatusCode::OK,
         Json(serde_json::json!({ "banUnit": unit_str, "lifted": true })),
     ))
+}
+
+/// Admin clear for one account's login, TOTP, TOTP-setup and reauth buckets
+/// (A8). Durable rows go first, under the persistence lock, so a flush cannot
+/// bring them back. L1 is cleared right after, so the block lifts at once and
+/// is gone from the next 10 s flush.
+#[instrument(skip(state, _auth, payload), fields(user_id))]
+pub async fn clear_identity_limits(
+    State(state): State<AppState>,
+    _auth: crate::services::auth::AuthSession,
+    payload: ValidatedJson<ClearIdentityLimitsPayload>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let user_id = payload.0.user_id;
+    tracing::Span::current().record("user_id", user_id);
+    let keys = clear_identity_limits_for(&state.sea_db, &state.gate_store, user_id).await?;
+    info!(user_id, cleared = keys.len(), "identity limiter cleared");
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({ "userId": user_id, "cleared": true })),
+    ))
+}
+
+pub async fn clear_identity_limits_for(
+    db: &sea_orm::DatabaseConnection,
+    store: &rux_request_gate::InMemoryStore,
+    user_id: i32,
+) -> Result<Vec<String>, ErrorResponse> {
+    let account = crate::db::sea_models::user::Entity::find_by_id_with_404(db, user_id).await?;
+    let keys = identity_limit_keys(user_id, &account.email);
+
+    let _guard = crate::services::rate_limit_store::PERSISTENCE_LOCK
+        .lock()
+        .await;
+    if let Err(e) = crate::services::rate_limit_store::delete_limit_rows(db, &keys).await {
+        error!(error = %e, user_id, "identity limiter durable clear failed; L1 kept");
+        return Err(ErrorResponse::new(ErrorCode::ServiceUnavailable)
+            .with_message("Failed to clear limiter (durable delete failed); limit remains"));
+    }
+    for key in &keys {
+        let _ = store.clear_limit(key).await;
+    }
+    Ok(keys)
+}
+
+// Login keys are built from the typed email, so this covers the stored address
+// only. Variants a caller typed stay in L1 until their window ends.
+pub(crate) fn identity_limit_keys(user_id: i32, email: &str) -> Vec<String> {
+    vec![
+        format!("login:{}", email.trim().to_lowercase()),
+        format!("totp:{user_id}"),
+        format!("totp_setup:{user_id}"),
+        format!("reauth:{user_id}"),
+    ]
 }
 
 #[instrument(skip(state))]
