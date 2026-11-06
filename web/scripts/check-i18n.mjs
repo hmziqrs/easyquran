@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 const LOCALES = ["en", "ar"];
-const DOMAINS = ["messages", "messages/reader", "messages/auth"];
+const DOMAINS = ["messages", "messages/reader", "messages/auth", "messages/account"];
 
 /**
  * @param {string} domain

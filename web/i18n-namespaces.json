@@ -129,6 +129,11 @@
       "prefixes": ["auth"]
     },
     {
+      "id": "account",
+      "description": "Account page (/account): chrome, profile, sessions, security. Lazy: ships only inside the account route chunk.",
+      "prefixes": ["account"]
+    },
+    {
       "id": "search",
       "description": "Dedicated /app/search page: query input, translation picker, merged results, download management. Lazy: downloaded whole when the search route loads.",
       "prefixes": ["search"]

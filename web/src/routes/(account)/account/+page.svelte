@@ -3,6 +3,7 @@
   import { page } from "$app/state";
   import { onMount } from "svelte";
   import { Button } from "#lib/components/ui/button/index.js";
+  import { Card } from "#lib/components/ui/card/index.js";
   import { Input } from "#lib/components/ui/input/index.js";
   import { Label } from "#lib/components/ui/label/index.js";
   import { authState } from "#lib/auth/auth-state.svelte.js";
@@ -10,9 +11,9 @@
   import { createLogoutFlow } from "#lib/auth/flows.svelte.js";
   import { createPasskeyFlow } from "#lib/auth/passkey-flow.svelte.js";
   import { accountClient, type SessionInfo } from "#lib/auth/account-client.js";
-  import { GENERIC_TRY_AGAIN } from "#lib/auth/auth-copy.js";
   import { consumeLinkProvider } from "#lib/auth/link-attempt.js";
   import { getAuthCopy } from "#lib/i18n/auth-copy.js";
+  import { getAccountCopy } from "#lib/i18n/account-copy.js";
   import FreshAuthControls from "#lib/auth/components/FreshAuthControls.svelte";
   import TwoFactorControls from "#lib/auth/components/TwoFactorControls.svelte";
   import ConnectedAccounts from "#lib/auth/components/ConnectedAccounts.svelte";
@@ -22,11 +23,12 @@
     sessionDeviceLabel,
     sessionLastSeenLabel,
     ANONYMOUS_CTA_HREF,
-    REGISTER_HREF,
     type LinkNotice,
   } from "./account-view";
 
-  const copy = getAuthCopy();
+  // The link-notice helper still speaks the auth copy shape (provider banners live there).
+  const authCopy = getAuthCopy();
+  const copy = getAccountCopy();
 
   const view = $derived(resolveAccountView(authState.status));
   const user = $derived(authState.user);
@@ -55,7 +57,7 @@
   onMount(() => {
     const params = page.url.searchParams;
     if (!params.has("linked") && !params.has("link_error")) return;
-    linkNotice = resolveLinkNotice(params, copy, consumeLinkProvider());
+    linkNotice = resolveLinkNotice(params, authCopy, consumeLinkProvider());
     const url = new URL(page.url.href);
     url.searchParams.delete("linked");
     url.searchParams.delete("link_error");
@@ -80,7 +82,7 @@
     } else if (res.status === "anonymous") {
       await goto(ANONYMOUS_CTA_HREF);
     } else {
-      sessionsError = GENERIC_TRY_AGAIN;
+      sessionsError = copy.genericError;
     }
   }
 
@@ -88,7 +90,7 @@
     if (profilePending || !user) return;
     const name = nameDraft.trim();
     if (!name) {
-      profileError = "Name can't be empty.";
+      profileError = copy.nameEmpty;
       return;
     }
     profilePending = true;
@@ -102,7 +104,7 @@
     } else if (res.status === "anonymous") {
       await goto(ANONYMOUS_CTA_HREF);
     } else {
-      profileError = GENERIC_TRY_AGAIN;
+      profileError = copy.genericError;
     }
   }
 
@@ -122,7 +124,7 @@
     } else if (res.status === "anonymous") {
       await goto(ANONYMOUS_CTA_HREF);
     } else {
-      terminateError = GENERIC_TRY_AGAIN;
+      terminateError = copy.genericError;
     }
   }
 
@@ -132,9 +134,9 @@
   }
 
   function sessionActionLabel(session: SessionInfo, pendingId: string | null): string {
-    if (pendingId === session.id) return "Ending…";
-    if (session.isCurrent) return "Sign out";
-    return "Revoke";
+    if (pendingId === session.id) return copy.sessionEnding;
+    if (session.isCurrent) return copy.signOut;
+    return copy.sessionRevoke;
   }
 
   async function handleAnonymous(): Promise<void> {
@@ -152,33 +154,35 @@
       class="h-8 w-8 animate-spin rounded-full border-2 border-line-2 border-t-accent"
       aria-hidden="true"></span>
     <div class="flex flex-col gap-1">
-      <h1 class="text-xl font-medium">Loading your account…</h1>
-      <p class="text-sm text-fg-2">Checking your session.</p>
+      <h1 class="text-xl font-medium">{copy.loadingHeading}</h1>
+      <p class="text-sm text-fg-2">{copy.loadingBody}</p>
     </div>
-    <Button variant="ghost" size="sm" onclick={() => authState.probe()}>Retry</Button>
+    <Button variant="ghost" size="sm" onclick={() => authState.probe()}>{copy.retry}</Button>
   </div>
 {:else if view === "anonymous"}
-  <section class="mx-auto flex w-full max-w-[420px] flex-col gap-5">
+  <section class="mx-auto flex w-full max-w-[420px] flex-col gap-6">
     <div class="flex flex-col gap-2">
-      <h1 class="text-[28px] font-medium leading-tight tracking-[-0.02em]">Your account</h1>
-      <p class="text-[15px] leading-relaxed text-fg-2">
-        Sign in to manage your profile, sessions, and security.
-      </p>
+      <h1 class="text-[28px] font-medium leading-tight tracking-[-0.02em]">{copy.heading}</h1>
+      <p class="text-[15px] leading-relaxed text-fg-2">{copy.anonymousBody}</p>
     </div>
-    <Button variant="accent" size="lg" onclick={() => authModal.show("login")}>Sign in</Button>
-    <p class="text-center text-sm text-fg-2">
-      No account? <a href={REGISTER_HREF} class="text-accent hover:underline">Create one</a>
-    </p>
+    <div class="flex flex-col gap-3 sm:flex-row">
+      <Button variant="accent" size="lg" onclick={() => authModal.show("login")}>
+        {copy.signIn}
+      </Button>
+      <Button variant="secondary" size="lg" onclick={() => authModal.show("register")}>
+        {copy.createAccount}
+      </Button>
+    </div>
   </section>
 {:else}
   <div class="flex flex-col gap-10">
     <div class="flex items-start justify-between gap-4">
       <div class="flex flex-col gap-1">
-        <h1 class="text-[28px] font-medium leading-tight tracking-[-0.02em]">Your account</h1>
-        <p class="text-sm text-fg-2">Manage your profile, sessions, and security.</p>
+        <h1 class="text-[28px] font-medium leading-tight tracking-[-0.02em]">{copy.heading}</h1>
+        <p class="text-sm text-fg-2">{copy.signedInBody}</p>
       </div>
       <Button variant="ghost" size="sm" disabled={logout.pending} onclick={doLogout}>
-        {logout.pending ? "Signing out…" : "Sign out"}
+        {logout.pending ? copy.signingOut : copy.signOut}
       </Button>
     </div>
 
@@ -189,10 +193,10 @@
     {/if}
 
     <section class="flex flex-col gap-4">
-      <h2 class="text-lg font-medium">Profile</h2>
+      <h2 class="text-lg font-medium">{copy.profileHeading}</h2>
       <div class="flex flex-col gap-3">
         <div class="flex flex-col gap-1.5">
-          <Label for="account-name">Name</Label>
+          <Label for="account-name">{copy.fieldName}</Label>
           <Input
             id="account-name"
             type="text"
@@ -202,14 +206,14 @@
           />
         </div>
         <div class="flex flex-col gap-1.5">
-          <Label for="account-email">Email</Label>
+          <Label for="account-email">{copy.fieldEmail}</Label>
           <Input id="account-email" type="email" value={user?.email ?? ""} disabled />
         </div>
         {#if profileError}
           <p role="alert" aria-live="assertive" class="text-sm text-destructive">{profileError}</p>
         {/if}
         {#if profileSaved}
-          <p role="status" aria-live="polite" class="text-sm text-accent">Profile updated.</p>
+          <p role="status" aria-live="polite" class="text-sm text-accent">{copy.profileSaved}</p>
         {/if}
         <Button
           variant="accent"
@@ -217,52 +221,52 @@
           disabled={profilePending}
           onclick={saveProfile}
         >
-          {profilePending ? "Saving…" : "Save changes"}
+          {profilePending ? copy.saving : copy.saveChanges}
         </Button>
       </div>
     </section>
 
     <section class="flex flex-col gap-4">
       <div class="flex flex-col gap-1">
-        <h2 class="text-lg font-medium">Sessions</h2>
-        <p class="text-sm text-fg-2">Devices currently signed in to your account.</p>
+        <h2 class="text-lg font-medium">{copy.sessionsHeading}</h2>
+        <p class="text-sm text-fg-2">{copy.sessionsDescription}</p>
       </div>
       {#if sessionsError}
         <p role="alert" aria-live="assertive" class="text-sm text-destructive">{sessionsError}</p>
-        <Button variant="ghost" size="sm" onclick={loadSessions}>Retry</Button>
+        <Button variant="ghost" size="sm" onclick={loadSessions}>{copy.retry}</Button>
       {:else if sessionsLoading && sessions.length === 0}
-        <p class="text-sm text-fg-2" role="status" aria-live="polite">Loading sessions…</p>
+        <p class="text-sm text-fg-2" role="status" aria-live="polite">{copy.sessionsLoading}</p>
       {:else if sessions.length === 0}
-        <p class="text-sm text-fg-2">No sessions found.</p>
+        <p class="text-sm text-fg-2">{copy.sessionsEmpty}</p>
       {:else}
         <ul class="flex flex-col gap-2">
           {#each sessions as s (s.id)}
-            {@const device = sessionDeviceLabel(s.userAgent)}
+            {@const device = sessionDeviceLabel(s.userAgent, copy.deviceUnknown)}
             {@const lastSeen = sessionLastSeenLabel(s.lastSeenAt, copy.locale)}
-            <li
-              class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line-2 bg-bg-2 px-4 py-3"
-            >
-              <div class="flex flex-col gap-0.5">
-                <span class="text-sm font-medium">
-                  {device}
-                  {#if s.isCurrent}
-                    <span
-                      class="ms-2 rounded-pill bg-accent-soft px-2 py-0.5 text-xs text-accent"
-                    >This session</span>
+            <li>
+              <Card size="sm" class="flex-row flex-wrap items-center justify-between gap-3 px-4">
+                <div class="flex flex-col gap-0.5">
+                  <span class="text-sm font-medium">
+                    {device}
+                    {#if s.isCurrent}
+                      <span
+                        class="ms-2 rounded-pill bg-accent-soft px-2 py-0.5 text-xs text-accent"
+                      >{copy.sessionThis}</span>
+                    {/if}
+                  </span>
+                  {#if lastSeen}
+                    <span class="text-xs text-fg-3">{copy.sessionLastSeen(lastSeen)}</span>
                   {/if}
-                </span>
-                {#if lastSeen}
-                  <span class="text-xs text-fg-3">Last seen {lastSeen}</span>
-                {/if}
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={terminatePendingId === s.id}
-                onclick={() => terminate(s.id, s.isCurrent)}
-              >
-                {sessionActionLabel(s, terminatePendingId)}
-              </Button>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={terminatePendingId === s.id}
+                  onclick={() => terminate(s.id, s.isCurrent)}
+                >
+                  {sessionActionLabel(s, terminatePendingId)}
+                </Button>
+              </Card>
             </li>
           {/each}
         </ul>
@@ -273,30 +277,30 @@
     </section>
 
     <section class="flex flex-col gap-4">
-      <h2 class="text-lg font-medium">Security</h2>
+      <h2 class="text-lg font-medium">{copy.securityHeading}</h2>
       <div class="flex flex-col gap-5">
         <TwoFactorControls />
 
-        <div class="flex flex-col gap-3 rounded-xl border border-line-2 bg-bg-2 p-5">
+        <Card class="gap-3 p-5">
           <div class="flex flex-col gap-1">
-            <h3 class="text-base font-medium">Passkeys</h3>
-            <p class="text-sm text-fg-2">Sign in without a password using a passkey.</p>
+            <h3 class="text-base font-medium">{copy.passkeysHeading}</h3>
+            <p class="text-sm text-fg-2">{copy.passkeysDescription}</p>
           </div>
           {#if !passkey.supported}
-            <p class="text-sm text-fg-2">Passkeys aren't supported on this device.</p>
+            <p class="text-sm text-fg-2">{copy.passkeysUnsupported}</p>
           {:else}
             {#if passkey.passkeys.length > 0}
               <ul class="flex flex-col gap-2">
                 {#each passkey.passkeys as pk (pk.id)}
                   <li class="flex items-center justify-between gap-3">
-                    <span class="text-sm">{pk.label || "Passkey"}</span>
+                    <span class="text-sm">{pk.label || copy.passkeyDefaultLabel}</span>
                     <Button
                       variant="ghost"
                       size="sm"
                       disabled={passkey.pending}
                       onclick={() => passkey.remove(pk.id)}
                     >
-                      Remove
+                      {copy.passkeyRemove}
                     </Button>
                   </li>
                 {/each}
@@ -313,10 +317,10 @@
               disabled={passkey.pending}
               onclick={() => passkey.register()}
             >
-              {passkey.pending ? "Adding…" : "Add a passkey"}
+              {passkey.pending ? copy.passkeyAdding : copy.passkeyAdd}
             </Button>
           {/if}
-        </div>
+        </Card>
       </div>
     </section>
 

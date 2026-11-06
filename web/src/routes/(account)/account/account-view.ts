@@ -10,7 +10,6 @@ export type AccountView = "loading" | "anonymous" | "authenticated";
 
 export const ACCOUNT_PATH = "/account";
 export const ANONYMOUS_CTA_HREF = "/login";
-export const REGISTER_HREF = "/register";
 
 export interface LinkNotice {
   readonly kind: "success" | "error";
@@ -88,14 +87,15 @@ function firstMatch(
   return null;
 }
 
-export function sessionDeviceLabel(userAgent?: string): string {
-  if (!userAgent) return "Unknown device";
+// `unknownLabel` is the localized fallback; the table labels stay English brand names.
+export function sessionDeviceLabel(userAgent?: string, unknownLabel = "Unknown device"): string {
+  if (!userAgent) return unknownLabel;
   const browser = firstMatch(userAgent, BROWSERS);
   const os = firstMatch(userAgent, OPERATING_SYSTEMS);
   if (browser !== null && os !== null) return `${browser} · ${os}`;
   if (browser !== null) return browser;
   if (os !== null) return os;
-  return "Unknown device";
+  return unknownLabel;
 }
 
 // Locale-aware "Oct 12, 07:47" for a session's last_seen stamp. Returns null
