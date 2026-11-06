@@ -12,9 +12,9 @@ use serde_json::{json, Value};
 use reading_common::{harness, send, Harness};
 use ruxlog::modules::reading_session_v1;
 
-const S1: &str = "c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1";
-const S2: &str = "c2c2c2c2-c2c2-4c2c-8c2c-c2c2c2c2c2c2";
-const S3: &str = "c3c3c3c3-c3c3-4c3c-8c3c-c3c3c3c3c3c3";
+const S1: &str = "c1c1c1c1-c1c1-7c1c-8c1c-c1c1c1c1c1c1";
+const S2: &str = "c2c2c2c2-c2c2-7c2c-8c2c-c2c2c2c2c2c2";
+const S3: &str = "c3c3c3c3-c3c3-7c3c-8c3c-c3c3c3c3c3c3";
 
 async fn setup() -> Harness {
     harness(reading_session_v1::routes()).await
@@ -248,4 +248,40 @@ async fn validation_rejects_bad_shapes() {
     );
     let (status, _) = sync(&h, &h.cookie_a, h.uid_a, vec![ok]).await;
     assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn thread_ids_must_be_uuid_v7() {
+    let h = setup().await;
+    let now = mins_ago(1);
+
+    let v4 = "c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1";
+    let (status, _) = sync(&h, &h.cookie_a, h.uid_a, vec![thread(v4, 2, 1, &now)]).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "v4 id is refused");
+
+    let bad_variant = "c1c1c1c1-c1c1-7c1c-cc1c-c1c1c1c1c1c1";
+    let (status, _) = sync(
+        &h,
+        &h.cookie_a,
+        h.uid_a,
+        vec![thread(bad_variant, 2, 1, &now)],
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "non-RFC variant is refused"
+    );
+
+    // Timestamp far in the future or past is a wrong device clock, never a rejection.
+    let odd_clock = "ffffffff-ffff-7c1c-8c1c-c1c1c1c1c1c1";
+    let (status, body) = sync(
+        &h,
+        &h.cookie_a,
+        h.uid_a,
+        vec![thread(odd_clock, 2, 1, &now)],
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(ids(&body["sessions"]), vec![odd_clock.to_string()]);
 }

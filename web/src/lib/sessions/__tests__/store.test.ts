@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+import type { UnsafeRequestInit } from "#lib/auth/auth-client.js";
 import type { RegisteredSyncDomain, SyncMutation } from "#lib/sync/index.js";
 
+import { isUuidV7 } from "#lib/sync/ids.js";
+
+import { createSessionsDomain } from "../domain";
 import { markEntry, noteLeaving } from "../entry";
 import {
   STALE_AFTER_MS,
@@ -286,3 +290,80 @@ function rowOf(store: SessionsStore, id: string): ReadingThread {
   if (row === undefined) throw new Error(`thread ${id} not open`);
   return row;
 }
+
+describe("legacy thread ids", () => {
+  const LEGACY = "c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1";
+
+  function storedLegacy(owner: string): void {
+    const startedAt = "2026-10-01T00:00:00.000Z";
+    localStorage.setItem(
+      `easyquran.sessions.${owner}`,
+      JSON.stringify({
+        v: 2,
+        threads: [
+          {
+            id: LEGACY,
+            origin: "index",
+            originRef: null,
+            scope: "surah:2",
+            boundEnd: null,
+            surah: 2,
+            ayah: 5,
+            localPage: null,
+            ratio: null,
+            sourceId: null,
+            device: "phone",
+            startedAt,
+            updatedAt: startedAt,
+            endedAt: null,
+            endReason: null,
+          },
+        ],
+        progress: {},
+      }),
+    );
+  }
+
+  it("re-keys a stored v4 thread to a v7 built from startedAt, and syncs it", () => {
+    storedLegacy("7");
+    const engine = fakeEngine();
+    const auth: FakeAuth = { authenticated: true, user: { id: 7 } };
+    const { store } = makeStore(auth, engine);
+    store.onAuthTransition();
+    const pushed = engine.enqueued.map((row) => row.payload);
+    const upsert = pushed.find((payload) => payload.kind === "session.upsert");
+    const id = upsert?.kind === "session.upsert" ? upsert.id : "";
+    expect(isUuidV7(id)).toBe(true);
+    expect(id.replaceAll("-", "").slice(0, 12)).toBe(
+      Date.parse("2026-10-01T00:00:00.000Z").toString(16).padStart(12, "0"),
+    );
+    expect(pushed.some((payload) => "id" in payload && payload.id === LEGACY)).toBe(false);
+  });
+
+  it("drops queued mutations for the old id before sending", async () => {
+    const bodies: unknown[] = [];
+    const auth: FakeAuth = { authenticated: true, user: { id: 7 } };
+    const domain = createSessionsDomain(
+      {
+        unsafeRequest: async <T>(_path: string, init: UnsafeRequestInit) => {
+          bodies.push(init.body);
+          const data = { applied: 0, skipped: 0, sessions: [], progress: [] };
+          // SAFETY: test double — the domain decodes this body as `unknown`.
+          return { ok: true, status: 200, data: data as T, error: null, rotated: false };
+        },
+      },
+      auth,
+      7,
+    );
+    const live = "019a0000-0000-7000-8000-000000000001";
+    const row = (seq: number, id: string): SyncMutation<SessionMutation> => ({
+      id: `m${seq}`,
+      domain: domain.name,
+      seq,
+      queuedAt: 0,
+      payload: { kind: "session.delete", id, updatedAt: "2026-10-01T00:00:00.000Z" },
+    });
+    await domain.sync([row(1, LEGACY), row(2, live)]);
+    expect(bodies[0]).toMatchObject({ mutations: [{ id: live }] });
+  });
+});

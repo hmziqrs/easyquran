@@ -2,26 +2,7 @@
 
 [Back to index](../README.md)
 
-Time-ordered ids and the multi-device conflict protocol for web, React Native and GPUI.
-
-## Ids
-
-#### D1. UUID v7 for client-minted ids
-
-Reading sessions start offline, so their ids must sort by creation time without the server. They are random UUID v4 today.
-
-Build:
-
-1. `newEntityId()` in `web/src/lib/sync/ids.ts` returns UUID v7 (RFC 9562): 48-bit Unix ms, 12-bit `rand_a` counter that starts at a random value below 2048 each new ms and increases within it, random tail. Counter overflow moves to the next ms. If the clock moves backwards, keep the last ms so ids from one tab never go down. Remove `crypto.randomUUID` and `fallbackUuidV4`. Keep the `getRandomValues` then `Math.random` entropy fallback for insecure origins. No new dependency. This covers threads, bookmarks, folders and insight events. `uuidV5` stays.
-2. Reading-session validator requires version 7 and variant `10xx`. Bookmark and analytics validators keep accepting any dashed UUID (default folders are v5). Do not reject an id for its timestamp: a wrong device clock must not lose reading data.
-3. One validation failure must not jam the outbox. On store load, give any local thread with a non-v7 id a new v7 id built from its `startedAt`, and drop queued mutations for the old id.
-4. Shared test vectors at `contracts/uuid-v7.json` (input ms, counter, random bytes, expected id) so React Native and GPUI prove the same output. Rust clients use the `uuid` crate `v7` feature, added when a Rust client needs it; the server mints no session ids.
-
-Files: `web/src/lib/sync/ids.ts`, `web/src/lib/sessions/store.svelte.ts`, `rust/backend/api/src/modules/reading_session_v1/validator.rs`, new `contracts/uuid-v7.json`.
-
-Done when: ids minted in one ms and across ms sort by creation (test, including backwards clock); vectors pass; server refuses a v4 session id and accepts v7 (test); a stored v4 thread is re-keyed on load and sync recovers (test).
-
-Owner: O30 before deploy.
+The multi-device conflict protocol for web, React Native and GPUI.
 
 ## Sync
 

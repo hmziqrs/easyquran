@@ -1,0 +1,47 @@
+{
+  "description": "UUID v7 (RFC 9562): 48-bit Unix ms, version 7, 12-bit counter in rand_a, variant 10, 62 bits from random. The top two bits of random[0] are overwritten by the variant.",
+  "vectors": [
+    {
+      "note": "RFC 9562 appendix A.6",
+      "ms": 1645557742000,
+      "counter": 3267,
+      "random": "98c4dc0c0c07398f",
+      "expected": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f"
+    },
+    {
+      "note": "epoch, all zero",
+      "ms": 0,
+      "counter": 0,
+      "random": "0000000000000000",
+      "expected": "00000000-0000-7000-8000-000000000000"
+    },
+    {
+      "note": "variant bits forced on zero tail",
+      "ms": 1700000000000,
+      "counter": 0,
+      "random": "0000000000000000",
+      "expected": "018bcfe5-6800-7000-8000-000000000000"
+    },
+    {
+      "note": "variant bits forced on full tail",
+      "ms": 1700000000000,
+      "counter": 1,
+      "random": "ffffffffffffffff",
+      "expected": "018bcfe5-6800-7001-bfff-ffffffffffff"
+    },
+    {
+      "note": "counter at maximum",
+      "ms": 1700000000000,
+      "counter": 4095,
+      "random": "0102030405060708",
+      "expected": "018bcfe5-6800-7fff-8102-030405060708"
+    },
+    {
+      "note": "largest timestamp",
+      "ms": 281474976710655,
+      "counter": 2047,
+      "random": "abcdef0123456789",
+      "expected": "ffffffff-ffff-77ff-abcd-ef0123456789"
+    }
+  ]
+}

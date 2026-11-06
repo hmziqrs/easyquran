@@ -1,31 +1,101 @@
 /**
- * Client-minted ids shared by every synced domain: random UUIDv4 entity ids
- * and deterministic UUIDv5 ids (default folders). The server validator only
- * accepts dashed-hex UUIDs, so every path here produces exactly that shape.
+ * Client-minted ids shared by every synced domain: time-ordered UUID v7 entity
+ * ids and deterministic UUID v5 ids (default folders). The server validators
+ * only accept dashed-hex UUIDs, so every path here produces exactly that shape.
+ *
+ * An id's timestamp comes from the device clock: it sets sort order only. Never
+ * trust it for security or read it as `startedAt`.
  */
 
+const COUNTER_MAX = 0xfff;
+/** A new millisecond starts below this, leaving room for the counter to climb. */
+const COUNTER_START_LIMIT = 2048;
+const TAIL_BYTES = 8;
+const UUID_V7_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
+/** `getRandomValues` where present, else Math.random (insecure origins, best available there). */
+function fillRandom(bytes: Uint8Array): void {
+  if ("getRandomValues" in crypto) {
+    crypto.getRandomValues(bytes);
+    return;
+  }
+  for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+}
+
+function randomBytes(length: number): Uint8Array {
+  const bytes = new Uint8Array(length);
+  fillRandom(bytes);
+  return bytes;
+}
+
+function hexOf(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 /**
- * Manual UUID v4 (8-4-4-4-12 lowercase hex, version 4 + variant bits set) for
- * insecure origins where crypto.randomUUID is missing: the server validator
- * only accepts dashed-hex UUIDs, so a non-UUID fallback id would 422 every
- * sync round forever. Entropy source: crypto.getRandomValues when present,
- * else Math.random (best available there).
+ * RFC 9562 layout: 48-bit Unix ms, version 7, 12-bit `rand_a` counter, variant
+ * `10`, then 62 bits from `tail`. Pure, and pinned by `contracts/uuid-v7.json`.
  */
-function fallbackUuidV4(): string {
-  const bytes = new Uint8Array(16);
-  if ("getRandomValues" in crypto) crypto.getRandomValues(bytes);
-  else for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
-  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40; // version 4
-  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80; // variant 10xx
-  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
-  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
+export function encodeUuidV7(ms: number, counter: number, tail: Uint8Array): string {
+  const time = Math.trunc(ms).toString(16).padStart(12, "0");
+  const randA = counter.toString(16).padStart(3, "0");
+  const variant = (((tail[0] ?? 0) & 0x3f) | 0x80).toString(16).padStart(2, "0");
+  const rest = hexOf(tail.slice(1, TAIL_BYTES));
+  return `${time.slice(0, 8)}-${time.slice(8)}-7${randA}-${variant}${rest.slice(0, 2)}-${rest.slice(2)}`;
+}
+
+export function isUuidV7(id: string): boolean {
+  return UUID_V7_RE.test(id);
+}
+
+export interface UuidV7Source {
+  readonly now: () => number;
+  readonly random: (length: number) => Uint8Array;
+}
+
+function counterStart(bytes: Uint8Array): number {
+  return (((bytes[0] ?? 0) << 8) | (bytes[1] ?? 0)) % COUNTER_START_LIMIT;
+}
+
+/**
+ * Monotonic minter: ids from one generator never go down, even when the clock
+ * moves backwards (the last ms is kept) or a ms runs out of counter (overflow
+ * moves to the next ms).
+ */
+export function createUuidV7Generator(
+  source: UuidV7Source = { now: () => Date.now(), random: randomBytes },
+): () => string {
+  let lastMs = -1;
+  let counter = 0;
+  return () => {
+    const now = source.now();
+    if (now > lastMs) {
+      lastMs = now;
+      counter = counterStart(source.random(2));
+    } else if (counter >= COUNTER_MAX) {
+      lastMs += 1;
+      counter = counterStart(source.random(2));
+    } else {
+      counter += 1;
+    }
+    return encodeUuidV7(lastMs, counter, source.random(TAIL_BYTES));
+  };
 }
 
 /** Client-minted entity id (bookmark, folder, thread, event). Distinct from the engine's queue-entry mutation id. */
-export function newEntityId(): string {
-  // `in` (not typeof): randomUUID is missing on insecure origins (LAN http dev).
-  if ("randomUUID" in crypto) return crypto.randomUUID();
-  return fallbackUuidV4();
+export const newEntityId: () => string = createUuidV7Generator();
+
+/**
+ * Stable v7 for a stored non-v7 id: time from `ms`, the rest from the old id's
+ * own bytes. Every tab and device re-keying one row lands on one id.
+ */
+export function uuidV7FromLegacy(legacyId: string, ms: number): string {
+  const hex = legacyId.replaceAll("-", "").padEnd(32, "0");
+  const tail = Uint8Array.from({ length: TAIL_BYTES }, (_, i) =>
+    Number.parseInt(hex.slice(16 + i * 2, 18 + i * 2), 16),
+  );
+  const counter = Number.parseInt(hex.slice(13, 16), 16);
+  return encodeUuidV7(Math.max(0, ms), counter, tail);
 }
 
 /** Pure-JS SHA-1: UUIDv5 namespacing needs it synchronously, and crypto.subtle is async and missing on insecure origins. */

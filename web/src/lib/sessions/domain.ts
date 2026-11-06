@@ -1,4 +1,5 @@
 import type { AuthRequestResult, UnsafeRequestInit } from "#lib/auth/auth-client.js";
+import { isUuidV7 } from "#lib/sync/ids.js";
 import {
   SyncPausedError,
   SyncRejectedError,
@@ -24,6 +25,10 @@ export const SESSIONS_DOMAIN = "sessions";
 
 export function sessionsDomainFor(userId: number): string {
   return `${SESSIONS_DOMAIN}.user:${userId}`;
+}
+
+function hasSendableId(payload: SessionMutation): boolean {
+  return payload.kind === "progress.upsert" || isUuidV7(payload.id);
 }
 
 /**
@@ -58,7 +63,11 @@ export function createSessionsDomain(
         method: "POST",
         body: {
           expectedUserId: ownerId,
-          mutations: mutations.map((mutation) => mutation.payload),
+          // A queued row for a pre-v7 id would refuse the whole batch; the store
+          // re-keyed that thread on load and queues it again under its new id.
+          mutations: mutations
+            .map((mutation) => mutation.payload)
+            .filter((payload) => hasSendableId(payload)),
         },
         signal,
       });

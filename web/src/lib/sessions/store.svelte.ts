@@ -14,7 +14,7 @@ import {
   writeJSON,
   writeRaw,
 } from "#lib/storage/index.js";
-import { newEntityId } from "#lib/sync/ids.js";
+import { isUuidV7, newEntityId, uuidV7FromLegacy } from "#lib/sync/ids.js";
 import {
   registerDomain,
   unregisterDomain,
@@ -662,8 +662,15 @@ export class SessionsStore {
     const id = asString(obj?.id);
     const scope = asString(obj?.scope);
     if (id === undefined || scope === undefined) return;
-    this.#tabId = id;
+    const thread = isUuidV7(id) ? undefined : this.#legacyTabTarget(id);
+    this.#tabId = thread ?? id;
     this.#tabScope = scope;
+  }
+
+  /** A tab record written before re-keying: follow its thread to the new id, keyed the same way. */
+  #legacyTabTarget(id: string): string | undefined {
+    return this.#env.threads.find((t) => t.id === uuidV7FromLegacy(id, Date.parse(t.startedAt)))
+      ?.id;
   }
 
   #resolveOwner(): string {
@@ -695,7 +702,26 @@ export class SessionsStore {
     const env = decodeEnvelope(raw);
     if (env === undefined) return undefined;
     const removed = asArray(asObject(raw)?.removed, (id) => asString(id));
-    return { ...env, removed };
+    return { ...env, threads: this.#rekeyLegacy(env.threads), removed };
+  }
+
+  /**
+   * The server refuses non-v7 session ids, and one refused row must not jam the
+   * outbox: a stored thread with an older id gets a v7 built from its
+   * `startedAt` and syncs again as a new row. Queued mutations for the old id
+   * are dropped in the domain.
+   */
+  #rekeyLegacy(threads: readonly ReadingThread[]): readonly ReadingThread[] {
+    if (threads.every((t) => isUuidV7(t.id))) return threads;
+    const rekeyed = threads.map((thread) => {
+      if (isUuidV7(thread.id)) return thread;
+      const id = uuidV7FromLegacy(thread.id, Date.parse(thread.startedAt));
+      if (this.#tabId === thread.id) this.#tabId = id;
+      this.#dirtyThreads.add(id);
+      return { ...thread, id };
+    });
+    this.#persist.schedule();
+    return rekeyed;
   }
 
   #load(owner: string): void {

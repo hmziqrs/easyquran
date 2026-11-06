@@ -14,8 +14,10 @@ pub enum MutationKind {
     ProgressUpsert,
 }
 
-/// Client-minted ids: dashed-hex UUID, 36 chars.
-fn valid_client_uuid(id: &str) -> Result<(), ValidationError> {
+/// Thread ids: dashed-hex UUID v7, variant `10xx`. The embedded timestamp comes
+/// from the device clock and is never checked: a wrong clock must not lose
+/// reading data.
+fn valid_thread_id(id: &str) -> Result<(), ValidationError> {
     fn invalid(detail: &'static str) -> ValidationError {
         ValidationError::new("invalid_uuid").with_message(detail.into())
     }
@@ -30,6 +32,13 @@ fn valid_client_uuid(id: &str) -> Result<(), ValidationError> {
         if !ok {
             return Err(invalid("id must be a dashed hex UUID"));
         }
+    }
+    let bytes = id.as_bytes();
+    if bytes[14] != b'7' {
+        return Err(invalid("id must be a UUID v7"));
+    }
+    if !matches!(bytes[19], b'8' | b'9' | b'a' | b'b' | b'A' | b'B') {
+        return Err(invalid("id must have the RFC 9562 variant"));
     }
     Ok(())
 }
@@ -123,7 +132,7 @@ pub fn valid_scope(scope: &str) -> Result<(), ValidationError> {
 pub struct SyncMutation {
     pub kind: MutationKind,
     /// Thread id for session.upsert / session.delete.
-    #[validate(custom(function = valid_client_uuid))]
+    #[validate(custom(function = valid_thread_id))]
     pub id: Option<String>,
     #[validate(custom(function = valid_origin))]
     pub origin: Option<String>,

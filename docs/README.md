@@ -7,7 +7,7 @@ The master index. It holds the build order; the detail for each item lives in it
 | Plan                                                     | Covers                                                                        |
 | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | [rules.md](plans/rules.md)                               | Standing rules, closed decisions, what already shipped. Applies to every item |
-| [sync.md](plans/sync.md)                                 | UUID v7 ids and the multi-device conflict protocol                            |
+| [sync.md](plans/sync.md)                                 | Multi-device conflict protocol                                                |
 | [devices.md](plans/devices.md)                           | Device registry, fingerprint, continuity, native client contract              |
 | [account-ux.md](plans/account-ux.md)                     | Account page                                                                  |
 | [abuse-0-foundations.md](plans/abuse-0-foundations.md)   | Truth, measurement, ingress                                                   |
@@ -40,12 +40,6 @@ Web items come first, then the apps. If app work must start sooner, move the Nat
 If reality differs from an item, trust the code, adjust, and note it in the commit message. New work found while building goes in as a new item at the right position, in its sub-plan and this index. Stop and ask only if an item would break a rule in `AGENTS.MD`.
 
 ## Build order
-
-### Ids
-
-| Item                                                 | Title                         | Blocked by |
-| ---------------------------------------------------- | ----------------------------- | ---------- |
-| [D1](plans/sync.md#d1-uuid-v7-for-client-minted-ids) | UUID v7 for client-minted ids | -          |
 
 ### Abuse phase 0
 
