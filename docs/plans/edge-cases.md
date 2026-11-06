@@ -25,7 +25,6 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 
 | Case                                           | Required behaviour                                                                                                    | Item       |
 | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------- |
-| Account deleted on another device              | Next call 401. Local data stays until cleared, per the survives-logout policy. Non-dirty cache dropped after 180 days | S7, F7     |
 | Minor flag set                                 | No device row; random stamp tail; existing rows deleted                                                               | D2, A34    |
 
 ### Device identity

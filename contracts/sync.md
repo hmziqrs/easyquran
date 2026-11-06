@@ -198,3 +198,4 @@ Each account may take 5,000 accepted mutations per UTC day, counted across readi
 | Stale native cookie jar | Impossible: native clients have no jar |
 | New client implementation | Must pass all shared vectors and O32 |
 | Many users behind one carrier IP | User bucket governs; IP bucket at least 10× |
+| Account deleted on another device | Next call 401. Local data stays until cleared, per the survives-logout policy. Non-dirty cache dropped after 180 days |

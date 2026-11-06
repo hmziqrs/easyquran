@@ -6,13 +6,6 @@ Product features, then the copy truth pass.
 
 ## Product
 
-#### F7. Self-service account deletion
-
-Build: new self-service route (only `admin_delete` exists today), through the A38 erase path, with `FreshAuthControls` re-auth. Revokes sessions, deletes Quran-state rows, device rows and device tokens, offers export first, clears local account data. Immediate, no grace period (default until the owner says otherwise). Update the privacy and terms deletion wording to match.
-Files: `rust/backend/api/src/modules/user_v1/`, `web/src/routes/(account)/account/+page.svelte`, `web/messages/en.json`, `web/messages/ar.json`
-Done when: API test proves rows and tokens are gone and the session is dead; legal copy no longer says "ask us to delete".
-Blocked by: F6, A38
-
 #### F17. Translation correction report
 
 Build: "Report an issue" on a verse, prefilled with immutable source id and verse key. `/contact` is only a `mailto:` link, so use the A24 report intake with a new `translation` kind, sharing its limits. Never edits a Quran DB.
