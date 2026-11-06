@@ -174,6 +174,48 @@ pub fn quran_internal_layer(state: &AppState) -> RateLimitLayer {
         .build()
 }
 
+/// Render class a Bun SSR call declares (`x-eq-render-class: html|md`). Read only
+/// behind the internal-identity predicate, so an external client cannot pick a class.
+fn internal_render_class(req: &axum::extract::Request) -> Option<&str> {
+    req.headers()
+        .get("x-eq-render-class")
+        .and_then(|value| value.to_str().ok())
+}
+
+fn is_range_path(req: &axum::extract::Request) -> bool {
+    req.uri().path().ends_with("/range")
+}
+
+/// Internal markdown renders get their own ceiling, so a crawl of `.md` pages
+/// cannot exhaust the HTML budget. Sits beside the internal backstop, not in place of it.
+pub fn quran_internal_md_layer(state: &AppState) -> RateLimitLayer {
+    let max = state
+        .settings
+        .rate_limit
+        .internal_md_requests_per_minute
+        .max(1);
+    RateLimitLayer::builder(state.gate_store.clone(), max, 60)
+        .path_key(PathKey::Fixed("quran-v1-md"))
+        .applies(|req| identity_is_internal(req) && internal_render_class(req) == Some("md"))
+        .on_block(blocked_response)
+        .build()
+}
+
+/// Internal range fetches (`/sources/{id}/range`) get their own ceiling, separate
+/// from page-shape calls. Keyed by path class, not by client IP.
+pub fn quran_internal_range_layer(state: &AppState) -> RateLimitLayer {
+    let max = state
+        .settings
+        .rate_limit
+        .internal_range_requests_per_minute
+        .max(1);
+    RateLimitLayer::builder(state.gate_store.clone(), max, 60)
+        .path_key(PathKey::Fixed("quran-v1-range"))
+        .applies(|req| identity_is_internal(req) && is_range_path(req))
+        .on_block(blocked_response)
+        .build()
+}
+
 /// Health-bucket identity: the TCP peer (`ConnectInfo`). Health routes are
 /// exempt from header identity resolution, so the default source would key the
 /// Docker healthcheck (localhost curl) and anonymous public traffic into ONE
@@ -267,6 +309,19 @@ mod tests {
             .build()
     }
 
+    fn md_layer(store: Arc<dyn RateLimitStore>) -> RateLimitLayer {
+        RateLimitLayer::builder(store, MAX, 60)
+            .path_key(PathKey::Fixed("quran-v1-md"))
+            .applies(|req| identity_is_internal(req) && internal_render_class(req) == Some("md"))
+            .build()
+    }
+    fn range_layer(store: Arc<dyn RateLimitStore>) -> RateLimitLayer {
+        RateLimitLayer::builder(store, MAX, 60)
+            .path_key(PathKey::Fixed("quran-v1-range"))
+            .applies(|req| identity_is_internal(req) && is_range_path(req))
+            .build()
+    }
+
     fn ext_ip() -> IpAddr {
         "203.0.113.5".parse().unwrap()
     }
@@ -351,6 +406,86 @@ mod tests {
             .find(|s| s.key == key)
             .map(|s| s.fixed_count)
             .unwrap_or(0)
+    }
+
+    fn internal_with_class(path: &str, class: &str) -> axum::extract::Request {
+        let mut r = request(
+            path,
+            RequestIdentity::InternalService(InternalServiceId::WebSsr),
+        );
+        r.headers_mut()
+            .insert("x-eq-render-class", class.parse().unwrap());
+        r
+    }
+
+    #[tokio::test]
+    async fn internal_md_fill_does_not_block_html_or_range() {
+        let mem = Arc::new(InMemoryStore::default());
+        let store = mem.clone() as Arc<dyn RateLimitStore>;
+        let md = md_layer(store.clone()).layer(OkService);
+        let range = range_layer(store.clone()).layer(OkService);
+        let html = internal_layer(store.clone()).layer(OkService);
+
+        for _ in 0..MAX {
+            assert_eq!(
+                md.clone()
+                    .oneshot(internal_with_class("/quran/v1/surahs", "md"))
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::OK
+            );
+        }
+        assert_eq!(
+            md.clone()
+                .oneshot(internal_with_class("/quran/v1/surahs", "md"))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::TOO_MANY_REQUESTS,
+            "md class past its ceiling must block"
+        );
+        assert_eq!(
+            html.clone().oneshot(internal_req()).await.unwrap().status(),
+            StatusCode::OK,
+            "html bucket must be untouched by md exhaustion"
+        );
+        assert_eq!(
+            range
+                .clone()
+                .oneshot(request(
+                    "/quran/v1/sources/en.sahih/range",
+                    RequestIdentity::InternalService(InternalServiceId::WebSsr),
+                ))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK,
+            "range bucket must be untouched by md exhaustion"
+        );
+        // MAX allowed hits plus the one blocked hit, which is still counted.
+        assert_eq!(
+            count_for(&mem, "ratelimit:internal-webssr:quran-v1-md"),
+            MAX + 1
+        );
+        assert_eq!(count_for(&mem, "ratelimit:internal-webssr:quran-v1"), 1);
+        assert_eq!(
+            count_for(&mem, "ratelimit:internal-webssr:quran-v1-range"),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn external_render_class_header_cannot_select_internal_bucket() {
+        let mem = Arc::new(InMemoryStore::default());
+        let store = mem.clone() as Arc<dyn RateLimitStore>;
+        let md = md_layer(store.clone()).layer(OkService);
+        let mut spoofed = request("/quran/v1/surahs", RequestIdentity::External(ext_ip()));
+        spoofed
+            .headers_mut()
+            .insert("x-eq-render-class", "md".parse().unwrap());
+        assert_eq!(md.oneshot(spoofed).await.unwrap().status(), StatusCode::OK);
+        assert_eq!(count_for(&mem, "ratelimit:internal-webssr:quran-v1-md"), 0);
     }
 
     #[tokio::test]

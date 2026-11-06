@@ -420,6 +420,11 @@ pub struct RateLimitSettings {
     // share an external IP bucket and never enter W3a escalation state.
     pub internal_requests_per_minute: u64,
     pub health_requests_per_minute: u64,
+    // Per-render-class internal buckets (x-eq-render-class). Nested under the
+    // internal backstop, so a burst of one class cannot starve the other.
+    // Defaults are not measured; owner sets them from peak data (O4).
+    pub internal_md_requests_per_minute: u64,
+    pub internal_range_requests_per_minute: u64,
 }
 
 impl std::fmt::Debug for RateLimitSettings {
@@ -446,6 +451,14 @@ impl std::fmt::Debug for RateLimitSettings {
                 "health_requests_per_minute",
                 &self.health_requests_per_minute,
             )
+            .field(
+                "internal_md_requests_per_minute",
+                &self.internal_md_requests_per_minute,
+            )
+            .field(
+                "internal_range_requests_per_minute",
+                &self.internal_range_requests_per_minute,
+            )
             .finish()
     }
 }
@@ -461,6 +474,9 @@ impl RateLimitSettings {
         let internal_token = std::env::var("INTERNAL_QURAN_API_TOKEN").unwrap_or_default();
         let internal_requests_per_minute = env_u64("QURAN_INTERNAL_REQUESTS_PER_MINUTE", 600);
         let health_requests_per_minute = env_u64("QURAN_HEALTH_REQUESTS_PER_MINUTE", 120);
+        let internal_md_requests_per_minute = env_u64("QURAN_INTERNAL_MD_REQUESTS_PER_MINUTE", 600);
+        let internal_range_requests_per_minute =
+            env_u64("QURAN_INTERNAL_RANGE_REQUESTS_PER_MINUTE", 600);
         if is_prod {
             if internal_token.trim().is_empty() {
                 return Err("INTERNAL_QURAN_API_TOKEN is unset/empty in production. \
@@ -499,6 +515,8 @@ impl RateLimitSettings {
             internal_token,
             internal_requests_per_minute,
             health_requests_per_minute,
+            internal_md_requests_per_minute,
+            internal_range_requests_per_minute,
         })
     }
 }
@@ -1700,6 +1718,8 @@ mod tests {
             internal_token: "internal-secret".to_string(),
             internal_requests_per_minute: 600,
             health_requests_per_minute: 120,
+            internal_md_requests_per_minute: 600,
+            internal_range_requests_per_minute: 600,
         };
         let rendered = format!("{:?}", cfg);
         assert!(!rendered.contains("internal-secret"), "leaked: {rendered}");

@@ -969,6 +969,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // (service label) + external content (verified IP). Each self-skips via
         // `applies`; only external IPs enter the content/escalation bucket.
         .layer(middlewares::rate_limit::quran_health_layer(&state))
+        .layer(middlewares::rate_limit::quran_internal_md_layer(&state))
+        .layer(middlewares::rate_limit::quran_internal_range_layer(&state))
         .layer(middlewares::rate_limit::quran_internal_layer(&state))
         .layer(middlewares::rate_limit::quran_content_layer(&state).with_escalation(escalation))
         .layer(middleware::from_fn(

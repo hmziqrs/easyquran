@@ -17,7 +17,6 @@ import type {
 import { OpenerKind, OpenerPackaging, QuranScript } from "#lib/data/quran-types.js";
 import { translationIdFromSegments } from "#lib/data/quran.js";
 import { TRANSLATION_CATALOGUE_BY_ID } from "#lib/quran/catalogue.js";
-import { isTafsirTranslation } from "#lib/quran/text-marks.js";
 import {
   FetchHttpError,
   FetchTimeoutError,
@@ -25,6 +24,7 @@ import {
   RANGE_CHUNK_TIMEOUT_MS,
 } from "#lib/quran/fetch.js";
 import { fetchRangeChunks, type RangeJsonFetcher } from "#lib/quran/range-fetch.js";
+import { isTafsirTranslation } from "#lib/quran/text-marks.js";
 import { decodeTranslationRangeText, type AyahCoordinateValidator } from "#lib/quran/wire.js";
 import { QURAN_DATA, toSurahRenderMetadata } from "#lib/server/quran-data.js";
 import { requireRangeEntry, surahRouteNav, toRangePageData } from "#lib/server/quran-page-shape.js";
@@ -33,13 +33,37 @@ import { getCachedTranslationRange } from "#lib/server/translation-range-cache.j
 export type TranslationFetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
 function requireApiBase(): string {
-  const base = (INTERNAL_QURAN_API_BASE || QURAN.apiBase).replace(/\/+$/, "");
+  // Production has no public fallback: the public base sits in the external
+  // rate bucket, so SSR traffic there could escalate into a shared ban.
+  const internal = (INTERNAL_QURAN_API_BASE ?? "").replace(/\/+$/, "");
+  if (internal) return internal;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("[quran-translation] INTERNAL_QURAN_API_BASE not configured");
+  }
+  const base = QURAN.apiBase.replace(/\/+$/, "");
   if (!base) {
     throw new Error(
       "[quran-translation] INTERNAL_QURAN_API_BASE or PUBLIC_QURAN_API_BASE not configured",
     );
   }
   return base;
+}
+
+/** SSR degraded path: the page still renders, so log the cause at warn. */
+function warnDegraded(stage: string, sourceId: string, reason: string): void {
+  console.warn(`[quran-translation] ${stage} degraded for ${sourceId}: ${reason}`);
+}
+
+/**
+ * Markdown routes tag their range calls as `md` so the API splits them into
+ * their own internal bucket (x-eq-render-class). HTML is the default.
+ */
+export function markdownRenderFetcher(fetcher: TranslationFetcher): TranslationFetcher {
+  return (url, init) => {
+    const headers = new Headers(init?.headers);
+    headers.set("x-eq-render-class", "md");
+    return fetcher(url, { ...init, headers });
+  };
 }
 
 function serverJsonFetcher(fetcher: TranslationFetcher): RangeJsonFetcher {
@@ -62,6 +86,7 @@ function serverJsonFetcher(fetcher: TranslationFetcher): RangeJsonFetcher {
     const timer = setTimeout(() => ctrl.abort(), init?.timeout ?? RANGE_CHUNK_TIMEOUT_MS);
     try {
       const headers = new Headers(init?.headers);
+      if (!headers.has("x-eq-render-class")) headers.set("x-eq-render-class", "html");
       if (internalToken && usingInternal) headers.set("x-easyquran-internal-token", internalToken);
       const res = await fetcher(url, { ...init, headers, signal: ctrl.signal });
       if (!res.ok) throw new FetchHttpError(res.status);
@@ -163,7 +188,8 @@ export async function loadTranslationSurahRouteData(
   let range: QuranRangeText | null;
   try {
     range = await fetchTranslationRange(sourceId, page.startGlobal, page.endGlobal, fetcher);
-  } catch {
+  } catch (e) {
+    warnDegraded("surah page", sourceId, e instanceof Error ? e.name : "unknown");
     range = null;
   }
   if (range) {
@@ -210,7 +236,8 @@ export async function loadTranslationRangeData(
     );
     ayahs = source.ayahs;
     normalizations = source.normalizations;
-  } catch {
+  } catch (e) {
+    warnDegraded(`range ${kind} ${index}`, sourceId, e instanceof Error ? e.name : "unknown");
     ayahs = [];
     normalizations = [];
   }
@@ -263,7 +290,12 @@ export async function loadTranslationSnippetData(
       let ayahs: Ayah[] = [];
       try {
         ayahs = (await fetchTranslationRange(sourceId, start, end, fetcher)).ayahs;
-      } catch {
+      } catch (e) {
+        warnDegraded(
+          `snippet ${ref.surah}:${ref.ayahStart}`,
+          sourceId,
+          e instanceof Error ? e.name : "unknown",
+        );
         ayahs = [];
       }
       return { surah: ref.surah, ayahStart: ref.ayahStart, ayahEnd: ref.ayahEnd, ayahs };

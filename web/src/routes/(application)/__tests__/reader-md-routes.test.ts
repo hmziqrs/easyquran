@@ -17,6 +17,8 @@ import { GET as pageMd } from "../page/[n].md/+server";
 
 vi.mock("#lib/server/quran-translation-page.js", () => ({
   loadTranslationSurahRouteData: vi.fn(),
+  // Pass-through: the render-class tag is asserted in its own unit test.
+  markdownRenderFetcher: (fetcher: typeof fetch) => fetcher,
 }));
 
 import { loadTranslationSurahRouteData } from "#lib/server/quran-translation-page.js";

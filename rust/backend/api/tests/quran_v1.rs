@@ -104,6 +104,8 @@ async fn state_with_public_url(public_url: &str) -> AppState {
             internal_token: String::new(),
             internal_requests_per_minute: 600,
             health_requests_per_minute: 120,
+            internal_md_requests_per_minute: 600,
+            internal_range_requests_per_minute: 600,
         },
         quran: quran_settings(),
     });

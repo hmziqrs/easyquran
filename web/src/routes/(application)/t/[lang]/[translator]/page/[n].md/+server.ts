@@ -1,6 +1,9 @@
 import { translationGlobalPagePath, translationIdFromSegments } from "#lib/data/quran.js";
 import { readerHrefFor } from "#lib/i18n/reader.js";
-import { loadTranslationRangeData } from "#lib/server/quran-translation-page.js";
+import {
+  markdownRenderFetcher,
+  loadTranslationRangeData,
+} from "#lib/server/quran-translation-page.js";
 import { renderRangePageMarkdown } from "#lib/server/reader-markdown.js";
 import { requireRangeIndex } from "#lib/server/reader-route-guards.js";
 
@@ -10,7 +13,13 @@ export const prerender = false;
 
 export const GET: RequestHandler = async ({ params, fetch }) => {
   const index = requireRangeIndex("page", params.n);
-  const data = await loadTranslationRangeData("page", index, params.lang, params.translator, fetch);
+  const data = await loadTranslationRangeData(
+    "page",
+    index,
+    params.lang,
+    params.translator,
+    markdownRenderFetcher(fetch),
+  );
   const canonical = translationGlobalPagePath(params.lang, params.translator, index);
   const body = renderRangePageMarkdown(
     data,

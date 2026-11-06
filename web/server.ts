@@ -11,6 +11,15 @@ import {
   notAcceptableBody,
   varyWithAccept,
 } from "./src/lib/accept-parse";
+import { trustedClientIp } from "./src/lib/server/client-identity";
+import { assertInternalQuranEnv } from "./src/lib/server/internal-quran-env";
+import {
+  hasLoggedInMarker,
+  isHealthPath,
+  isTranslatedReaderPath,
+  parseSsrLimitConfig,
+  SsrMissLimiter,
+} from "./src/lib/server/ssr-limiter";
 
 // ---------------------------------------------------------------------------
 // Minimal structural types for the Bun globals this entry uses. The web app's
@@ -715,6 +724,35 @@ async function routeNegotiated(request: Request, decodedPath: string): Promise<R
 }
 
 // ---------------------------------------------------------------------------
+// Translated reader SSR limiter (A15). Ceilings come from WEB_SSR_* env and are
+// off when unset. The client address is the edge-marked cf-connecting-ip, or the
+// socket peer when the marker is absent.
+const ssrLimiter = new SsrMissLimiter(parseSsrLimitConfig(process.env));
+const edgeMarker = process.env.INGRESS_EDGE_MARKER;
+
+function ssrLimitResponse(
+  request: Request,
+  server: BunFetchServer,
+  pathname: string,
+): Response | null {
+  if (isHealthPath(pathname) || !isTranslatedReaderPath(pathname)) return null;
+  const peer = server.requestIP(request)?.address ?? "";
+  const ip = trustedClientIp(request, peer, edgeMarker);
+  const decision = ssrLimiter.check(ip, hasLoggedInMarker(request.headers.get("cookie")));
+  if (decision === null) return null;
+  const response = new Response("Too many requests", {
+    status: 429,
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "no-store",
+      "retry-after": String(decision.retryAfterSecs),
+    },
+  });
+  applyHeaders(response, pathname);
+  return response;
+}
+
+// ---------------------------------------------------------------------------
 // The fetch pipeline: env module → markdown negotiation → static asset table → kit SSR.
 async function handleRequest(request: Request, server: BunFetchServer): Promise<Response> {
   const url = new URL(request.url);
@@ -759,6 +797,9 @@ async function handleRequest(request: Request, server: BunFetchServer): Promise<
     applyHeaders(response, decodedPath);
     return response;
   }
+
+  const limited = ssrLimitResponse(request, server, decodedPath);
+  if (limited !== null) return limited;
 
   let response: Response;
   try {
@@ -825,6 +866,8 @@ function idleTimeout(): number {
   }
   return value;
 }
+
+if (bun !== undefined && !process.env.VITEST) assertInternalQuranEnv(process.env);
 
 if (bun !== undefined && !process.env.VITEST && kitServer !== null) {
   const readFiles = new Map<string, string>();
