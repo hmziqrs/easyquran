@@ -46,13 +46,11 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 | Item                                                                                                             | Title                                                                         | Blocked by |
 | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------- |
 | [A4b](plans/abuse-0-foundations.md#a4b-contact-addresses) | Contact addresses | O3 |
-| [A7](plans/abuse-0-foundations.md#a7-daily-cross-domain-ceiling-sync-envelope-snapshot-guard-subject_score-seam) | Daily cross-domain ceiling, sync envelope, snapshot guard, subject_score seam | A5, S6     |
 
 ### Devices
 
 | Item                                                                   | Title                                        | Blocked by |
 | ---------------------------------------------------------------------- | -------------------------------------------- | ---------- |
-| [D2](plans/devices.md#d2-device-registry)                              | Device registry                              | S2         |
 | [D3](plans/devices.md#d3-device-fingerprint-and-continuity)            | Device fingerprint and continuity            | D2         |
 | [D4](plans/devices.md#d4-devices-on-the-account-page)                  | Devices on the account page                  | D2, U1     |
 | [D5](plans/devices.md#d5-handoff-by-device)                            | Handoff by device                            | D3, S9     |

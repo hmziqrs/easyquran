@@ -6,26 +6,6 @@ Device registry, fingerprint and continuity, device UI, handoff and the native c
 
 Account device management for web, React Native and GPUI desktop. Not an abuse signal; Gate B still governs that. Sync correctness never depends on recognising a device: at worst a duplicate shows in the list.
 
-#### D2. Device registry
-
-Build:
-
-1. New `user_devices` table, primary key `(user_id, id)`: `id` (from S2), `display_name`, `platform` (`web|ios|android|macos|windows|linux`), `client` (`web|react_native|gpui`), `form_factor` (`phone|tablet|desktop`, same values as `reading_sessions.device`), `browser` (closed enum, web only), `os_major`, `app_version`, `name_stamp`, `merged_into`, `created_at`, `last_seen_at`, `retired_at`, `revoked_at`, `expires_at` (last seen + 90 days), `retention_class`. Closed enums validated on the server. No raw UA, screen, model string or IP.
-2. Nullable `device_id` on `devices` (existing FCM push table) and `user_sessions`. A device owns its push tokens and sessions.
-3. `POST /device/v1/register`: idempotent upsert, bind the current session and push token, refresh `last_seen_at`. Client calls it after sign-in and at most once per 24 h after that, from one tab, never per request. Limit 10 per hour per user. Like all `device_v1` routes it sits behind `auth_guard::verified`, so an unverified account registers after verification. Registration failing never blocks reading or sync: the server accepts stamps from an id it has no row for.
-4. `POST /device/v1/list`, `POST /device/v1/rename` (1–40 characters after NFC normalisation and trim, rendered as plain text, bidi-safe), `POST /device/v1/delete`. These follow the module's POST routes; `PATCH` is not in the CORS method list. Rename is a register: highest stamp wins. Delete revokes the device's sessions using the same path as `/auth/v1/sessions/terminate`, deletes its push tokens, and sets `revoked_at`. Registering a revoked id returns 409; the client mints a new id.
-5. Sign-out on a device deletes that device's push token first, so a shared phone never gets the previous user's notifications. Client re-uploads its token on every token-refresh event, and weekly at most otherwise.
-6. List shows devices with a live session and hides `retired_at` rows. Rows stay until `expires_at` so thread labels still resolve.
-7. Cap 20 live devices per user. Evict the oldest idle one, never the calling device. This replaces `MAX_DEVICES_PER_USER` eviction by token.
-8. Later items extend this: A19 kills through the same path; A23 audits `device.remove`; A32 sweeps on `expires_at`; A34 blocks registration for minors (`{registered: false}`, sign-in still works), gives their stamps a random per-sign-in tail instead of a device id, and adds the account-device sentence; A36 prunes tokens; A38 and F7 delete the rows and salt.
-9. Guard: source scan fails if `device_id` appears in analytics modules, rate-limit keys or ban tables. Sync stamps are the one allowed carrier, and they stay in sync tables.
-
-Files: new migration, `rust/backend/api/src/modules/device_v1/*`, `rust/backend/api/src/db/sea_models/device/*`, new `rust/backend/api/src/db/sea_models/user_device/`, `rust/backend/api/src/services/auth.rs`, `web/src/lib/firebase/messaging.ts`, `web/src/lib/device/`.
-
-Done when: API tests cover register, rename, delete, cap and 409; deleting a device kills its session on the next request and removes its push token; the same id under two accounts yields two unrelated rows; `/t/**` responses and signed-out requests carry nothing device-related (test).
-
-Blocked by: S2
-
 #### D3. Device fingerprint and continuity
 
 The fingerprint is a random key only that install holds, plus a salted OS id on the platforms where the key alone cannot survive a reinstall. Enough to keep one device as one row, and nothing more. Everything here is optional at runtime: with no key and no hint a device still reads, syncs and appears in the list.

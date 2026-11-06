@@ -15,7 +15,6 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 | Case                                                      | Required behaviour                                            | Item   |
 | --------------------------------------------------------- | ------------------------------------------------------------- | ------ |
 | Two settings changed on two devices                       | Both survive                                                  | S1, F2 |
-| Very large first sync or import above the daily ceiling   | Stays dirty, continues next day, surfaced; pulls still work   | S5, A7 |
 
 ### Failures and crashes
 
@@ -23,7 +22,6 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 | --------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ---------- |
 | Safari 7-day cap or site data cleared, with unsynced rows | Accepted limit: those local rows are lost. Session cookie survives, so the device row is kept | D3, O32    |
 | Server restored from backup                               | `sync_epoch` forces full pull and re-push                                                     | S6, O2     |
-| Rate limited, many devices or tabs                        | One polling tab; `Retry-After` honoured                                                       | S5, S6, A6 |
 
 ### Accounts and sessions
 
@@ -57,8 +55,6 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 | Android multi-user or work profile                         | Separate devices                                              | D3          |
 | Tablet, foldable, or desktop-mode iPad changes form factor | Latest register wins; label follows the last write            | D2, D5      |
 | Device removed while its threads remain                    | Label falls back to device kind                               | D5          |
-| More than 20 devices                                       | Oldest idle evicted, never the caller                         | D2          |
-| Sign-out on a shared phone                                 | Push token deleted first                                      | D2          |
 | Push token rotates or goes stale                           | Re-uploaded on refresh; terminal errors prune it              | D2, A36     |
 | Device with no push (GPUI)                                 | No token; local notifications                                 | D6, F9      |
 

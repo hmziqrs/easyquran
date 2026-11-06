@@ -170,3 +170,5 @@ Each account may take 5,000 accepted mutations per UTC day, counted across readi
 | Position written on another client or layout | `surah:ayah` wins; page and ratio ignored unless same client class |
 | Translation or snippet missing on this client | Display fallback; row value preserved |
 | iOS or Android blocks background work | Sync on foreground and resume; nothing depends on background |
+| Very large first sync or import above the daily ceiling | Stays dirty, continues next day, surfaced; pulls still work |
+| Rate limited, many devices or tabs | One polling tab; `Retry-After` honoured |
