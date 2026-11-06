@@ -36,7 +36,6 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 | Android reinstall                                          | Hint matches: same row                                        | D3, O32     |
 | Backup restored onto a new phone or Mac                    | `ThisDeviceOnly` and hardware keys absent: new row            | D3, O32     |
 | Android device-to-device transfer                          | Identity excluded by `dataExtractionRules`; new row           | D3, M3, O32 |
-| Push token rotates or goes stale                           | Re-uploaded on refresh; terminal errors prune it              | D2, A36     |
 
 ### Versions and platforms
 

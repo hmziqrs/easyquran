@@ -194,3 +194,4 @@ A client is ready when it passes, from `contracts/`:
 8. APNs delivery of the alert block with the production APNs key (O34).
 9. Device lifecycle rows from D3 (reinstall, backup restore, device-to-device transfer) and the push rows in the edge ledger that need a device.
 | Device with no push (GPUI) | No token; local notifications |
+| Push token rotates or goes stale | Re-uploaded on refresh; terminal errors prune it |

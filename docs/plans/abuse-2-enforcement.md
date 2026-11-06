@@ -2,34 +2,6 @@
 
 [Back to index](../README.md)
 
-#### A27. Moderation notice and comment hardening
-
-Build:
-
-1. Comment hide and delete produce an enforcement notice and appeal token, reusing A19/A21. Notice is Art 17-shaped: facts, ground, whether automated, how to contest.
-2. Refuse comment edit while hidden or with ≥3 flags. Author cannot edit flagged text.
-3. Add `flags_cleared_at`. Flag count counts only rows created after it. Clearing flags stays cleared after a new flag.
-4. Flag rate limit: 20 per hour and 50 per day per account. Refuse self-flagging.
-5. Sanitization: comment content is a raw `String`. Choose sanitize-on-write using `rust/backend/api/src/utils/sanitize.rs` (ammonia), extended to all block types, or document that consumers must escape. Record choice in the commit message. The current sanitizer skips header, quote, embed, table blocks.
-
-Files: `rust/backend/api/src/modules/post_comment_v1/*`, `rust/backend/api/src/db/sea_models/{post_comment,comment_flag}/*`, `rust/backend/api/src/utils/sanitize.rs`, migration, web comment components, `web/messages/*`.
-
-Done when: hiding a comment creates a notice row and an appeal token (test); author edit refused on hidden or flagged comment (test); cleared flag count stays cleared after a new flag (test); self-flag refused; rate limit test.
-Blocked by: A21, A25
-
-#### A36. Device token hygiene
-
-Build:
-
-1. `UNREGISTERED` (404) already prunes at once in `services/notification/mod.rs`; keep that, as Firebase advises. `SENDER_ID_MISMATCH` (403) and `INVALID_ARGUMENT` (400) are new error classes in `rux-fcm`. A 400 can also mean a bad payload, so mark `invalid_at` and prune only after 2 consecutive failures on that token.
-2. Validate token shape on device registration. Write a `device.transfer` audit row when a token moves accounts.
-
-Files: `rust/backend/api/crates/rux-fcm/src/{client,error}.rs`, `rust/backend/api/src/services/notification/mod.rs`, `rust/backend/api/src/modules/device_v1/`, new migration if `invalid_at` is absent.
-
-Done when: `UNREGISTERED` prunes at once and the other two classes prune on the second consecutive failure (tests); malformed tokens are refused; transfer writes an audit row.
-
-Blocked by: A23
-
 #### A30. Media takedown: variants, tombstones, sweep
 
 Build:
