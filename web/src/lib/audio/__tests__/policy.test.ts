@@ -13,7 +13,7 @@ import {
 
 describe("nearestRate", () => {
   it("snaps to the nearest allowed rate", () => {
-    expect(nearestRate(1.4)).toBe(1.25);
+    expect(nearestRate(1.4)).toBe(1.5);
     expect(nearestRate(0.1)).toBe(0.75);
     expect(nearestRate(9)).toBe(2);
   });

@@ -63,7 +63,8 @@ describe("surahBoundary", () => {
   ]);
 
   it("finds the first ayah of the next surah", () => {
-    expect(queue && surahBoundary(queue, 1)).toBeNull();
+    // No surah before the first ayah: the previous-surah boundary is null.
+    expect(queue && surahBoundary(queue, -1)).toBeNull();
     const inFirst = queue && queueAt(queue, 0);
     expect(inFirst && surahBoundary(inFirst, 1)).toBe(2);
   });
