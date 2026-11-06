@@ -867,6 +867,91 @@ pub struct Settings {
     pub rate_limit: RateLimitSettings,
 }
 
+/// How production proves a request came through the edge.
+#[derive(Clone, Debug, Default)]
+pub struct IngressSettings {
+    pub trust_mode: String,
+    pub edge_marker: String,
+}
+
+const INGRESS_TRUST_MODES: [&str; 2] = ["cloudflare_tunnel", "authenticated_origin_pull"];
+const INGRESS_MARKER_MIN_BYTES: usize = 32;
+/// Every configured secret the marker must differ from: it travels in a header
+/// through Cloudflare and Traefik, so sharing a value would leak the other.
+const SECRET_ENV_VARS: [&str; 12] = [
+    "COOKIE_KEY",
+    "FIELD_ENC_KEY",
+    "FIELD_ENC_KEY_PREV",
+    "INTERNAL_QURAN_API_TOKEN",
+    "BAN_EXPORT_TOKEN",
+    "TURNSTILE_SECRET_KEY",
+    "CLOUDFLARE_EMAIL_API_TOKEN",
+    "CLOUDFLARE_EMAIL_WEBHOOK_SECRET",
+    "GOOGLE_CLIENT_SECRET",
+    "GITHUB_CLIENT_SECRET",
+    "DISCORD_CLIENT_SECRET",
+    "FACEBOOK_CLIENT_SECRET",
+];
+
+fn is_placeholder_secret(value: &str) -> bool {
+    let upper = value.to_ascii_uppercase();
+    upper.contains("CHANGE_ME") || upper.contains("PLACEHOLDER") || upper.contains("EXAMPLE")
+}
+
+impl IngressSettings {
+    pub fn from_env() -> Result<Self, String> {
+        let trust_mode = std::env::var("INGRESS_TRUST_MODE").unwrap_or_default();
+        let edge_marker = std::env::var("INGRESS_EDGE_MARKER").unwrap_or_default();
+        if !is_production()? {
+            return Ok(Self {
+                trust_mode,
+                edge_marker,
+            });
+        }
+        if !INGRESS_TRUST_MODES.contains(&trust_mode.as_str()) {
+            return Err(format!(
+                "INGRESS_TRUST_MODE must be one of {INGRESS_TRUST_MODES:?} in production"
+            ));
+        }
+        if edge_marker.len() < INGRESS_MARKER_MIN_BYTES {
+            return Err(format!(
+                "INGRESS_EDGE_MARKER must be at least {INGRESS_MARKER_MIN_BYTES} bytes in production; \
+                 generate with: openssl rand -hex 32"
+            ));
+        }
+        if is_placeholder_secret(&edge_marker) {
+            return Err("INGRESS_EDGE_MARKER is a placeholder value".to_string());
+        }
+        for name in SECRET_ENV_VARS {
+            if std::env::var(name).is_ok_and(|other| other == edge_marker) {
+                return Err(format!("INGRESS_EDGE_MARKER must differ from {name}"));
+            }
+        }
+        if std::env::var("IP_SOURCE").as_deref() != Ok("CfConnectingIp") {
+            return Err("IP_SOURCE must be exactly CfConnectingIp in production".to_string());
+        }
+        let cidrs = std::env::var("TRUSTED_PROXY_CIDRS").unwrap_or_default();
+        if parse_trusted_proxy_cidrs(&cidrs)?
+            .iter()
+            .any(|net| net.prefix_len() == 0)
+        {
+            return Err("TRUSTED_PROXY_CIDRS must not contain 0.0.0.0/0 or ::/0".to_string());
+        }
+        Ok(Self {
+            trust_mode,
+            edge_marker,
+        })
+    }
+}
+
+static INGRESS: std::sync::OnceLock<IngressSettings> = std::sync::OnceLock::new();
+
+/// Process-wide ingress settings, same shape as `web_auth()`: set once by
+/// `Settings::from_env`, empty before that.
+pub fn ingress() -> &'static IngressSettings {
+    INGRESS.get_or_init(IngressSettings::default)
+}
+
 // Web auth is exposed via a process-wide accessor (not a Settings field) so the
 // auth router gate + readiness surface can read it without every test that
 // constructs a literal `Settings { ... }` needing to populate it. Set once by
@@ -902,6 +987,7 @@ impl Settings {
         // construction working).
         let web_auth = WebAuthSettings::from_env()?;
         let _ = WEB_AUTH.set(web_auth);
+        let _ = INGRESS.set(IngressSettings::from_env()?);
 
         Ok(Self {
             cookie_key,
@@ -2084,5 +2170,81 @@ mod tests {
         assert_eq!(origin_of("http://localhost:8080"), "http://localhost:8080");
         assert_eq!(origin_of("not-a-url"), "");
         assert_eq!(origin_of("ftp://example.com"), "");
+    }
+
+    mod ingress_boot_gate {
+        use super::super::*;
+
+        const VARS: [&str; 7] = [
+            "APP_ENV",
+            "INGRESS_TRUST_MODE",
+            "INGRESS_EDGE_MARKER",
+            "IP_SOURCE",
+            "TRUSTED_PROXY_CIDRS",
+            "COOKIE_KEY",
+            "INTERNAL_QURAN_API_TOKEN",
+        ];
+        const MARKER: &str = "0123456789abcdef0123456789abcdef0123456789abcdef";
+
+        /// Run `check` against a valid production env with `tweak` applied, then restore.
+        fn with_env(tweak: &[(&str, Option<&str>)]) -> Result<IngressSettings, String> {
+            let _g = TEST_ENV_MUTEX.lock().unwrap();
+            let saved: Vec<_> = VARS.iter().map(|v| (*v, std::env::var(v).ok())).collect();
+            std::env::set_var("APP_ENV", "production");
+            std::env::set_var("INGRESS_TRUST_MODE", "cloudflare_tunnel");
+            std::env::set_var("INGRESS_EDGE_MARKER", MARKER);
+            std::env::set_var("IP_SOURCE", "CfConnectingIp");
+            std::env::set_var("TRUSTED_PROXY_CIDRS", "172.16.0.0/12");
+            std::env::remove_var("COOKIE_KEY");
+            std::env::remove_var("INTERNAL_QURAN_API_TOKEN");
+            for (name, value) in tweak {
+                match value {
+                    Some(v) => std::env::set_var(name, v),
+                    None => std::env::remove_var(name),
+                }
+            }
+            let result = IngressSettings::from_env();
+            for (name, value) in saved {
+                match value {
+                    Some(v) => std::env::set_var(name, v),
+                    None => std::env::remove_var(name),
+                }
+            }
+            result
+        }
+
+        #[test]
+        fn accepts_a_valid_production_env() {
+            assert!(with_env(&[]).is_ok());
+            assert!(with_env(&[("INGRESS_TRUST_MODE", Some("authenticated_origin_pull"))]).is_ok());
+        }
+
+        #[test]
+        fn refuses_each_missing_or_invalid_setting() {
+            let bad: [(&str, Option<&str>); 9] = [
+                ("INGRESS_TRUST_MODE", None),
+                ("INGRESS_TRUST_MODE", Some("direct")),
+                ("INGRESS_EDGE_MARKER", None),
+                ("INGRESS_EDGE_MARKER", Some("too-short")),
+                (
+                    "INGRESS_EDGE_MARKER",
+                    Some("CHANGE_ME_openssl_rand_hex_32_padding_xx"),
+                ),
+                ("IP_SOURCE", Some("RightmostXForwardedFor")),
+                ("IP_SOURCE", None),
+                ("TRUSTED_PROXY_CIDRS", Some("0.0.0.0/0")),
+                ("TRUSTED_PROXY_CIDRS", Some("10.0.0.0/8,::/0")),
+            ];
+            for tweak in bad {
+                assert!(with_env(&[tweak]).is_err(), "must refuse {tweak:?}");
+            }
+        }
+
+        #[test]
+        fn refuses_a_marker_shared_with_another_secret() {
+            for name in ["COOKIE_KEY", "INTERNAL_QURAN_API_TOKEN"] {
+                assert!(with_env(&[(name, Some(MARKER))]).is_err(), "{name}");
+            }
+        }
     }
 }

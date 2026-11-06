@@ -2,31 +2,6 @@
 
 [Back to index](../README.md)
 
-#### A1. Ingress trust in code
-
-Build:
-
-1. `rust/backend/api/src/config/settings.rs`: add `IngressSettings::from_env` following the existing prod-gate pattern (see the prod checks near lines 191–233 and 456–495). In production refuse to boot unless all hold:
-   - `INGRESS_TRUST_MODE` ∈ {`cloudflare_tunnel`, `authenticated_origin_pull`}.
-   - `INGRESS_EDGE_MARKER` is set, at least 32 bytes, not a placeholder, and differs from every other configured secret.
-   - `TRUSTED_PROXY_CIDRS` (already required in production, `settings.rs` ~217) also rejects `0.0.0.0/0` and `::/0`. Do not add a second peer list.
-   - `IP_SOURCE` is exactly `CfConnectingIp`.
-2. `rust/backend/api/src/middlewares/client_ip.rs` `resolve_client_ip` (about lines 76–149). Order:
-   a. Before the peer gate: in production require header `x-eq-ingress-marker`. Compare constant-time (`subtle` `ct_eq`, same as the internal token check near lines 92–106). Missing or wrong → 400.
-   b. Peer gate: TCP peer must be inside `TRUSTED_PROXY_CIDRS`. Outside → reject, instead of today's fall-through. Health routes stay exempt (`is_health_route` runs first).
-   c. Duplicate `cf-connecting-ip` headers → fail closed (400).
-   d. After resolution: overwrite `cf-connecting-ip` with the verified value. Remove from the request: `x-forwarded-for`, `x-real-ip`, `true-client-ip`, `forwarded`, and the marker header. Nothing downstream may read the stripped headers.
-3. Fix the internal SSR token path: it is checked before the peer gate and has no peer check (`client_ip.rs` ~92–106). Put the internal token behind the same peer gate.
-4. Counters: `ingress_marker_missing_total`, `ingress_marker_mismatch_total`, `untrusted_proxy_peer_total`. Expose through the existing metrics/telemetry module.
-5. `docker-compose.yml` and `deploy/README.md`: add the env vars above; document the Traefik/Cloudflare path (owner executes the tunnel; see O1).
-6. Web tier (for later items): any web limiter must read the marker-gated `cf-connecting-ip`. Never `ADDRESS_HEADER=x-forwarded-for`.
-7. Alert on any non-zero ingress counter.
-
-Files: `rust/backend/api/src/middlewares/client_ip.rs`, `rust/backend/api/src/config/settings.rs`, `rust/backend/api/src/main.rs`, `docker-compose.yml`, `deploy/README.md`, new `rust/backend/api/tests/ingress_trust.rs`.
-
-Done when: `tests/ingress_trust.rs` (prod-pinned binary, same pattern as `tests/quran_prod_gate.rs`) proves: forged `cf-connecting-ip` without marker → rejected and no rate-limit bucket key contains the forged value; wrong marker → rejected; correct marker → exactly one bucket keyed on the real IP; 25 forged-IP floods with escalation enabled leave `ban_status("quran-ban:<forged>/32")` empty; peer outside CIDRs → rejected; duplicate `cf-connecting-ip` → fail closed; prod boot refuses each missing/invalid setting (boot-gate tests in `settings.rs` tests using `TEST_ENV_MUTEX`).
-Owner: O1 for real deploy.
-
 #### A2. Restore CI gates and fix the commit hook
 
 Build:

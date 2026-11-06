@@ -7,6 +7,8 @@ use subtle::ConstantTimeEq;
 
 use rux_request_gate::{InternalServiceId, RequestIdentity};
 
+use crate::utils::telemetry::{record_ingress_rejection, IngressRejection};
+
 /// Server-only shared secret used to recognize trusted Docker-internal SSR.
 /// Layered as an extension by main.rs; never logged or surfaced publicly.
 #[derive(Clone)]
@@ -73,6 +75,87 @@ fn forwarded_header_from_untrusted_peer(req: &Request, trusted: &TrustedProxyCid
         && !peer_within_trusted_cidrs(req, &trusted.0)
 }
 
+/// Edge marker Cloudflare stamps on every origin request (`INGRESS_EDGE_MARKER`).
+/// Layered as an extension by main.rs; never logged or surfaced publicly.
+#[derive(Clone, Default)]
+pub struct IngressMarker(pub std::sync::Arc<str>);
+
+impl std::fmt::Debug for IngressMarker {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let state = if self.0.is_empty() { "unset" } else { "set" };
+        f.debug_tuple("IngressMarker").field(&state).finish()
+    }
+}
+
+const MARKER_HEADER: &str = "x-eq-ingress-marker";
+const CF_HEADER: &str = "cf-connecting-ip";
+const INTERNAL_TOKEN_HEADER: &str = "x-easyquran-internal-token";
+/// Nothing past the resolver may read these: the verified identity is the only
+/// client address downstream code can see.
+const SCRUBBED_HEADERS: [&str; 5] = [
+    "x-forwarded-for",
+    "x-real-ip",
+    "true-client-ip",
+    "forwarded",
+    MARKER_HEADER,
+];
+
+fn secret_matches(provided: &[u8], expected: &[u8]) -> bool {
+    !expected.is_empty() && provided.len() == expected.len() && bool::from(provided.ct_eq(expected))
+}
+
+fn reject(error: &'static str, message: &'static str) -> Response {
+    let body = Json(serde_json::json!({ "error": error, "message": message }));
+    (StatusCode::BAD_REQUEST, body).into_response()
+}
+
+fn scrub_forwarding_headers(req: &mut Request) {
+    for name in SCRUBBED_HEADERS {
+        req.headers_mut().remove(name);
+    }
+}
+
+/// The TCP peer may act as trusted ingress. An empty list only reaches this in
+/// development: production refuses to boot on one, and fails closed if it does.
+fn peer_is_trusted(req: &Request, is_prod: bool) -> bool {
+    let cidrs = req
+        .extensions()
+        .get::<TrustedProxyCidrs>()
+        .map(|t| t.0.clone())
+        .unwrap_or_default();
+    if cidrs.is_empty() {
+        return !is_prod;
+    }
+    peer_within_trusted_cidrs(req, &cidrs)
+}
+
+/// In production every external request must carry the edge marker, compared
+/// constant-time, before any forwarded header is considered.
+fn check_edge_marker(req: &Request, path: &str) -> Result<(), Response> {
+    let expected = req
+        .extensions()
+        .get::<IngressMarker>()
+        .map(|m| m.0.clone())
+        .unwrap_or_default();
+    let Some(provided) = req.headers().get(MARKER_HEADER) else {
+        record_ingress_rejection(IngressRejection::MarkerMissing);
+        tracing::warn!(path = %path, "ingress marker missing; rejecting");
+        return Err(reject(
+            "ingress_rejected",
+            "Request did not arrive through the edge.",
+        ));
+    };
+    if !secret_matches(provided.as_bytes(), expected.as_bytes()) {
+        record_ingress_rejection(IngressRejection::MarkerMismatch);
+        tracing::warn!(path = %path, "ingress marker mismatch; rejecting");
+        return Err(reject(
+            "ingress_rejected",
+            "Request did not arrive through the edge.",
+        ));
+    }
+    Ok(())
+}
+
 pub async fn resolve_client_ip(mut req: Request, next: Next) -> Response {
     let path = req.uri().path().to_string();
     if is_health_route(&path) {
@@ -86,38 +169,53 @@ pub async fn resolve_client_ip(mut req: Request, next: Next) -> Response {
         .unwrap_or_else(|| std::sync::Arc::<str>::from(""));
     let is_prod = crate::config::settings::is_production().unwrap_or(true);
 
-    // Trusted internal SSR (Bun): constant-time match on the server-only token.
-    // Present-but-invalid NEVER grants internal treatment — it falls through to
-    // external resolution, which rejects in production without a CF header.
-    if let Some(provided) = req.headers().get("x-easyquran-internal-token") {
-        let expected = internal_token.as_bytes();
-        let matches = !expected.is_empty()
-            && provided.as_bytes().len() == expected.len()
-            && bool::from(provided.as_bytes().ct_eq(expected));
-        if matches {
+    // Trusted internal SSR (Bun): constant-time match on the server-only token,
+    // from a peer inside the same gate external traffic passes. SSR reaches the
+    // api over the Docker network, so it carries no edge marker. A token that
+    // fails either check NEVER grants internal treatment: it falls through to
+    // external resolution, which rejects in production.
+    if let Some(provided) = req.headers().get(INTERNAL_TOKEN_HEADER) {
+        let token_ok = secret_matches(provided.as_bytes(), internal_token.as_bytes());
+        if token_ok && peer_is_trusted(&req, is_prod) {
+            scrub_forwarding_headers(&mut req);
             req.extensions_mut()
                 .insert(RequestIdentity::InternalService(InternalServiceId::WebSsr));
             return next.run(req).await;
         }
         tracing::warn!(
             path = %path,
-            "X-EasyQuran-Internal-Token present but invalid; denying internal treatment"
+            "X-EasyQuran-Internal-Token present but not accepted; denying internal treatment"
         );
+    }
+
+    if is_prod {
+        if let Err(rejected) = check_edge_marker(&req, &path) {
+            return rejected;
+        }
     }
 
     // External identity via the layered ClientIpSource (CfConnectingIp in prod).
     // Header trust is peer-gated: a forwarded header is only believed when the
-    // TCP peer falls inside TRUSTED_PROXY_CIDRS (when configured); anything else
-    // presenting that header is rejected outright rather than keyed by a
-    // spoofed IP.
-    if let Some(trusted) = req.extensions().get::<TrustedProxyCidrs>() {
-        if forwarded_header_from_untrusted_peer(&req, trusted) {
-            tracing::warn!(
-                path = %path,
-                "forwarded client-IP header rejected: TCP peer outside TRUSTED_PROXY_CIDRS"
-            );
-            return reject_untrusted_proxy_peer();
-        }
+    // TCP peer falls inside TRUSTED_PROXY_CIDRS; anything else presenting that
+    // header is rejected outright rather than keyed by a spoofed IP.
+    let trusted = req.extensions().get::<TrustedProxyCidrs>().cloned();
+    let peer_rejected = match &trusted {
+        Some(cidrs) if !cidrs.0.is_empty() => forwarded_header_from_untrusted_peer(&req, cidrs),
+        _ => is_prod,
+    };
+    if peer_rejected {
+        record_ingress_rejection(IngressRejection::UntrustedPeer);
+        tracing::warn!(
+            path = %path,
+            "forwarded client-IP header rejected: TCP peer outside TRUSTED_PROXY_CIDRS"
+        );
+        return reject_untrusted_proxy_peer();
+    }
+
+    // Two values would let an appended header choose its own identity.
+    if req.headers().get_all(CF_HEADER).iter().count() > 1 {
+        tracing::warn!(path = %path, "duplicate CF-Connecting-IP headers; rejecting");
+        return reject("ambiguous_client_identity", "Duplicate client-IP headers.");
     }
 
     let (mut parts, body) = req.into_parts();
@@ -126,7 +224,13 @@ pub async fn resolve_client_ip(mut req: Request, next: Next) -> Response {
             let ip = client_ip.0;
             parts.extensions.insert(client_ip);
             parts.extensions.insert(RequestIdentity::External(ip));
+            if parts.headers.contains_key(CF_HEADER) {
+                if let Ok(verified) = axum::http::HeaderValue::from_str(&ip.to_string()) {
+                    parts.headers.insert(CF_HEADER, verified);
+                }
+            }
             req = Request::from_parts(parts, body);
+            scrub_forwarding_headers(&mut req);
             next.run(req).await
         }
         Err(e) => {
@@ -143,6 +247,7 @@ pub async fn resolve_client_ip(mut req: Request, next: Next) -> Response {
                 "client IP resolution failed in non-production; request uses the 'unknown' bucket"
             );
             req = Request::from_parts(parts, body);
+            scrub_forwarding_headers(&mut req);
             next.run(req).await
         }
     }
@@ -364,12 +469,22 @@ mod tests {
         let prev = std::env::var("APP_ENV").ok();
         std::env::set_var("APP_ENV", "production");
 
-        let app = echo_identity_router();
+        let app = echo_identity_router()
+            .layer(Extension(IngressMarker(std::sync::Arc::from(
+                "edge-marker",
+            ))))
+            .layer(Extension(trusted_cidrs(&["10.0.0.0/8"])))
+            .layer(Extension(peer("10.1.2.3")));
 
         // Missing CF header → rejected.
         let missing = app
             .clone()
-            .oneshot(Request::builder().body(axum::body::Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .header(MARKER_HEADER, "edge-marker")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(
@@ -382,6 +497,7 @@ mod tests {
         let with_cf = app
             .oneshot(
                 Request::builder()
+                    .header(MARKER_HEADER, "edge-marker")
                     .header("cf-connecting-ip", "203.0.113.30")
                     .body(axum::body::Body::empty())
                     .unwrap(),
@@ -569,5 +685,74 @@ mod tests {
         assert_eq!(resp.status(), axum::http::StatusCode::OK);
         let body = axum::body::to_bytes(resp.into_body(), 64).await.unwrap();
         assert_eq!(&body[..], b"203.0.113.99");
+    }
+
+    #[tokio::test]
+    async fn valid_internal_token_from_untrusted_peer_gets_no_privilege() {
+        let _g = env_lock();
+        let app = router_with_token("test-internal-token-secret")
+            .layer(Extension(trusted_cidrs(&["10.0.0.0/8"])))
+            .layer(Extension(peer("203.0.113.99")));
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .header("x-easyquran-internal-token", "test-internal-token-secret")
+                    .header("cf-connecting-ip", "198.51.100.7")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), axum::http::StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn duplicate_cf_headers_fail_closed() {
+        let _g = env_lock();
+        let resp = echo_identity_router()
+            .oneshot(
+                Request::builder()
+                    .header("cf-connecting-ip", "198.51.100.7")
+                    .header("cf-connecting-ip", "198.51.100.8")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), axum::http::StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn resolver_strips_forwarding_headers_for_everything_downstream() {
+        let _g = env_lock();
+        let app: Router = Router::new()
+            .route(
+                "/",
+                get(|headers: axum::http::HeaderMap| async move {
+                    SCRUBBED_HEADERS
+                        .iter()
+                        .filter(|name| headers.contains_key(**name))
+                        .count()
+                        .to_string()
+                }),
+            )
+            .layer(middleware::from_fn(resolve_client_ip))
+            .layer(Extension(ClientIpSource::CfConnectingIp));
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .header("cf-connecting-ip", "198.51.100.7")
+                    .header("x-forwarded-for", "1.2.3.4")
+                    .header("x-real-ip", "1.2.3.4")
+                    .header("true-client-ip", "1.2.3.4")
+                    .header("forwarded", "for=1.2.3.4")
+                    .header(MARKER_HEADER, "anything")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 8).await.unwrap();
+        assert_eq!(&body[..], b"0");
     }
 }

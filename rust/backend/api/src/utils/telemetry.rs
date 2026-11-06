@@ -440,6 +440,48 @@ impl ImageMetrics {
     }
 }
 
+/// Why the ingress gate refused a request.
+#[derive(Clone, Copy, Debug)]
+pub enum IngressRejection {
+    MarkerMissing,
+    MarkerMismatch,
+    UntrustedPeer,
+}
+
+static INGRESS_MARKER_MISSING: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static INGRESS_MARKER_MISMATCH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static UNTRUSTED_PROXY_PEER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Count one rejection. Atomics back the abuse report; the OTel counter feeds
+/// any configured collector. Any non-zero value is an alert condition.
+pub fn record_ingress_rejection(kind: IngressRejection) {
+    use std::sync::atomic::Ordering::Relaxed;
+    let (cell, name) = match kind {
+        IngressRejection::MarkerMissing => {
+            (&INGRESS_MARKER_MISSING, "ingress_marker_missing_total")
+        }
+        IngressRejection::MarkerMismatch => {
+            (&INGRESS_MARKER_MISMATCH, "ingress_marker_mismatch_total")
+        }
+        IngressRejection::UntrustedPeer => (&UNTRUSTED_PROXY_PEER, "untrusted_proxy_peer_total"),
+    };
+    cell.fetch_add(1, Relaxed);
+    global::meter("ruxlog-api")
+        .u64_counter(name)
+        .build()
+        .add(1, &[]);
+}
+
+/// `(missing, mismatch, untrusted_peer)` totals since boot.
+pub fn ingress_rejection_totals() -> (u64, u64, u64) {
+    use std::sync::atomic::Ordering::Relaxed;
+    (
+        INGRESS_MARKER_MISSING.load(Relaxed),
+        INGRESS_MARKER_MISMATCH.load(Relaxed),
+        UNTRUSTED_PROXY_PEER.load(Relaxed),
+    )
+}
+
 pub struct LimiterMetrics {
     pub checks: Counter<u64>,
     pub allowed: Counter<u64>,

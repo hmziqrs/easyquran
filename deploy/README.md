@@ -164,7 +164,7 @@ that path — a relative or name-like value is read as a volume name, not a path
    compose file, so it must be at the repo root or the deploy fails with
    `…/code/deploy/.env: No such file or directory`.
 3. Environment tab: the 5 required vars from `.env.example` (`DOMAIN`,
-   `COOKIE_KEY`, `FIELD_ENC_KEY`, `INTERNAL_QURAN_API_TOKEN`,
+   `COOKIE_KEY`, `FIELD_ENC_KEY`, `INTERNAL_QURAN_API_TOKEN`, `INGRESS_EDGE_MARKER`,
    `ALLOWED_ORIGINS` — literal CSV, no `${DOMAIN}` expansion).
    Web-auth URL variables all derive from `DOMAIN` — compose sets
    `FRONTEND_URL=https://${DOMAIN}` and the API derives OAuth callback URIs,
@@ -361,6 +361,35 @@ and `cf-connecting-ip` are invalid). The api refuses to boot in production with
 `IP_SOURCE=ConnectInfo` — behind Cloudflare→Traefik that would collapse every
 caller into one proxy-IP bucket. Production boot also fails closed on a missing
 `INTERNAL_QURAN_API_TOKEN` or a non-positive internal/health limit.
+
+### Edge marker and peer gate
+
+A forged `CF-Connecting-IP` must never choose a rate-limit bucket, so production
+requires proof that a request crossed the edge, in this order:
+
+1. `x-eq-ingress-marker` must equal `INGRESS_EDGE_MARKER` (constant-time). Missing
+   or wrong: 400.
+2. The TCP peer must sit inside `TRUSTED_PROXY_CIDRS`. Outside: 400. The internal
+   SSR token passes this same peer gate, and SSR needs no marker because it stays
+   on the Docker network.
+3. Duplicate `CF-Connecting-IP` headers: 400.
+4. The verified value overwrites `CF-Connecting-IP`; `X-Forwarded-For`, `X-Real-IP`,
+   `True-Client-IP`, `Forwarded` and the marker are removed before any handler runs.
+
+Boot refuses unless `INGRESS_TRUST_MODE` is `cloudflare_tunnel` or
+`authenticated_origin_pull`, the marker is at least 32 bytes, not a placeholder and
+shared with no other secret, `IP_SOURCE` is exactly `CfConnectingIp`, and
+`TRUSTED_PROXY_CIDRS` holds no `0.0.0.0/0` or `::/0`.
+
+Path: Cloudflare, then `cloudflared` tunnel (or per-zone Authenticated Origin Pulls),
+then Traefik, then the api. Add a Cloudflare Transform Rule that sets
+`x-eq-ingress-marker` to the marker value on every origin request, and verify the
+origin answers nothing except through the edge. Web-tier limiters must read the
+marker-gated `CF-Connecting-IP`; never set `ADDRESS_HEADER=x-forwarded-for`.
+
+`ingress_marker_missing_total`, `ingress_marker_mismatch_total` and
+`untrusted_proxy_peer_total` should stay at zero. Any other value means traffic is
+reaching the origin around the edge.
 
 ### Generate the internal token
 

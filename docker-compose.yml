@@ -141,6 +141,11 @@ services:
       # If the api ever receives Cloudflare connections directly (no Traefik hop),
       # replace with the published ranges: https://www.cloudflare.com/ips/
       TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fd00::/8}
+      # Proof a request crossed the edge: Cloudflare stamps x-eq-ingress-marker on
+      # every origin request and the api compares it constant-time. Boot refuses a
+      # missing, short or reused value. See deploy/README.md.
+      INGRESS_TRUST_MODE: ${INGRESS_TRUST_MODE:-cloudflare_tunnel}
+      INGRESS_EDGE_MARKER: ${INGRESS_EDGE_MARKER:?set INGRESS_EDGE_MARKER, generate with openssl rand -hex 32}
       # Media storage defaults. Credentials + account id come from .env via
       # env_file; the endpoint derives from CLOUDFLARE_ACCOUNT_ID (region is
       # always "auto"). No devkey/devsecret defaults — public credentials here

@@ -824,10 +824,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let internal_token: std::sync::Arc<str> =
         std::sync::Arc::<str>::from(settings.rate_limit.internal_token.as_str());
 
+    let ingress_marker = middlewares::client_ip::IngressMarker(std::sync::Arc::from(
+        ruxlog::config::settings::ingress().edge_marker.as_str(),
+    ));
+
     let private = router::router(state.clone())
         .layer(middleware::from_fn(
             middlewares::client_ip::resolve_client_ip,
         ))
+        .layer(axum::Extension(ingress_marker.clone()))
         .layer(ip_source.clone().into_extension())
         .layer(axum::Extension(trusted_proxy_cidrs.clone()))
         .layer(axum::Extension(middlewares::client_ip::InternalApiToken(
@@ -913,6 +918,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(middleware::from_fn(
             middlewares::client_ip::resolve_client_ip,
         ))
+        .layer(axum::Extension(ingress_marker))
         .layer(ip_source.into_extension())
         .layer(axum::Extension(trusted_proxy_cidrs))
         .layer(axum::Extension(middlewares::client_ip::InternalApiToken(
