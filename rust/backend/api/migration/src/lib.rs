@@ -32,6 +32,7 @@ mod m000050_audit_logs_evidence;
 mod m000060_reports;
 mod m000061_case_evidence;
 mod m000070_mail_budget;
+mod m000100_comment_notice_hardening;
 
 pub struct Migrator;
 
@@ -133,6 +134,9 @@ impl MigratorTrait for Migrator {
             // m000070 adds mail budget columns (A29): email_suppression.blocks_transactional
             // (webhook rows default 0 until reviewed) and newsletter retention columns.
             Box::new(m000070_mail_budget::Migration),
+            // m000100 hardens comment moderation (A27): post_comments.flags_cleared_at, and
+            // enforcement_notices gains subject_kind, nullable ban_id, comment_id and automated.
+            Box::new(m000100_comment_notice_hardening::Migration),
         ]
     }
 }

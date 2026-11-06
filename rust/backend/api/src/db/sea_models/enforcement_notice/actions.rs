@@ -9,6 +9,17 @@ use super::*;
 pub const RETENTION_ENFORCEMENT_12M: &str = "enforcement_12m";
 
 pub const CHANNEL_EMAIL: &str = "email";
+pub const SUBJECT_BAN: &str = "ban";
+pub const SUBJECT_COMMENT: &str = "comment";
+/// Reason codes a moderator may pick for a comment notice (A27). Same closed set as
+/// `reason_copy`; anything else is refused before a row is written.
+pub const COMMENT_REASON_CODES: &[&str] = &[
+    "spam",
+    "harassment",
+    "credential_abuse",
+    "policy_violation",
+    "other",
+];
 
 /// Outcome of one delivery attempt. Stored as `delivery_state` (CHECK-constrained).
 /// `Sent` means the provider accepted the message for delivery or queued it. A
@@ -32,6 +43,15 @@ impl DeliveryState {
     }
 }
 
+pub struct NewCommentNotice {
+    pub user_id: i32,
+    pub comment_id: i32,
+    pub reason_code: String,
+    pub reason_text: Option<String>,
+    pub decided_by: i32,
+    pub decided_at: i64,
+}
+
 pub struct NewNotice {
     pub user_id: i32,
     pub ban_id: i32,
@@ -53,7 +73,10 @@ impl Entity {
         let now = chrono::Utc::now().timestamp();
         let row = ActiveModel {
             user_id: Set(new.user_id),
-            ban_id: Set(new.ban_id),
+            ban_id: Set(Some(new.ban_id)),
+            subject_kind: Set(SUBJECT_BAN.to_string()),
+            comment_id: Set(None),
+            automated: Set(false),
             reason_code: Set(new.reason_code),
             reason_text: Set(new.reason_text),
             corroborator: Set(new.corroborator),
@@ -68,6 +91,39 @@ impl Entity {
             retention_class: Set(RETENTION_ENFORCEMENT_12M.to_string()),
             notice_channel: Set(CHANNEL_EMAIL.to_string()),
             shared_device_checked: Set(new.shared_device_checked),
+            ..Default::default()
+        };
+        Ok(row.insert(conn).await?)
+    }
+
+    /// Insert the case record for a comment hide or removal (A27), inside the caller's
+    /// transaction. There is no ban and no contact-free expiry: `expires_at` equals
+    /// `decided_at` (the mail copy shows no end date for comment notices).
+    pub async fn insert_comment_notice<C: ConnectionTrait>(
+        conn: &C,
+        new: NewCommentNotice,
+    ) -> DbResult<Model> {
+        let now = chrono::Utc::now().timestamp();
+        let row = ActiveModel {
+            user_id: Set(new.user_id),
+            ban_id: Set(None),
+            subject_kind: Set(SUBJECT_COMMENT.to_string()),
+            comment_id: Set(Some(new.comment_id)),
+            reason_code: Set(new.reason_code),
+            reason_text: Set(new.reason_text),
+            corroborator: Set("none".to_string()),
+            decided_by: Set(new.decided_by),
+            decided_at: Set(new.decided_at),
+            effective_at: Set(new.decided_at),
+            expires_at: Set(new.decided_at),
+            delivery_state: Set(None),
+            sent_at: Set(None),
+            appeal_token_hash: Set(None),
+            created_at: Set(now),
+            retention_class: Set(RETENTION_ENFORCEMENT_12M.to_string()),
+            notice_channel: Set(CHANNEL_EMAIL.to_string()),
+            shared_device_checked: Set(false),
+            automated: Set(false),
             ..Default::default()
         };
         Ok(row.insert(conn).await?)

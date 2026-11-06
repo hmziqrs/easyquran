@@ -67,6 +67,7 @@ pub async fn deliver(
                     reason_ar,
                     expires_at: &expires_at,
                     appeal_url,
+                    comment: notice.subject_kind == enforcement_notice::SUBJECT_COMMENT,
                 },
             )
             .await;

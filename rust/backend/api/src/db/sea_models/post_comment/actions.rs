@@ -402,9 +402,11 @@ impl Entity {
     ) -> DbResult<Option<Model>> {
         let existing = Self::find_by_id(comment_id).one(conn).await?;
         if let Some(model) = existing {
+            let now = chrono::Utc::now().fixed_offset();
             let mut active: ActiveModel = model.into();
             active.flags_count = Set(0);
-            active.updated_at = Set(chrono::Utc::now().fixed_offset());
+            active.flags_cleared_at = Set(Some(now));
+            active.updated_at = Set(now);
             let updated = active.update(conn).await?;
             Ok(Some(updated))
         } else {

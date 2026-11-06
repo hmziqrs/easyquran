@@ -11,7 +11,10 @@ pub struct Model {
     pub content: String,
     pub likes_count: i32,
     pub hidden: bool,
+    /// Cached count of flags created after this instant (A27). Flag rows are never
+    /// deleted: clearing only moves this marker, so removal still sees the evidence.
     pub flags_count: i32,
+    pub flags_cleared_at: Option<DateTimeWithTimeZone>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }

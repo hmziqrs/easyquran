@@ -40,6 +40,15 @@ impl V1UpdatePostCommentPayload {
     }
 }
 
+/// Optional body on an admin hide or removal (A27): the notice's ground. Absent means
+/// `policy_violation` with no free text.
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct V1AdminCommentActionPayload {
+    pub reason_code: Option<String>,
+    pub reason_text: Option<String>,
+}
+
 /// `?confirm_evidence=true` on a comment removal: the caller accepts that the
 /// comment's open flags are copied into a case before the row goes (A25).
 #[derive(Debug, Default, Deserialize)]

@@ -7,6 +7,18 @@ use sea_orm::{
 
 use super::{slice::*, *};
 
+/// The comment's last clear instant (A27); `None` when its flags were never cleared.
+async fn cleared_at_for<C: ConnectionTrait>(
+    conn: &C,
+    comment_id: i32,
+) -> DbResult<Option<sea_orm::prelude::DateTimeWithTimeZone>> {
+    use super::super::post_comment::Entity as PostCommentEntity;
+    Ok(PostCommentEntity::find_by_id(comment_id)
+        .one(conn)
+        .await?
+        .and_then(|pc| pc.flags_cleared_at))
+}
+
 impl Entity {
     const PER_PAGE: u64 = 20;
 
@@ -18,10 +30,17 @@ impl Entity {
             .await?;
 
         let now = chrono::Utc::now().fixed_offset();
+        let cleared_at = cleared_at_for(conn, new_flag.comment_id).await?;
 
         let model = if let Some(found) = existing {
+            // A flag from before the last clear no longer counts. Flagging again after
+            // the clear is a new flag, so its row moves to now and counts again.
+            let stale = cleared_at.is_some_and(|at| found.created_at <= at);
             let mut active: ActiveModel = found.into();
             active.reason = Set(new_flag.reason.clone());
+            if stale {
+                active.created_at = Set(now);
+            }
             active.update(conn).await?
         } else {
             let active = ActiveModel {
@@ -168,15 +187,24 @@ impl Entity {
             .await?)
     }
 
+    /// Cached flag count: rows created after the comment's `flags_cleared_at` (A27).
+    /// Compared in Rust on the stored instants, so the same clock format is used on
+    /// both sides and sub-second order holds.
     pub async fn sync_flags_count<C: ConnectionTrait>(conn: &C, comment_id: i32) -> DbResult<i64> {
         use super::super::post_comment::Entity as PostCommentEntity;
 
-        let count = Entity::find()
+        let comment = PostCommentEntity::find_by_id(comment_id).one(conn).await?;
+        let cleared_at = comment.as_ref().and_then(|pc| pc.flags_cleared_at);
+        let flags = Entity::find()
             .filter(Column::CommentId.eq(comment_id))
-            .count(conn)
-            .await? as i64;
+            .all(conn)
+            .await?;
+        let count = flags
+            .iter()
+            .filter(|flag| cleared_at.is_none_or(|at| flag.created_at > at))
+            .count() as i64;
 
-        if let Some(pc) = PostCommentEntity::find_by_id(comment_id).one(conn).await? {
+        if let Some(pc) = comment {
             let mut active: super::super::post_comment::ActiveModel = pc.into();
             active.flags_count = Set(count as i32);
             active.updated_at = Set(chrono::Utc::now().fixed_offset());

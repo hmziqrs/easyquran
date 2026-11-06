@@ -26,6 +26,7 @@ pub enum AuditAction {
     CommentUnhide,
     CommentDelete,
     CommentFlagsClear,
+    CommentNotice,
     BanCreate,
     BanRevoke,
     BanRenew,
@@ -56,6 +57,7 @@ impl AuditAction {
         Self::CommentUnhide,
         Self::CommentDelete,
         Self::CommentFlagsClear,
+        Self::CommentNotice,
         Self::BanCreate,
         Self::BanRevoke,
         Self::BanRenew,
@@ -86,6 +88,7 @@ impl AuditAction {
             Self::CommentUnhide => "comment.unhide",
             Self::CommentDelete => "comment.delete",
             Self::CommentFlagsClear => "comment.flags_clear",
+            Self::CommentNotice => "comment.notice",
             Self::BanCreate => "ban.create",
             Self::BanRevoke => "ban.revoke",
             Self::BanRenew => "ban.renew",
@@ -114,7 +117,8 @@ impl AuditAction {
             Self::CommentHide
             | Self::CommentUnhide
             | Self::CommentDelete
-            | Self::CommentFlagsClear => "comment",
+            | Self::CommentFlagsClear
+            | Self::CommentNotice => "comment",
             Self::BanCreate | Self::BanRevoke | Self::BanRenew | Self::BanNoticeResend => {
                 "user_ban"
             }

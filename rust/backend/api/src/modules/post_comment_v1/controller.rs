@@ -10,9 +10,10 @@ use serde_json::json;
 use tracing::{error, info, instrument, warn};
 
 use crate::{
-    db::sea_models::{comment_flag, post, post_comment, user},
-    error::{ErrorCode, ErrorResponse},
+    db::sea_models::{comment_flag, enforcement_notice, post, post_comment, user},
+    error::{DbResult, ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
+    modules::{admin_user_bans_v1::notice as delivery, appeal_v1},
     services::{
         abuse_limiter,
         audit::{self, AuditAction, AuditEvent},
@@ -21,6 +22,25 @@ use crate::{
     },
     AppState,
 };
+
+/// Flag rate limit per account (A27): 20 flags an hour and 50 a day. The gate blocks
+/// on reaching the threshold, so the thresholds are one above the allowance. Every
+/// attempt counts, landed or not. Process-local, like the other limiters.
+pub fn flag_limit_config() -> abuse_limiter::AbuseLimiterConfig {
+    abuse_limiter::AbuseLimiterConfig {
+        temp_block_attempts: 21,
+        temp_block_range: 60 * 60,
+        temp_block_duration: 60 * 60,
+        block_retry_limit: 51,
+        block_range: 24 * 60 * 60,
+        block_duration: 24 * 60 * 60,
+    }
+}
+
+/// Open flags at which the author can no longer edit a comment (A27).
+const EDIT_LOCK_FLAGS: i32 = 3;
+const MAX_COMMENT_REASON_CHARS: usize = 500;
+const DEFAULT_COMMENT_REASON: &str = "policy_violation";
 
 // Per-account comment throttle: per-IP limiting alone can't stop one account behind rotating IPs from flooding comments.
 const COMMENT_ABUSE_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::AbuseLimiterConfig {
@@ -33,9 +53,137 @@ const COMMENT_ABUSE_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::A
 };
 
 use super::validator::{
-    V1AdminCommentFlagListQuery, V1AdminPostCommentListQuery, V1ConfirmEvidenceQuery,
-    V1CreatePostCommentPayload, V1FlagCommentPayload, V1UpdatePostCommentPayload,
+    V1AdminCommentActionPayload, V1AdminCommentFlagListQuery, V1AdminPostCommentListQuery,
+    V1ConfirmEvidenceQuery, V1CreatePostCommentPayload, V1FlagCommentPayload,
+    V1UpdatePostCommentPayload,
 };
+
+/// A hidden comment, or one at the flag lock, is frozen for its author (A27).
+fn ensure_editable(comment: &post_comment::Model) -> Result<(), ErrorResponse> {
+    if comment.hidden {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("Hidden comments cannot be edited."));
+    }
+    if comment.flags_count >= EDIT_LOCK_FLAGS {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("Flagged comments cannot be edited."));
+    }
+    Ok(())
+}
+
+/// Reason for a comment notice. A closed code plus optional free text, refused before
+/// any write when either is out of range.
+fn comment_notice_reason(
+    payload: Option<V1AdminCommentActionPayload>,
+) -> Result<(String, Option<String>), ErrorResponse> {
+    let payload = payload.unwrap_or_default();
+    let code = payload
+        .reason_code
+        .unwrap_or_else(|| DEFAULT_COMMENT_REASON.to_string());
+    if !enforcement_notice::COMMENT_REASON_CODES.contains(&code.as_str()) {
+        return Err(ErrorResponse::new(ErrorCode::InvalidInput)
+            .with_message("reasonCode is not a known reason"));
+    }
+    let text = payload
+        .reason_text
+        .map(|text| text.trim().to_string())
+        .filter(|text| !text.is_empty());
+    if text
+        .as_ref()
+        .is_some_and(|text| text.chars().count() > MAX_COMMENT_REASON_CHARS)
+    {
+        return Err(
+            ErrorResponse::new(ErrorCode::InvalidInput).with_message("reasonText is too long")
+        );
+    }
+    Ok((code, text))
+}
+
+/// Case record and audit row for a comment hide or removal (A27). Runs in the caller's
+/// transaction, so the action and its notice commit or roll back together.
+async fn record_comment_notice<C: ConnectionTrait>(
+    conn: &C,
+    admin_id: i32,
+    comment: &post_comment::Model,
+    action: &str,
+    reason: (String, Option<String>),
+) -> DbResult<enforcement_notice::Model> {
+    let notice = enforcement_notice::Entity::insert_comment_notice(
+        conn,
+        enforcement_notice::NewCommentNotice {
+            user_id: comment.user_id,
+            comment_id: comment.id,
+            reason_code: reason.0.clone(),
+            reason_text: reason.1,
+            decided_by: admin_id,
+            decided_at: chrono::Utc::now().timestamp(),
+        },
+    )
+    .await?;
+    audit::record(
+        conn,
+        AuditEvent {
+            actor_id: Some(admin_id),
+            action: AuditAction::CommentNotice,
+            resource_id: comment.id.to_string(),
+            metadata: json!({
+                "noticeId": notice.id,
+                "userId": comment.user_id,
+                "action": action,
+                "reasonCode": reason.0,
+            }),
+        },
+    )
+    .await?;
+    Ok(notice)
+}
+
+/// Sends a comment notice after commit, with a fresh appeal link (A35 rule: a send
+/// replaces the stored hash). Returns the recorded delivery state. A failure is logged
+/// and the hide or removal stays in place: the row shows the state, not a guess.
+async fn deliver_comment_notice(
+    state: &AppState,
+    notice: &enforcement_notice::Model,
+) -> Option<String> {
+    let author = user::Entity::find_by_id(notice.user_id)
+        .one(&state.sea_db)
+        .await
+        .inspect_err(|err| warn!(notice_id = notice.id, error = ?err, "author lookup failed"))
+        .ok()
+        .flatten();
+    let contact = author
+        .as_ref()
+        .map(|author| (author.email.as_str(), author.name.as_str()));
+    let appeal_url = if contact.is_some() {
+        let token = appeal_v1::controller::new_token();
+        let hash = appeal_v1::controller::token_hash(&state.secret_key, &token);
+        enforcement_notice::Entity::set_appeal_token_hash(&state.sea_db, notice.id, &hash)
+            .await
+            .inspect_err(
+                |err| warn!(notice_id = notice.id, error = ?err, "appeal token not stored"),
+            )
+            .ok()
+            .map(|()| appeal_v1::controller::appeal_url(&state.settings.site.url, &token))
+    } else {
+        None
+    };
+    match delivery::deliver(
+        &state.sea_db,
+        &state.mailer,
+        &state.settings.site.name,
+        notice,
+        contact,
+        appeal_url.as_deref(),
+    )
+    .await
+    {
+        Ok(state) => Some(state.as_str().to_string()),
+        Err(err) => {
+            warn!(notice_id = notice.id, error = ?err, "comment notice delivery record failed");
+            None
+        }
+    }
+}
 
 /// Removal guard (A25). A comment with open flags is evidence: removal is refused
 /// unless the caller passes `confirm_evidence`. When passed, the case is copied in
@@ -140,6 +288,13 @@ pub async fn update(
     payload: ValidatedJson<V1UpdatePostCommentPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user = auth.user.unwrap();
+    let current = post_comment::Entity::find_by_id(comment_id)
+        .filter(post_comment::Column::UserId.eq(user.id))
+        .one(&state.sea_db)
+        .await?;
+    if let Some(comment) = current.as_ref() {
+        ensure_editable(comment)?;
+    }
     let update_comment = payload.0.into_update_post_comment();
     if let Some(content) = update_comment.content.as_deref() {
         registration_admission::check_fresh_comment(
@@ -316,11 +471,17 @@ pub async fn admin_hide(
     State(state): State<AppState>,
     auth: AuthSession,
     Path(comment_id): Path<i32>,
+    payload: Option<Json<V1AdminCommentActionPayload>>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user = auth.user.unwrap();
+    let reason = comment_notice_reason(payload.map(|Json(body)| body))?;
     let result = async {
         let txn = state.sea_db.begin().await?;
+        let before = post_comment::Entity::find_by_id(comment_id)
+            .one(&txn)
+            .await?;
         let updated = post_comment::Entity::admin_hide(&txn, comment_id).await?;
+        let mut notice = None;
         if updated.is_some() {
             audit::record(
                 &txn,
@@ -332,21 +493,34 @@ pub async fn admin_hide(
                 },
             )
             .await?;
+            // Only a visible comment opens a case: re-hiding adds no second notice (A27).
+            let was_visible = before.as_ref().is_some_and(|comment| !comment.hidden);
+            if let (true, Some(comment)) = (was_visible, updated.as_ref()) {
+                notice = Some(record_comment_notice(&txn, user.id, comment, "hide", reason).await?);
+            }
         }
         txn.commit().await?;
-        Ok::<_, ErrorResponse>(updated)
+        Ok::<_, ErrorResponse>((updated, notice))
     }
     .await;
 
     match result {
-        Ok(Some(_)) => {
+        Ok((Some(_), notice)) => {
             info!(comment_id, "Admin hid comment");
+            let delivery_state = match notice.as_ref() {
+                Some(notice) => deliver_comment_notice(&state, notice).await,
+                None => None,
+            };
             Ok((
                 StatusCode::OK,
-                Json(json!({ "message": "Hidden successfully" })),
+                Json(json!({
+                    "message": "Hidden successfully",
+                    "noticeId": notice.as_ref().map(|n| n.id),
+                    "deliveryState": delivery_state,
+                })),
             ))
         }
-        Ok(None) => {
+        Ok((None, _)) => {
             warn!(comment_id, "Comment not found for hide");
             Err(ErrorResponse::new(ErrorCode::RecordNotFound))
         }
@@ -411,20 +585,22 @@ pub async fn admin_delete(
     auth: AuthSession,
     Path(comment_id): Path<i32>,
     Query(evidence): Query<V1ConfirmEvidenceQuery>,
+    payload: Option<Json<V1AdminCommentActionPayload>>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user = auth.user.unwrap();
+    let reason = comment_notice_reason(payload.map(|Json(body)| body))?;
     let result = async {
         let txn = state.sea_db.begin().await?;
-        let exists = post_comment::Entity::find_by_id(comment_id)
+        let existing = post_comment::Entity::find_by_id(comment_id)
             .one(&txn)
-            .await?
-            .is_some();
-        let affected = if exists {
+            .await?;
+        let affected = if existing.is_some() {
             guard_open_flags(&txn, comment_id, evidence.confirm_evidence).await?;
             post_comment::Entity::admin_delete(&txn, comment_id).await?
         } else {
             0
         };
+        let mut notice = None;
         if affected > 0 {
             audit::record(
                 &txn,
@@ -436,18 +612,30 @@ pub async fn admin_delete(
                 },
             )
             .await?;
+            if let Some(comment) = existing.as_ref() {
+                notice =
+                    Some(record_comment_notice(&txn, user.id, comment, "delete", reason).await?);
+            }
         }
         txn.commit().await?;
-        Ok::<u64, ErrorResponse>(affected)
+        Ok::<(u64, Option<enforcement_notice::Model>), ErrorResponse>((affected, notice))
     }
     .await;
 
     match result {
-        Ok(affected) if affected > 0 => {
+        Ok((affected, notice)) if affected > 0 => {
             info!(comment_id, "Admin deleted comment");
+            let delivery_state = match notice.as_ref() {
+                Some(notice) => deliver_comment_notice(&state, notice).await,
+                None => None,
+            };
             Ok((
                 StatusCode::OK,
-                Json(json!({ "message": "Deleted successfully" })),
+                Json(json!({
+                    "message": "Deleted successfully",
+                    "noticeId": notice.as_ref().map(|n| n.id),
+                    "deliveryState": delivery_state,
+                })),
             ))
         }
         Ok(_) => {
@@ -515,12 +703,24 @@ pub async fn flag(
     let user = auth.user.unwrap();
     let p = payload.0;
 
+    // Every attempt counts toward the flag budget, whether or not it lands (A27).
+    abuse_limiter::limiter(
+        &state.gate_store,
+        &format!("comment:flag:user:{}", user.id),
+        flag_limit_config(),
+    )
+    .await?;
+
     let tx = state.sea_db.begin().await?;
     let comment = post_comment::Entity::find_by_id(comment_id)
         .one(&tx)
         .await?
         .ok_or_else(|| ErrorResponse::new(ErrorCode::RecordNotFound))?;
     require_post_visibility(&tx, comment.post_id, Some(&user)).await?;
+    if comment.user_id == user.id {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("You cannot flag your own comment."));
+    }
 
     let new_flag = comment_flag::slice::NewCommentFlag {
         comment_id,

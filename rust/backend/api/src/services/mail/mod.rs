@@ -40,6 +40,8 @@ pub struct EnforcementNoticeMail<'a> {
     pub reason_ar: &'a str,
     pub expires_at: &'a str,
     pub appeal_url: Option<&'a str>,
+    /// Comment notice (A27): copy says a comment was hidden or removed, not a suspension.
+    pub comment: bool,
 }
 
 /// Sends the notice through the router. The returned receipt is the only proof of
@@ -56,6 +58,7 @@ pub async fn send_enforcement_notice(
     ctx.insert("reason_ar", notice.reason_ar);
     ctx.insert("expires_at", notice.expires_at);
     ctx.insert("appeal_url", &notice.appeal_url);
+    ctx.insert("comment", &notice.comment);
     let html = templates::render("enforcement_notice", &ctx)
         .map_err(|e| MailError::Other(format!("enforcement notice template: {e}")))?;
     mailer
