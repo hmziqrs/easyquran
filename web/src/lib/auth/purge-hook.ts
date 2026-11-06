@@ -1,7 +1,8 @@
 import type { AuthTransitionContext, AuthTransitionHook } from "#lib/auth/auth-state.svelte.js";
 import { bookmarks } from "#lib/bookmarks/store.svelte.js";
-import { sessions } from "#lib/sessions/store.svelte.js";
+import { scheduleDeviceRegistration } from "#lib/device/register.js";
 import { purgeUserCaches } from "#lib/offline/messages.js";
+import { sessions } from "#lib/sessions/store.svelte.js";
 
 const ACCOUNT_TRANSITION_KINDS: ReadonlySet<AuthTransitionContext["kind"]> = new Set([
   "login",
@@ -29,8 +30,20 @@ export function makePurgeHook(): (ctx: AuthTransitionContext) => Promise<void> {
   };
 }
 
+const SIGN_IN_KINDS: ReadonlySet<AuthTransitionContext["kind"]> = new Set([
+  "login",
+  "oauth",
+  "passkey",
+]);
+
 export function installPurgeHook(state: {
   setOnAuthTransition: (hook: AuthTransitionHook) => void;
+  readonly user: { readonly id: number } | null;
 }): void {
-  state.setOnAuthTransition(makePurgeHook());
+  const purge = makePurgeHook();
+  state.setOnAuthTransition(async (ctx: AuthTransitionContext): Promise<void> => {
+    await purge(ctx);
+    // Device registration waits for the new user to land on the auth state.
+    if (SIGN_IN_KINDS.has(ctx.kind)) scheduleDeviceRegistration(() => state.user?.id ?? null);
+  });
 }

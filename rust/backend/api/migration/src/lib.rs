@@ -17,6 +17,7 @@ mod m000014_user_analytics;
 mod m000015_newsletter_subscribers;
 mod m000016_abuse_measurement;
 mod m000017_sync_protocol;
+mod m000018_device_registry;
 
 pub struct Migrator;
 
@@ -79,6 +80,9 @@ impl MigratorTrait for Migrator {
             // periodic-job run). Both new tables, IF NOT EXISTS, no backfill.
             Box::new(m000016_abuse_measurement::Migration),
             Box::new(m000017_sync_protocol::Migration),
+            // m000018 ships the device registry (devices.md D2): user_devices, plus a
+            // nullable device_id on devices and user_sessions. Additive, IF NOT EXISTS.
+            Box::new(m000018_device_registry::Migration),
         ]
     }
 }

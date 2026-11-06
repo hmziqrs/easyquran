@@ -666,6 +666,7 @@ async fn seed_user_sessions(db: &DatabaseConnection) -> SeedResult<()> {
                 device: Some(devices.choose(&mut rng).unwrap().to_string()),
                 ip_address: Some(ip_addresses.choose(&mut rng).unwrap().to_string()),
                 last_seen,
+                device_id: None,
                 revoked_at: if rng.random_bool(0.2) {
                     Some(last_seen + chrono::Duration::hours(rng.random_range(1..48)))
                 } else {
@@ -680,6 +681,7 @@ async fn seed_user_sessions(db: &DatabaseConnection) -> SeedResult<()> {
                 ip_address: Set(new_session.ip_address),
                 last_seen: Set(new_session.last_seen),
                 revoked_at: Set(new_session.revoked_at),
+                device_id: Set(None),
             };
 
             let _ = active_model.insert(db).await;

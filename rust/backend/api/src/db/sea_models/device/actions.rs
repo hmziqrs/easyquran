@@ -13,6 +13,7 @@ impl Entity {
             user_id: Set(new.user_id),
             token: Set(new.token),
             platform: Set(new.platform),
+            device_id: Set(new.device_id),
             created_at: Set(now),
             updated_at: Set(now),
             last_seen_at: Set(now),
@@ -24,6 +25,7 @@ impl Entity {
                     .update_columns([
                         Column::UserId,
                         Column::Platform,
+                        Column::DeviceId,
                         Column::UpdatedAt,
                         Column::LastSeenAt,
                     ])
@@ -49,6 +51,17 @@ impl Entity {
         let res = Self::delete_many()
             .filter(Column::UserId.eq(user_id))
             .filter(Column::Token.eq(token))
+            .exec(conn)
+            .await
+            .map_err_to_response()?;
+        Ok(res.rows_affected)
+    }
+
+    /// Drop every push token a device owns (sign-out, device delete, eviction).
+    pub async fn delete_for_device(conn: &DbConn, user_id: i32, device_id: &str) -> DbResult<u64> {
+        let res = Self::delete_many()
+            .filter(Column::UserId.eq(user_id))
+            .filter(Column::DeviceId.eq(device_id))
             .exec(conn)
             .await
             .map_err_to_response()?;

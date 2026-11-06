@@ -6,6 +6,7 @@ pub struct NewDevice {
     pub user_id: i32,
     pub token: String,
     pub platform: String,
+    pub device_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

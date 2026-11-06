@@ -11,6 +11,10 @@ pub struct Model {
     pub ip_address: Option<String>,
     pub last_seen: DateTimeWithTimeZone,
     pub revoked_at: Option<DateTimeWithTimeZone>,
+    /// The owning `user_devices` id. Never serialized: account session lists and
+    /// admin views must not carry device identity.
+    #[serde(skip_serializing)]
+    pub device_id: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

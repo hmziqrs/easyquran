@@ -1055,6 +1055,20 @@ pub async fn sessions_terminate(
         Ok(None) => return Err(ErrorResponse::new(ErrorCode::RecordNotFound)),
         Err(err) => return Err(err.into()),
     };
+    terminate_session(&state, &auth, id).await?;
+    Ok((
+        StatusCode::OK,
+        Json(json!({ "message": "Session terminated" })),
+    ))
+}
+
+/// The one session-kill path: `sessions_terminate` and device delete both call it.
+/// Stamps the audit row, deletes the live tower record and clears the binding.
+pub(crate) async fn terminate_session(
+    state: &AppState,
+    auth: &AuthSession,
+    id: i32,
+) -> Result<(), ErrorResponse> {
     user_session::Entity::revoke(&state.sea_db, id).await?;
 
     {
@@ -1085,10 +1099,7 @@ pub async fn sessions_terminate(
                 "No durable tower-session binding for session; live record could not be DEL'd — cookie valid until 14-day expiry (revoked_at is audit-only)"
             );
         }
-        Ok((
-            StatusCode::OK,
-            Json(json!({ "message": "Session terminated" })),
-        ))
+        Ok(())
     }
 }
 
@@ -1258,6 +1269,7 @@ mod tests {
             ip_address: None,
             last_seen: chrono::Utc::now().fixed_offset(),
             revoked_at: None,
+            device_id: None,
         }
     }
 

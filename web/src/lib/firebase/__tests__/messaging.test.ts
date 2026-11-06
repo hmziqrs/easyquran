@@ -10,6 +10,7 @@ import { asString } from "#lib/storage/decoders.js";
 const requests: { url: string; init: RequestInit }[] = [];
 
 beforeEach(() => {
+  window.localStorage.clear();
   authClient.clearCsrf();
   requests.length = 0;
   vi.stubGlobal(
@@ -32,7 +33,7 @@ describe("push registration transport", () => {
     expect(requests.map((request) => request.url)).toEqual([
       "/api/csrf/v1/generate",
       "/api/device/v1/register",
-      "/api/device/v1/delete",
+      "/api/device/v1/token/delete",
     ]);
     for (const request of requests.slice(1)) {
       expect(request.init.headers).toMatchObject({ "csrf-token": "csrf-proof" });

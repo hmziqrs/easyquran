@@ -3,6 +3,7 @@ import type { Messaging, MessagePayload, Unsubscribe } from "firebase/messaging"
 
 import { authClient } from "#lib/auth/auth-client.js";
 import { registerServiceWorker } from "#lib/boot/service-worker.js";
+import { ensureDeviceRegistered, forgetRegisteredToken } from "#lib/device/register.js";
 import { publicPushPayload } from "#lib/firebase/push-privacy.js";
 
 import { isConfigured, FCM_VAPID_KEY, initApp } from "./index";
@@ -133,36 +134,32 @@ export async function onForegroundMessage(
   };
 }
 
-async function postDeviceEndpoint(
-  path: string,
-  body: { token: string; expected_user_id: number; platform?: string },
-  signal?: AbortSignal,
-): Promise<boolean> {
+async function postTokenDelete(token: string, ownerId: number): Promise<boolean> {
   try {
-    const res = await authClient.unsafeRequest(`/device/v1/${path}`, {
+    const res = await authClient.unsafeRequest("/device/v1/token/delete", {
       method: "POST",
-      body,
-      signal,
+      body: { token, expected_user_id: ownerId },
     });
+    if (res.ok) forgetRegisteredToken(ownerId);
     return res.ok;
   } catch (err) {
-    console.warn(`[firebase] device ${path} failed:`, err);
+    console.warn("[firebase] device token delete failed:", err);
     return false;
   }
 }
 
+/**
+ * Push token upload. Registers the device too (the server binds the token to the
+ * device row), so this respects the same once-per-24-h gate unless the token changed.
+ */
 export function registerTokenWithServer(
   token: string,
   ownerId: number,
   signal?: AbortSignal,
 ): Promise<boolean> {
-  return postDeviceEndpoint(
-    "register",
-    { token, platform: "web", expected_user_id: ownerId },
-    signal,
-  );
+  return ensureDeviceRegistered(ownerId, token, signal);
 }
 
 export function unregisterTokenFromServer(token: string, ownerId: number): Promise<boolean> {
-  return postDeviceEndpoint("delete", { token, expected_user_id: ownerId });
+  return postTokenDelete(token, ownerId);
 }

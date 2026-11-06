@@ -1,6 +1,8 @@
-use sea_orm::{entity::prelude::*, Order, PaginatorTrait, QueryFilter, QueryOrder, Set};
+use sea_orm::{
+    entity::prelude::*, sea_query::Expr, Order, PaginatorTrait, QueryFilter, QueryOrder, Set,
+};
 
-use crate::error::DbResult;
+use crate::error::{DbResult, DbResultExt};
 use ruxlog_types::PaginatedList;
 
 use super::*;
@@ -24,6 +26,54 @@ impl Entity {
             Ok(model) => Ok(model),
             Err(err) => Err(err.into()),
         }
+    }
+
+    /// Bind the live session to a device. Only the owner's unrevoked row matches.
+    pub async fn bind_device(
+        conn: &DbConn,
+        session_id: i32,
+        user_id: i32,
+        device_id: &str,
+    ) -> DbResult<()> {
+        Self::update_many()
+            .col_expr(Column::DeviceId, Expr::value(device_id.to_string()))
+            .filter(Column::Id.eq(session_id))
+            .filter(Column::UserId.eq(user_id))
+            .filter(Column::RevokedAt.is_null())
+            .exec(conn)
+            .await
+            .map_err_to_response()?;
+        Ok(())
+    }
+
+    /// Live (unrevoked) session rows bound to one device of one account.
+    pub async fn live_for_device(
+        conn: &DbConn,
+        user_id: i32,
+        device_id: &str,
+    ) -> DbResult<Vec<Model>> {
+        Self::find()
+            .filter(Column::UserId.eq(user_id))
+            .filter(Column::DeviceId.eq(device_id))
+            .filter(Column::RevokedAt.is_null())
+            .all(conn)
+            .await
+            .map_err_to_response()
+    }
+
+    /// Device ids that still have at least one live session for this account.
+    pub async fn live_device_ids(conn: &DbConn, user_id: i32) -> DbResult<Vec<String>> {
+        let rows = Self::find()
+            .filter(Column::UserId.eq(user_id))
+            .filter(Column::RevokedAt.is_null())
+            .filter(Column::DeviceId.is_not_null())
+            .all(conn)
+            .await
+            .map_err_to_response()?;
+        let mut ids: Vec<String> = rows.into_iter().filter_map(|row| row.device_id).collect();
+        ids.sort();
+        ids.dedup();
+        Ok(ids)
     }
 
     pub async fn touch(conn: &DbConn, session_id: i32) -> DbResult<Option<Model>> {

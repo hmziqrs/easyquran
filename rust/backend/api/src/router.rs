@@ -165,7 +165,7 @@ pub fn router(state: AppState) -> Router<AppState> {
     router = router
         .nest(
             "/device/v1",
-            device_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
+            device_v1::routes(&state).layer(rate_limit::rate_limit_layer(&state, 100, 60)),
         )
         .nest(
             "/notification/v1",

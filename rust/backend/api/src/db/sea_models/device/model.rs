@@ -9,6 +9,8 @@ pub struct Model {
     pub user_id: i32,
     pub token: String,
     pub platform: String,
+    /// The `user_devices` id this push token belongs to. NULL for tokens from before D2.
+    pub device_id: Option<String>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
     pub last_seen_at: DateTimeWithTimeZone,
