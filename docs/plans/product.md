@@ -13,13 +13,6 @@ Files: `web/src/lib/home/layout.svelte.ts`, `web/src/lib/sync/`, `rust/backend/a
 Done when: changing a setting or widget layout on one signed-in device shows on another after sync; two different settings changed offline on two devices both survive; signed-out behaviour unchanged; vectors and `cargo test` cover merge and owner mismatch.
 Blocked by: S7
 
-#### F4. Thread history clear-all
-
-Build: clear-all on thread history. Tombstones every ended thread, with an Undo toast and no dialog.
-Files: `web/src/routes/(application)/yours/_components/ThreadHistory.svelte`, `web/src/lib/sessions/store.svelte.ts`
-Done when: clear-all empties history, Undo restores it, and the result syncs to other devices.
-Blocked by: S7
-
 #### F5. Explicit reading bookmark
 
 Build: user-set page/verse reading bookmark, separate from automatic resume. Set, replace with Undo toast, timestamp, source, card on `/yours`, synced with the account as a new `contracts/sync.md` domain, with its rule and vectors added first.
