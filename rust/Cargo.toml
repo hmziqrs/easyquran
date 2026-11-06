@@ -8,6 +8,7 @@ members = [
     "backend/api/crates/rux-request-gate",
     "backend/api/crates/rux-webhook-crypto",
     "backend/api/migration",
+    "crates/eq-sync-core",
     "crates/ruxlog-types",
 ]
 resolver = "2"

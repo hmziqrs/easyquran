@@ -12,7 +12,6 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 | Device clock hours or a year ahead           | Rewritten to server + 60 s, `last` reset, converges                                    | S2, S3 |
 | Clock changed backwards mid-session          | Stamps keep rising                                                                     | D1, S2 |
 | Same-millisecond writes, counter overflow    | Counter orders them; overflow bumps ms                                                 | D1, S2 |
-| Identical stamps from racing tabs or a clone | RFC 8785 byte tie-break, same result everywhere                                        | S1     |
 | Time-zone change or travel                   | Local day follows the user's zone; stamps are unaffected                               | S2, F8 |
 | Sleep, wake, or suspended desktop            | Offset refreshes on next sync                                                          | S2     |
 

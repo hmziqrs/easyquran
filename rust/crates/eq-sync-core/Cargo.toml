@@ -1,0 +1,9 @@
+[package]
+name = "eq-sync-core"
+version = "0.1.0"
+edition = "2021"
+description = "Pure sync merge rules shared by the API and native clients. See contracts/sync.md."
+publish = false
+
+[dependencies]
+serde_json = "1.0.140"

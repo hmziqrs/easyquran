@@ -1,0 +1,1167 @@
+{
+  "description": "Shared merge vectors. Every client must pass all of them. Compare results as RFC 8785 canonical JSON. See contracts/sync.md.",
+  "vectors": [
+    {
+      "name": "thread identity: lowest stamp wins",
+      "op": "thread",
+      "a": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "identity": {
+          "stamp": "0000000000100-0000-a",
+          "value": {
+            "origin": "index",
+            "originRef": null,
+            "scope": "surah:2",
+            "boundEnd": null,
+            "startedAt": "2026-11-01T00:00:00.000Z"
+          }
+        }
+      },
+      "b": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "identity": {
+          "stamp": "0000000000200-0000-a",
+          "value": {
+            "origin": "search",
+            "originRef": null,
+            "scope": "surah:2",
+            "boundEnd": null,
+            "startedAt": "2026-11-01T00:00:00.000Z"
+          }
+        }
+      },
+      "expected": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "identity": {
+          "stamp": "0000000000100-0000-a",
+          "value": {
+            "origin": "index",
+            "originRef": null,
+            "scope": "surah:2",
+            "boundEnd": null,
+            "startedAt": "2026-11-01T00:00:00.000Z"
+          }
+        }
+      }
+    },
+    {
+      "name": "thread cursor: highest stamp wins",
+      "op": "thread",
+      "a": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "cursor": {
+          "stamp": "0000000000100-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 5,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      },
+      "b": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "cursor": {
+          "stamp": "0000000000200-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 1,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      },
+      "expected": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "cursor": {
+          "stamp": "0000000000200-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 1,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      }
+    },
+    {
+      "name": "thread cursor: moving back on purpose is allowed",
+      "op": "thread",
+      "a": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "cursor": {
+          "stamp": "0000000000100-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 200,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      },
+      "b": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "cursor": {
+          "stamp": "0000000000101-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 3,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      },
+      "expected": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "cursor": {
+          "stamp": "0000000000101-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 3,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      }
+    },
+    {
+      "name": "thread lifecycle: highest stamp wins, reopen beats end",
+      "op": "thread",
+      "a": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "lifecycle": {
+          "stamp": "0000000000100-0000-a",
+          "value": {
+            "state": "ended",
+            "endedAt": "2026-11-02T00:00:00.000Z",
+            "endReason": "completed"
+          }
+        }
+      },
+      "b": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "lifecycle": {
+          "stamp": "0000000000200-0000-a",
+          "value": {
+            "state": "open",
+            "endedAt": null,
+            "endReason": null
+          }
+        }
+      },
+      "expected": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "lifecycle": {
+          "stamp": "0000000000200-0000-a",
+          "value": {
+            "state": "open",
+            "endedAt": null,
+            "endReason": null
+          }
+        }
+      }
+    },
+    {
+      "name": "thread lifecycle: a stale cursor never revives a delete",
+      "op": "thread",
+      "a": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "lifecycle": {
+          "stamp": "0000000000500-0000-a",
+          "value": {
+            "state": "deleted",
+            "endedAt": null,
+            "endReason": null
+          }
+        }
+      },
+      "b": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "cursor": {
+          "stamp": "0000000000900-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 9,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      },
+      "expected": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "lifecycle": {
+          "stamp": "0000000000500-0000-a",
+          "value": {
+            "state": "deleted",
+            "endedAt": null,
+            "endReason": null
+          }
+        },
+        "cursor": {
+          "stamp": "0000000000900-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 9,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      }
+    },
+    {
+      "name": "thread: registers merge independently",
+      "op": "thread",
+      "a": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "lifecycle": {
+          "stamp": "0000000000500-0000-a",
+          "value": {
+            "state": "ended",
+            "endedAt": "2026-11-02T00:00:00.000Z",
+            "endReason": "completed"
+          }
+        },
+        "cursor": {
+          "stamp": "0000000000100-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 1,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      },
+      "b": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "lifecycle": {
+          "stamp": "0000000000100-0000-a",
+          "value": {
+            "state": "open",
+            "endedAt": null,
+            "endReason": null
+          }
+        },
+        "cursor": {
+          "stamp": "0000000000600-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 9,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      },
+      "expected": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "lifecycle": {
+          "stamp": "0000000000500-0000-a",
+          "value": {
+            "state": "ended",
+            "endedAt": "2026-11-02T00:00:00.000Z",
+            "endReason": "completed"
+          }
+        },
+        "cursor": {
+          "stamp": "0000000000600-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 9,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      }
+    },
+    {
+      "name": "thread: absent register is no change, never a clear",
+      "op": "thread",
+      "a": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "cursor": {
+          "stamp": "0000000000100-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 1,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      },
+      "b": {
+        "id": "019a0000-0000-7000-8000-000000000001"
+      },
+      "expected": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "cursor": {
+          "stamp": "0000000000100-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 1,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      }
+    },
+    {
+      "name": "thread: null stamp ranks lowest",
+      "op": "thread",
+      "a": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "cursor": {
+          "stamp": null,
+          "value": {
+            "surah": 2,
+            "ayah": 1,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      },
+      "b": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "cursor": {
+          "stamp": "0000000000001-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 9,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      },
+      "expected": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "cursor": {
+          "stamp": "0000000000001-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 9,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      }
+    },
+    {
+      "name": "thread: null stamp identity is oldest, so it stays",
+      "op": "thread",
+      "a": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "identity": {
+          "stamp": null,
+          "value": {
+            "origin": "index",
+            "originRef": null,
+            "scope": "surah:2",
+            "boundEnd": null,
+            "startedAt": "2026-11-01T00:00:00.000Z"
+          }
+        }
+      },
+      "b": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "identity": {
+          "stamp": "0000000000001-0000-a",
+          "value": {
+            "origin": "search",
+            "originRef": null,
+            "scope": "surah:2",
+            "boundEnd": null,
+            "startedAt": "2026-11-01T00:00:00.000Z"
+          }
+        }
+      },
+      "expected": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "identity": {
+          "stamp": null,
+          "value": {
+            "origin": "index",
+            "originRef": null,
+            "scope": "surah:2",
+            "boundEnd": null,
+            "startedAt": "2026-11-01T00:00:00.000Z"
+          }
+        }
+      }
+    },
+    {
+      "name": "thread: identical stamps, higher canonical bytes win",
+      "op": "thread",
+      "a": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "cursor": {
+          "stamp": "0000000000100-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 1,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      },
+      "b": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "cursor": {
+          "stamp": "0000000000100-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 9,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      },
+      "expected": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "cursor": {
+          "stamp": "0000000000100-0000-a",
+          "value": {
+            "surah": 2,
+            "ayah": 9,
+            "localPage": null,
+            "ratio": null,
+            "sourceId": null,
+            "device": "phone",
+            "deviceId": "a"
+          }
+        }
+      }
+    },
+    {
+      "name": "thread: unknown register survives and merges by highest stamp",
+      "op": "thread",
+      "a": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "future": {
+          "stamp": "0000000000100-0000-a",
+          "value": "x"
+        }
+      },
+      "b": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "future": {
+          "stamp": "0000000000200-0000-a",
+          "value": "y"
+        },
+        "other": {
+          "stamp": "0000000000001-0000-a",
+          "value": "z"
+        }
+      },
+      "expected": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "future": {
+          "stamp": "0000000000200-0000-a",
+          "value": "y"
+        },
+        "other": {
+          "stamp": "0000000000001-0000-a",
+          "value": "z"
+        }
+      }
+    },
+    {
+      "name": "progress: max of furthest ayah",
+      "op": "progress",
+      "a": {
+        "surah": 2,
+        "furthestAyah": 50
+      },
+      "b": {
+        "surah": 2,
+        "furthestAyah": 7
+      },
+      "expected": {
+        "surah": 2,
+        "furthestAyah": 50
+      }
+    },
+    {
+      "name": "bookmark: whole row, highest stamp wins",
+      "op": "bookmark",
+      "a": {
+        "id": "019a0000-0000-7000-8000-00000000000b",
+        "register": {
+          "stamp": "0000000000100-0000-a",
+          "value": {
+            "context": null,
+            "deleted": false,
+            "folderId": "019a0000-0000-7000-8000-0000000000f1",
+            "key": "2:255"
+          }
+        }
+      },
+      "b": {
+        "id": "019a0000-0000-7000-8000-00000000000b",
+        "register": {
+          "stamp": "0000000000200-0000-a",
+          "value": {
+            "context": null,
+            "deleted": true,
+            "folderId": "5c9b6d3a-0000-5000-8000-000000000000",
+            "key": "2:255"
+          }
+        }
+      },
+      "expected": {
+        "id": "019a0000-0000-7000-8000-00000000000b",
+        "register": {
+          "stamp": "0000000000200-0000-a",
+          "value": {
+            "context": null,
+            "deleted": true,
+            "folderId": "5c9b6d3a-0000-5000-8000-000000000000",
+            "key": "2:255"
+          }
+        }
+      }
+    },
+    {
+      "name": "bookmark: tombstone beats a live copy at one stamp",
+      "op": "bookmark",
+      "a": {
+        "id": "019a0000-0000-7000-8000-00000000000b",
+        "register": {
+          "stamp": "0000000000100-0000-a",
+          "value": {
+            "context": null,
+            "deleted": false,
+            "folderId": "019a0000-0000-7000-8000-0000000000f1",
+            "key": "2:255"
+          }
+        }
+      },
+      "b": {
+        "id": "019a0000-0000-7000-8000-00000000000b",
+        "register": {
+          "stamp": "0000000000100-0000-a",
+          "value": {
+            "context": null,
+            "deleted": true,
+            "folderId": "019a0000-0000-7000-8000-0000000000f1",
+            "key": "2:255"
+          }
+        }
+      },
+      "expected": {
+        "id": "019a0000-0000-7000-8000-00000000000b",
+        "register": {
+          "stamp": "0000000000100-0000-a",
+          "value": {
+            "context": null,
+            "deleted": true,
+            "folderId": "019a0000-0000-7000-8000-0000000000f1",
+            "key": "2:255"
+          }
+        }
+      }
+    },
+    {
+      "name": "folder: rename and move both survive",
+      "op": "folder",
+      "a": {
+        "id": "019a0000-0000-7000-8000-0000000000f1",
+        "name": {
+          "stamp": "0000000000200-0000-a",
+          "value": "Duas"
+        },
+        "position": {
+          "stamp": "0000000000100-0000-a",
+          "value": 1
+        }
+      },
+      "b": {
+        "id": "019a0000-0000-7000-8000-0000000000f1",
+        "name": {
+          "stamp": "0000000000100-0000-a",
+          "value": "Old"
+        },
+        "position": {
+          "stamp": "0000000000200-0000-a",
+          "value": 9
+        }
+      },
+      "expected": {
+        "id": "019a0000-0000-7000-8000-0000000000f1",
+        "name": {
+          "stamp": "0000000000200-0000-a",
+          "value": "Duas"
+        },
+        "position": {
+          "stamp": "0000000000200-0000-a",
+          "value": 9
+        }
+      }
+    },
+    {
+      "name": "folder: delete, highest stamp wins",
+      "op": "folder",
+      "a": {
+        "id": "019a0000-0000-7000-8000-0000000000f1",
+        "deleted": {
+          "stamp": "0000000000300-0000-a",
+          "value": true
+        }
+      },
+      "b": {
+        "id": "019a0000-0000-7000-8000-0000000000f1",
+        "deleted": {
+          "stamp": "0000000000200-0000-a",
+          "value": false
+        }
+      },
+      "expected": {
+        "id": "019a0000-0000-7000-8000-0000000000f1",
+        "deleted": {
+          "stamp": "0000000000300-0000-a",
+          "value": true
+        }
+      }
+    },
+    {
+      "name": "folder: default cannot be deleted",
+      "op": "folder",
+      "a": {
+        "id": "5c9b6d3a-0000-5000-8000-000000000000",
+        "isDefault": true,
+        "deleted": {
+          "stamp": "0000000000300-0000-a",
+          "value": true
+        }
+      },
+      "b": {
+        "id": "5c9b6d3a-0000-5000-8000-000000000000",
+        "isDefault": true,
+        "deleted": {
+          "stamp": "0000000000100-0000-a",
+          "value": false
+        }
+      },
+      "expected": {
+        "id": "5c9b6d3a-0000-5000-8000-000000000000",
+        "isDefault": true,
+        "deleted": {
+          "stamp": "0000000000300-0000-a",
+          "value": false
+        }
+      }
+    },
+    {
+      "name": "settings: one register per key, both survive",
+      "op": "settings",
+      "a": {
+        "theme": {
+          "stamp": "0000000000200-0000-a",
+          "value": "dark"
+        },
+        "font": {
+          "stamp": "0000000000100-0000-a",
+          "value": "a"
+        }
+      },
+      "b": {
+        "theme": {
+          "stamp": "0000000000100-0000-a",
+          "value": "light"
+        },
+        "font": {
+          "stamp": "0000000000200-0000-a",
+          "value": "b"
+        }
+      },
+      "expected": {
+        "theme": {
+          "stamp": "0000000000200-0000-a",
+          "value": "dark"
+        },
+        "font": {
+          "stamp": "0000000000200-0000-a",
+          "value": "b"
+        }
+      }
+    },
+    {
+      "name": "layout: whole document, highest stamp wins",
+      "op": "layout",
+      "a": {
+        "stamp": "0000000000100-0000-a",
+        "value": {
+          "cards": [
+            "a"
+          ]
+        }
+      },
+      "b": {
+        "stamp": "0000000000200-0000-a",
+        "value": {
+          "cards": [
+            "b"
+          ]
+        }
+      },
+      "expected": {
+        "stamp": "0000000000200-0000-a",
+        "value": {
+          "cards": [
+            "b"
+          ]
+        }
+      }
+    },
+    {
+      "name": "event: insert once by id",
+      "op": "event",
+      "a": {
+        "id": "e1",
+        "surah": 2,
+        "ayah": 1,
+        "ms": 10
+      },
+      "b": {
+        "id": "e1",
+        "surah": 2,
+        "ayah": 1,
+        "ms": 10
+      },
+      "expected": {
+        "id": "e1",
+        "surah": 2,
+        "ayah": 1,
+        "ms": 10
+      }
+    },
+    {
+      "name": "threads: one scope on two devices keeps both",
+      "op": "threadSet",
+      "a": [
+        {
+          "id": "019a0000-0000-7000-8000-000000000001",
+          "identity": {
+            "stamp": "0000000000001-0000-a",
+            "value": {
+              "origin": "index",
+              "originRef": null,
+              "scope": "surah:2",
+              "boundEnd": null,
+              "startedAt": "2026-11-01T00:00:00.000Z"
+            }
+          }
+        }
+      ],
+      "b": [
+        {
+          "id": "019a0000-0000-7000-8000-000000000002",
+          "identity": {
+            "stamp": "0000000000002-0000-a",
+            "value": {
+              "origin": "index",
+              "originRef": null,
+              "scope": "surah:2",
+              "boundEnd": null,
+              "startedAt": "2026-11-01T00:00:00.000Z"
+            }
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "019a0000-0000-7000-8000-000000000001",
+          "identity": {
+            "stamp": "0000000000001-0000-a",
+            "value": {
+              "origin": "index",
+              "originRef": null,
+              "scope": "surah:2",
+              "boundEnd": null,
+              "startedAt": "2026-11-01T00:00:00.000Z"
+            }
+          }
+        },
+        {
+          "id": "019a0000-0000-7000-8000-000000000002",
+          "identity": {
+            "stamp": "0000000000002-0000-a",
+            "value": {
+              "origin": "index",
+              "originRef": null,
+              "scope": "surah:2",
+              "boundEnd": null,
+              "startedAt": "2026-11-01T00:00:00.000Z"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "folders: one name twice offline keeps both",
+      "op": "folderSet",
+      "a": [
+        {
+          "id": "019a0000-0000-7000-8000-0000000000f1",
+          "name": {
+            "stamp": "0000000000001-0000-a",
+            "value": "Duas"
+          }
+        }
+      ],
+      "b": [
+        {
+          "id": "019a0000-0000-7000-8000-0000000000f2",
+          "name": {
+            "stamp": "0000000000002-0000-a",
+            "value": "Duas"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "id": "019a0000-0000-7000-8000-0000000000f1",
+          "name": {
+            "stamp": "0000000000001-0000-a",
+            "value": "Duas"
+          }
+        },
+        {
+          "id": "019a0000-0000-7000-8000-0000000000f2",
+          "name": {
+            "stamp": "0000000000002-0000-a",
+            "value": "Duas"
+          }
+        }
+      ]
+    },
+    {
+      "name": "bookmarks: older bookmark dies with its folder",
+      "op": "converge",
+      "rows": [
+        {
+          "id": "019a0000-0000-7000-8000-00000000000b",
+          "register": {
+            "stamp": "0000000000400-0000-a",
+            "value": {
+              "context": null,
+              "deleted": false,
+              "folderId": "019a0000-0000-7000-8000-0000000000f1",
+              "key": "2:255"
+            }
+          }
+        }
+      ],
+      "folders": [
+        {
+          "id": "019a0000-0000-7000-8000-0000000000f1",
+          "deleted": {
+            "stamp": "0000000000500-0000-a",
+            "value": true
+          }
+        },
+        {
+          "id": "5c9b6d3a-0000-5000-8000-000000000000",
+          "isDefault": true,
+          "deleted": {
+            "stamp": "0000000000001-0000-a",
+            "value": false
+          }
+        }
+      ],
+      "defaultFolderId": "5c9b6d3a-0000-5000-8000-000000000000",
+      "expected": [
+        {
+          "id": "019a0000-0000-7000-8000-00000000000b",
+          "register": {
+            "stamp": "0000000000400-0000-a",
+            "value": {
+              "context": null,
+              "deleted": true,
+              "folderId": "019a0000-0000-7000-8000-0000000000f1",
+              "key": "2:255"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "bookmarks: newer bookmark moves to the default folder",
+      "op": "converge",
+      "rows": [
+        {
+          "id": "019a0000-0000-7000-8000-00000000000b",
+          "register": {
+            "stamp": "0000000000600-0000-a",
+            "value": {
+              "context": null,
+              "deleted": false,
+              "folderId": "019a0000-0000-7000-8000-0000000000f1",
+              "key": "2:255"
+            }
+          }
+        }
+      ],
+      "folders": [
+        {
+          "id": "019a0000-0000-7000-8000-0000000000f1",
+          "deleted": {
+            "stamp": "0000000000500-0000-a",
+            "value": true
+          }
+        },
+        {
+          "id": "5c9b6d3a-0000-5000-8000-000000000000",
+          "isDefault": true,
+          "deleted": {
+            "stamp": "0000000000001-0000-a",
+            "value": false
+          }
+        }
+      ],
+      "defaultFolderId": "5c9b6d3a-0000-5000-8000-000000000000",
+      "expected": [
+        {
+          "id": "019a0000-0000-7000-8000-00000000000b",
+          "register": {
+            "stamp": "0000000000600-0000-a",
+            "value": {
+              "context": null,
+              "deleted": false,
+              "folderId": "5c9b6d3a-0000-5000-8000-000000000000",
+              "key": "2:255"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "bookmarks: two ids on one key, lower stamp becomes a tombstone",
+      "op": "converge",
+      "rows": [
+        {
+          "id": "019a0000-0000-7000-8000-00000000000b",
+          "register": {
+            "stamp": "0000000000100-0000-a",
+            "value": {
+              "context": null,
+              "deleted": false,
+              "folderId": "019a0000-0000-7000-8000-0000000000f1",
+              "key": "2:255"
+            }
+          }
+        },
+        {
+          "id": "019a0000-0000-7000-8000-00000000000c",
+          "register": {
+            "stamp": "0000000000200-0000-a",
+            "value": {
+              "context": null,
+              "deleted": false,
+              "folderId": "019a0000-0000-7000-8000-0000000000f1",
+              "key": "2:255"
+            }
+          }
+        }
+      ],
+      "folders": [
+        {
+          "id": "019a0000-0000-7000-8000-0000000000f1",
+          "deleted": {
+            "stamp": "0000000000001-0000-a",
+            "value": false
+          }
+        }
+      ],
+      "defaultFolderId": "5c9b6d3a-0000-5000-8000-000000000000",
+      "expected": [
+        {
+          "id": "019a0000-0000-7000-8000-00000000000b",
+          "register": {
+            "stamp": "0000000000100-0000-a",
+            "value": {
+              "context": null,
+              "deleted": true,
+              "folderId": "019a0000-0000-7000-8000-0000000000f1",
+              "key": "2:255"
+            }
+          }
+        },
+        {
+          "id": "019a0000-0000-7000-8000-00000000000c",
+          "register": {
+            "stamp": "0000000000200-0000-a",
+            "value": {
+              "context": null,
+              "deleted": false,
+              "folderId": "019a0000-0000-7000-8000-0000000000f1",
+              "key": "2:255"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "stamp validity: 0000000000001-0000-a",
+      "op": "stampValid",
+      "input": "0000000000001-0000-a",
+      "expected": true
+    },
+    {
+      "name": "stamp validity: 1700000000000-ffff-019a0000-0000",
+      "op": "stampValid",
+      "input": "1700000000000-ffff-019a0000-0000-7000-8000-000000000001",
+      "expected": true
+    },
+    {
+      "name": "stamp validity: 1700000000000-00ff-",
+      "op": "stampValid",
+      "input": "1700000000000-00ff-",
+      "expected": false
+    },
+    {
+      "name": "stamp validity: 170000000000-00ff-a",
+      "op": "stampValid",
+      "input": "170000000000-00ff-a",
+      "expected": false
+    },
+    {
+      "name": "stamp validity: 1700000000000-00FF-a",
+      "op": "stampValid",
+      "input": "1700000000000-00FF-a",
+      "expected": false
+    },
+    {
+      "name": "stamp validity: 1700000000000-00ff-a b",
+      "op": "stampValid",
+      "input": "1700000000000-00ff-a b",
+      "expected": false
+    },
+    {
+      "name": "stamp validity: not-a-stamp",
+      "op": "stampValid",
+      "input": "not-a-stamp",
+      "expected": false
+    },
+    {
+      "name": "stamp validity: 1700000000000-00ff-xxxxxxxxxxxxx",
+      "op": "stampValid",
+      "input": "1700000000000-00ff-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "expected": false
+    },
+    {
+      "name": "stamp order is bytewise: ms, then counter, then device",
+      "op": "stampOrder",
+      "ascending": [
+        "0000000000001-0000-z",
+        "0000000000001-0001-a",
+        "0000000000002-0000-a",
+        "0000000000002-0000-b"
+      ]
+    },
+    {
+      "name": "ratio rounds to 4 decimals: 0.12345",
+      "op": "roundRatio",
+      "input": 0.12345,
+      "expected": 0.1235
+    },
+    {
+      "name": "ratio rounds to 4 decimals: 0.5",
+      "op": "roundRatio",
+      "input": 0.5,
+      "expected": 0.5
+    },
+    {
+      "name": "ratio rounds to 4 decimals: 1",
+      "op": "roundRatio",
+      "input": 1,
+      "expected": 1
+    },
+    {
+      "name": "ratio rounds to 4 decimals: 0",
+      "op": "roundRatio",
+      "input": 0,
+      "expected": 0
+    },
+    {
+      "name": "ratio rounds to 4 decimals: 4e-05",
+      "op": "roundRatio",
+      "input": 4e-05,
+      "expected": 0
+    },
+    {
+      "name": "canonical json",
+      "op": "canonical",
+      "input": {
+        "b": 1,
+        "a": [
+          true,
+          null,
+          "x"
+        ]
+      },
+      "expected": "{\"a\":[true,null,\"x\"],\"b\":1}"
+    },
+    {
+      "name": "canonical json",
+      "op": "canonical",
+      "input": {
+        "ratio": 0.1235,
+        "whole": 1.0,
+        "s": "é\n\"q\""
+      },
+      "expected": "{\"ratio\":0.1235,\"s\":\"é\\n\\\"q\\\"\",\"whole\":1}"
+    }
+  ]
+}

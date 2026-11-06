@@ -8,36 +8,6 @@ The multi-device conflict protocol for web, React Native and GPUI.
 
 Today, conflicts are decided by device wall clocks on whole rows, and clients infer deletes from a row being absent. These items replace that for three clients. Pre-launch, so replace in place with no shims.
 
-#### S1. Sync contract, merge core and vectors
-
-Build:
-
-1. `contracts/sync.md`: the rules below, plus the wire format from S2–S6. It is the only spec React Native and GPUI need.
-2. Stamp: hybrid logical clock string `{ms, 13 digits}-{counter, 4 hex}-{device id}`. Compare bytewise. Higher wins. On identical stamps (racing tabs, a cloned machine) the register with the higher RFC 8785 canonical JSON bytes wins, so every replica picks the same result in every language. `ratio` is rounded to 4 decimals before it is stamped. A stamp that fails the format is `rejected`. A NULL stamp ranks lowest.
-3. Merge rules. Each row carries one stamp per register, and registers merge independently:
-
-   | Data                              | Register                                                                           | Rule                                                                                                                              |
-   | --------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-   | Thread                            | Identity: `origin`, `origin_ref`, `scope`, `bound_end`, `started_at`               | Set once. Lowest stamp wins                                                                                                       |
-   | Thread                            | Cursor: `surah`, `ayah`, `local_page`, `ratio`, `source_id`, `device`, `device_id` | Highest stamp wins. Moving back on purpose is allowed                                                                             |
-   | Thread                            | Lifecycle: state `open`, `ended` (with `ended_at`, `end_reason`) or `deleted`      | Highest stamp wins. Only an explicit end, reopen, delete or undo writes it, so a stale reader can never reopen or revive a thread |
-   | Progress                          | Per surah                                                                          | MAX of `furthest_ayah`. Never regresses                                                                                           |
-   | Bookmark                          | Whole row: folder, key, context, deleted                                           | Highest stamp wins. Two ids on one key: the lower stamp becomes a tombstone                                                       |
-   | Folder                            | Name; position; deleted                                                            | Each highest stamp wins. Default folder cannot be deleted                                                                         |
-   | Folder delete vs bookmark         | Bookmark stamp compared to delete stamp                                            | Older bookmarks die with the folder. Newer ones move to the default folder                                                        |
-   | Same folder name twice offline    | None                                                                               | Keep both. Never merge user-created data silently                                                                                 |
-   | Same scope on two devices offline | None                                                                               | Keep both threads. Continue shows the newest per scope; the other stays reachable in History                                      |
-   | Settings (F2)                     | One per setting key                                                                | Highest stamp wins, so two settings changed on two devices both survive                                                           |
-   | Home layout (F2)                  | Whole document                                                                     | Highest stamp wins                                                                                                                |
-   | Reading events                    | Insert-once by id                                                                  | Already idempotent (`user_analytics_v1`). Keep                                                                                    |
-
-4. Pure merge functions in Rust (new crate `rust/crates/eq-sync-core`, so the API and GPUI share it) and TypeScript (new `web/src/lib/sync/merge.ts`, moved to a shared package in N1). No IO. Rows are state, not operations, so replay and reordering are harmless. A register absent from a write means no change, never a clear, so an older client cannot erase what it does not know about.
-5. `contracts/sync-vectors.json`: inputs and expected merged rows, run by both implementations, and later by React Native and GPUI.
-
-Files: new `contracts/sync.md`, new `contracts/sync-vectors.json`, new `rust/crates/eq-sync-core/`, `rust/Cargo.toml`, new `web/src/lib/sync/merge.ts`.
-
-Done when: property tests prove merge is commutative, associative and idempotent in both languages; Rust and TypeScript pass the same vectors; every row in the table has a vector.
-
 #### S2. Clock and local device id
 
 Build:

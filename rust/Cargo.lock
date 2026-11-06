@@ -1855,6 +1855,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "eq-sync-core"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
