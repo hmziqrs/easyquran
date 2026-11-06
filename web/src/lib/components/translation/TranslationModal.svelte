@@ -730,7 +730,7 @@
                     aria-label={copy.stacked.moveUp}
                     class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[width,opacity] before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground focus-visible:opacity-100 group-hover/chip:opacity-100 group-focus-within/chip:opacity-100 md:h-8 [@media(hover:hover)]:w-0 [@media(hover:hover)]:overflow-hidden [@media(hover:hover)]:group-hover/chip:w-7 [@media(hover:hover)]:group-focus-within/chip:w-7 [@media(hover:hover)]:focus-visible:w-7 [@media(hover:none)]:enabled:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
                   >
-                    <Icon name="arrow-right" size={12} class="-rotate-90" />
+                    <Icon name="arrow-up" size={12} />
                   </button>
                   <button
                     type="button"
@@ -739,7 +739,7 @@
                     aria-label={copy.stacked.moveDown}
                     class="relative flex h-11 w-7 flex-none cursor-pointer touch-manipulation items-center justify-center rounded-md text-muted-foreground opacity-0 transition-[width,opacity] before:absolute before:-inset-x-2 before:inset-y-0 before:content-[''] hover:text-foreground focus-visible:opacity-100 group-hover/chip:opacity-100 group-focus-within/chip:opacity-100 md:h-8 [@media(hover:hover)]:w-0 [@media(hover:hover)]:overflow-hidden [@media(hover:hover)]:group-hover/chip:w-7 [@media(hover:hover)]:group-focus-within/chip:w-7 [@media(hover:hover)]:focus-visible:w-7 [@media(hover:none)]:enabled:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
                   >
-                    <Icon name="arrow-right" size={12} class="rotate-90" />
+                    <Icon name="arrow-down" size={12} />
                   </button>
                   <button
                     type="button"

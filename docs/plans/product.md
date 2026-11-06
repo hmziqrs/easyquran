@@ -33,19 +33,6 @@ Files: `rust/backend/api/src/modules/notification_v1/`, `web/src/lib/firebase/`,
 Done when: a scheduled reminder fires at the user's local time, respects quiet hours, and stops on unsubscribe.
 Blocked by: F8
 
-#### F13. Share dialog and image card
-
-Build: dialog for range, source and format with attribution options and the canonical link (`…/{slug}?ayah=2:255-2:286`); branded accessible image card with download. Plain copy/share stays the fast path. Video waits for audio.
-Files: `web/src/lib/stores/reader-share.svelte.ts`, `web/src/routes/(application)/_reader/VerseTools.svelte`
-Done when: card renders Arabic correctly and downloads; shared links open the right range.
-
-#### F14. Bookmark bulk actions
-
-Build: multi-select on `/bookmarks`: move and delete with an Undo toast.
-Files: `web/src/routes/(application)/bookmarks/+page.svelte`, `web/src/lib/bookmarks/store.svelte.ts`
-Done when: bulk move and delete work offline and sync; Undo restores them.
-Blocked by: S7
-
 #### F15. Voice search
 
 Build: voice input in the palette and `/search` with unsupported, permission and error states. Preserve the Arabic normalization/parity contract. The microphone is blocked today by `Permissions-Policy: microphone=()` in `web/src/hooks.server.ts`, `web/server.ts` and `security_headers.rs`; allow `self` on the web tier only and update `web/scripts/assert-headers.sh`. Browser speech recognition can send audio to the browser vendor, so add a privacy sentence and the A34 ledger reference.
@@ -58,12 +45,6 @@ Build: "Report an issue" on a verse, prefilled with immutable source id and vers
 Files: `web/src/routes/(application)/_reader/VerseTools.svelte`, `rust/backend/api/src/modules/report_v1/*`
 Done when: report is stored with source id and verse key; the A24 limits apply (test).
 Blocked by: A24
-
-#### F18. RTL polish and localized text variants
-
-Build: fix remaining physical utilities and reader arrows in RTL; localized `.md`/`.txt` representations. Keep UI locale out of reader server cache keys.
-Files: `web/src/routes/[slug=marketingText].md/`, `web/src/routes/[slug].txt/`, `web/src/routes/(application)/_reader/`
-Done when: logical-properties guard green; Arabic text variants serve Arabic.
 
 #### F19. Recitation audio and player
 
@@ -94,9 +75,3 @@ Done when: each new source is credited and missing verses show a clear state.
 Blocked by: O24
 
 ## Copy
-
-#### C1. Copy truth pass
-
-Build: drop or defer recitation claims in `legal_terms_service_body`, `legal_terms_third_party_body` and `faq_offline_answer` unless F19 shipped. Then sweep landing, reader empty/loading/settings labels, and PWA manifest descriptions: every capability is available now, beta with an entry point, or planned. Remove the unused `auth_merge_*` strings. Recheck translation-source counts against the baked catalogue.
-Files: `web/messages/en.json`, `web/messages/ar.json`, `web/messages/auth/en.json`, `web/messages/auth/ar.json`, `web/static/manifest.webmanifest`
-Done when: no shipped copy promises a feature that doesn't exist; `en` and `ar` match.

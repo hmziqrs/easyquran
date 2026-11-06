@@ -100,21 +100,12 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 | [F7](plans/product.md#f7-self-service-account-deletion)            | Self-service account deletion          | F6, A38    |
 | [F8](plans/product.md#f8-reading-goals-and-streaks)                | Reading goals and streaks              | S7         |
 | [F9](plans/product.md#f9-goal-reminders)                           | Goal reminders                         | F8         |
-| [F13](plans/product.md#f13-share-dialog-and-image-card)            | Share dialog and image card            | -          |
-| [F14](plans/product.md#f14-bookmark-bulk-actions)                  | Bookmark bulk actions                  | S7         |
 | [F15](plans/product.md#f15-voice-search)                           | Voice search                           | -          |
 | [F17](plans/product.md#f17-translation-correction-report)          | Translation correction report          | A24        |
-| [F18](plans/product.md#f18-rtl-polish-and-localized-text-variants) | RTL polish and localized text variants | -          |
 | [F19](plans/product.md#f19-recitation-audio-and-player)            | Recitation audio and player            | O22        |
 | [F20](plans/product.md#f20-memorization-repeat-engine)             | Memorization repeat engine             | F19        |
 | [F21](plans/product.md#f21-word-by-word)                           | Word-by-word                           | O23        |
 | [F22](plans/product.md#f22-more-tafsir-sources)                    | More tafsir sources                    | O24        |
-
-### Copy
-
-| Item                                      | Title           | Blocked by |
-| ----------------------------------------- | --------------- | ---------- |
-| [C1](plans/product.md#c1-copy-truth-pass) | Copy truth pass | -          |
 
 ### Native foundations
 
