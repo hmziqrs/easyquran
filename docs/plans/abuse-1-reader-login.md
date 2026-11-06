@@ -4,33 +4,6 @@
 
 Measured first.
 
-#### A10. Verification identity canonicalization
-
-Build:
-
-1. Gmail-family normalization: strip dots in local part for `gmail.com` and `googlemail.com`. Current alias logic (`rust/backend/api/src/utils/email.rs` ~7–9, `email_alias.rs`) handles `+` only; production rejects plus-tags.
-2. Migration (next free): `users.verification_identity_hash` (nullable, indexed). Value: keyed HMAC (new setting `VERIFICATION_IDENTITY_KEY`, required in production, not SHA) of the canonical address. Backfill: lazy on next login or a boot job that computes it. Do not compute over Quran data (not applicable here, but keep the hard rule).
-3. Caps: 3 pending and 5 lifetime accounts per verification identity.
-
-Files: `rust/backend/api/src/utils/email.rs`, `rust/backend/api/src/utils/email_alias.rs`, new migration, `rust/backend/api/src/db/sea_models/user/*`, `rust/backend/api/src/modules/auth_v1/*`, `rust/backend/api/src/config/settings.rs`.
-
-Done when: `a.b@gmail.com` and `ab@gmail.com` map to the same identity; a dot-alias cannot exceed the lifetime cap; migration re-runnable; test in `tests/registration_admission.rs`.
-Blocked by: A9
-
-#### A11. Password-work queue and reserved lanes
-
-Build:
-
-1. `rust/backend/api/src/services/password_work.rs` (capacity 2, fail-fast 429 at ~lines 8–15 and 56–58). Replace fail-fast with a bounded queue: 1.5 s wait, waiter cap. Waiter cap: pick a small bound, record it in a code comment and the commit message.
-2. Separate lane for the dummy verification (currently burns a slot in `services/auth.rs` ~86–89, ~115, ~136).
-3. Reserved lane for already-authenticated operations (reauth, fresh-auth).
-4. Telemetry: counter for password-work saturation.
-
-Files: `rust/backend/api/src/services/password_work.rs`, `rust/backend/api/src/services/auth.rs`, `rust/backend/api/src/modules/auth_v1/controller.rs`.
-
-Done when: 20 parallel logins do not deny a 21st legitimate login beyond the queue wait; saturation counter increments in test; test in `tests/auth_availability.rs`.
-Blocked by: A8
-
 #### A12. Recovery masking, reset grants, email change
 
 Build:
