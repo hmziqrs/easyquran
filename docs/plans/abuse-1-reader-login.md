@@ -4,23 +4,6 @@
 
 Measured first.
 
-#### A8. Login limiter split: failures only, no lock
-
-Build:
-
-1. Split the store API in `rust/backend/api/crates/rux-request-gate/src/abuse.rs` and `store.rs`: `abuse_peek` (read-only, before verification) and `abuse_record` (append and evaluate, after a failed verification). Today `abuse_check` appends on every call including success.
-2. Do not append on the blocked path. A blocked user's retries must not extend their own block.
-3. Credential-keyed failures (`login:<email>`, `totp:`, `reauth:`): progressive delay 1–8 s plus a session challenge. Never a 429, never a lock.
-4. IP-keyed failures: 429 with `Retry-After` capped at 900 s. No long tier.
-5. Clear the credential key on success.
-6. Admin action: clear the limiter for an identity (classes `login:`, `totp:`, `reauth:`). Add to the admin API. Block removed within one flush cycle (10 s).
-7. Update the clone sites in `rust/backend/api/src/modules/auth_v1/controller.rs` (search `abuse_limiter::limiter`; around lines 135, 299, 411, 443, 582, 813, 918). Also `email_verification_v1` and `forgot_password_v1`. Current config: `ABUSE_LIMITER_CONFIG` at controller line ~31.
-
-Files: `rust/backend/api/crates/rux-request-gate/src/{abuse,store}.rs`, `rust/backend/api/src/services/abuse_limiter.rs`, `rust/backend/api/src/modules/auth_v1/controller.rs`, `rust/backend/api/src/modules/{email_verification_v1,forgot_password_v1,admin_bans_v1}/*`.
-
-Done when: three successful logins in a row never block; three failures delay the fourth but do not lock; a blocked identity's retry does not extend the block; the admin unblock removes the block within one flush cycle; tests in `tests/login_limiter.rs`.
-Blocked by: A5
-
 #### A9. Registration admission, password and OAuth doors
 
 Build:

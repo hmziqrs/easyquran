@@ -60,7 +60,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 
 | Item                                                                                                        | Title                                                                 | Blocked by |
 | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------- |
-| [A8](plans/abuse-1-reader-login.md#a8-login-limiter-split-failures-only-no-lock)                            | Login limiter split: failures only, no lock                           | A5         |
 | [A9](plans/abuse-1-reader-login.md#a9-registration-admission-password-and-oauth-doors)                      | Registration admission, password and OAuth doors                      | A8         |
 | [A10](plans/abuse-1-reader-login.md#a10-verification-identity-canonicalization)                             | Verification identity canonicalization                                | A9         |
 | [A11](plans/abuse-1-reader-login.md#a11-password-work-queue-and-reserved-lanes)                             | Password-work queue and reserved lanes                                | A8         |
