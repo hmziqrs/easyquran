@@ -13,13 +13,6 @@ Files: `rust/backend/api/src/modules/user_v1/`, `web/src/routes/(account)/accoun
 Done when: API test proves rows and tokens are gone and the session is dead; legal copy no longer says "ask us to delete".
 Blocked by: F6, A38
 
-#### F9. Goal reminders
-
-Build: `notification_v1` has no schedules today, so add a stored schedule per user (time zone, quiet hours, per-kind preferences, unsubscribe) and a job in the scheduler that writes `job_runs`. Push goes to the account's most recently seen device with a token. GPUI uses local notifications only when the account has no mobile push token (G6), so nobody is told twice.
-Files: `rust/backend/api/src/modules/notification_v1/`, `web/src/lib/firebase/`, `web/src/routes/(application)/settings/`
-Done when: a scheduled reminder fires at the user's local time, respects quiet hours, and stops on unsubscribe.
-Blocked by: F8
-
 #### F17. Translation correction report
 
 Build: "Report an issue" on a verse, prefilled with immutable source id and verse key. `/contact` is only a `mailto:` link, so use the A24 report intake with a new `translation` kind, sharing its limits. Never edits a Quran DB.

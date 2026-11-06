@@ -78,6 +78,7 @@ async fn send_goal_reminder(fcm: &rux_fcm::FcmClient, token: &str) -> Result<(),
         }),
         data: None,
         android: None,
+        apns: Some(rux_fcm::apns_alert()),
         webpush: None,
     };
     match fcm.send(msg).await {

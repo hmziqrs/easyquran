@@ -4,20 +4,6 @@
 
 Measured first.
 
-#### A13. Challenge maps: no eviction, per-session quota, session payload state
-
-Build:
-
-1. `rust/backend/api/src/services/passkey_state.rs` (~104–112) and `rust/backend/api/src/services/oauth/state.rs` (~71–79, ~142–150): at the cap, refuse instead of evicting the oldest entry. Add a per-session quota for passkey and OAuth maps.
-2. Move fresh-auth (`services/fresh_auth.rs` ~60) and pending-login (`services/pending_login.rs` ~44) state into the session payload.
-3. `AuthSessionState` change: add new fields with `#[serde(default)]`, append-only ordering. Test a legacy payload decodes (a missing field must not turn every live session into anonymous or a 500).
-4. Failure-only counters on passkey and OAuth finish paths.
-
-Files: `rust/backend/api/src/services/{passkey_state,pending_login,fresh_auth}.rs`, `rust/backend/api/src/services/oauth/state.rs`, `rust/backend/api/src/modules/{auth_v1,passkey_v1}/*`, session payload types.
-
-Done when: an unused passkey challenge survives an API restart (test); cap refusal tested; legacy session payload test green; session-payload tests updated and named in the commit message.
-Blocked by: A12
-
 #### A14. Reader-path cookie and cache predicate
 
 Build:

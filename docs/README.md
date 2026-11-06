@@ -51,7 +51,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 
 | Item                                                                                                        | Title                                                                 | Blocked by |
 | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------- |
-| [A13](plans/abuse-1-reader-login.md#a13-challenge-maps-no-eviction-per-session-quota-session-payload-state) | Challenge maps: no eviction, per-session quota, session payload state | A12        |
 | [A14](plans/abuse-1-reader-login.md#a14-reader-path-cookie-and-cache-predicate)                             | Reader-path cookie and cache predicate                                | -          |
 | [A17](plans/abuse-1-reader-login.md#a17-canonical-redirects-no-store-errors-per-artifact-verified-set)      | Canonical redirects, no-store errors, per-artifact verified set       | -          |
 
@@ -85,7 +84,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 | Item                                                               | Title                                  | Blocked by |
 | ------------------------------------------------------------------ | -------------------------------------- | ---------- |
 | [F7](plans/product.md#f7-self-service-account-deletion)            | Self-service account deletion          | F6, A38    |
-| [F9](plans/product.md#f9-goal-reminders)                           | Goal reminders                         | F8         |
 | [F17](plans/product.md#f17-translation-correction-report)          | Translation correction report          | A24        |
 | [F19](plans/product.md#f19-recitation-audio-and-player)            | Recitation audio and player            | O22        |
 | [F20](plans/product.md#f20-memorization-repeat-engine)             | Memorization repeat engine             | F19        |
