@@ -1434,6 +1434,7 @@ mod tests {
     async fn tombstone_floor_rises_before_aged_tombstone_is_deleted() {
         let db = test_db().await;
         let now = job_log::epoch_now();
+        insert_user_row(&db, 31).await;
         exec(
             &db,
             "INSERT INTO sync_counters (user_id, domain, rev) VALUES (31, 'bookmarks', 12)",
@@ -1470,6 +1471,7 @@ mod tests {
     async fn notification_under_user_hold_survives() {
         let db = test_db().await;
         let now = job_log::epoch_now();
+        insert_user_row(&db, 41).await;
         exec(
             &db,
             "INSERT INTO notifications (user_id, kind, title, body, created_at) \
@@ -1504,7 +1506,22 @@ mod tests {
         assert_eq!(kept, 1);
     }
 
+    /// Owner row first: child tables FK to users and foreign_keys=ON.
+    async fn insert_user_row(db: &DatabaseConnection, user: i32) {
+        exec(
+            db,
+            &format!(
+                "INSERT OR IGNORE INTO users (id, name, email, password, is_verified, role, two_fa_enabled, \
+                 session_auth_secret, created_at, updated_at) VALUES \
+                 ({user}, 'n', 'n{user}@example.com', 'hash', 1, 'user', 0, 's', \
+                 '2019-01-01 00:00:00', '2019-01-01 00:00:00')"
+            ),
+        )
+        .await;
+    }
+
     async fn insert_notification(db: &DatabaseConnection, user: i32) {
+        insert_user_row(db, user).await;
         exec(
             db,
             &format!(

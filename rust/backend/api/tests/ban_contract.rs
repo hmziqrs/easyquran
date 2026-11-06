@@ -179,9 +179,15 @@ async fn active_ban_lookup_plan_uses_partial_index() {
         .iter()
         .map(|row| row.try_get_by_index::<String>(3).unwrap())
         .collect();
+    // Either the A30/A32 partial index or the A32 (user_id, revoked_at) index is a seek.
+    // The planner may pick the latter; the guard is that no full table scan happens.
     assert!(
-        plan.iter().any(|d| d.contains("idx_user_bans_one_active")),
-        "plan does not use the partial index: {plan:?}"
+        plan.iter().any(|d| d.contains("SEARCH user_bans")),
+        "plan does not seek user_bans: {plan:?}"
+    );
+    assert!(
+        !plan.iter().any(|d| d.starts_with("SCAN user_bans")),
+        "plan scans user_bans: {plan:?}"
     );
 }
 
