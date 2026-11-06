@@ -6,31 +6,6 @@ Device registry, fingerprint and continuity, device UI, handoff and the native c
 
 Account device management for web, React Native and GPUI desktop. Not an abuse signal; Gate B still governs that. Sync correctness never depends on recognising a device: at worst a duplicate shows in the list.
 
-#### D4. Devices on the account page
-
-Build: replace the Sessions card on `/account` with Devices: name, platform icon, browser or OS, last seen, "This device". Rename inline. "Sign out" on another device acts at once with a toast, no dialog. On this device it runs normal sign-out and keeps the id. Sessions with no device show as "Unknown device" using the existing fixed-table label. Strings go in the `account` namespace (`en`, `ar`).
-
-Files: `web/src/routes/(account)/account/+page.svelte`, `web/src/routes/(account)/account/account-view.ts`, `web/src/lib/auth/account-client.ts`, `web/messages/account/{en,ar}.json`.
-
-Done when: list, rename and remote sign-out work in both locales; labels never echo unvalidated input (test); `bun run check` stays warning-free.
-
-Blocked by: D2, U1
-
-#### D5. Handoff by device
-
-Build:
-
-1. `device_id` in the thread's cursor register. An unknown or revoked id is stored as sent but resolves to no name, so threads started offline still land.
-2. Pull rows return `deviceName`, resolved through `merged_into` from the user's own rows.
-3. `ContinueThreads` compares device ids instead of device kinds, so two phones are no longer "the same". Label: "on Pixel · 5 min ago". Falls back to the kind label when no name resolves.
-4. F6 export leaves out `device_id` and stamps. Import only adds rows whose ids are absent and stamps those fresh, so an old export can never overwrite newer data.
-
-Files: `rust/backend/api/src/modules/reading_session_v1/*`, `rust/backend/api/src/db/sea_models/reading_session.rs`, `web/src/lib/sessions/{schema.ts,store.svelte.ts}`, `web/src/routes/(application)/yours/_components/ContinueThreads.svelte`.
-
-Done when: a thread from another phone shows that phone's name; removing the device falls back to "on your phone"; a reinstalled Android device keeps its label; S9 covers a revoked device whose dirty rows land after re-sign-in.
-
-Blocked by: D3, S9
-
 #### D6. Native client contract and session transport
 
 Native sign-in pieces exist (`/auth/{provider}/v1/token`, `ensure_native_token_request`), but the API has no bearer tokens, and React Native's cookie jar has reported problems: stale cookies overriding fresh ones, manual `Cookie` headers appended rather than replaced, and differences between iOS and Android. So native clients do not use a cookie jar. A thin adapter keeps every session, CSRF, rotation and revocation rule unchanged.

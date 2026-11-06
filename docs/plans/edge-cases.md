@@ -41,8 +41,6 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 | Android reinstall                                          | Hint matches: same row                                        | D3, O32     |
 | Backup restored onto a new phone or Mac                    | `ThisDeviceOnly` and hardware keys absent: new row            | D3, O32     |
 | Android device-to-device transfer                          | Identity excluded by `dataExtractionRules`; new row           | D3, M3, O32 |
-| Tablet, foldable, or desktop-mode iPad changes form factor | Latest register wins; label follows the last write            | D2, D5      |
-| Device removed while its threads remain                    | Label falls back to device kind                               | D5          |
 | Push token rotates or goes stale                           | Re-uploaded on refresh; terminal errors prune it              | D2, A36     |
 | Device with no push (GPUI)                                 | No token; local notifications                                 | D6, F9      |
 

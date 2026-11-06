@@ -8,7 +8,7 @@ Product features, then the copy truth pass.
 
 #### F6. Personal data export and import
 
-Build: versioned JSON export of bookmarks, folders, notes, threads, cards and settings. Import validates, adds only rows whose ids are absent (with a toast), and rejects newer schema versions. Lives in Settings.
+Build: versioned JSON export of bookmarks, folders, notes, threads, cards and settings. Export drops `device_id`, and import adds only absent ids (from D5). Import validates, adds only rows whose ids are absent (with a toast), and rejects newer schema versions. Lives in Settings.
 Files: `web/src/routes/(application)/settings/`, new: `web/src/lib/storage/data-export.ts`
 Done when: export then import on a clean browser round-trips everything; malformed and future-schema files are rejected with a clear message.
 

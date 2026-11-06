@@ -51,8 +51,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 
 | Item                                                                   | Title                                        | Blocked by |
 | ---------------------------------------------------------------------- | -------------------------------------------- | ---------- |
-| [D4](plans/devices.md#d4-devices-on-the-account-page)                  | Devices on the account page                  | D2, U1     |
-| [D5](plans/devices.md#d5-handoff-by-device)                            | Handoff by device                            | D3, S9     |
 | [D6](plans/devices.md#d6-native-client-contract-and-session-transport) | Native client contract and session transport | D3, D5     |
 
 ### Abuse phase 1

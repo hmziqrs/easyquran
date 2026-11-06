@@ -109,3 +109,5 @@ Manual only (need a device): iOS and Android reinstall (server side: `rung_three
 | Two machines sharing `MachineGuid` or `machine-id` | Detected on the second install; rows split; nobody signed out |
 | Full disk clone with keys intact | Accepted limit: one row; sync still correct |
 | Android multi-user or work profile | Separate devices |
+| Tablet, foldable, or desktop-mode iPad changes form factor | Latest register wins; label follows the last write |
+| Device removed while its threads remain | Label falls back to device kind |
