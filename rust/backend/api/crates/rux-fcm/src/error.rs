@@ -14,4 +14,13 @@ pub enum FcmError {
 
     #[error("token unregistered")]
     Unregistered,
+
+    /// 400 INVALID_ARGUMENT. Usually a bad token, but a bad payload gives the same
+    /// status, so callers prune only after repeated failures.
+    #[error("invalid argument")]
+    InvalidArgument,
+
+    /// 403 SENDER_ID_MISMATCH: the token belongs to another Firebase sender.
+    #[error("sender id mismatch")]
+    SenderMismatch,
 }

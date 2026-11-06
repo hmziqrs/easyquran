@@ -360,6 +360,63 @@ async fn signed_out_and_wrong_owner_requests_are_refused() {
 }
 
 #[tokio::test]
+async fn a_push_token_moving_accounts_writes_one_device_transfer_row() {
+    use sea_orm::{ColumnTrait, QueryFilter};
+    let ctx = setup().await;
+    let mut reg_a = web_registration(ctx.uid_a, DEV_A);
+    reg_a["token"] = json!("fcm-token-moves");
+    let (status, body) = register(&ctx, &ctx.cookie_a, &reg_a).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let mut reg_b = web_registration(ctx.uid_b, DEV_A);
+    reg_b["token"] = json!("fcm-token-moves");
+    let (status, body) = register(&ctx, &ctx.cookie_b, &reg_b).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let rows = ruxlog::db::sea_models::audit_log::Entity::find()
+        .filter(
+            ruxlog::db::sea_models::audit_log::Column::Action
+                .eq(ruxlog::services::audit::AuditAction::DeviceTransfer.as_str()),
+        )
+        .all(&ctx.state.sea_db)
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 1, "one device.transfer row");
+    assert_eq!(rows[0].user_id, Some(ctx.uid_b));
+    assert_eq!(rows[0].resource_type, "device");
+    assert_eq!(
+        rows[0].metadata,
+        Some(json!({ "fromUserId": ctx.uid_a, "platform": "web" }))
+    );
+    assert!(
+        !format!("{:?}", rows[0]).contains("fcm-token-moves"),
+        "token leaked into audit row"
+    );
+    assert!(
+        !format!("{:?}", rows[0]).contains(DEV_A),
+        "device id leaked into audit row"
+    );
+    assert_eq!(
+        device::Entity::owner_of_token(&ctx.state.sea_db, "fcm-token-moves")
+            .await
+            .unwrap(),
+        Some(ctx.uid_b)
+    );
+}
+
+#[tokio::test]
+async fn malformed_push_tokens_are_refused_at_registration() {
+    let ctx = setup().await;
+    for bad in ["has space", "quote\"injection", "line\nbreak"] {
+        let mut reg = web_registration(ctx.uid_a, DEV_A);
+        reg["token"] = json!(bad);
+        let (status, body) = register(&ctx, &ctx.cookie_a, &reg).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{bad:?} -> {body}");
+    }
+    assert!(list(&ctx, &ctx.cookie_a).await.is_empty());
+}
+
+#[tokio::test]
 async fn sign_out_token_delete_leaves_the_device_row_alone() {
     let ctx = setup().await;
     let mut reg = web_registration(ctx.uid_a, DEV_A);

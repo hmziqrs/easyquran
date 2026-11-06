@@ -100,38 +100,107 @@ async fn dispatch(
 
     for dev in devices {
         let msg = private_push_hint(&dev.token);
-        match client.send(msg).await {
-            Ok(name) => {
-                tracing::debug!(
-                    device_id = dev.id,
-                    fcm_name = %name,
-                    "FCM delivered"
-                );
-            }
-            Err(rux_fcm::FcmError::Unregistered) => {
-                tracing::info!(
-                    device_id = dev.id,
-                    "FCM token unregistered; pruning stale device"
-                );
-                if let Err(err) = device::Entity::prune_owned_by_id(db, dev.id, user_id).await {
-                    tracing::warn!(
-                        error = %err,
-                        device_id = dev.id,
-                        "Failed to prune unregistered device"
-                    );
-                }
-            }
-            Err(err) => {
-                tracing::warn!(
-                    error = %err,
-                    device_id = dev.id,
-                    "FCM send failed; device left in place"
-                );
-            }
-        }
+        let result = client.send(msg).await;
+        apply_push_result(db, user_id, &dev, result).await;
     }
 
     Ok(model)
+}
+
+/// Strikes on consecutive non-terminal rejections before a token is pruned (A36).
+pub(crate) const STRIKES_TO_PRUNE: i32 = 2;
+
+/// How a failed push treats the device row (A36).
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum FailureClass {
+    /// Firebase says the token is gone: prune at once.
+    Unregistered,
+    /// Could be a bad token or a bad payload: count a strike, prune on the second.
+    Strikable,
+    /// Transient or unknown: leave the row alone.
+    Keep,
+}
+
+pub(crate) fn classify_push_failure(err: &rux_fcm::FcmError) -> FailureClass {
+    match err {
+        rux_fcm::FcmError::Unregistered => FailureClass::Unregistered,
+        rux_fcm::FcmError::InvalidArgument | rux_fcm::FcmError::SenderMismatch => {
+            FailureClass::Strikable
+        }
+        _ => FailureClass::Keep,
+    }
+}
+
+/// Apply one push result to its device row. A send that fails here never fails the
+/// notification: the in-app row is already durable.
+async fn apply_push_result(
+    db: &DatabaseConnection,
+    user_id: i32,
+    dev: &device::Model,
+    result: Result<String, rux_fcm::FcmError>,
+) {
+    let err = match result {
+        Ok(name) => {
+            tracing::debug!(device_id = dev.id, fcm_name = %name, "FCM delivered");
+            if dev.invalid_strikes > 0 {
+                if let Err(db_err) = device::Entity::clear_invalid(db, dev.id).await {
+                    tracing::warn!(error = %db_err, device_id = dev.id, "Failed to clear push strikes");
+                }
+            }
+            return;
+        }
+        Err(err) => err,
+    };
+    match classify_push_failure(&err) {
+        FailureClass::Unregistered => {
+            tracing::info!(
+                device_id = dev.id,
+                "FCM token unregistered; pruning stale device"
+            );
+            prune(db, user_id, dev.id).await;
+        }
+        FailureClass::Strikable => {
+            let strikes = match device::Entity::record_invalid(db, dev.id).await {
+                Ok(n) => n,
+                Err(db_err) => {
+                    tracing::warn!(error = %db_err, device_id = dev.id, "Failed to record push strike");
+                    return;
+                }
+            };
+            if strikes >= STRIKES_TO_PRUNE {
+                tracing::info!(
+                    device_id = dev.id,
+                    strikes,
+                    "FCM token rejected repeatedly; pruning device"
+                );
+                prune(db, user_id, dev.id).await;
+            } else {
+                tracing::warn!(
+                    error = %err,
+                    device_id = dev.id,
+                    strikes,
+                    "FCM token rejected; strike recorded"
+                );
+            }
+        }
+        FailureClass::Keep => {
+            tracing::warn!(
+                error = %err,
+                device_id = dev.id,
+                "FCM send failed; device left in place"
+            );
+        }
+    }
+}
+
+async fn prune(db: &DatabaseConnection, user_id: i32, device_id: i32) {
+    if let Err(err) = device::Entity::prune_owned_by_id(db, device_id, user_id).await {
+        tracing::warn!(
+            error = %err,
+            device_id,
+            "Failed to prune unregistered device"
+        );
+    }
 }
 
 pub(crate) fn private_push_hint(token: &str) -> rux_fcm::FcmMessage {
@@ -168,6 +237,33 @@ mod tests {
                     "payload": { "aps": { "sound": "default" } }
                 }
             })
+        );
+    }
+
+    #[test]
+    fn unregistered_prunes_at_once_while_bad_tokens_take_two_strikes() {
+        use super::{classify_push_failure, FailureClass, STRIKES_TO_PRUNE};
+        use rux_fcm::FcmError;
+        assert_eq!(
+            classify_push_failure(&FcmError::Unregistered),
+            FailureClass::Unregistered
+        );
+        assert_eq!(
+            classify_push_failure(&FcmError::InvalidArgument),
+            FailureClass::Strikable
+        );
+        assert_eq!(
+            classify_push_failure(&FcmError::SenderMismatch),
+            FailureClass::Strikable
+        );
+        // Transient and unknown failures never touch the row.
+        assert_eq!(
+            classify_push_failure(&FcmError::Api(503, "busy".into())),
+            FailureClass::Keep
+        );
+        assert_eq!(
+            STRIKES_TO_PRUNE, 2,
+            "prune on the second consecutive failure"
         );
     }
 

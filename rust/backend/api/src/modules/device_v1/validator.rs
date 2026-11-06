@@ -35,7 +35,7 @@ pub struct V1RegisterDevicePayload {
     #[validate(length(min = 1, max = 32))]
     pub app_version: Option<String>,
     /// Push token, when the device has notification permission. Optional.
-    #[validate(length(min = 1, max = 4096))]
+    #[validate(length(min = 1, max = 4096), custom(function = "valid_push_token"))]
     pub token: Option<String>,
     #[validate(custom(function = "valid_key_store"))]
     pub key_store: String,
@@ -97,6 +97,37 @@ pub fn valid_device_id(id: &str) -> Result<(), ValidationError> {
     } else {
         Err(ValidationError::new("invalid_device_id")
             .with_message("device id must be 1 to 64 of [A-Za-z0-9._-]".into()))
+    }
+}
+
+/// Push token shape (A36). FCM registration tokens are ASCII letters, digits, `:`,
+/// `_` and `-`. Whitespace, control bytes, quotes and non-ASCII are refused before
+/// the token reaches the device table or the FCM call.
+pub fn valid_push_token(token: &str) -> Result<(), ValidationError> {
+    let ok = token
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b':' | b'_' | b'-'));
+    if ok {
+        Ok(())
+    } else {
+        Err(ValidationError::new("invalid_push_token")
+            .with_message("push token has characters outside [A-Za-z0-9:_-]".into()))
+    }
+}
+
+#[cfg(test)]
+mod push_token_tests {
+    use super::valid_push_token;
+
+    #[test]
+    fn fcm_shaped_tokens_pass_and_malformed_ones_fail() {
+        assert!(valid_push_token("fcm-token-a").is_ok());
+        assert!(valid_push_token("dGhpcyBpcyBh_-Zm:APA91bHx").is_ok());
+        assert!(valid_push_token("has space").is_err());
+        assert!(valid_push_token("line\nbreak").is_err());
+        assert!(valid_push_token("quote\"injection").is_err());
+        assert!(valid_push_token("tökén").is_err());
+        assert!(valid_push_token("nul\0byte").is_err());
     }
 }
 

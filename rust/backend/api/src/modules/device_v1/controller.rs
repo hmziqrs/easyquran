@@ -248,6 +248,7 @@ pub async fn register(
     .await?;
 
     if let Some(token) = payload.token.clone() {
+        let prior_owner = device::Entity::owner_of_token(db, &token).await?;
         device::Entity::upsert(
             db,
             device::NewDevice {
@@ -258,6 +259,23 @@ pub async fn register(
             },
         )
         .await?;
+        // A token that was held by another account moved here. Record the move;
+        // the account id is evidence, the token and device id are not.
+        if let Some(from_user_id) = prior_owner.filter(|&owner| owner != user.id) {
+            audit::record(
+                db,
+                AuditEvent {
+                    actor_id: Some(user.id),
+                    action: AuditAction::DeviceTransfer,
+                    resource_id: user.id.to_string(),
+                    metadata: json!({
+                        "fromUserId": from_user_id,
+                        "platform": payload.platform,
+                    }),
+                },
+            )
+            .await?;
+        }
     }
 
     if let Some(session_id) = session_id {
@@ -434,7 +452,9 @@ mod tests {
                 "device_id" TEXT,
                 "created_at" TEXT NOT NULL,
                 "updated_at" TEXT NOT NULL,
-                "last_seen_at" TEXT NOT NULL
+                "last_seen_at" TEXT NOT NULL,
+                "invalid_strikes" INTEGER NOT NULL DEFAULT 0,
+                "invalid_at" TEXT
             )"#,
         )
         .await

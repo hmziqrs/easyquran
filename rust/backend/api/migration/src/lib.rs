@@ -33,6 +33,7 @@ mod m000060_reports;
 mod m000061_case_evidence;
 mod m000070_mail_budget;
 mod m000100_comment_notice_hardening;
+mod m000110_device_token_hygiene;
 
 pub struct Migrator;
 
@@ -137,6 +138,8 @@ impl MigratorTrait for Migrator {
             // m000100 hardens comment moderation (A27): post_comments.flags_cleared_at, and
             // enforcement_notices gains subject_kind, nullable ban_id, comment_id and automated.
             Box::new(m000100_comment_notice_hardening::Migration),
+            // m000110 adds devices.invalid_strikes and devices.invalid_at (A36). Constant default 0.
+            Box::new(m000110_device_token_hygiene::Migration),
         ]
     }
 }

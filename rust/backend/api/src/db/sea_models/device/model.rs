@@ -14,6 +14,10 @@ pub struct Model {
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
     pub last_seen_at: DateTimeWithTimeZone,
+    /// Consecutive non-terminal FCM rejections (A36). Reset on success or re-register.
+    pub invalid_strikes: i32,
+    /// When the latest strike landed. NULL while `invalid_strikes` is 0.
+    pub invalid_at: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

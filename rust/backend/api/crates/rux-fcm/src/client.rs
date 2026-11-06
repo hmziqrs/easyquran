@@ -81,11 +81,67 @@ impl FcmClient {
                 .ok_or_else(|| FcmError::Api(status, "missing 'name' in response".to_string()));
         }
 
-        // Map 404/UNREGISTERED to the `Unregistered` sentinel — the fan-out loop prunes the device row on this variant; do not collapse.
-        if status == 404 || body.to_uppercase().contains("UNREGISTERED") {
-            return Err(FcmError::Unregistered);
-        }
+        Err(classify_failure(status, body))
+    }
+}
 
-        Err(FcmError::Api(status, body))
+/// Map a non-success FCM reply to its error class. Order matters: `UNREGISTERED`
+/// is checked first and keeps its own sentinel (pruned at once). `SENDER_ID_MISMATCH`
+/// and `INVALID_ARGUMENT` get their own classes, so callers can count strikes.
+pub(crate) fn classify_failure(status: u16, body: String) -> FcmError {
+    let upper = body.to_uppercase();
+    if status == 404 || upper.contains("UNREGISTERED") {
+        return FcmError::Unregistered;
+    }
+    if upper.contains("SENDER_ID_MISMATCH") {
+        return FcmError::SenderMismatch;
+    }
+    if status == 400 || upper.contains("INVALID_ARGUMENT") {
+        return FcmError::InvalidArgument;
+    }
+    FcmError::Api(status, body)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unregistered_prunes_at_once_on_404_or_body() {
+        assert!(matches!(
+            classify_failure(404, String::new()),
+            FcmError::Unregistered
+        ));
+        let body = r#"{"error":{"status":"NOT_FOUND","details":[{"errorCode":"UNREGISTERED"}]}}"#;
+        assert!(matches!(
+            classify_failure(404, body.into()),
+            FcmError::Unregistered
+        ));
+    }
+
+    #[test]
+    fn invalid_argument_and_sender_mismatch_get_their_own_classes() {
+        let bad = r#"{"error":{"code":400,"status":"INVALID_ARGUMENT"}}"#;
+        assert!(matches!(
+            classify_failure(400, bad.into()),
+            FcmError::InvalidArgument
+        ));
+        let mismatch = r#"{"error":{"code":403,"status":"PERMISSION_DENIED","details":[{"errorCode":"SENDER_ID_MISMATCH"}]}}"#;
+        assert!(matches!(
+            classify_failure(403, mismatch.into()),
+            FcmError::SenderMismatch
+        ));
+    }
+
+    #[test]
+    fn other_failures_stay_api_errors() {
+        assert!(matches!(
+            classify_failure(500, "boom".into()),
+            FcmError::Api(500, _)
+        ));
+        assert!(matches!(
+            classify_failure(429, "quota".into()),
+            FcmError::Api(429, _)
+        ));
     }
 }
