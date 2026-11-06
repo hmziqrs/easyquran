@@ -77,8 +77,10 @@ export async function fetchOwnerProfile(opts?: { force?: boolean }): Promise<Own
 
 export async function getOwnerPublic(): Promise<OwnerPublic> {
   const p = await fetchOwnerProfile();
+  // Public contact is the site's support address, never the owner's personal email
+  // from the remote profile (that stays server-side and unpublished).
   return {
-    email: p.email,
+    email: SITE.contactEmail,
     x: `https://x.com/${p.social.twitter}`,
     xHandle: `@${p.social.twitter}`,
   };
