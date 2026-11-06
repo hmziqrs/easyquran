@@ -41,4 +41,13 @@ impl Entity {
         };
         Ok(row.insert(conn).await?)
     }
+
+    /// Open reports at one priority (`p0` or `p1`). Used by the daily digest (A26).
+    pub async fn count_open<C: ConnectionTrait>(conn: &C, priority: &str) -> DbResult<u64> {
+        Ok(Self::find()
+            .filter(Column::Status.eq("open"))
+            .filter(Column::Priority.eq(priority))
+            .count(conn)
+            .await?)
+    }
 }

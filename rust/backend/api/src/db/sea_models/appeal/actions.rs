@@ -56,4 +56,12 @@ impl Entity {
             .count(conn)
             .await?)
     }
+
+    /// Appeals still awaiting a decision, overdue or not (A26 digest).
+    pub async fn open_count<C: ConnectionTrait>(conn: &C) -> DbResult<u64> {
+        Ok(Self::find()
+            .filter(Column::Status.eq(STATUS_OPEN))
+            .count(conn)
+            .await?)
+    }
 }

@@ -15,6 +15,7 @@ pub mod mail;
 pub mod media;
 pub mod notification;
 pub mod oauth;
+pub mod operator_alert;
 pub mod passkey_state;
 pub mod password_work;
 pub mod paywall;

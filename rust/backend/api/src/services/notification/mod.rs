@@ -134,7 +134,7 @@ async fn dispatch(
     Ok(model)
 }
 
-fn private_push_hint(token: &str) -> rux_fcm::FcmMessage {
+pub(crate) fn private_push_hint(token: &str) -> rux_fcm::FcmMessage {
     rux_fcm::FcmMessage {
         token: token.into(),
         notification: Some(rux_fcm::Notification {

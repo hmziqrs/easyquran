@@ -43,6 +43,7 @@ pub enum AuditAction {
     IncidentCapture,
     LegalHoldPlace,
     LegalHoldRenew,
+    AlertDispatch,
 }
 
 impl AuditAction {
@@ -71,6 +72,7 @@ impl AuditAction {
         Self::IncidentCapture,
         Self::LegalHoldPlace,
         Self::LegalHoldRenew,
+        Self::AlertDispatch,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -99,6 +101,7 @@ impl AuditAction {
             Self::IncidentCapture => "incident.capture",
             Self::LegalHoldPlace => "legal_hold.place",
             Self::LegalHoldRenew => "legal_hold.renew",
+            Self::AlertDispatch => "alert.dispatch",
         }
     }
 
@@ -124,6 +127,7 @@ impl AuditAction {
             Self::ReportSubmit => "report",
             Self::IncidentCapture => "case",
             Self::LegalHoldPlace | Self::LegalHoldRenew => "legal_hold",
+            Self::AlertDispatch => "report",
         }
     }
 }

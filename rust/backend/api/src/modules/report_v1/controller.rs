@@ -17,6 +17,7 @@ use crate::{
         abuse_limiter::{limiter, AbuseLimiterConfig},
         audit::{self, AuditAction, AuditEvent},
         auth::AuthSession,
+        operator_alert,
     },
     AppState,
 };
@@ -170,6 +171,10 @@ pub async fn submit(
         priority = reason.priority(),
         "Report received"
     );
+
+    if reason.is_p0() {
+        operator_alert::spawn_p0(&state, report.id);
+    }
 
     Ok((
         StatusCode::CREATED,
