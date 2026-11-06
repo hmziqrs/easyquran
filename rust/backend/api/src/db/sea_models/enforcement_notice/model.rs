@@ -23,6 +23,7 @@ pub struct Model {
     pub created_at: i64,
     pub retention_class: String,
     pub notice_channel: String,
+    pub shared_device_checked: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -69,6 +69,7 @@ fn create_body(user_id: i32, days: i64) -> Value {
         "reasonCode": "spam",
         "reasonText": "repeated spam",
         "corroborator": "credential_reuse",
+        "sharedDeviceChecked": true,
         "expiresAt": expires_in_days(days),
     })
 }
@@ -263,6 +264,77 @@ async fn expiry_is_required_and_bounded() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "400-day ban: {body}");
     assert_eq!(count(&h, "SELECT COUNT(*) FROM user_bans").await, 0);
+}
+
+#[tokio::test]
+async fn shared_device_check_is_required_on_create() {
+    let h = admin_harness().await;
+    let mut missing = create_body(h.uid_b, 1);
+    missing
+        .as_object_mut()
+        .unwrap()
+        .remove("sharedDeviceChecked");
+    let (status, body) = send(&h.app, req("POST", "/", &h.cookie_a, Some(missing))).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "missing flag: {body}");
+
+    let mut unchecked = create_body(h.uid_b, 1);
+    unchecked["sharedDeviceChecked"] = json!(false);
+    let (status, body) = send(&h.app, req("POST", "/", &h.cookie_a, Some(unchecked))).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "false flag: {body}");
+    assert_eq!(count(&h, "SELECT COUNT(*) FROM user_bans").await, 0);
+    assert_eq!(
+        count(&h, "SELECT COUNT(*) FROM enforcement_notices").await,
+        0
+    );
+}
+
+#[tokio::test]
+async fn ban_decision_records_the_shared_device_check() {
+    let h = admin_harness().await;
+    let (status, body) = send(
+        &h.app,
+        req("POST", "/", &h.cookie_a, Some(create_body(h.uid_b, 1))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "ban: {body}");
+    assert_eq!(
+        count(
+            &h,
+            "SELECT shared_device_checked FROM enforcement_notices ORDER BY id DESC LIMIT 1"
+        )
+        .await,
+        1
+    );
+}
+
+/// A device signal is advisory: the precedence rule resolves it to a challenge,
+/// never to an account ban. The admin route is the only path that writes a ban.
+#[test]
+fn device_signal_alone_resolves_to_challenge_not_ban() {
+    use ruxlog::modules::admin_user_bans_v1::precedence::{resolve, Outcome, Signals};
+    let outcome = resolve(Signals {
+        device_signal: true,
+        ..Signals::default()
+    });
+    assert_eq!(outcome, Outcome::Challenge);
+}
+
+/// The SOP is the operator's checklist for the multi-account decision (A22). The
+/// guard keeps each required step in the committed file.
+#[test]
+fn moderation_sop_lists_the_multi_account_checklist() {
+    let sop = include_str!("../../../../deploy/moderation-sop.md").to_lowercase();
+    for step in [
+        "prior case link",
+        "functional test",
+        "causal test",
+        "admissible corroborators",
+        "shared-device check",
+        "continuity",
+        "closed reason codes",
+    ] {
+        assert!(sop.contains(step), "SOP missing step: {step}");
+    }
 }
 
 #[tokio::test]

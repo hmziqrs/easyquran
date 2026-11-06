@@ -106,6 +106,11 @@ pub async fn create_ban(
     let admin = actor(&auth)?;
     let now = chrono::Utc::now().fixed_offset();
     check_expiry(payload.expires_at, now)?;
+    if payload.shared_device_checked != Some(true) {
+        return Err(invalid(
+            "sharedDeviceChecked must be true: run the shared-device step in deploy/moderation-sop.md",
+        ));
+    }
     if payload
         .reason_text
         .as_ref()
@@ -152,6 +157,8 @@ pub async fn create_ban(
             reason_code: reason_code.to_string(),
             reason_text: payload.reason_text.clone(),
             corroborator: corroborator.to_string(),
+            // Refused above unless true, so the stored decision records the check.
+            shared_device_checked: true,
             decided_by: admin.id,
             decided_at: now.timestamp(),
             effective_at: now.timestamp(),

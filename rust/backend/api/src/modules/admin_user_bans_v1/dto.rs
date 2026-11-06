@@ -55,6 +55,10 @@ pub struct CreateBanPayload {
     #[serde(default)]
     pub reason_text: Option<String>,
     pub corroborator: Corroborator,
+    /// Must be `true` (A22): the shared-device step of deploy/moderation-sop.md ran.
+    /// Optional on the wire so a missing field gets the same 400 as `false`.
+    #[serde(default)]
+    pub shared_device_checked: Option<bool>,
     pub expires_at: DateTime<FixedOffset>,
 }
 

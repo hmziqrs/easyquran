@@ -38,6 +38,8 @@ pub struct NewNotice {
     pub reason_code: String,
     pub reason_text: Option<String>,
     pub corroborator: String,
+    /// The operator ran the shared-device step (A22). Required true on create.
+    pub shared_device_checked: bool,
     pub decided_by: i32,
     pub decided_at: i64,
     pub effective_at: i64,
@@ -65,6 +67,7 @@ impl Entity {
             created_at: Set(now),
             retention_class: Set(RETENTION_ENFORCEMENT_12M.to_string()),
             notice_channel: Set(CHANNEL_EMAIL.to_string()),
+            shared_device_checked: Set(new.shared_device_checked),
             ..Default::default()
         };
         Ok(row.insert(conn).await?)
