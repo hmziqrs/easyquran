@@ -559,6 +559,22 @@ that the recipient is in `CLOUDFLARE_EMAIL_ALLOWED_ADDRESSES` if you set that
 allowlist. Re-run the smoke from step 2 until the controlled inbox receives the
 mail with SPF+DKIM pass.
 
+## Retention sweeper (A32): modes and ship gates
+
+`RETENTION_SWEEP_MODE` (compose default `off`). Unknown values are off.
+
+1. `off`: the task does not start.
+2. `dry_run`: counts eligible rows per table, logs them, writes a `job_runs` row
+   (`mode=dry_run eligible=...`). Deletes nothing.
+3. `enforce`: deletes, but only after a `dry_run` row exists. Otherwise the run
+   falls back to dry-run and raises `enforce_blocked`.
+
+Ship order: set `dry_run`, read the logged counts, then set `enforce`. Alerts
+(`target: retention_alert` in logs): `zero_delete`, `canary_survived`,
+`enforce_blocked`. Deletes never touch rows under a live legal hold or a live
+ban. Retention does not erase physical bytes: `DELETE` leaves freelist and WAL
+data on this build, so do not claim physical erasure (A33).
+
 ## Registration admission (A9): caps, Turnstile, smoke test
 
 ### Caps (`AdmissionSettings`, `rust/backend/api/src/config/settings.rs`)

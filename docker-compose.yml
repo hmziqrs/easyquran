@@ -162,6 +162,9 @@ services:
       MAIL_PROVIDER: ${MAIL_PROVIDER:-none}
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-no-reply@easyquran.fyi}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-EasyQuran}
+      # Retention sweeper (A32): off | dry_run | enforce. Default off. Enforce deletes
+      # only after a dry_run row exists in job_runs. See deploy/README.md.
+      RETENTION_SWEEP_MODE: ${RETENTION_SWEEP_MODE:-off}
     # The corpus volume must be full before boot — the api fails fast (§4) on an
     # incomplete catalogue, so without this gate it crashloops through the first
     # deploy until quran-init finishes.
