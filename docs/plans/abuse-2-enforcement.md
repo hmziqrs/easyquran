@@ -2,20 +2,6 @@
 
 [Back to index](../README.md)
 
-#### A25. Case evidence, legal holds, incident capture, delete guard
-
-Build:
-
-1. `case_evidence`: append-only, self-contained, no FK that can null or cascade. Columns include `case_ref`, snapshot JSON, `captured_at INTEGER`, `retention_class`, `expires_at INTEGER NOT NULL`.
-2. `legal_holds` and `legal_hold_subjects`: subject kind and id copied at hold time; `authority`, `reason`, `owner`, `expires_at`. Retention classes: CSAM hold 1 year, never auto-released; law-enforcement preservation 90 + 90 days (`preserve_until`, renewable); enforcement records 12 months.
-3. `just incident capture <ref>`: copies the comment, its flags, the user, sessions, views, media metadata, and an audit row into the case, before any removal.
-4. Comment delete with open flags is refused unless `confirm_evidence` is passed (A27 item 1 or here; implement here since evidence needs it). Also `flags_clear` must not destroy evidence.
-
-Files: new migration, new `rust/backend/api/src/db/sea_models/{case_evidence,legal_hold}/*`, `justfile`, `rust/backend/api/src/modules/post_comment_v1/*`, `rust/backend/api/src/db/sea_models/comment_flag/actions.rs`.
-
-Done when: deleting a comment with open flags is refused without `confirm_evidence` (test); `just incident capture` writes a case row with all listed objects (test or run); legal holds table enforced by sweeper later (A32).
-Blocked by: A23
-
 #### A26. Alerting, runbook, drill
 
 Build:
