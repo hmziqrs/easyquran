@@ -6,6 +6,7 @@ import { createOutbox, type Outbox } from "./outbox";
 import {
   SyncPausedError,
   SyncRejectedError,
+  SyncRetryAfterError,
   type SyncDomain,
   type SyncMutation,
   type SyncPhase,
@@ -63,6 +64,10 @@ const ONLINE_POLL_MS = 5_000;
 const PERIODIC_FLUSH_MS = 30_000;
 /** Consecutive server-rejected batches before the batch head is dead-lettered (EC-29). */
 const DEAD_LETTER_REJECTIONS = 5;
+/** One tab polls at a time; every tab polls where locks are missing. */
+const POLL_LOCK = "easyquran-sync-poll";
+/** A runaway domain cannot spin: this many rounds, then the next flush continues. */
+const MAX_ROUNDS_PER_FLUSH = 50;
 
 /** Exponential retry delay: 2s, 4s, 8s, 16s, 32s, capped at 60s. */
 export function syncRetryDelayMs(failures: number): number {
@@ -113,8 +118,12 @@ export class SyncEngine {
   #lastSyncAt = $state<number | null>(null);
   #lastError = $state<string | null>(null);
   #deadLettered = $state(0);
+  #storageDegraded = $state(false);
 
   #running: Promise<void> | null = null;
+  /** Domain name → epoch ms before which no round runs (`Retry-After`). */
+  #holdUntil = new Map<string, number>();
+  #isPollLeader = true;
   #coalesced = false;
   #activeDomainFilter: string | undefined;
   #coalescedDomainFilter: string | undefined;
@@ -159,6 +168,11 @@ export class SyncEngine {
   get lastError(): string | null {
     return this.#lastError;
   }
+  /** A store's durable write failed: never report those rows as synced. */
+  setStorageDegraded(on: boolean): void {
+    this.#storageDegraded = on;
+  }
+
   /** Mutations this engine moved to the dead-letter store (EC-29). */
   get deadLettered(): number {
     return this.#deadLettered;
@@ -169,7 +183,7 @@ export class SyncEngine {
       pending: this.#pending,
       lastSyncAt: this.#lastSyncAt,
       lastError: this.#lastError,
-      degraded: this.#outbox.degraded,
+      degraded: this.#outbox.degraded || this.#storageDegraded,
       deadLettered: this.#deadLettered,
     };
   }
@@ -282,9 +296,12 @@ export class SyncEngine {
     // queue — pulls once (pull-on-reconnect cadence; 1 req/domain/30s stays far
     // inside the API's 100 req/60s limit).
     const periodic = setInterval(() => {
-      if (this.#isOnline()) void this.flush();
+      if (!this.#isOnline() || !this.#isPollLeader) return;
+      if (document.visibilityState !== "visible") return;
+      void this.flush();
     }, PERIODIC_FLUSH_MS);
     teardowns.push(() => clearInterval(periodic));
+    teardowns.push(this.#electPollLeader());
 
     const onVisibility = (): void => {
       if (document.visibilityState === "visible" && this.#isOnline()) void this.flush();
@@ -313,6 +330,57 @@ export class SyncEngine {
     };
     this.#teardownListeners = teardown;
     return teardown;
+  }
+
+  /** Hold the poll lock while this tab lives. Without locks, every tab polls. */
+  #electPollLeader(): () => void {
+    const locks: LockManager | null = "locks" in navigator ? navigator.locks : null;
+    if (locks === null) return () => {};
+    const stop = new AbortController();
+    this.#isPollLeader = false;
+    void locks
+      .request(POLL_LOCK, { signal: stop.signal }, () => {
+        this.#isPollLeader = true;
+        return new Promise<void>((resolve) => {
+          stop.signal.addEventListener("abort", () => resolve(), { once: true });
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      stop.abort();
+      this.#isPollLeader = true;
+    };
+  }
+
+  /** A row domain's rounds: the store's dirty rows are the queue. */
+  async #runRounds(
+    domain: RegisteredSyncDomain,
+    round: NonNullable<RegisteredSyncDomain["round"]>,
+    signal: AbortSignal,
+    isCurrent: () => boolean,
+  ): Promise<DrainOutcome> {
+    const hold = this.#holdUntil.get(domain.name) ?? 0;
+    if (Date.now() < hold) return "paused";
+    this.#holdUntil.delete(domain.name);
+    for (let i = 0; i < MAX_ROUNDS_PER_FLUSH; i += 1) {
+      if (!isCurrent()) return "paused";
+      try {
+        const result = await round(signal);
+        if (!isCurrent()) return "paused";
+        this.#lastSyncAt = Date.now();
+        this.#lastError = null;
+        if (!result.more) return "drained";
+      } catch (err) {
+        if (!isCurrent() || err instanceof SyncPausedError) return "paused";
+        if (err instanceof SyncRetryAfterError) {
+          this.#holdUntil.set(domain.name, Date.now() + err.seconds * 1000);
+          return "paused";
+        }
+        this.#lastError = messageOf(err);
+        return "failed";
+      }
+    }
+    return "drained";
   }
 
   async #drain(domainFilter: string | undefined): Promise<void> {
@@ -385,6 +453,10 @@ export class SyncEngine {
     const isCurrent = (): boolean => !controller.signal.aborted && this.#domains.includes(domain);
     this.#controllers.set(domain.name, controller);
     try {
+      if (domain.round !== undefined) {
+        const round = domain.round.bind(domain);
+        return await this.#runRounds(domain, round, controller.signal, isCurrent);
+      }
       let pushedAny = false;
       for (;;) {
         if (!isCurrent()) return "paused";

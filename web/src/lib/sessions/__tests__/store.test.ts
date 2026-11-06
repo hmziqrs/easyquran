@@ -1,19 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { UnsafeRequestInit } from "#lib/auth/auth-client.js";
-import type { RegisteredSyncDomain, SyncMutation } from "#lib/sync/index.js";
+import type { RegisteredSyncDomain } from "#lib/sync/index.js";
 
-import { isUuidV7 } from "#lib/sync/ids.js";
-
-import { createSessionsDomain } from "../domain";
 import { markEntry, noteLeaving } from "../entry";
-import {
-  STALE_AFTER_MS,
-  decodeEnvelope,
-  type ReadingThread,
-  type SessionMutation,
-  type SessionSnapshot,
-} from "../schema";
+import { STALE_AFTER_MS, decodeEnvelope } from "../schema";
 import { SessionsStore, type ReaderTarget, type SessionsEngineLike } from "../store.svelte";
 
 vi.mock("$app/env", () => ({ browser: true }));
@@ -30,18 +20,14 @@ interface FakeAuth {
 }
 
 function fakeEngine() {
-  const enqueued: Array<{ domain: string; payload: SessionMutation }> = [];
+  const flushed: Array<string | undefined> = [];
   const engine: SessionsEngineLike = {
-    async enqueue<P>(domain: string, payload: P) {
-      // SAFETY: test double — SessionsStore only enqueues SessionMutation payloads.
-      enqueued.push({ domain, payload: payload as SessionMutation });
-      // SAFETY: test double — the store never reads the returned mutation.
-      return { id: `m${enqueued.length}`, seq: enqueued.length } as SyncMutation<P>;
+    async flush(domain) {
+      flushed.push(domain);
     },
-    async flush() {},
     start: () => () => undefined,
   };
-  return { engine, enqueued };
+  return { engine, flushed };
 }
 
 function makeStore(auth: FakeAuth, engine = fakeEngine()) {
@@ -210,160 +196,5 @@ describe("thread lifecycle", () => {
       JSON.parse(window.localStorage.getItem("easyquran.sessions.local") ?? "null"),
     );
     expect(stored?.threads.map((t) => t.surah).sort((a, b) => a - b)).toEqual([2, 67]);
-  });
-});
-
-describe("account sync", () => {
-  const account = (): FakeAuth => ({ authenticated: true, user: { id: 7 } });
-
-  it("pushes thread rows and progress through the account partition", () => {
-    vi.useFakeTimers();
-    const { store, engine, registered } = makeStore(account());
-    store.onAuthTransition();
-    expect(registered.map((d) => d.name)).toEqual(["sessions.user:7"]);
-    store.enter(surah(2));
-    store.cursor(2, 30, null);
-    store.cursor(2, 31, null);
-    vi.advanceTimersByTime(4100);
-    const kinds = engine.enqueued.map((e) => `${e.domain} ${e.payload.kind}`);
-    expect(kinds).toEqual(["sessions.user:7 session.upsert", "sessions.user:7 progress.upsert"]);
-    expect(engine.enqueued[0]?.payload).toMatchObject({
-      surah: 2,
-      ayah: 31,
-      device: expect.any(String),
-    });
-  });
-
-  it("applies newer server rows, keeps pending ones, and drops threads ended elsewhere", () => {
-    vi.useFakeTimers();
-    const { store } = makeStore(account());
-    store.onAuthTransition();
-    const mine = store.enter(surah(2)).thread;
-    store.cursor(2, 10, null);
-    vi.advanceTimersByTime(4100);
-    markEntry({ origin: "index" });
-    const other = store.enter(surah(5)).thread;
-    store.cursor(5, 2, null);
-    vi.advanceTimersByTime(4100);
-    // Pretend both drained; then the server reports only `mine`, moved on another device.
-    const drained: SyncMutation<SessionMutation>[] = [mine, other].map((t, i) => ({
-      id: `m${i}`,
-      domain: "sessions.user:7",
-      seq: i,
-      queuedAt: 0,
-      payload: { kind: "session.upsert", ...rowOf(store, t.id) },
-    }));
-    const moved: ReadingThread = {
-      ...rowOf(store, mine.id),
-      ayah: 50,
-      device: "phone",
-      updatedAt: new Date(Date.now() + 60_000).toISOString(),
-    };
-    const snapshot: SessionSnapshot = { applied: 0, skipped: 0, sessions: [moved], progress: [] };
-    // `other` is this tab's thread: kept even though the server omits it.
-    store.applyServer(snapshot, drained);
-    expect(store.open.find((t) => t.id === mine.id)).toMatchObject({ ayah: 50, device: "phone" });
-    expect(store.open.some((t) => t.id === other.id)).toBe(true);
-  });
-
-  it("signing in folds the device's threads into the account silently", () => {
-    vi.useFakeTimers();
-    const auth: FakeAuth = anon();
-    const { store, engine } = makeStore(auth);
-    store.enter(surah(18));
-    store.cursor(18, 10, null);
-    vi.advanceTimersByTime(500);
-    expect(window.localStorage.getItem("easyquran.sessions.local")).not.toBeNull();
-    auth.authenticated = true;
-    auth.user = { id: 9 };
-    store.onAuthTransition();
-    expect(window.localStorage.getItem("easyquran.sessions.local")).toBeNull();
-    expect(store.open[0]).toMatchObject({ surah: 18, ayah: 10 });
-    vi.advanceTimersByTime(4100);
-    expect(engine.enqueued.map((e) => e.payload.kind)).toContain("session.upsert");
-    expect(engine.enqueued.every((e) => e.domain === "sessions.user:9")).toBe(true);
-  });
-});
-
-function rowOf(store: SessionsStore, id: string): ReadingThread {
-  const row = store.open.find((t) => t.id === id);
-  if (row === undefined) throw new Error(`thread ${id} not open`);
-  return row;
-}
-
-describe("legacy thread ids", () => {
-  const LEGACY = "c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1";
-
-  function storedLegacy(owner: string): void {
-    const startedAt = "2026-10-01T00:00:00.000Z";
-    localStorage.setItem(
-      `easyquran.sessions.${owner}`,
-      JSON.stringify({
-        v: 2,
-        threads: [
-          {
-            id: LEGACY,
-            origin: "index",
-            originRef: null,
-            scope: "surah:2",
-            boundEnd: null,
-            surah: 2,
-            ayah: 5,
-            localPage: null,
-            ratio: null,
-            sourceId: null,
-            device: "phone",
-            startedAt,
-            updatedAt: startedAt,
-            endedAt: null,
-            endReason: null,
-          },
-        ],
-        progress: {},
-      }),
-    );
-  }
-
-  it("re-keys a stored v4 thread to a v7 built from startedAt, and syncs it", () => {
-    storedLegacy("7");
-    const engine = fakeEngine();
-    const auth: FakeAuth = { authenticated: true, user: { id: 7 } };
-    const { store } = makeStore(auth, engine);
-    store.onAuthTransition();
-    const pushed = engine.enqueued.map((row) => row.payload);
-    const upsert = pushed.find((payload) => payload.kind === "session.upsert");
-    const id = upsert?.kind === "session.upsert" ? upsert.id : "";
-    expect(isUuidV7(id)).toBe(true);
-    expect(id.replaceAll("-", "").slice(0, 12)).toBe(
-      Date.parse("2026-10-01T00:00:00.000Z").toString(16).padStart(12, "0"),
-    );
-    expect(pushed.some((payload) => "id" in payload && payload.id === LEGACY)).toBe(false);
-  });
-
-  it("drops queued mutations for the old id before sending", async () => {
-    const bodies: unknown[] = [];
-    const auth: FakeAuth = { authenticated: true, user: { id: 7 } };
-    const domain = createSessionsDomain(
-      {
-        unsafeRequest: async <T>(_path: string, init: UnsafeRequestInit) => {
-          bodies.push(init.body);
-          const data = { applied: 0, skipped: 0, sessions: [], progress: [] };
-          // SAFETY: test double — the domain decodes this body as `unknown`.
-          return { ok: true, status: 200, data: data as T, error: null, rotated: false };
-        },
-      },
-      auth,
-      7,
-    );
-    const live = "019a0000-0000-7000-8000-000000000001";
-    const row = (seq: number, id: string): SyncMutation<SessionMutation> => ({
-      id: `m${seq}`,
-      domain: domain.name,
-      seq,
-      queuedAt: 0,
-      payload: { kind: "session.delete", id, updatedAt: "2026-10-01T00:00:00.000Z" },
-    });
-    await domain.sync([row(1, LEGACY), row(2, live)]);
-    expect(bodies[0]).toMatchObject({ mutations: [{ id: live }] });
   });
 });

@@ -1,4 +1,6 @@
 import { asArray, asLiteral, asNumber, asObject, asString } from "#lib/storage/index.js";
+import type { JsonRecord, JsonValue } from "#lib/storage/decoders.js";
+import { parseStamp } from "#lib/sync/merge.js";
 
 /**
  * Reading threads. A thread is one continuous run
@@ -8,7 +10,7 @@ import { asArray, asLiteral, asNumber, asObject, asString } from "#lib/storage/i
  * defensively here — nothing past this module trusts raw storage or responses.
  */
 
-export const SESSIONS_SCHEMA_VERSION = 2;
+export const SESSIONS_SCHEMA_VERSION = 3;
 /** Open threads go stale after this long without a touch (derived, never stored). */
 export const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
 /** Local cap: newest threads kept on device (open first); the server keeps the rest. */
@@ -21,7 +23,17 @@ export type EndReason = (typeof END_REASONS)[number];
 export const DEVICES = ["phone", "tablet", "desktop"] as const;
 export type DeviceKind = (typeof DEVICES)[number];
 
-export interface ReadingThread {
+export const THREAD_STATES = ["open", "ended", "deleted"] as const;
+export type ThreadState = (typeof THREAD_STATES)[number];
+
+/** Registers of a row. Null until the row first belongs to an account. */
+export interface ThreadStamps {
+  readonly identityStamp: string | null;
+  readonly cursorStamp: string | null;
+  readonly lifecycleStamp: string | null;
+}
+
+export interface ReadingThread extends ThreadStamps {
   readonly id: string;
   readonly origin: SessionOrigin;
   /** Origin detail — e.g. the home card that opened the thread. */
@@ -40,11 +52,20 @@ export interface ReadingThread {
   readonly updatedAt: string;
   readonly endedAt: string | null;
   readonly endReason: EndReason | null;
+  readonly state: ThreadState;
+  readonly deviceId: string | null;
+  /** The row is the queue: true until a result acknowledges these exact stamps. */
+  readonly dirty: boolean;
+  /** Refused by the server. Kept locally, not resent until the next edit. */
+  readonly rejected: boolean;
+  /** Fields this build does not know, kept for whoever does. */
+  readonly extras: Readonly<Record<string, JsonValue>>;
 }
 
 export interface SurahProgress {
   readonly furthestAyah: number;
   readonly updatedAt: string;
+  readonly dirty?: boolean;
 }
 
 /** Furthest ayah reached per surah (account-level, MAX-merged). */
@@ -54,11 +75,16 @@ export interface SessionsEnvelope {
   readonly v: number;
   readonly threads: readonly ReadingThread[];
   readonly progress: ProgressBySurah;
+  /** Last pulled `rev`; 0 means a full pull is next. */
+  readonly since: number;
+  /** Page cursor inside a full pull. */
+  readonly after: number;
+  readonly epoch: string | null;
+  readonly lastSeenAt: number;
 }
 
-export type SessionMutation =
-  | ({ readonly kind: "session.upsert" } & ReadingThread)
-  | { readonly kind: "session.delete"; readonly id: string; readonly updatedAt: string }
+export type SessionWireRow =
+  | ({ readonly kind: "session.upsert"; readonly id: string } & Partial<ReadingThread>)
   | {
       readonly kind: "progress.upsert";
       readonly surah: number;
@@ -66,11 +92,29 @@ export type SessionMutation =
       readonly updatedAt: string;
     };
 
-export interface SessionSnapshot {
-  readonly applied: number;
-  readonly skipped: number;
+export type RowStatus = "applied" | "superseded" | "rejected" | "capped";
+
+export interface RowResult {
+  readonly id: string;
+  readonly status: RowStatus;
+  readonly stamps: Partial<Record<"identity" | "cursor" | "lifecycle", string | null>> | null;
+}
+
+export interface ThreadTombstone extends ThreadStamps {
+  readonly id: string;
+}
+
+export interface SessionRound {
+  readonly serverTime: number;
+  readonly syncEpoch: string | null;
+  readonly results: readonly RowResult[];
   readonly sessions: readonly ReadingThread[];
+  readonly tombstones: readonly ThreadTombstone[];
   readonly progress: readonly ({ readonly surah: number } & SurahProgress)[];
+  readonly rev: number;
+  readonly latestRev: number;
+  readonly more: boolean;
+  readonly tombstoneFloor: number;
 }
 
 export interface ArchivePage {
@@ -79,19 +123,34 @@ export interface ArchivePage {
 }
 
 export function emptyEnvelope(): SessionsEnvelope {
-  return { v: SESSIONS_SCHEMA_VERSION, threads: [], progress: {} };
+  return {
+    v: SESSIONS_SCHEMA_VERSION,
+    threads: [],
+    progress: {},
+    since: 0,
+    after: -1,
+    epoch: null,
+    lastSeenAt: 0,
+  };
 }
 
 /** Open = not ended and touched within STALE_AFTER_MS. */
 export function isOpen(thread: ReadingThread, nowMs: number = Date.now()): boolean {
-  if (thread.endedAt !== null) return false;
-  const touched = Date.parse(thread.updatedAt);
+  if (thread.state !== "open" || thread.endedAt !== null) return false;
+  const touched = touchedAt(thread);
   return Number.isFinite(touched) && nowMs - touched < STALE_AFTER_MS;
+}
+
+/** When the cursor last moved. Signed-out rows have no stamp yet. */
+export function touchedAt(thread: ReadingThread): number {
+  const stamp = thread.cursorStamp === null ? null : parseStamp(thread.cursorStamp);
+  return stamp === null ? Date.parse(thread.updatedAt) : stamp.ms;
 }
 
 /** Newest first, ties by id — the server's order, so every device converges. */
 export function byNewest(a: ReadingThread, b: ReadingThread): number {
-  if (a.updatedAt !== b.updatedAt) return a.updatedAt > b.updatedAt ? -1 : 1;
+  const [left, right] = [touchedAt(a), touchedAt(b)];
+  if (left !== right) return left > right ? -1 : 1;
   if (a.id === b.id) return 0;
   return a.id > b.id ? -1 : 1;
 }
@@ -133,27 +192,62 @@ function numberOrNull(raw: unknown, min: number, max: number): number | null {
   return asNumber(raw, min, max) ?? null;
 }
 
+const KNOWN_THREAD_FIELDS = new Set([
+  "id",
+  "kind",
+  "origin",
+  "originRef",
+  "scope",
+  "boundEnd",
+  "surah",
+  "ayah",
+  "localPage",
+  "ratio",
+  "sourceId",
+  "device",
+  "deviceId",
+  "startedAt",
+  "updatedAt",
+  "endedAt",
+  "endReason",
+  "state",
+  "identityStamp",
+  "cursorStamp",
+  "lifecycleStamp",
+  "dirty",
+  "rejected",
+  "rev",
+  "extras",
+]);
+
+function extrasOf(obj: JsonRecord) {
+  const stored = asObject(obj.extras) ?? {};
+  const unknown = Object.entries(obj).filter(([key]) => !KNOWN_THREAD_FIELDS.has(key));
+  return { ...stored, ...Object.fromEntries(unknown) };
+}
+
+function stateOf(obj: JsonRecord): ThreadState {
+  const state = asLiteral<ThreadState>(obj.state, THREAD_STATES);
+  if (state !== undefined) return state;
+  return stringOrNull(obj.endedAt) === null ? "open" : "ended";
+}
+
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed thread row (storage or wire); this decoder is its boundary parser.
 export function decodeThread(raw: unknown): ReadingThread | null {
   const obj = asObject(raw);
   if (!obj) return null;
   const id = asString(obj.id);
-  const origin = asLiteral<SessionOrigin>(obj.origin, SESSION_ORIGINS);
   const scope = asString(obj.scope);
   const surah = asNumber(obj.surah, 1, 114);
   const ayah = asNumber(obj.ayah, 1, 286);
-  const device = asLiteral<DeviceKind>(obj.device, DEVICES);
   const startedAt = asString(obj.startedAt);
   const updatedAt = asString(obj.updatedAt);
   if (
     id === undefined ||
     id.length !== 36 ||
-    origin === undefined ||
     scope === undefined ||
-    !isScope(scope) ||
     surah === undefined ||
     ayah === undefined ||
-    device === undefined ||
     startedAt === undefined ||
     updatedAt === undefined
   ) {
@@ -161,10 +255,13 @@ export function decodeThread(raw: unknown): ReadingThread | null {
   }
   const boundEnd = stringOrNull(obj.boundEnd);
   const endedAt = stringOrNull(obj.endedAt);
-  const endReason = asLiteral<EndReason>(obj.endReason, END_REASONS) ?? null;
+  // Newer clients may send values this build has never seen: show a neutral
+  // default, and a scope it cannot read falls back at display time. The stored
+  // register on the server is never touched by reading a row.
+  const endReason = asLiteral<EndReason>(obj.endReason, END_REASONS) ?? "dismissed";
   return {
     id,
-    origin,
+    origin: asLiteral<SessionOrigin>(obj.origin, SESSION_ORIGINS) ?? "link",
     originRef: stringOrNull(obj.originRef),
     scope,
     boundEnd: boundEnd !== null && parseVerseKey(boundEnd) !== null ? boundEnd : null,
@@ -173,11 +270,32 @@ export function decodeThread(raw: unknown): ReadingThread | null {
     localPage: numberOrNull(obj.localPage, 1, 10_000),
     ratio: numberOrNull(obj.ratio, 0, 1),
     sourceId: stringOrNull(obj.sourceId),
-    device,
+    device: asLiteral<DeviceKind>(obj.device, DEVICES) ?? "desktop",
     startedAt,
     updatedAt,
-    endedAt: endedAt !== null && endReason !== null ? endedAt : null,
-    endReason: endedAt !== null ? endReason : null,
+    endedAt,
+    endReason: endedAt === null ? null : endReason,
+    state: stateOf(obj),
+    deviceId: stringOrNull(obj.deviceId),
+    identityStamp: stringOrNull(obj.identityStamp),
+    cursorStamp: stringOrNull(obj.cursorStamp),
+    lifecycleStamp: stringOrNull(obj.lifecycleStamp),
+    dirty: obj.dirty === true,
+    rejected: obj.rejected === true,
+    extras: extrasOf(obj),
+  };
+}
+
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed tombstone row from a pull; this decoder is its boundary parser.
+function decodeTombstone(raw: unknown): ThreadTombstone | undefined {
+  const obj = asObject(raw);
+  const id = asString(obj?.id);
+  if (obj === undefined || id === undefined || obj.state !== "deleted") return undefined;
+  return {
+    id,
+    identityStamp: stringOrNull(obj.identityStamp),
+    cursorStamp: stringOrNull(obj.cursorStamp),
+    lifecycleStamp: stringOrNull(obj.lifecycleStamp),
   };
 }
 
@@ -190,33 +308,82 @@ function decodeProgressRow(raw: unknown): ({ surah: number } & SurahProgress) | 
   const updatedAt = asString(obj.updatedAt);
   if (surah === undefined || furthestAyah === undefined || updatedAt === undefined)
     return undefined;
-  return { surah, furthestAyah, updatedAt };
+  return obj.dirty === true
+    ? { surah, furthestAyah, updatedAt, dirty: true }
+    : { surah, furthestAyah, updatedAt };
 }
 
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the unparsed per-owner localStorage value; this decoder is its boundary parser.
 export function decodeEnvelope(raw: unknown): SessionsEnvelope | undefined {
   const obj = asObject(raw);
-  if (!obj || obj.v !== SESSIONS_SCHEMA_VERSION) return undefined;
+  // Older versions migrate forward through the tolerant row decoder. A newer
+  // store is left alone; see `isNewerStore`.
+  if (!obj || isNewerStore(raw)) return undefined;
   const threads = asArray(obj.threads, (row) => decodeThread(row) ?? undefined);
   const progress: Record<number, SurahProgress> = {};
   const progressObj = asObject(obj.progress) ?? {};
   for (const [key, value] of Object.entries(progressObj)) {
     const row = decodeProgressRow({ ...asObject(value), surah: Number(key) });
-    if (row !== undefined)
-      progress[row.surah] = { furthestAyah: row.furthestAyah, updatedAt: row.updatedAt };
+    if (row !== undefined) {
+      const { surah, ...rest } = row;
+      progress[surah] = rest;
+    }
   }
-  return { v: SESSIONS_SCHEMA_VERSION, threads: [...threads].sort(byNewest), progress };
+  return {
+    v: SESSIONS_SCHEMA_VERSION,
+    threads: [...threads].sort(byNewest),
+    progress,
+    since: asNumber(obj.since, 0, Number.MAX_SAFE_INTEGER) ?? 0,
+    after: asNumber(obj.after, -1, Number.MAX_SAFE_INTEGER) ?? -1,
+    epoch: stringOrNull(obj.epoch),
+    lastSeenAt: asNumber(obj.lastSeenAt, 0, Number.MAX_SAFE_INTEGER) ?? 0,
+  };
+}
+
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the unparsed per-owner localStorage value; this check reads only its version.
+export function isNewerStore(raw: unknown): boolean {
+  const version = asNumber(asObject(raw)?.v, 0, Number.MAX_SAFE_INTEGER);
+  return version !== undefined && version > SESSIONS_SCHEMA_VERSION;
+}
+
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one unparsed per-row result; this decoder is its boundary parser.
+function decodeResult(raw: unknown): RowResult | undefined {
+  const obj = asObject(raw);
+  const id = asString(obj?.id);
+  const status = asLiteral<RowStatus>(obj?.status, ["applied", "superseded", "rejected", "capped"]);
+  if (obj === undefined || id === undefined || status === undefined) return undefined;
+  const stamps = asObject(obj.stamps);
+  return {
+    id,
+    status,
+    stamps:
+      stamps === undefined
+        ? null
+        : {
+            identity: stringOrNull(stamps.identity),
+            cursor: stringOrNull(stamps.cursor),
+            lifecycle: stringOrNull(stamps.lifecycle),
+          },
+  };
 }
 
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the unparsed POST /reading-session/v1/sync body; this decoder is its boundary parser.
-export function decodeSessionSnapshot(raw: unknown): SessionSnapshot | null {
+export function decodeSessionRound(raw: unknown): SessionRound | null {
   const obj = asObject(raw);
   if (!obj || !Array.isArray(obj.sessions) || !Array.isArray(obj.progress)) return null;
+  const bound = Number.MAX_SAFE_INTEGER;
+  const rows = obj.sessions;
   return {
-    applied: asNumber(obj.applied, 0, Number.MAX_SAFE_INTEGER) ?? 0,
-    skipped: asNumber(obj.skipped, 0, Number.MAX_SAFE_INTEGER) ?? 0,
-    sessions: asArray(obj.sessions, (row) => decodeThread(row) ?? undefined),
+    serverTime: asNumber(obj.serverTime, 0, bound) ?? Date.now(),
+    syncEpoch: stringOrNull(obj.syncEpoch),
+    results: asArray(obj.results, decodeResult),
+    sessions: asArray(rows, (row) => decodeThread(row) ?? undefined),
+    tombstones: asArray(rows, decodeTombstone),
     progress: asArray(obj.progress, decodeProgressRow),
+    rev: asNumber(obj.rev, 0, bound) ?? 0,
+    latestRev: asNumber(obj.latestRev, 0, bound) ?? 0,
+    more: obj.more === true,
+    tombstoneFloor: asNumber(obj.tombstoneFloor, 0, bound) ?? 0,
   };
 }
 

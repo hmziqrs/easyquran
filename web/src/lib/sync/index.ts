@@ -5,8 +5,9 @@ export type {
   SyncPhase,
   SyncRoundResult,
   SyncStatus,
+  RowRoundResult,
 } from "./types";
-export { SyncPausedError, SyncRejectedError } from "./types";
+export { SyncPausedError, SyncRejectedError, SyncRetryAfterError } from "./types";
 export {
   Outbox,
   createOutbox,

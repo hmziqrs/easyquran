@@ -1,6 +1,7 @@
 export {
   readJSON,
   writeJSON,
+  tryWriteJSON,
   removeJSON,
   readRaw,
   writeRaw,

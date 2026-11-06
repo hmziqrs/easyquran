@@ -37,6 +37,8 @@ export interface AuthRequestResult<T> {
   readonly data: T | null;
   readonly error: AuthErrorEnvelope | null;
   readonly rotated: boolean;
+  /** Parsed `Retry-After` seconds, on responses that carry one. */
+  readonly retryAfter?: number;
 }
 
 export class AuthTransportError extends Error {
@@ -223,7 +225,10 @@ export class AuthClient {
         const retried = await this.#retryAfterCsrfRefresh<T>(method, path, opts);
         if (retried !== null) return retried;
       }
-      return { ok: false, status, data: null, error, rotated };
+      const retryAfter = Number.parseInt(res.headers.get("retry-after") ?? "", 10);
+      return Number.isFinite(retryAfter)
+        ? { ok: false, status, data: null, error, rotated, retryAfter }
+        : { ok: false, status, data: null, error, rotated };
     }
     const data = raw;
     if (rotated && !this.#refreshing) {

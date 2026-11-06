@@ -79,6 +79,14 @@ function thread(overrides: Partial<ReadingThread> = {}): ReadingThread {
     updatedAt: "2026-10-27T00:00:00.000Z",
     endedAt: null,
     endReason: null,
+    state: "open",
+    deviceId: null,
+    identityStamp: null,
+    cursorStamp: null,
+    lifecycleStamp: null,
+    dirty: false,
+    rejected: false,
+    extras: {},
     ...overrides,
   };
 }

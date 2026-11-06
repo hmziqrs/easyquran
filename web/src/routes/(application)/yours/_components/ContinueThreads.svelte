@@ -71,7 +71,7 @@
   }
 </script>
 
-{#if sessions.enqueueError !== null}
+{#if sessions.storageFailed !== null}
   <p role="status" class="mt-3 text-[13px] text-danger">{reader_threads_sync_error(undefined, msg)}</p>
 {/if}
 

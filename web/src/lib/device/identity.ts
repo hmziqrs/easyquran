@@ -16,9 +16,9 @@ const memory = new Map<string, string>();
 
 export function deviceIdFor(owner: string): string {
   const key = keyFor(owner);
-  const known = memory.get(key) ?? readRaw("local", key);
-  if (known !== null && known !== undefined && known.length > 0) return known;
-  const minted = newEntityId();
+  const stored = readRaw("local", key);
+  if (stored !== null && stored.length > 0) return stored;
+  const minted = memory.get(key) ?? newEntityId();
   memory.set(key, minted);
   writeRaw("local", key, minted);
   return minted;

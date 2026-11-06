@@ -2,8 +2,8 @@ import { browser } from "$app/env";
 
 import { authClient } from "#lib/auth/auth-client.js";
 import { authState } from "#lib/auth/auth-state.svelte.js";
+import { deviceIdFor } from "#lib/device/identity.js";
 import {
-  asArray,
   asObject,
   asString,
   onPageHide,
@@ -11,18 +11,18 @@ import {
   readRaw,
   removeJSON,
   trailingDebounce,
-  writeJSON,
+  tryWriteJSON,
   writeRaw,
 } from "#lib/storage/index.js";
+import { createClock, localClockStorage, type SyncClock } from "#lib/sync/clock.js";
 import { isUuidV7, newEntityId, uuidV7FromLegacy } from "#lib/sync/ids.js";
 import {
   registerDomain,
   unregisterDomain,
   syncEngine,
   type RegisteredSyncDomain,
-  type SyncDomain,
-  type SyncMutation,
 } from "#lib/sync/index.js";
+import { compareStamps, mergeThread, roundRatio, type JsonObject } from "#lib/sync/merge.js";
 
 import { deviceKind } from "./device";
 import {
@@ -34,29 +34,33 @@ import {
 import { cameFromReader, consumeEntry, markEntry, type EntryIntent } from "./entry";
 import {
   LOCAL_THREAD_CAP,
-  SESSIONS_SCHEMA_VERSION,
   byNewest,
   compareVerse,
   decodeArchivePage,
   decodeEnvelope,
+  decodeThread,
   emptyEnvelope,
+  isNewerStore,
   isOpen,
   parseVerseKey,
   type EndReason,
   type ReadingThread,
-  type SessionMutation,
+  type RowResult,
   type SessionOrigin,
-  type SessionSnapshot,
+  type SessionRound,
+  type SessionWireRow,
   type ProgressBySurah,
   type SessionsEnvelope,
   type SurahProgress,
+  type ThreadStamps,
+  type ThreadTombstone,
 } from "./schema";
 
 /** Engine surface the store depends on; the real SyncEngine satisfies it structurally. */
 export interface SessionsEngineLike {
-  enqueue<P>(domain: string, payload: P): Promise<SyncMutation<P>>;
   flush(domain?: string): Promise<void>;
   start(): () => void;
+  setStorageDegraded?(on: boolean): void;
 }
 
 export interface SessionsStoreDeps {
@@ -102,14 +106,17 @@ export interface ArchiveView {
  * otherwise); the tab's current thread id lives in sessionStorage so a reload
  * continues it and two tabs read two threads. A thread the reader merely
  * opened stays an in-memory draft until something is actually read — bounces
- * never litter Continue. Signed in, every thread row and progress change
- * syncs through the `sessions.user:{id}` outbox partition; on sign-in the
+ * never litter Continue. Signed in, the row is the queue: `dirty` persists with
+ * the row, and a sync round sends the dirty rows, clearing the flag only when a
+ * result acknowledges those exact stamps (contracts/sync.md). On sign-in the
  * device's anonymous threads fold into the account silently.
  */
 
 const LOCAL_OWNER = "local";
 const TAB_KEY = "easyquran.session.tab";
-const REMOVED_CAP = 200;
+const SYNC_PAGE = 200;
+/** A cached account nobody signed into for this long loses its non-dirty rows. */
+const IDLE_ACCOUNT_MS = 180 * 24 * 60 * 60 * 1000;
 /** Cursor moves coalesce: scrolling marks many verses in seconds. */
 const PUSH_DEBOUNCE_MS = 4000;
 const PERSIST_DEBOUNCE_MS = 400;
@@ -123,35 +130,122 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-// eslint-disable-next-line anti-slop/no-unknown-parameters -- err is a caught throw of unknown provenance; this formatter narrows it to a displayable message string.
-function errorMessage(err: unknown): string {
-  return err instanceof Error && err.message ? err.message : String(err);
+
+function registersOf(thread: ReadingThread): JsonObject {
+  return {
+    id: thread.id,
+    identity: {
+      stamp: thread.identityStamp,
+      value: {
+        origin: thread.origin,
+        originRef: thread.originRef,
+        scope: thread.scope,
+        boundEnd: thread.boundEnd,
+        startedAt: thread.startedAt,
+      },
+    },
+    cursor: {
+      stamp: thread.cursorStamp,
+      value: {
+        surah: thread.surah,
+        ayah: thread.ayah,
+        localPage: thread.localPage,
+        ratio: thread.ratio,
+        sourceId: thread.sourceId,
+        device: thread.device,
+        deviceId: thread.deviceId,
+      },
+    },
+    lifecycle: {
+      stamp: thread.lifecycleStamp,
+      value: { state: thread.state, endedAt: thread.endedAt, endReason: thread.endReason },
+    },
+  };
 }
 
-/** Durable envelope + local removal ledger (ids deleted from history on this device). */
-type StoredEnvelope = SessionsEnvelope & { readonly removed?: readonly string[] };
-
-function newerOf(a: ReadingThread, b: ReadingThread): ReadingThread {
-  return b.updatedAt > a.updatedAt ? b : a;
+function sameStamps(a: ThreadStamps, b: ThreadStamps): boolean {
+  return (
+    a.identityStamp === b.identityStamp &&
+    a.cursorStamp === b.cursorStamp &&
+    a.lifecycleStamp === b.lifecycleStamp
+  );
 }
 
-/** Union by id, newest row wins; open threads are kept before the cap trims history. */
+/**
+ * Does `row` hold a winning register the other side lacks? Only then can its
+ * `dirty` flag still mean something after the merge.
+ */
+function contributes(row: ReadingThread, other: ReadingThread, merged: ThreadStamps): boolean {
+  return (
+    (row.identityStamp === merged.identityStamp && other.identityStamp !== merged.identityStamp) ||
+    (row.cursorStamp === merged.cursorStamp && other.cursorStamp !== merged.cursorStamp) ||
+    (row.lifecycleStamp === merged.lifecycleStamp && other.lifecycleStamp !== merged.lifecycleStamp)
+  );
+}
+
+/**
+ * S1 merge on the local row shape. `dirty` is OR across tabs, except that an ack
+ * is final for the stamps it named: the same stamps clean on either side are clean,
+ * and a dirty row whose registers all lost has nothing left to send.
+ */
+function mergeRow(a: ReadingThread, b: ReadingThread): ReadingThread {
+  // Signed-out rows carry no stamps yet: their own time decides.
+  if (a.cursorStamp === null && b.cursorStamp === null) return b.updatedAt > a.updatedAt ? b : a;
+  const merged = decodeMerged(mergeThread(registersOf(a), registersOf(b)));
+  const stamps: ThreadStamps = {
+    identityStamp: merged.identityStamp ?? null,
+    cursorStamp: merged.cursorStamp ?? null,
+    lifecycleStamp: merged.lifecycleStamp ?? null,
+  };
+  const dirty = sameStamps(a, b)
+    ? a.dirty && b.dirty
+    : (a.dirty && contributes(a, b, stamps)) || (b.dirty && contributes(b, a, stamps));
+  return {
+    ...a,
+    ...merged,
+    updatedAt: a.updatedAt > b.updatedAt ? a.updatedAt : b.updatedAt,
+    dirty,
+    rejected: a.rejected && b.rejected,
+    extras: { ...a.extras, ...b.extras },
+  };
+}
+
+function decodeMerged(merged: JsonObject): Partial<ReadingThread> {
+  const stampOf = (name: string): string | null => asString(asObject(merged[name])?.stamp) ?? null;
+  const fields = (name: string): JsonObject => asObject(asObject(merged[name])?.value) ?? {};
+  const row = decodeThread({
+    id: merged.id,
+    ...fields("identity"),
+    ...fields("cursor"),
+    ...fields("lifecycle"),
+    updatedAt: "1970-01-01T00:00:00.000Z",
+    identityStamp: stampOf("identity"),
+    cursorStamp: stampOf("cursor"),
+    lifecycleStamp: stampOf("lifecycle"),
+  });
+  if (row === null) return {};
+  const { updatedAt: _updatedAt, dirty: _dirty, rejected: _rejected, extras: _extras, ...rest } = row;
+  return rest;
+}
+
+/**
+ * Union by id through the merge core. Open threads are kept before the cap trims
+ * history, and a dirty row is never evicted: it is the queue.
+ */
 function mergeThreads(
   a: readonly ReadingThread[],
   b: readonly ReadingThread[],
-  removed: ReadonlySet<string>,
+  now: number = Date.now(),
 ): ReadingThread[] {
   const byId = new Map<string, ReadingThread>();
   for (const row of [...a, ...b]) {
-    if (removed.has(row.id)) continue;
     const prev = byId.get(row.id);
-    byId.set(row.id, prev === undefined ? row : newerOf(prev, row));
+    byId.set(row.id, prev === undefined ? row : mergeRow(prev, row));
   }
   const all = [...byId.values()].sort(byNewest);
-  const now = Date.now();
-  const open = all.filter((t) => isOpen(t, now));
-  const rest = all.filter((t) => !isOpen(t, now));
-  return [...open, ...rest].slice(0, LOCAL_THREAD_CAP).sort(byNewest);
+  const pinned = all.filter((t) => t.dirty || isOpen(t, now));
+  const rest = all.filter((t) => !t.dirty && !isOpen(t, now));
+  return [...pinned, ...rest].slice(0, Math.max(LOCAL_THREAD_CAP, pinned.length)).sort(byNewest);
 }
 
 function mergeProgress(a: ProgressBySurah, b: ProgressBySurah): ProgressBySurah {
@@ -160,8 +254,16 @@ function mergeProgress(a: ProgressBySurah, b: ProgressBySurah): ProgressBySurah 
     const surah = Number(key);
     const prev = out[surah];
     if (prev === undefined || row.furthestAyah > prev.furthestAyah) out[surah] = row;
+    else if (row.dirty === true && row.furthestAyah === prev.furthestAyah && prev.dirty !== true) {
+      out[surah] = row;
+    }
   }
   return out;
+}
+
+function wireOf(thread: ReadingThread): SessionWireRow {
+  const { dirty: _dirty, rejected: _rejected, extras, ...row } = thread;
+  return { kind: "session.upsert", ...extras, ...row };
 }
 
 /** A `range:S:A-S:B` scope bounds itself at `S:B`. */
@@ -195,7 +297,6 @@ export class SessionsStore {
   #owner = LOCAL_OWNER;
   #hydrated = false;
   #env = $state.raw<SessionsEnvelope>(emptyEnvelope());
-  #removed = new Set<string>();
   /** The tab's thread before anything was read in it — never persisted or synced. */
   #draft = $state.raw<ReadingThread | null>(null);
   #tabId = $state<string | null>(null);
@@ -203,15 +304,19 @@ export class SessionsStore {
   /** A whole-scope entry resumed this thread: offer "Start over". */
   #offer = $state<string | null>(null);
   #archive = $state.raw<ArchiveView>({ items: [], next: null, loading: false, loaded: false });
-  #enqueueError = $state<string | null>(null);
-
-  #dirtyThreads = new Set<string>();
-  #dirtyProgress = new Set<number>();
-  /** Enqueued-but-undrained rows: they beat any snapshot row until their mutation drains. */
-  #pendingThreads = new Map<string, ReadingThread>();
-  #pendingDeletes = new Set<string>();
+  #rejected = $state(0);
+  #capped = $state(0);
+  #updateRequired = $state(false);
+  #storageFailed = $state(false);
+  /** A store newer than this build: left untouched, and sync stays paused. */
+  #futureStore = false;
+  #clock: SyncClock | null = null;
+  /** Past the tombstone floor: ids seen in this full pull. Others are gone. */
+  #fullPullSeen: Set<string> | null = null;
+  #cappedIds = new Set<string>();
   #registered: string | null = null;
   #device = deviceKind();
+  #deviceId: string | null = null;
 
   readonly #engine: SessionsEngineLike;
   readonly #auth: NonNullable<SessionsStoreDeps["auth"]>;
@@ -237,8 +342,8 @@ export class SessionsStore {
 
   /** Open threads (not ended, touched within 30 days), newest first. */
   get open(): readonly ReadingThread[] {
-    const now = Date.now();
-    return this.#env.threads.filter((t) => isOpen(t, now) && !this.#pendingDeletes.has(t.id));
+    const now = this.#now();
+    return this.#env.threads.filter((t) => isOpen(t, now));
   }
 
   /** Newest open thread — what "Continue reading" resumes. */
@@ -264,8 +369,24 @@ export class SessionsStore {
     return this.#archive;
   }
 
-  get enqueueError(): string | null {
-    return this.#enqueueError;
+  /** Rows the server refused, kept here and not resent until edited. */
+  get rejectedCount(): number {
+    return this.#rejected;
+  }
+
+  /** Rows waiting for room under the account's quota. */
+  get cappedCount(): number {
+    return this.#capped;
+  }
+
+  /** This build is below the server's minimum protocol. Reading keeps working. */
+  get updateRequired(): boolean {
+    return this.#updateRequired;
+  }
+
+  /** The browser refused a durable write. Never report those rows as synced. */
+  get storageFailed(): boolean {
+    return this.#storageFailed;
   }
 
   /** Furthest ayah reached in a surah (account-level, never regresses). */
@@ -294,7 +415,7 @@ export class SessionsStore {
       }
     }
     const tab = this.current;
-    const tabAlive = tab !== null && (tab === this.#draft || isOpen(tab));
+    const tabAlive = tab !== null && (tab === this.#draft || isOpen(tab, this.#now()));
     if (intent === null && tab !== null && tabAlive) {
       if (this.#tabScope === target.scope || cameFromReader()) {
         this.#setTab(tab.id, target.scope);
@@ -352,8 +473,9 @@ export class SessionsStore {
   anchor(localPage: number, ratio: number): void {
     const thread = this.current;
     if (thread === null || thread === this.#draft) return;
-    if (thread.localPage === localPage && thread.ratio === ratio) return;
-    this.#write({ ...thread, localPage, ratio, device: this.#device, updatedAt: nowIso() });
+    const rounded = roundRatio(ratio);
+    if (thread.localPage === localPage && thread.ratio === rounded) return;
+    this.#write({ ...thread, localPage, ratio: rounded, device: this.#device, updatedAt: nowIso() });
   }
 
   /** A verse was actually read (read tracker): bounded threads complete at their end. */
@@ -419,22 +541,21 @@ export class SessionsStore {
     this.#end(thread, "dismissed");
   }
 
-  /** Delete from history everywhere (tombstone on the server). */
+  /** Delete from history everywhere. Signed in, the row stays as a tombstone until acknowledged. */
   remove(id: string): void {
-    this.#removed.add(id);
-    this.#dirtyThreads.delete(id);
-    this.#pendingThreads.delete(id);
-    this.#env = { ...this.#env, threads: this.#env.threads.filter((t) => t.id !== id) };
+    const thread = this.#find(id);
     this.#archive = {
       ...this.#archive,
       items: this.#archive.items.filter((t) => t.id !== id),
     };
     if (this.#tabId === id) this.#clearTab();
-    this.#persist.schedule();
-    if (this.#accountOwnerId() !== null) {
-      this.#pendingDeletes.add(id);
-      this.#enqueue({ kind: "session.delete", id, updatedAt: nowIso() });
+    if (this.#accountOwnerId() === null) {
+      this.#env = { ...this.#env, threads: this.#env.threads.filter((t) => t.id !== id) };
+      this.#persist.schedule();
+      return;
     }
+    if (thread === undefined) return;
+    this.#write({ ...thread, state: "deleted", updatedAt: nowIso() });
   }
 
   /** History: ended + stale threads, newest first. Account pages come from the server. */
@@ -444,8 +565,8 @@ export class SessionsStore {
     if (prev.loading || (!reset && prev.loaded && prev.next === null)) return;
     const ownerId = this.#accountOwnerId();
     if (ownerId === null) {
-      const now = Date.now();
-      const items = this.#env.threads.filter((t) => !isOpen(t, now));
+      const now = this.#now();
+      const items = this.#env.threads.filter((t) => t.state !== "deleted" && !isOpen(t, now));
       this.#archive = { items, next: null, loading: false, loaded: true };
       return;
     }
@@ -492,59 +613,215 @@ export class SessionsStore {
     const local = absorbing ? this.#env : null;
     this.#owner = next;
     this.#unregisterCurrent();
-    this.#dirtyThreads.clear();
-    this.#dirtyProgress.clear();
-    this.#pendingThreads.clear();
-    this.#pendingDeletes.clear();
+    this.#cappedIds.clear();
+    this.#fullPullSeen = null;
     this.#archive = { items: [], next: null, loading: false, loaded: false };
     this.#load(next);
     if (local !== null) this.#absorb(local);
   }
 
-  applyServer(snapshot: SessionSnapshot, drained?: readonly SyncMutation<SessionMutation>[]): void {
-    for (const mutation of drained ?? []) {
-      const payload = mutation.payload;
-      if (payload.kind === "session.upsert") {
-        const pending = this.#pendingThreads.get(payload.id);
-        if (pending !== undefined && pending.updatedAt === payload.updatedAt) {
-          this.#pendingThreads.delete(payload.id);
-        }
-      } else if (payload.kind === "session.delete") {
-        this.#pendingDeletes.delete(payload.id);
+  /** Rows the next round sends. A capped row waits behind the others. */
+  dirtyRows(): readonly SessionWireRow[] {
+    const dirty = this.#env.threads.filter((t) => t.dirty && !t.rejected && t.id.length === 36);
+    const ready = dirty.filter((t) => !this.#cappedIds.has(t.id));
+    const waiting = dirty.filter((t) => this.#cappedIds.has(t.id));
+    const threads = [...ready, ...waiting].map((t) => wireOf(t));
+    const progress = Object.entries(this.#env.progress)
+      .filter(([, row]) => row.dirty === true)
+      .map(([surah, row]) => ({
+        kind: "progress.upsert" as const,
+        surah: Number(surah),
+        furthestAyah: row.furthestAyah,
+        updatedAt: row.updatedAt,
+      }));
+    return [...threads, ...progress].slice(0, SYNC_PAGE);
+  }
+
+  /**
+   * Apply one round durably. `dirty` clears only for a row whose current stamps are
+   * the ones sent, so an edit made while the request flew stays queued. A row
+   * missing from a response means nothing: only a tombstone deletes.
+   */
+  applyRound(round: SessionRound, sent: readonly SessionWireRow[]) {
+    const clock = this.#clock;
+    clock?.onServerTime(round.serverTime);
+    // Everything below is synchronous, so another tab's writes join once, here.
+    this.#reloadFromStorage(this.#owner);
+
+    const epochChanged = this.#env.epoch !== null && round.syncEpoch !== this.#env.epoch;
+    const aheadOfServer = this.#env.since > round.latestRev;
+    const belowFloor = this.#env.since > 0 && this.#env.since < round.tombstoneFloor;
+    const restored = epochChanged || aheadOfServer;
+
+    const byId = new Map(this.#env.threads.map((t) => [t.id, t]));
+    const progressNow = new Map(
+      Object.entries(this.#env.progress).map(([surah, row]) => [Number(surah), row] as const),
+    );
+    const sentById = new Map(
+      sent.flatMap((row) => (row.kind === "session.upsert" ? [[row.id, row] as const] : [])),
+    );
+
+    for (const result of round.results) {
+      this.#applyResult(result, sentById.get(result.id), byId);
+      this.#applyProgressAck(result, sent, progressNow);
+    }
+    for (const row of round.sessions) {
+      this.#observeRow(row);
+      const mine = byId.get(row.id);
+      byId.set(row.id, mine === undefined ? row : mergeRow(mine, row));
+      this.#fullPullSeen?.add(row.id);
+    }
+    for (const tombstone of round.tombstones) this.#applyTombstone(tombstone, byId);
+    for (const row of round.progress) {
+      const prev = progressNow.get(row.surah);
+      if (prev === undefined || row.furthestAyah >= prev.furthestAyah) {
+        progressNow.set(row.surah, { furthestAyah: row.furthestAyah, updatedAt: row.updatedAt });
       }
     }
-    if (this.#accountOwnerId() === null) return;
-    const local = new Map(this.#env.threads.map((t) => [t.id, t]));
-    const serverIds = new Set<string>();
-    for (const row of snapshot.sessions) {
-      serverIds.add(row.id);
-      if (this.#pendingDeletes.has(row.id) || this.#removed.has(row.id)) continue;
-      if (this.#pendingThreads.has(row.id) || this.#dirtyThreads.has(row.id)) continue;
-      const mine = local.get(row.id);
-      local.set(row.id, mine === undefined ? row : newerOf(mine, row));
+
+    if (belowFloor) this.#fullPullSeen = new Set();
+    if (restored) {
+      // Rows and `rev` went backwards: every row this device holds is pushed
+      // again, which heals writes the restore lost.
+      for (const [id, thread] of byId) byId.set(id, { ...thread, dirty: true });
     }
-    // The snapshot is the server's newest open threads. A local open thread
-    // missing from it ended or was deleted elsewhere — unless it is older
-    // than the snapshot's tail (merely cut by the limit) or still ours.
-    const tail = snapshot.sessions.at(-1);
-    const full = snapshot.sessions.length >= 20;
-    const now = Date.now();
-    for (const [id, thread] of local) {
-      if (serverIds.has(id) || !isOpen(thread, now) || id === this.#tabId) continue;
-      if (this.#pendingThreads.has(id) || this.#dirtyThreads.has(id)) continue;
-      if (full && tail !== undefined && thread.updatedAt < tail.updatedAt) continue;
-      local.delete(id);
+
+    const reset = restored || belowFloor;
+    const fullPull = this.#env.since === 0;
+    let after = -1;
+    let since = reset ? 0 : round.rev;
+    if (!reset && round.more && fullPull) {
+      since = 0;
+      after = round.rev;
     }
-    const progress: Record<number, SurahProgress> = {};
-    for (const row of snapshot.progress) {
-      progress[row.surah] = { furthestAyah: row.furthestAyah, updatedAt: row.updatedAt };
+    if (!reset && !round.more && this.#fullPullSeen !== null) {
+      // Past the floor, the server no longer holds tombstones for what is gone.
+      for (const [id, thread] of byId) {
+        if (!thread.dirty && !this.#fullPullSeen.has(id)) byId.set(id, this.#goneLocally(thread));
+      }
+      this.#fullPullSeen = null;
     }
+
     this.#env = {
-      v: SESSIONS_SCHEMA_VERSION,
-      threads: mergeThreads([...local.values()], [], this.#removed),
-      progress: mergeProgress(this.#env.progress, progress),
+      ...this.#env,
+      threads: mergeThreads([...byId.values()], [], this.#now()),
+      progress: Object.fromEntries(progressNow),
+      since,
+      after,
+      epoch: round.syncEpoch ?? this.#env.epoch,
     };
-    this.#persist.schedule();
+    // `since` is saved with the rows it covers, so an interrupted pull resumes.
+    this.#store();
+
+    const sentAll = sent.length >= SYNC_PAGE;
+    const progressed = round.results.some((r) => r.status === "applied" || r.status === "superseded");
+    const dirtyLeft = this.dirtyRows().length > 0;
+    return { more: reset || round.more || (sentAll && progressed && dirtyLeft) };
+  }
+
+  #observeRow(row: ThreadStamps): void {
+    this.#clock?.observe(row.identityStamp);
+    this.#clock?.observe(row.cursorStamp);
+    this.#clock?.observe(row.lifecycleStamp);
+  }
+
+  #applyResult(
+    result: RowResult,
+    sent: SessionWireRow | undefined,
+    byId: Map<string, ReadingThread>,
+  ): void {
+    const mine = byId.get(result.id);
+    if (mine === undefined || sent === undefined || sent.kind !== "session.upsert") return;
+    const unchanged =
+      mine.identityStamp === (sent.identityStamp ?? null) &&
+      mine.cursorStamp === (sent.cursorStamp ?? null) &&
+      mine.lifecycleStamp === (sent.lifecycleStamp ?? null);
+    this.#cappedIds.delete(result.id);
+    if (result.status === "capped") {
+      this.#cappedIds.add(result.id);
+      this.#capped = this.#cappedIds.size;
+      return;
+    }
+    this.#capped = this.#cappedIds.size;
+    if (result.status === "rejected") {
+      if (unchanged) byId.set(result.id, { ...mine, rejected: true });
+      this.#rejected = [...byId.values()].filter((t) => t.rejected).length;
+      return;
+    }
+    if (!unchanged) return;
+    if (result.stamps === null) {
+      // Older than the tombstone floor: it may have been deleted long ago. It
+      // cannot come back, so the device lets it go.
+      byId.set(result.id, this.#goneLocally(mine));
+      return;
+    }
+    // A stamp the server rewrote is below ours: adopt it, or this device would
+    // keep a row no other replica holds. One the server beat arrives with the row.
+    const adopt = (stamp: string | null | undefined, local: string | null): string | null =>
+      stamp !== null && stamp !== undefined && local !== null && stamp < local ? stamp : local;
+    const adopted = {
+      ...mine,
+      identityStamp: adopt(result.stamps.identity, mine.identityStamp),
+      cursorStamp: adopt(result.stamps.cursor, mine.cursorStamp),
+      lifecycleStamp: adopt(result.stamps.lifecycle, mine.lifecycleStamp),
+      dirty: false,
+      rejected: false,
+    };
+    byId.set(result.id, adopted);
+  }
+
+  #applyProgressAck(
+    result: RowResult,
+    sent: readonly SessionWireRow[],
+    progress: Map<number, SurahProgress>,
+  ): void {
+    if (result.status === "rejected" || !result.id.startsWith("progress:")) return;
+    const surah = Number(result.id.slice("progress:".length));
+    const row = sent.find((m) => m.kind === "progress.upsert" && m.surah === surah);
+    const current = progress.get(surah);
+    if (row?.kind !== "progress.upsert" || current === undefined) return;
+    if (current.furthestAyah === row.furthestAyah) {
+      progress.set(surah, { furthestAyah: current.furthestAyah, updatedAt: current.updatedAt });
+    }
+  }
+
+  /** Delete only on a tombstone. A local undo with a newer stamp keeps its row. */
+  #applyTombstone(tombstone: ThreadTombstone, byId: Map<string, ReadingThread>): void {
+    this.#observeRow(tombstone);
+    const mine = byId.get(tombstone.id);
+    if (mine === undefined) return;
+    const localWins =
+      mine.lifecycleStamp !== null &&
+      compareStamps(mine.lifecycleStamp, tombstone.lifecycleStamp) > 0;
+    if (localWins) return;
+    if (mine.dirty) {
+      byId.set(tombstone.id, {
+        ...mine,
+        state: "deleted",
+        lifecycleStamp: tombstone.lifecycleStamp,
+      });
+      return;
+    }
+    byId.set(tombstone.id, {
+      ...mine,
+      state: "deleted",
+      lifecycleStamp: tombstone.lifecycleStamp,
+    });
+    if (this.#tabId === tombstone.id) this.#clearTab();
+  }
+
+  /**
+   * Tombstones stay as clean local rows until the cap trims them: another tab
+   * merging its copy can then never bring a deleted thread back. This one was never
+   * on the server, so its stamp is purely local.
+   */
+  #goneLocally(thread: ReadingThread): ReadingThread {
+    return {
+      ...thread,
+      state: "deleted",
+      lifecycleStamp: this.#clock?.stamp() ?? thread.lifecycleStamp,
+      dirty: false,
+    };
   }
 
   // --- internals ---
@@ -583,10 +860,17 @@ export class SessionsStore {
       updatedAt: now,
       endedAt: null,
       endReason: null,
+      state: "open",
+      deviceId: null,
+      identityStamp: null,
+      cursorStamp: null,
+      lifecycleStamp: null,
+      dirty: false,
+      rejected: false,
+      extras: {},
     };
   }
 
-  /** A position write with no resolved thread (a reader that never called enter). */
   #implicitThread(surah: number, ayah: number, sourceId: string | null): ReadingThread {
     const draft = this.#newThread({
       origin: "link",
@@ -603,45 +887,94 @@ export class SessionsStore {
   }
 
   #reopen(thread: ReadingThread): ReadingThread {
-    const reopened = { ...thread, endedAt: null, endReason: null, updatedAt: nowIso() };
+    const reopened: ReadingThread = {
+      ...thread,
+      state: "open",
+      endedAt: null,
+      endReason: null,
+      updatedAt: nowIso(),
+    };
     this.#write(reopened);
     return reopened;
   }
 
   #end(thread: ReadingThread, reason: EndReason): void {
     const now = nowIso();
-    this.#write({ ...thread, endedAt: now, endReason: reason, updatedAt: now });
+    this.#write({ ...thread, state: "ended", endedAt: now, endReason: reason, updatedAt: now });
     if (this.#offer === thread.id) this.#offer = null;
   }
 
-  /** Commit a thread row: drafts materialize here, the first time anything is read. */
+  /**
+   * Commit a thread row: drafts materialize here, the first time anything is read.
+   * Only a register whose fields changed gets a new stamp, so a cursor move can
+   * never reopen a thread and a lifecycle write can never move a cursor.
+   */
   #write(thread: ReadingThread): void {
     this.syncOwner();
     if (this.#draft?.id === thread.id) this.#draft = null;
-    this.#removed.delete(thread.id);
+    const prev = this.#env.threads.find((t) => t.id === thread.id);
+    const lifecycleMoved =
+      prev === undefined ||
+      prev.state !== thread.state ||
+      prev.endedAt !== thread.endedAt ||
+      prev.endReason !== thread.endReason;
+    const row = this.#stamped(thread, prev, lifecycleMoved);
     this.#env = {
       ...this.#env,
       threads: mergeThreads(
-        this.#env.threads.filter((t) => t.id !== thread.id),
-        [thread],
-        this.#removed,
+        this.#env.threads.filter((t) => t.id !== row.id),
+        [row],
+        this.#now(),
       ),
     };
-    this.#dirtyThreads.add(thread.id);
-    this.#persist.schedule();
+    // Lifecycle writes persist at once. Cursor moves may debounce, so a hard kill
+    // can lose only the last moments of scrolling.
+    if (lifecycleMoved) this.#writeNow();
+    else this.#persist.schedule();
     if (this.#accountOwnerId() !== null) this.#schedulePush.schedule();
+  }
+
+  #stamped(
+    thread: ReadingThread,
+    prev: ReadingThread | undefined,
+    lifecycleMoved: boolean,
+  ): ReadingThread {
+    const clock = this.#clock;
+    if (clock === null) return thread;
+    const cursorMoved =
+      prev === undefined ||
+      prev.surah !== thread.surah ||
+      prev.ayah !== thread.ayah ||
+      prev.localPage !== thread.localPage ||
+      prev.ratio !== thread.ratio ||
+      prev.sourceId !== thread.sourceId ||
+      prev.device !== thread.device;
+    return {
+      ...thread,
+      deviceId: thread.deviceId ?? this.#deviceId,
+      identityStamp: thread.identityStamp ?? clock.stamp(),
+      cursorStamp: cursorMoved || thread.cursorStamp === null ? clock.stamp() : thread.cursorStamp,
+      lifecycleStamp:
+        lifecycleMoved || thread.lifecycleStamp === null ? clock.stamp() : thread.lifecycleStamp,
+      dirty: true,
+      rejected: false,
+    };
+  }
+
+  #now(): number {
+    return this.#clock?.now() ?? Date.now();
   }
 
   #bumpProgress(surah: number, ayah: number): void {
     const prev = this.#env.progress[surah];
     if (prev !== undefined && prev.furthestAyah >= ayah) return;
-    this.#env = {
-      ...this.#env,
-      progress: { ...this.#env.progress, [surah]: { furthestAyah: ayah, updatedAt: nowIso() } },
-    };
-    this.#dirtyProgress.add(surah);
+    const account = this.#accountOwnerId() !== null;
+    const row: SurahProgress = account
+      ? { furthestAyah: ayah, updatedAt: nowIso(), dirty: true }
+      : { furthestAyah: ayah, updatedAt: nowIso() };
+    this.#env = { ...this.#env, progress: { ...this.#env.progress, [surah]: row } };
     this.#persist.schedule();
-    if (this.#accountOwnerId() !== null) this.#schedulePush.schedule();
+    if (account) this.#schedulePush.schedule();
   }
 
   #setTab(id: string, scope: string): void {
@@ -690,6 +1023,7 @@ export class SessionsStore {
     this.#owner = this.#resolveOwner();
     this.#load(this.#owner);
     this.#loadTab();
+    this.#pruneIdleAccounts();
     onPageHide(() => this.#flushPending());
     // Another tab of this owner wrote: fold its threads into ours (multi-tab).
     window.addEventListener("storage", (event) => {
@@ -697,19 +1031,20 @@ export class SessionsStore {
     });
   }
 
-  #readStored(owner: string): StoredEnvelope | undefined {
+  #readStored(owner: string): SessionsEnvelope | undefined {
     const raw = readJSON(keyFor(owner));
+    if (isNewerStore(raw)) {
+      this.#futureStore = true;
+      return undefined;
+    }
     const env = decodeEnvelope(raw);
     if (env === undefined) return undefined;
-    const removed = asArray(asObject(raw)?.removed, (id) => asString(id));
-    return { ...env, threads: this.#rekeyLegacy(env.threads), removed };
+    return { ...env, threads: this.#rekeyLegacy(env.threads) };
   }
 
   /**
-   * The server refuses non-v7 session ids, and one refused row must not jam the
-   * outbox: a stored thread with an older id gets a v7 built from its
-   * `startedAt` and syncs again as a new row. Queued mutations for the old id
-   * are dropped in the domain.
+   * The server refuses non-v7 session ids: a stored thread with an older id gets a
+   * v7 built from its `startedAt` and syncs again as a new row.
    */
   #rekeyLegacy(threads: readonly ReadingThread[]): readonly ReadingThread[] {
     if (threads.every((t) => isUuidV7(t.id))) return threads;
@@ -717,37 +1052,78 @@ export class SessionsStore {
       if (isUuidV7(thread.id)) return thread;
       const id = uuidV7FromLegacy(thread.id, Date.parse(thread.startedAt));
       if (this.#tabId === thread.id) this.#tabId = id;
-      this.#dirtyThreads.add(id);
-      return { ...thread, id };
+      return { ...thread, id, dirty: true, rejected: false };
     });
     this.#persist.schedule();
     return rekeyed;
   }
 
+  /** Rows from before stamps get them now, from their own time. */
+  #stampLoaded(threads: readonly ReadingThread[]): readonly ReadingThread[] {
+    const clock = this.#clock;
+    if (clock === null) return threads;
+    return threads.map((thread) => {
+      if (thread.cursorStamp !== null) return thread;
+      const at = Date.parse(thread.updatedAt);
+      const stamp = clock.stampAt(Number.isFinite(at) ? at : 0);
+      return {
+        ...thread,
+        deviceId: thread.deviceId ?? this.#deviceId,
+        identityStamp: stamp,
+        cursorStamp: stamp,
+        lifecycleStamp: stamp,
+        dirty: true,
+      };
+    });
+  }
+
   #load(owner: string): void {
+    this.#futureStore = false;
+    const accountId = owner === LOCAL_OWNER ? null : owner;
+    this.#deviceId = accountId === null ? null : deviceIdFor(accountId);
+    this.#clock =
+      accountId === null || this.#deviceId === null
+        ? null
+        : createClock(this.#deviceId, localClockStorage(accountId));
     const stored = this.#readStored(owner);
-    this.#removed = new Set(stored?.removed ?? []);
-    this.#env = stored ?? emptyEnvelope();
+    const env = stored ?? emptyEnvelope();
+    this.#env = { ...env, threads: [...this.#stampLoaded(env.threads)] };
+    for (const thread of env.threads) this.#observeRow(thread);
+    this.#rejected = env.threads.filter((t) => t.rejected).length;
+    this.#capped = 0;
+    if (accountId !== null) {
+      this.#env = { ...this.#env, lastSeenAt: Date.now() };
+      this.#persist.schedule();
+    }
   }
 
   #reloadFromStorage(owner: string): void {
     if (owner !== this.#owner) return;
     const stored = this.#readStored(owner);
     if (stored === undefined) return;
-    for (const id of stored.removed ?? []) this.#removed.add(id);
     this.#env = {
-      v: SESSIONS_SCHEMA_VERSION,
-      threads: mergeThreads(this.#env.threads, stored.threads, this.#removed),
+      ...this.#env,
+      threads: mergeThreads(this.#env.threads, stored.threads, this.#now()),
       progress: mergeProgress(this.#env.progress, stored.progress),
+      since: this.#env.since === 0 ? 0 : Math.max(this.#env.since, stored.since),
+      epoch: this.#env.epoch ?? stored.epoch,
     };
   }
 
   #writeNow(): void {
-    if (!browser) return;
+    if (!browser || this.#futureStore) return;
     // Merge-on-write: another tab may have written since we loaded.
     this.#reloadFromStorage(this.#owner);
-    const removed = [...this.#removed].slice(-REMOVED_CAP);
-    writeJSON(keyFor(this.#owner), { ...this.#env, removed });
+    this.#store();
+  }
+
+  #store(): void {
+    if (!browser || this.#futureStore) return;
+    const landed = tryWriteJSON(keyFor(this.#owner), this.#env);
+    if (landed === this.#storageFailed) {
+      this.#storageFailed = !landed;
+      this.#engine.setStorageDegraded?.(!landed);
+    }
   }
 
   #flushPending(): void {
@@ -758,13 +1134,28 @@ export class SessionsStore {
   /** Sign-in: the device's anonymous threads + progress join the account, silently. */
   #absorb(local: SessionsEnvelope): void {
     if (local.threads.length === 0 && Object.keys(local.progress).length === 0) return;
+    const clock = this.#clock;
+    const threads = local.threads.map((thread) => {
+      const at = Date.parse(thread.updatedAt);
+      const stamp = clock?.stampAt(Number.isFinite(at) ? at : 0) ?? null;
+      return {
+        ...thread,
+        deviceId: this.#deviceId,
+        identityStamp: stamp,
+        cursorStamp: stamp,
+        lifecycleStamp: stamp,
+        dirty: true,
+        rejected: false,
+      };
+    });
+    const progress = Object.fromEntries(
+      Object.entries(local.progress).map(([surah, row]) => [surah, { ...row, dirty: true }]),
+    );
     this.#env = {
-      v: SESSIONS_SCHEMA_VERSION,
-      threads: mergeThreads(this.#env.threads, local.threads, this.#removed),
-      progress: mergeProgress(this.#env.progress, local.progress),
+      ...this.#env,
+      threads: mergeThreads(this.#env.threads, threads, this.#now()),
+      progress: mergeProgress(this.#env.progress, progress),
     };
-    for (const thread of local.threads) this.#dirtyThreads.add(thread.id);
-    for (const surah of Object.keys(local.progress)) this.#dirtyProgress.add(Number(surah));
     removeJSON(keyFor(LOCAL_OWNER));
     this.#persist.schedule();
     this.#schedulePush.schedule();
@@ -773,42 +1164,27 @@ export class SessionsStore {
   #push(): void {
     const ownerId = this.#accountOwnerId();
     if (ownerId === null || this.#registered !== sessionsDomainFor(ownerId)) return;
-    for (const id of this.#dirtyThreads) {
-      const thread = this.#env.threads.find((t) => t.id === id);
-      if (thread === undefined) continue;
-      this.#pendingThreads.set(id, thread);
-      this.#enqueue({ kind: "session.upsert", ...thread });
-    }
-    this.#dirtyThreads.clear();
-    for (const surah of this.#dirtyProgress) {
-      const row = this.#env.progress[surah];
-      if (row === undefined) continue;
-      this.#enqueue({ kind: "progress.upsert", surah, ...row });
-    }
-    this.#dirtyProgress.clear();
+    this.#persist.flush();
+    void this.#engine.flush(sessionsDomainFor(ownerId)).catch(() => undefined);
   }
 
-  #enqueue(payload: SessionMutation): void {
-    const ownerId = this.#accountOwnerId();
-    if (ownerId === null) return;
-    void this.#engine.enqueue(sessionsDomainFor(ownerId), payload).then(
-      () => {
-        this.#enqueueError = null;
-      },
-      // eslint-disable-next-line anti-slop/no-unknown-parameters -- rejection reason is any thrown value (opaque boundary); errorMessage() narrows it.
-      (err: unknown) => {
-        // Surface the failure and re-mark the row dirty: the next write retries.
-        this.#enqueueError = errorMessage(err);
-        if (payload.kind === "session.upsert") {
-          this.#pendingThreads.delete(payload.id);
-          this.#dirtyThreads.add(payload.id);
-        } else if (payload.kind === "session.delete") {
-          this.#pendingDeletes.delete(payload.id);
-        } else {
-          this.#dirtyProgress.add(payload.surah);
-        }
-      },
-    );
+  /** Other accounts' cached rows go after 180 days away. Dirty rows wait for sign-in. */
+  #pruneIdleAccounts(): void {
+    const prefix = keyFor("");
+    const now = Date.now();
+    try {
+      const keys = Object.keys(localStorage).filter(
+        (key) => key.startsWith(prefix) && key !== keyFor(this.#owner) && key !== keyFor(LOCAL_OWNER),
+      );
+      for (const key of keys) {
+        const env = decodeEnvelope(readJSON(key));
+        if (env === undefined || env.lastSeenAt === 0) continue;
+        if (now - env.lastSeenAt < IDLE_ACCOUNT_MS) continue;
+        tryWriteJSON(key, { ...env, threads: env.threads.filter((t) => t.dirty) });
+      }
+    } catch {
+      return;
+    }
   }
 
   #unregisterCurrent(): void {
@@ -821,20 +1197,28 @@ export class SessionsStore {
     const name = sessionsDomainFor(ownerId);
     if (this.#registered === name) return;
     this.#unregisterCurrent();
+    if (this.#futureStore) return;
     const isCurrent = (): boolean =>
       this.#registered === name && this.#accountOwnerId() === ownerId;
-    const domain = createSessionsDomain(this.#auth, this.#state, ownerId, isCurrent, () => {
-      if (!isCurrent()) return;
-      this.#unregisterCurrent();
-      this.#state.notifySessionLost?.();
-    });
-    const adapter: SyncDomain<SessionMutation, SessionSnapshot> = {
-      name: domain.name,
-      sync: (mutations, signal) => domain.sync(mutations, signal),
-      applyServer: (state, drained) => {
-        if (isCurrent()) this.applyServer(state, drained);
+    const adapter = createSessionsDomain(
+      this.#auth,
+      this.#state,
+      ownerId,
+      {
+        dirtyRows: () => this.dirtyRows(),
+        position: () => ({ since: this.#env.since, after: this.#env.after }),
+        applyRound: (round, sent) => this.applyRound(round, sent),
+        onUpgradeRequired: () => {
+          this.#updateRequired = true;
+        },
       },
-    };
+      isCurrent,
+      () => {
+        if (!isCurrent()) return;
+        this.#unregisterCurrent();
+        this.#state.notifySessionLost?.();
+      },
+    );
     this.#register(adapter);
     this.#registered = name;
     this.#engine.start();

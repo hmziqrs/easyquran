@@ -20,6 +20,18 @@ export function writeJSON(key: string, value: unknown): void {
   } catch {}
 }
 
+/** Like `writeJSON`, but says whether the write landed (quota, blocked storage). */
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- callers persist heterogeneous app state; JSON.stringify inside this fn is the serializer at the boundary.
+export function tryWriteJSON(key: string, value: unknown): boolean {
+  if (!browser) return true;
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function removeJSON(key: string): void {
   if (!browser) return;
   try {

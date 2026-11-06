@@ -47,6 +47,27 @@ export interface SyncDomain<P = unknown, S = unknown> {
    * entities instead of dropping every in-flight local edit.
    */
   applyServer(state: S, drained?: SyncMutation<P>[]): void;
+  /**
+   * A row domain: the dirty rows in the store are the queue, so the engine only
+   * asks for rounds and never touches the outbox. Omit it for insert-once data,
+   * which stays on the outbox.
+   */
+  round?(signal?: AbortSignal): Promise<RowRoundResult>;
+}
+
+export interface RowRoundResult {
+  /** More dirty rows or pull pages wait; run another round now. */
+  readonly more: boolean;
+}
+
+/** Thrown by a row domain on 429: wait this long. Rows stay dirty. */
+export class SyncRetryAfterError extends Error {
+  readonly seconds: number;
+  constructor(seconds: number) {
+    super("sync rate limited");
+    this.name = "SyncRetryAfterError";
+    this.seconds = seconds;
+  }
 }
 
 /**
