@@ -100,9 +100,7 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 
 | Item                                                               | Title                                  | Blocked by |
 | ------------------------------------------------------------------ | -------------------------------------- | ---------- |
-| [F1](plans/product.md#f1-remove-dead-tafsir-placeholder)           | Remove dead tafsir placeholder         | -          |
 | [F2](plans/product.md#f2-settings-and-widget-layout-sync)          | Settings and widget-layout sync        | S7         |
-| [F3](plans/product.md#f3-notes-library)                            | Notes library                          | -          |
 | [F4](plans/product.md#f4-thread-history-clear-all)                 | Thread history clear-all               | S7         |
 | [F5](plans/product.md#f5-explicit-reading-bookmark)                | Explicit reading bookmark              | S7         |
 | [F6](plans/product.md#f6-personal-data-export-and-import)          | Personal data export and import        | -          |

@@ -6,24 +6,12 @@ Product features, then the copy truth pass.
 
 ## Product
 
-#### F1. Remove dead tafsir placeholder
-
-Build: delete the unreferenced `tafsirFor` sample string.
-Files: `web/src/lib/data/quran.ts`
-Done when: no `tafsirFor` in `web/src`.
-
 #### F2. Settings and widget-layout sync
 
 Build: sync the settings document and home widget layout across devices on the `contracts/sync.md` protocol: one stamp per setting key, one for the layout document, per-row results, delta pull, `expectedUserId`. New migration (next free number), new module, wire `settings-document.ts`. Contract detail: `documentation/settings-system.md` §7. Notes stay device-local by decision; never add them to sync.
 Files: `web/src/lib/home/layout.svelte.ts`, `web/src/lib/sync/`, `rust/backend/api/src/modules/`, `rust/backend/api/migration/src/`
 Done when: changing a setting or widget layout on one signed-in device shows on another after sync; two different settings changed offline on two devices both survive; signed-out behaviour unchanged; vectors and `cargo test` cover merge and owner mismatch.
 Blocked by: S7
-
-#### F3. Notes library
-
-Build: notes tab on `/yours`: list, search, sort, edit, delete. Add per-note timestamp and source-aware verse context to the note model. Device-local only.
-Files: `web/src/lib/stores/annotations.svelte.ts`, `web/src/lib/home/notes-source.svelte.ts`, `web/src/routes/(application)/yours/`
-Done when: a note written in the reader appears on `/yours` with verse, source and date, and can be found, edited and deleted there.
 
 #### F4. Thread history clear-all
 
