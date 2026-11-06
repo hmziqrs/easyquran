@@ -57,7 +57,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 
 | Item                                                               | Title                                  | Blocked by |
 | ------------------------------------------------------------------ | -------------------------------------- | ---------- |
-| [F17](plans/product.md#f17-translation-correction-report)          | Translation correction report          | A24        |
 | [F19](plans/product.md#f19-recitation-audio-and-player)            | Recitation audio and player            | O22        |
 | [F20](plans/product.md#f20-memorization-repeat-engine)             | Memorization repeat engine             | F19        |
 | [F21](plans/product.md#f21-word-by-word)                           | Word-by-word                           | O23        |

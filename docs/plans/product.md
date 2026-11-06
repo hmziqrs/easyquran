@@ -6,13 +6,6 @@ Product features, then the copy truth pass.
 
 ## Product
 
-#### F17. Translation correction report
-
-Build: "Report an issue" on a verse, prefilled with immutable source id and verse key. `/contact` is only a `mailto:` link, so use the A24 report intake with a new `translation` kind, sharing its limits. Never edits a Quran DB.
-Files: `web/src/routes/(application)/_reader/VerseTools.svelte`, `rust/backend/api/src/modules/report_v1/*`
-Done when: report is stored with source id and verse key; the A24 limits apply (test).
-Blocked by: A24
-
 #### F19. Recitation audio and player
 
 Build: update the CSP for audio hosts. Reciter/recording catalogue, verse timing, surah and ayah queue, play/pause/seek/next/previous, persistent mini and full player, playback speed, media-session controls, failure/retry, optional offline audio with explicit storage limits, attribution.
