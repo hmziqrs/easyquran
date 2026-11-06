@@ -4,24 +4,6 @@
 
 Measured first.
 
-#### A9. Registration admission, password and OAuth doors
-
-Build:
-
-1. Per-identity creation caps on both doors: password register and the five OAuth callbacks (google, facebook, github, discord, apple auth modules). OAuth callbacks currently have no Turnstile and allow about 86,400 accounts per IP per provider per day; the caps close that.
-2. Per-IP soft cap plus a per-day global ceiling. Values: owner supplies after A5 measurement (O20), at ≥4× measured peak, never below. Until then, use a configured value and note "not measured" in code.
-3. Disposable-domain list (static list in repo). No hard ASN blocking.
-4. Turnstile stays on password registration. Never on login. (A missing site key makes the widget unavailable while the secret makes the API fail closed with 503; that combination kills registration.)
-5. Fresh-account limits for first 24 h: one comment, no links, no media.
-6. Deploy smoke test: registration works end-to-end with prod keys, or the deploy aborts (`deploy/README.md` runbook).
-7. CSRF anonymous-session cap: anonymous `/csrf/v1/generate` sessions are capped per IP (the unbounded anonymous session creation is a storage/DoS lever). Value comes from config, set after A5 measurement (O20); test the cap refuses the next session. Check `rust/backend/api/src/modules/csrf_v1/` first: a cap may already exist.
-
-Files: `rust/backend/api/src/modules/auth_v1/*`, `rust/backend/api/src/modules/{google,facebook,github,discord,apple}_auth_v1/*`, `rust/backend/api/src/services/turnstile.rs`, `rust/backend/api/src/config/settings.rs`, `deploy/README.md`.
-
-Done when: a registration burst test cannot exceed the per-day ceiling; OAuth callbacks share the caps; a fresh account cannot post a link or media; a user with a blocked Turnstile host can still register via the documented fallback or the fallback is documented as unavailable in that region.
-Blocked by: A8
-Owner: O20 for numeric caps.
-
 #### A10. Verification identity canonicalization
 
 Build:
