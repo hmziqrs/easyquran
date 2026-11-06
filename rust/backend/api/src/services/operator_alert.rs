@@ -249,6 +249,28 @@ pub fn spawn_p0(state: &AppState, report_id: i64) {
     });
 }
 
+/// Ship-gate alert from the retention sweeper (A32). The text carries alert codes
+/// and table names only, never row content.
+pub async fn send_retention_alert(state: &AppState, alerts: &[String]) {
+    let cfg = OperatorConfig::from_env();
+    let text = format!(
+        "Retention sweeper alert: {}. No row content is included.",
+        alerts.join("; ")
+    );
+    let mail = send_mail(
+        &state.mailer,
+        &cfg,
+        "EasyQuran: retention sweeper alert",
+        &text,
+    )
+    .await;
+    info!(
+        mail = mail.label(),
+        count = alerts.len(),
+        "retention alert dispatched"
+    );
+}
+
 /// Counts only. No ids, no content.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Digest {

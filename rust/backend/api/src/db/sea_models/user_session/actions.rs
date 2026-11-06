@@ -106,6 +106,9 @@ impl Entity {
             let mut active: ActiveModel = model.into();
             active.last_seen = Set(now);
             active.revoked_at = Set(Some(now));
+            // A32: raw UA and IP stop at revoke. Only the revoked row's identity stays.
+            active.device = Set(None);
+            active.ip_address = Set(None);
 
             match active.update(conn).await {
                 Ok(updated) => Ok(Some(updated)),

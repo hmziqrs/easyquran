@@ -143,7 +143,11 @@ pub fn router(state: AppState) -> Router<AppState> {
 
     router = router.nest(
         "/post/v1",
-        post_v1::routes().layer(rate_limit::rate_limit_layer(&state, 200, 60)),
+        post_v1::routes()
+            .layer(rate_limit::rate_limit_layer(&state, 200, 60))
+            .merge(
+                post_v1::track_view_routes().layer(rate_limit::rate_limit_layer(&state, 30, 60)),
+            ),
     );
 
     router = router.nest(

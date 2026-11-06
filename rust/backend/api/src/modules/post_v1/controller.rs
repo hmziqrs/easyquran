@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     response::IntoResponse,
     Json,
 };
@@ -351,17 +351,13 @@ pub async fn track_view(
     auth: AuthSession,
     Path(post_id): Path<i32>,
     client_ip: ClientIp,
-    headers: HeaderMap,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user_id: Option<i32> = auth.user.map(|user| user.id);
 
-    // Dedup per (post, ip) bounds writes to one per (post, ip) per 5 min (fail-open on store error); rate-limiting caps requests/IP but can't stop rotating IPs.
+    // Dedup per (post, ip) bounds writes to one per (post, ip) per 5 min (fail-open on store error); the route's own limiter caps requests/IP but can't stop rotating IPs.
+    // A32: the IP is never persisted and the UA is never read. The dedup key lives in the in-memory gate store only.
     let ip_str = client_ip.0.to_string();
     let dedup_key = format!("trackview:{post_id}:{ip_str}");
-    let user_agent = headers
-        .get(axum::http::header::USER_AGENT)
-        .and_then(|h| h.to_str().ok())
-        .map(|s| s.to_string());
     if !rux_request_gate::dedup_nx(&state.gate_store, &dedup_key, 300).await {
         return Ok((
             StatusCode::OK,
@@ -369,15 +365,7 @@ pub async fn track_view(
         ));
     }
 
-    match post::Entity::increment_view_count(
-        &state.sea_db,
-        post_id,
-        user_id,
-        Some(ip_str),
-        user_agent,
-    )
-    .await
-    {
+    match post::Entity::increment_view_count(&state.sea_db, post_id, user_id, None, None).await {
         Ok(_) => Ok((
             StatusCode::OK,
             Json(json!({ "message": "View tracked successfully" })),

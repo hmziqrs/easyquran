@@ -1,30 +1,46 @@
-//! Retention sweeper (A32). Deletes rows past `expires_at` on the swept tables.
+//! Retention sweeper (A32). Deletes rows past their retention on the swept tables.
 //!
 //! Dark by default: `RETENTION_SWEEP_MODE` unset or unknown means off, and the task
 //! never starts. `dry_run` counts eligible rows and deletes nothing. `enforce`
 //! deletes, but only after a `dry_run` run has been recorded in `job_runs`.
 //!
-//! Every delete keeps rows under a live legal hold (A25, `legal_holds` and
-//! `legal_hold_subjects`) and rows whose owning user has a live ban
-//! (`user_bans.revoked_at IS NULL`). Rows with `retention_class = 'account_lifetime'`
-//! are never swept. Batches are at most 500 rows, at most 20 per table per run,
-//! with a 50 ms pause between batches. A failing table is logged and skipped.
+//! Two kinds of rule per table:
+//! - `ExpiresAt`: the row's own `expires_at` epoch column (new tables and the
+//!   tables that already carried it).
+//! - `AgeDays`: age of the row's own timestamp column. Existing tables get no new
+//!   column; the rule reads what is already there.
+//!
+//! Every delete keeps rows under a live legal hold (A25) on the row's subject,
+//! and rows whose owning user has a live ban (`user_bans.revoked_at IS NULL`).
+//! Rows with `retention_class = 'account_lifetime'` are never swept. Batches are at
+//! most 500 rows, at most 20 per table per run, with a 50 ms pause between
+//! batches. A failing table is logged, reported and skipped.
+//!
+//! Sync tombstones (`tombstone_domain`): before a table's rows are deleted, the
+//! domain's `floor_rev` rises to the highest deleted `rev` and, for bookmarks, the
+//! `floor_ms` rises to the 180-day cutoff. Both happen in one transaction that
+//! commits before the first delete. A client below the floor does a full pull, and
+//! a stale write cannot recreate a deleted row.
 //!
 //! A canary row is inserted at boot with an expiry in the past. An enforced run
 //! must delete it, or the run raises an alert. A run that deletes nothing while
-//! eligible rows exist also raises an alert.
+//! eligible rows exist also raises an alert. Alerts go to the operator through
+//! `operator_alert::send_retention_alert`.
 //!
-//! Counts only reach logs, `job_runs.detail` and audit metadata. Row contents
-//! never do.
+//! Counts only reach logs, `job_runs.detail`, alerts and audit metadata. Row
+//! contents never do.
 
 use std::time::Duration;
 
-use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, DbErr, Statement};
+use sea_orm::{
+    ConnectionTrait, DatabaseBackend, DatabaseConnection, DbErr, Statement, TransactionTrait,
+};
 use serde_json::json;
 use tracing::{error, info, warn};
 
 use crate::services::audit::{self, AuditAction, AuditEvent};
 use crate::services::job_log::{self, OUTCOME_ERROR, OUTCOME_OK};
+use crate::services::operator_alert;
 use crate::state::AppState;
 
 pub const MODE_ENV: &str = "RETENTION_SWEEP_MODE";
@@ -34,8 +50,11 @@ pub const INTERVAL_SECS: u64 = 6 * 3_600;
 pub const JITTER_MAX_SECS: u64 = 300;
 pub const BATCH_SIZE: i64 = 500;
 pub const MAX_BATCHES_PER_TABLE: usize = 20;
+/// Sync tombstone retention (contracts/sync.md: clean rows and tombstones, 180 days).
+pub const TOMBSTONE_DAYS: i64 = 180;
 const BATCH_PAUSE: Duration = Duration::from_millis(50);
 const ACCOUNT_LIFETIME: &str = "account_lifetime";
+const BOOKMARKS_DOMAIN: &str = "bookmarks";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -67,75 +86,292 @@ impl Mode {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum Expiry {
+    /// `expires_at` epoch column, with the account-lifetime skip.
+    ExpiresAt,
+    /// Age in days of a julian-day expression over the row's own timestamp.
+    /// `expr` is a fixed SQL expression over alias `t`, never input.
+    AgeDays { expr: &'static str, days: i64 },
+}
+
 /// A legal-hold subject kind and the SQL condition that ties a row to a subject.
-/// The condition sees `s` (`legal_hold_subjects`) and `t` (the swept row).
+/// The condition sees `s` (`legal_hold_subjects`) and `t` (the swept row). An empty
+/// `kind` matches any subject kind, and the condition must then name it.
 pub struct Hold {
     pub kind: &'static str,
     pub match_sql: &'static str,
 }
 
-/// One swept table. `user_col` names the owning user for the live-ban guard.
+/// One swept table. `user_col` names the owning user: the live-ban guard and a
+/// `user` legal-hold guard both key on it.
 pub struct Table {
     pub name: &'static str,
+    pub expiry: Expiry,
+    pub extra: Option<&'static str>,
     pub user_col: Option<&'static str>,
     pub hold: Option<Hold>,
+    pub tombstone_domain: Option<&'static str>,
 }
 
-/// Tables with `expires_at` and `retention_class` columns. Operational tables have
-/// no subject, so only the expiry and class apply to them.
+const TOMBSTONE_AGE: Expiry = Expiry::AgeDays {
+    expr: "julianday(t.deleted_at)",
+    days: TOMBSTONE_DAYS,
+};
+
+/// Swept tables. `t` aliases the row. Expiry and class columns are named by the
+/// migration that creates each table; see the source-scan test.
 pub const TABLES: &[Table] = &[
+    // Operational tables with no subject.
     Table {
         name: "rate_limit_events",
+        expiry: Expiry::ExpiresAt,
+        extra: None,
         user_col: None,
         hold: None,
+        tombstone_domain: None,
     },
     Table {
         name: "job_runs",
+        expiry: Expiry::ExpiresAt,
+        extra: None,
         user_col: None,
         hold: None,
+        tombstone_domain: None,
     },
     Table {
         name: "newsletter_subscribers",
+        expiry: Expiry::ExpiresAt,
+        extra: None,
         user_col: None,
         hold: None,
+        tombstone_domain: None,
     },
     Table {
         name: "media_deletions",
+        expiry: Expiry::ExpiresAt,
+        extra: None,
         user_col: Some("uploader_id"),
         hold: Some(Hold {
             kind: "media",
             match_sql: "s.subject_id = CAST(t.media_id AS TEXT)",
         }),
+        tombstone_domain: None,
     },
     Table {
         name: "audit_logs",
+        expiry: Expiry::ExpiresAt,
+        extra: None,
         user_col: Some("user_id"),
         hold: Some(Hold {
             kind: "user",
-            match_sql: "s.subject_id = CAST(t.user_id AS TEXT) \
-                OR (t.resource_type = 'user' AND s.subject_id = t.resource_id)",
+            match_sql: "s.subject_id = t.resource_id AND t.resource_type = 'user'",
         }),
+        tombstone_domain: None,
+    },
+    // Account data, 90 days.
+    Table {
+        name: "user_sessions",
+        expiry: Expiry::AgeDays {
+            expr: "julianday(t.last_seen)",
+            days: 90,
+        },
+        extra: None,
+        user_col: Some("user_id"),
+        hold: None,
+        tombstone_domain: None,
+    },
+    Table {
+        name: "devices",
+        expiry: Expiry::AgeDays {
+            expr: "julianday(t.last_seen_at)",
+            days: 90,
+        },
+        extra: None,
+        user_col: Some("user_id"),
+        hold: None,
+        tombstone_domain: None,
+    },
+    Table {
+        name: "user_devices",
+        expiry: Expiry::AgeDays {
+            expr: "julianday(t.last_seen_at)",
+            days: 90,
+        },
+        extra: None,
+        user_col: Some("user_id"),
+        hold: None,
+        tombstone_domain: None,
+    },
+    Table {
+        name: "post_views",
+        expiry: Expiry::AgeDays {
+            expr: "julianday(t.created_at)",
+            days: 90,
+        },
+        extra: None,
+        user_col: Some("user_id"),
+        hold: None,
+        tombstone_domain: None,
+    },
+    // Sync tombstones, 180 days. Floor advances first (see `advance_floors`).
+    Table {
+        name: "reading_sessions",
+        expiry: TOMBSTONE_AGE,
+        extra: Some("t.deleted_at IS NOT NULL"),
+        user_col: Some("user_id"),
+        hold: None,
+        tombstone_domain: Some("sessions"),
+    },
+    Table {
+        name: "bookmarks",
+        expiry: TOMBSTONE_AGE,
+        extra: Some("t.deleted_at IS NOT NULL"),
+        user_col: Some("user_id"),
+        hold: None,
+        tombstone_domain: Some(BOOKMARKS_DOMAIN),
+    },
+    Table {
+        name: "bookmark_folders",
+        expiry: TOMBSTONE_AGE,
+        extra: Some("t.deleted_at IS NOT NULL"),
+        user_col: Some("user_id"),
+        hold: None,
+        tombstone_domain: Some(BOOKMARKS_DOMAIN),
+    },
+    // Moderation and evidence, 12 months.
+    Table {
+        name: "user_bans",
+        expiry: Expiry::AgeDays {
+            expr: "MAX(julianday(t.created_at), IFNULL(julianday(t.revoked_at), 0), IFNULL(julianday(t.expires_at), 0))",
+            days: 365,
+        },
+        extra: None,
+        user_col: Some("user_id"),
+        hold: None,
+        tombstone_domain: None,
+    },
+    Table {
+        name: "enforcement_notices",
+        expiry: Expiry::AgeDays {
+            expr: "julianday(t.created_at, 'unixepoch')",
+            days: 365,
+        },
+        extra: None,
+        user_col: Some("user_id"),
+        hold: None,
+        tombstone_domain: None,
+    },
+    Table {
+        name: "case_evidence",
+        expiry: Expiry::AgeDays {
+            expr: "julianday(t.captured_at, 'unixepoch')",
+            days: 365,
+        },
+        extra: None,
+        user_col: None,
+        hold: Some(Hold {
+            kind: "",
+            match_sql: "s.subject_kind = t.kind AND s.subject_id = t.subject_id",
+        }),
+        tombstone_domain: None,
+    },
+    Table {
+        name: "reports",
+        expiry: Expiry::AgeDays {
+            expr: "julianday(t.created_at)",
+            days: 365,
+        },
+        extra: None,
+        user_col: None,
+        hold: Some(Hold {
+            kind: "",
+            match_sql: "s.subject_kind = t.target_kind AND s.subject_id = t.target_id",
+        }),
+        tombstone_domain: None,
+    },
+    Table {
+        name: "post_comments",
+        expiry: Expiry::AgeDays {
+            expr: "julianday(t.updated_at)",
+            days: 365,
+        },
+        extra: Some("t.hidden = 1"),
+        user_col: Some("user_id"),
+        hold: Some(Hold {
+            kind: "comment",
+            match_sql: "s.subject_id = CAST(t.id AS TEXT)",
+        }),
+        tombstone_domain: None,
+    },
+    Table {
+        name: "comment_flags",
+        expiry: Expiry::AgeDays {
+            expr: "julianday(t.created_at)",
+            days: 365,
+        },
+        extra: None,
+        user_col: Some("user_id"),
+        hold: Some(Hold {
+            kind: "comment",
+            match_sql: "s.subject_id = CAST(t.comment_id AS TEXT)",
+        }),
+        tombstone_domain: None,
+    },
+    Table {
+        name: "notifications",
+        expiry: Expiry::AgeDays {
+            expr: "julianday(t.created_at)",
+            days: 365,
+        },
+        extra: None,
+        user_col: Some("user_id"),
+        hold: None,
+        tombstone_domain: None,
     },
 ];
 
-/// The WHERE clause for one table: expired, not account-lifetime, and every guard.
+/// Legal-hold guard. `kind` empty means no kind filter.
+fn hold_clause(kind: &str, match_sql: &str, now: i64) -> String {
+    let kind_sql = if kind.is_empty() {
+        String::new()
+    } else {
+        format!("s.subject_kind = '{kind}' AND ")
+    };
+    format!(
+        " AND NOT EXISTS (SELECT 1 FROM legal_holds h \
+         JOIN legal_hold_subjects s ON s.hold_id = h.id \
+         WHERE h.released_at IS NULL AND (h.auto_release = 0 OR h.expires_at > {now}) \
+         AND {kind_sql}({match_sql}))"
+    )
+}
+
+/// The WHERE clause for one table: due, not account-lifetime, and every guard.
 fn where_clause(table: &Table, now: i64) -> String {
-    let mut clause = format!("t.expires_at < {now} AND t.retention_class <> '{ACCOUNT_LIFETIME}'");
+    let mut clause = match table.expiry {
+        Expiry::ExpiresAt => {
+            format!("t.expires_at < {now} AND t.retention_class <> '{ACCOUNT_LIFETIME}'")
+        }
+        Expiry::AgeDays { expr, days } => {
+            format!("({expr}) < julianday({now}, 'unixepoch', '-{days} days')")
+        }
+    };
+    if let Some(extra) = table.extra {
+        clause.push_str(&format!(" AND ({extra})"));
+    }
     if let Some(col) = table.user_col {
         clause.push_str(&format!(
             " AND NOT EXISTS (SELECT 1 FROM user_bans b \
              WHERE b.user_id = t.{col} AND b.revoked_at IS NULL)"
         ));
+        clause.push_str(&hold_clause(
+            "user",
+            &format!("s.subject_id = CAST(t.{col} AS TEXT)"),
+            now,
+        ));
     }
     if let Some(hold) = &table.hold {
-        clause.push_str(&format!(
-            " AND NOT EXISTS (SELECT 1 FROM legal_holds h \
-             JOIN legal_hold_subjects s ON s.hold_id = h.id \
-             WHERE h.released_at IS NULL AND (h.auto_release = 0 OR h.expires_at > {now}) \
-             AND s.subject_kind = '{kind}' AND ({m}))",
-            kind = hold.kind,
-            m = hold.match_sql,
-        ));
+        clause.push_str(&hold_clause(hold.kind, hold.match_sql, now));
     }
     clause
 }
@@ -194,6 +430,43 @@ async fn count(db: &DatabaseConnection, sql: &str) -> Result<i64, DbErr> {
     row.try_get_by_index::<i64>(0)
 }
 
+/// Raise the domain floors over the rows about to be deleted. Runs in its own
+/// transaction and commits before any delete. Floors only rise.
+async fn advance_floors(
+    db: &DatabaseConnection,
+    table: &Table,
+    domain: &str,
+    now: i64,
+) -> Result<(), DbErr> {
+    let name = table.name;
+    let clause = where_clause(table, now);
+    let exists = format!(
+        "EXISTS (SELECT 1 FROM {name} AS t WHERE t.user_id = sync_counters.user_id AND {clause})"
+    );
+    let txn = db.begin().await?;
+    txn.execute(Statement::from_string(
+        DatabaseBackend::Sqlite,
+        format!(
+            "UPDATE sync_counters SET floor_rev = MAX(floor_rev, \
+             (SELECT MAX(t.rev) FROM {name} AS t WHERE t.user_id = sync_counters.user_id AND {clause})) \
+             WHERE domain = '{domain}' AND {exists}"
+        ),
+    ))
+    .await?;
+    if domain == BOOKMARKS_DOMAIN {
+        let cutoff_ms = (now - TOMBSTONE_DAYS * 86_400) * 1_000;
+        txn.execute(Statement::from_string(
+            DatabaseBackend::Sqlite,
+            format!(
+                "UPDATE sync_counters SET floor_ms = MAX(floor_ms, {cutoff_ms}) \
+                 WHERE domain = '{domain}' AND {exists}"
+            ),
+        ))
+        .await?;
+    }
+    txn.commit().await
+}
+
 async fn sweep_table(
     db: &DatabaseConnection,
     table: &Table,
@@ -208,10 +481,13 @@ async fn sweep_table(
     )
     .await?;
     let mut deleted = 0;
-    if delete {
+    if delete && eligible > 0 {
+        if let Some(domain) = table.tombstone_domain {
+            advance_floors(db, table, domain, now).await?;
+        }
         let sql = format!(
-            "DELETE FROM {name} WHERE id IN \
-             (SELECT t.id FROM {name} AS t WHERE {clause} LIMIT {BATCH_SIZE})"
+            "DELETE FROM {name} WHERE rowid IN \
+             (SELECT t.rowid FROM {name} AS t WHERE {clause} LIMIT {BATCH_SIZE})"
         );
         for _ in 0..MAX_BATCHES_PER_TABLE {
             let n = db
@@ -248,6 +524,9 @@ pub async fn run_once(db: &DatabaseConnection, delete: bool, now: i64) -> Report
             }
             Err(e) => {
                 warn!(table = table.name, error = %e, "retention table failed (non-fatal)");
+                let alert = format!("table_failed table={}", table.name);
+                error!(target: "retention_alert", %alert, "retention alert");
+                report.alerts.push(alert);
                 report.tables.push(TableReport {
                     name: table.name,
                     eligible: 0,
@@ -375,7 +654,10 @@ pub async fn run(state: AppState) {
     let mut wait = jitter_secs();
     loop {
         tokio::time::sleep(Duration::from_secs(wait)).await;
-        run_recorded(&state.sea_db, mode, job_log::epoch_now()).await;
+        let report = run_recorded(&state.sea_db, mode, job_log::epoch_now()).await;
+        if !report.alerts.is_empty() {
+            operator_alert::send_retention_alert(&state, &report.alerts).await;
+        }
         wait = INTERVAL_SECS + jitter_secs();
     }
 }
@@ -452,7 +734,7 @@ mod tests {
     }
 
     #[test]
-    fn every_swept_table_has_expiry_and_class_in_migrations() {
+    fn every_swept_table_has_a_migration() {
         let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/migration/src");
         let mut sources = String::new();
         for entry in std::fs::read_dir(dir).unwrap() {
@@ -470,6 +752,19 @@ mod tests {
         }
         assert!(sources.contains("expires_at"));
         assert!(sources.contains("retention_class"));
+    }
+
+    #[test]
+    fn every_delete_clause_keeps_the_ban_and_hold_guards() {
+        for table in TABLES {
+            let clause = where_clause(table, 1_700_000_000);
+            if table.user_col.is_some() {
+                assert!(clause.contains("b.revoked_at IS NULL"), "{}", table.name);
+            }
+            if table.user_col.is_some() || table.hold.is_some() {
+                assert!(clause.contains("legal_hold_subjects"), "{}", table.name);
+            }
+        }
     }
 
     #[tokio::test]
@@ -616,5 +911,108 @@ mod tests {
         run_recorded(&db, Mode::Enforce, now).await;
 
         assert_eq!(media_ids(&db).await, vec![90]);
+    }
+
+    #[tokio::test]
+    async fn aged_revoked_ban_deleted_and_live_ban_kept() {
+        let db = test_db().await;
+        let now = job_log::epoch_now();
+        exec(
+            &db,
+            "INSERT INTO user_bans (user_id, reason, created_at, revoked_at) \
+             VALUES (21, 'old', '2019-01-01T00:00:00Z', '2019-02-01T00:00:00Z')",
+        )
+        .await;
+        exec(
+            &db,
+            "INSERT INTO user_bans (user_id, reason, created_at) \
+             VALUES (22, 'live', '2019-01-01T00:00:00Z')",
+        )
+        .await;
+        run_recorded(&db, Mode::DryRun, now).await;
+
+        run_recorded(&db, Mode::Enforce, now).await;
+
+        let left = count(
+            &db,
+            "SELECT COUNT(*) FROM user_bans WHERE user_id IN (21, 22)",
+        )
+        .await
+        .unwrap();
+        assert_eq!(left, 1);
+    }
+
+    #[tokio::test]
+    async fn tombstone_floor_rises_before_aged_tombstone_is_deleted() {
+        let db = test_db().await;
+        let now = job_log::epoch_now();
+        exec(
+            &db,
+            "INSERT INTO sync_counters (user_id, domain, rev) VALUES (31, 'bookmarks', 12)",
+        )
+        .await;
+        exec(
+            &db,
+            "INSERT INTO bookmark_folders (user_id, id, name, created_at, updated_at, deleted_at, rev) \
+             VALUES (31, 'gone', 'x', '2019-01-01T00:00:00Z', '2019-01-01T00:00:00Z', \
+             '2019-01-02T00:00:00Z', 7)",
+        )
+        .await;
+        run_recorded(&db, Mode::DryRun, now).await;
+
+        run_recorded(&db, Mode::Enforce, now).await;
+
+        let folders = count(
+            &db,
+            "SELECT COUNT(*) FROM bookmark_folders WHERE user_id = 31",
+        )
+        .await
+        .unwrap();
+        assert_eq!(folders, 0);
+        let floor = count(
+            &db,
+            "SELECT floor_rev FROM sync_counters WHERE user_id = 31 AND domain = 'bookmarks'",
+        )
+        .await
+        .unwrap();
+        assert_eq!(floor, 7);
+    }
+
+    #[tokio::test]
+    async fn notification_under_user_hold_survives() {
+        let db = test_db().await;
+        let now = job_log::epoch_now();
+        exec(
+            &db,
+            "INSERT INTO notifications (user_id, kind, title, body, created_at) \
+             VALUES (41, 'k', 't', 'b', '2019-01-01 00:00:00')",
+        )
+        .await;
+        actions::place(
+            &db,
+            NewHold {
+                rule: HoldRule::Enforcement12m,
+                authority: "test".into(),
+                reason: "test".into(),
+                owner: "test".into(),
+                case_ref: None,
+                subjects: vec![HoldSubject {
+                    kind: "user".into(),
+                    id: "41".into(),
+                    user_id: Some(41),
+                }],
+            },
+            Utc::now(),
+        )
+        .await
+        .unwrap();
+        run_recorded(&db, Mode::DryRun, now).await;
+
+        run_recorded(&db, Mode::Enforce, now).await;
+
+        let kept = count(&db, "SELECT COUNT(*) FROM notifications WHERE user_id = 41")
+            .await
+            .unwrap();
+        assert_eq!(kept, 1);
     }
 }

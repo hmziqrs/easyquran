@@ -63,8 +63,13 @@ pub fn routes() -> Router<AppState> {
     let public = Router::<AppState>::new()
         .route("/view/{id_or_slug}", post(controller::find_by_id_or_slug))
         .route("/list/published", post(controller::find_published_posts))
-        .route("/sitemap", post(controller::sitemap))
-        .route("/track_view/{post_id}", post(controller::track_view));
+        .route("/sitemap", post(controller::sitemap));
 
     protected.merge(authenticated).merge(public)
+}
+
+/// `track_view` is an anonymous writer. It sits outside `routes()` so the router
+/// can give it its own per-IP limit (A32 item 7).
+pub fn track_view_routes() -> Router<AppState> {
+    Router::<AppState>::new().route("/track_view/{post_id}", post(controller::track_view))
 }
