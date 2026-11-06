@@ -22,7 +22,49 @@ only: noto-naskh, scheherazade, gulzar, bidi. Not looked at: taha-v1, katibeh,
 mirza, lateef, aref-ruqaa, lalezar, noto-sans-arabic, simple in the reader.
 
 Joining, harakat, RTL, ayah markers and Nastaliq match the Flutter shots. No y-flip
-bug. Failure: Awami Nastaliq does not join (Graphite only, no `GSUB`), on both.
+bug. Awami Nastaliq does not join on either platform, same as Flutter and Safari
+(Graphite only, no `GSUB`), so this is not NSH-specific.
+
+## Rune vs NSH on macOS
+
+App: [`../rune-quran-sample`](../rune-quran-sample) (Rune `dev` rev `781e2b6d`, Parley and
+HarfRust, own GPU renderer). Shots: `rune/`, vision-checked, no pixel diff. All 6 Arabic
+fonts, all 12 Urdu fonts and all 3 databases were looked at in headless snapshots. Selector
+and scrolling were tried in a real window. **Rune has no iOS or Android support yet**, so
+it was not run on mobile.
+
+Arabic and Urdu shape correctly in all but Awami Nastaliq, which fails as it does in NSH,
+Flutter and Safari. Default view matches NSH by eye. Rune needed U+200F on the ayah marker
+because it has no paragraph direction setting.
+
+Median of 3 runs, first run discarded, same 1200x830 window size, same text, Apple silicon
+on battery. "Long" repeats the sample 17 times (289 ayahs, about Al-Baqarah's count, shorter
+text). Scripts and raw numbers: [`bench/`](bench).
+
+| | NSH 0.4.0 | Rune |
+| --- | --- | --- |
+| App size | 44 MB | 28 MB |
+| Launch to window on screen, long | 225 ms | 280 ms |
+| CPU used by 2.5 s after launch, long | 0.36 s | 0.20 s |
+| Idle CPU, long | 0% | 0% |
+| Memory at idle, long | 66 MB | 70 MB |
+| Memory after 20 font switches, long | 75 MB | 342 MB |
+| Memory after scrolling, long | 146 MB | 343 MB |
+| CPU per font switch, long (range) | 38 ms (37-46) | 48 ms (35-58) |
+| CPU while scrolling, long (range) | 49 ms/s (48-104) | 55 ms/s (43-104) |
+| Memory at idle, short sample | 34 MB | 66-318 MB across runs |
+
+Read these as rough:
+
+- CPU per switch and while scrolling overlap, so treat them as a tie.
+- Rune memory jumps between about 65 MB and 340 MB, at short and long content alike. It
+  does not track content size. Cause not investigated.
+- Rune's short-sample font switch numbers are left out: two of four runs show almost no
+  CPU, so I can't tell the switches ran. The long runs were checked on screen.
+- Not measured: frame rate, input latency, GPU time, WindowServer CPU. "Window on screen"
+  is not "text painted".
+- The same wheel events moved Rune further than NSH, so scroll CPU is not per point of
+  travel.
 
 Same faces, same data extract (`gpui-kit-sample/data/quran-sample.json`),
 same type settings (Arabic 30px / line-height 1.9, Urdu 20px with per-font
@@ -53,7 +95,9 @@ before inclusion.
 | Lalezar            | OFL 1.1        | Google Fonts       | Display              | 2.0            | [shot](flutter/urdu-lalezar-in-flutter.png)          | [shot](web/urdu-lalezar-in-web.png)          |
 | Noto Sans Arabic   | OFL 1.1        | Google Fonts       | Sans                 | 2.4            | [shot](flutter/urdu-noto-sans-arabic-in-flutter.png) | [shot](web/urdu-noto-sans-arabic-in-web.png) |
 
-All twelve shape correctly in Flutter (HarfBuzz) and the browser reference.
+Eleven shape correctly in Flutter (HarfBuzz) and the browser reference. Awami
+Nastaliq does not join in either ([Flutter](flutter/urdu-awami-in-flutter.png),
+[web](web/urdu-awami-in-web.png)): the font has Graphite tables (`Silf`) and no `GSUB`.
 Mehr's broken look in stock GPUI is the y-flip bug, not CoreText. Flutter sample: `Urdu`
 dropdown + **F11** cycles faces. Web reference: `&urdu=<id>` param.
 

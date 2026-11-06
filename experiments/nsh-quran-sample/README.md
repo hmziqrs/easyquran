@@ -21,7 +21,9 @@ Notes:
   uncaught error.
 - RTL text needs `textAlign: "right"`. With `writingDirection: "rtl"`,
   `textAlign: "start"` sits flush left.
-- `awami-nastaliq` does not join here. The font has Graphite tables (`Silf`)
-  and no `GSUB`, so CoreText cannot shape it.
+- `awami-nastaliq` does not join here, and breaks the same way in the Flutter
+  sample and Safari. The font has Graphite tables (`Silf`) and no `GSUB`, the
+  likely cause. Not specific to NSH or CoreText.
 - Latin `m` is blank in these fonts (`../gpui-kit-sample` patch), so mixed
   Latin text loses it. This comes from the font files, not NSH.
+- `QURAN_BENCH_REPEAT` and `QURAN_BENCH_CYCLES` drive `../render-compare/bench`.

@@ -2,5 +2,8 @@
   "name": "nsh-quran-sample",
   "id": "com.example.nshquransample",
   "version": "1.0.0",
-  "build": 1
+  "build": 1,
+  "capabilities": {
+    "process": { "env": ["QURAN_BENCH_REPEAT", "QURAN_BENCH_CYCLES"] }
+  }
 }

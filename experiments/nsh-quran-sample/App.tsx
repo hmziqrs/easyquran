@@ -1,5 +1,6 @@
 import { computed, mount, setColorScheme, signal, Scroll, Text, View } from "nsh";
 import { Select } from "nsh/base";
+import process from "process";
 import { SAMPLE } from "./data";
 import Amiri from "./fonts/amiri.ttf";
 import Scheherazade from "./fonts/scheherazade-new.ttf";
@@ -48,6 +49,11 @@ const DATASETS = ["uthmani", "simple", "indopak"];
 const ACCENT = "#00695C";
 const RULE = "#E0E0E0";
 
+// Bench only, see ../render-compare/COMPARE.md: copies of the sample, and how many font switches to run.
+const REPEAT = Math.max(1, Number(process.env.QURAN_BENCH_REPEAT ?? 1));
+const CYCLES = Number(process.env.QURAN_BENCH_CYCLES ?? 0);
+const COPIES = Array.from({ length: REPEAT }, (_, i) => i);
+
 function ayahMarker(n: number): string {
   const digits = [...String(n)].map((c) => String.fromCharCode(0x0660 + Number(c))).join("");
   return `﴿${digits}﴾`;
@@ -95,6 +101,19 @@ function App() {
   const arabic = computed(() => ARABIC_FONTS.find((f) => f.id === arabicId()) ?? ARABIC_FONTS[0]!);
   const urdu = computed(() => URDU_FONTS.find((f) => f.id === urduId()) ?? URDU_FONTS[0]!);
 
+  // Bench only: from 5 s, every 500 ms pick the next Arabic font, as the Rune sample does.
+  if (CYCLES > 0) {
+    setTimeout(() => {
+      let left = CYCLES;
+      const timer = setInterval(() => {
+        const next = (ARABIC_FONTS.findIndex((f) => f.id === arabicId()) + 1) % ARABIC_FONTS.length;
+        arabicId.set(ARABIC_FONTS[next]!.id);
+        left -= 1;
+        if (left === 0) clearInterval(timer);
+      }, 500);
+    }, 5000);
+  }
+
   return (
     <View
       class="flex-1 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
@@ -109,7 +128,7 @@ function App() {
         <Selector label="Database" ids={DATASETS} value={dataset} onChange={(id) => dataset.set(id)} />
       </View>
       <Scroll class="flex-1">
-        {SAMPLE.arabic[dataset()]!.surahs.map((surah) => (
+        {COPIES.flatMap(() => SAMPLE.arabic[dataset()]!.surahs).map((surah) => (
           <View>
             <View
               class="items-center py-5"
