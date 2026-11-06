@@ -25,6 +25,8 @@ vi.mock("#lib/firebase/analytics.js", () => {
 describe("consent gate", () => {
   beforeEach(() => {
     consent.set({ analytics: false });
+    // A34: analytics also waits for auth status to resolve (latches once set).
+    consent.markAuthResolved();
   });
 
   it("loads nothing until consent turns on", async () => {

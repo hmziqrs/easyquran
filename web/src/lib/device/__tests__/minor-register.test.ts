@@ -9,9 +9,13 @@ import { authState } from "#lib/auth/auth-state.svelte.js";
 import { ensureDeviceRegistered } from "../register";
 
 /** Every request the register path would make. A minor account must make none. */
-const fetchMock = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(
-  async () => new Response("{}", { status: 200 }),
-);
+const fetchMock = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async (input) => {
+  // Register needs a CSRF token first; every other call just succeeds.
+  if (String(input).endsWith("/csrf/v1/generate")) {
+    return new Response(JSON.stringify({ token: "csrf-fixture" }), { status: 200 });
+  }
+  return new Response("{}", { status: 200 });
+});
 
 function signIn(id: number, isMinor: boolean): void {
   const user: UserProfile = {
