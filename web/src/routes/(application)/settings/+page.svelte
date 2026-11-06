@@ -10,11 +10,12 @@
   import AppSection from "./_components/AppSection.svelte";
   import PrivacySection from "./_components/PrivacySection.svelte";
   import AccountSection from "./_components/AccountSection.svelte";
+  import DataSection from "./_components/DataSection.svelte";
   import SettingsShell from "./_components/SettingsShell.svelte";
 
   const copy = getSettingsCopy();
 
-  type SectionId = "storage" | "appearance" | "reading" | "app" | "privacy" | "account";
+  type SectionId = "storage" | "appearance" | "reading" | "app" | "privacy" | "account" | "data";
 
   const sections: { id: SectionId; label: string; icon: IconName }[] = [
     { id: "storage", label: copy.nav.storage, icon: "database" },
@@ -22,6 +23,7 @@
     { id: "reading", label: copy.nav.reading, icon: "book" },
     { id: "app", label: copy.nav.app, icon: "arrows-clockwise" },
     { id: "privacy", label: copy.nav.privacy, icon: "shield" },
+    { id: "data", label: copy.nav.data, icon: "share" },
     { id: "account", label: copy.nav.account, icon: "user" },
   ];
 
@@ -78,6 +80,8 @@
       <AppSection id="app" heading={copy.nav.app} copy={copy.app} />
     {:else if active === "privacy"}
       <PrivacySection id="privacy" heading={copy.nav.privacy} copy={copy.privacy} />
+    {:else if active === "data"}
+      <DataSection id="data" heading={copy.nav.data} copy={copy.data} />
     {:else}
       <AccountSection id="account" heading={copy.nav.account} copy={copy.account} />
     {/if}

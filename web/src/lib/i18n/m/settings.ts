@@ -2,7 +2,7 @@
 //
 // Settings page: storage, reading, privacy and account sections. Lazy: downloaded whole when the settings route loads or the reader appearance panel opens (offline-pack + notification toggle copy). The marketing appearance panel and the settings privacy section reuse reader_* notifications strings instead and never pull this namespace.
 //
-// 143 messages. Import this barrel, never
+// 155 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { settings_account_device_note } from "#lib/paraglide/messages/settings_account_device_note.js";
@@ -26,6 +26,17 @@ export { settings_app_status_up_to_date } from "#lib/paraglide/messages/settings
 export { settings_app_status_update_ready } from "#lib/paraglide/messages/settings_app_status_update_ready.js";
 export { settings_app_version_not_controlling } from "#lib/paraglide/messages/settings_app_version_not_controlling.js";
 export { settings_appearance_intro } from "#lib/paraglide/messages/settings_appearance_intro.js";
+export { settings_data_error_future } from "#lib/paraglide/messages/settings_data_error_future.js";
+export { settings_data_error_malformed } from "#lib/paraglide/messages/settings_data_error_malformed.js";
+export { settings_data_error_not_export } from "#lib/paraglide/messages/settings_data_error_not_export.js";
+export { settings_data_error_read } from "#lib/paraglide/messages/settings_data_error_read.js";
+export { settings_data_export } from "#lib/paraglide/messages/settings_data_export.js";
+export { settings_data_export_note } from "#lib/paraglide/messages/settings_data_export_note.js";
+export { settings_data_import } from "#lib/paraglide/messages/settings_data_import.js";
+export { settings_data_import_done } from "#lib/paraglide/messages/settings_data_import_done.js";
+export { settings_data_import_invalid } from "#lib/paraglide/messages/settings_data_import_invalid.js";
+export { settings_data_import_note } from "#lib/paraglide/messages/settings_data_import_note.js";
+export { settings_data_intro } from "#lib/paraglide/messages/settings_data_intro.js";
 export { settings_language } from "#lib/paraglide/messages/settings_language.js";
 export { settings_notifications_blocked } from "#lib/paraglide/messages/settings_notifications_blocked.js";
 export { settings_notifications_busy } from "#lib/paraglide/messages/settings_notifications_busy.js";
@@ -72,6 +83,7 @@ export { settings_reading_translation_size } from "#lib/paraglide/messages/setti
 export { settings_section_account } from "#lib/paraglide/messages/settings_section_account.js";
 export { settings_section_app } from "#lib/paraglide/messages/settings_section_app.js";
 export { settings_section_appearance } from "#lib/paraglide/messages/settings_section_appearance.js";
+export { settings_section_data } from "#lib/paraglide/messages/settings_section_data.js";
 export { settings_section_privacy } from "#lib/paraglide/messages/settings_section_privacy.js";
 export { settings_section_reading } from "#lib/paraglide/messages/settings_section_reading.js";
 export { settings_section_storage } from "#lib/paraglide/messages/settings_section_storage.js";

@@ -352,6 +352,11 @@ export class SessionsStore {
     return this.#env.threads.filter((t) => isOpen(t, now));
   }
 
+  /** Every thread this device holds for the current owner, ended ones included. Export reads these. */
+  get all(): readonly ReadingThread[] {
+    return this.#env.threads;
+  }
+
   /** Newest open thread — what "Continue reading" resumes. */
   get latest(): ReadingThread | null {
     return this.open[0] ?? null;
@@ -612,6 +617,32 @@ export class SessionsStore {
       loading: false,
       loaded: true,
     };
+  }
+
+  /**
+   * Import (F6). Threads whose ids this device lacks are added through `#write`,
+   * so they get fresh stamps and `dirty`. The device id is this device's, never the
+   * exporter's. Existing ids are skipped. Returns how many were added.
+   */
+  importThreads(threads: readonly ReadingThread[]): number {
+    this.syncOwner();
+    const known = new Set(this.#env.threads.map((t) => t.id));
+    let added = 0;
+    for (const thread of threads) {
+      if (known.has(thread.id) || thread.state === "deleted") continue;
+      known.add(thread.id);
+      this.#write({
+        ...thread,
+        deviceId: null,
+        identityStamp: null,
+        cursorStamp: null,
+        lifecycleStamp: null,
+        dirty: false,
+        rejected: false,
+      });
+      added += 1;
+    }
+    return added;
   }
 
   /** Load every archive page, stopping early if the server stops advancing. */

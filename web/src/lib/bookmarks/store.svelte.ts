@@ -82,6 +82,12 @@ export interface DeletedFolder {
   readonly bookmarks: readonly Bookmark[];
 }
 
+/** What an import added. Folders and rows counted separately for the Settings toast. */
+export interface BookmarkImportCounts {
+  readonly folders: number;
+  readonly bookmarks: number;
+}
+
 /**
  * Bookmarks. One store, two owners:
  *
@@ -606,6 +612,64 @@ export class BookmarksStore {
   restoreFolder(deleted: DeletedFolder): void {
     this.#putFolder({ ...deleted.folder, deleted: false, updatedAt: nowIso() });
     this.restore(deleted.bookmarks);
+  }
+
+  /**
+   * Import (F6). Only ids this store lacks are added, and each lands through the
+   * normal write path, so it gets fresh stamps and `dirty`. Existing ids and
+   * tombstones are skipped; a folder id this store lacks (or has deleted) files
+   * into the default folder; a verse already live in that folder is skipped.
+   */
+  importRows(
+    incomingFolders: readonly BookmarkFolder[],
+    incomingBookmarks: readonly Bookmark[],
+  ): BookmarkImportCounts {
+    if (this.#suspended) return { folders: 0, bookmarks: 0 };
+    this.#syncOwner();
+    let folders = 0;
+    for (const folder of incomingFolders) {
+      const name = validFolderName(folder.name);
+      if (folder.isDefault || name === null || this.#folders.some((f) => f.id === folder.id)) {
+        continue;
+      }
+      this.#putFolder({
+        ...folder,
+        name,
+        deleted: false,
+        nameStamp: null,
+        positionStamp: null,
+        deletedStamp: null,
+        updatedAt: nowIso(),
+        dirty: false,
+        rejected: false,
+      });
+      // A position set on import needs its own stamp; setFolderPosition stamps it.
+      if (folder.position !== null) this.setFolderPosition(folder.id, folder.position);
+      folders += 1;
+    }
+    let added = 0;
+    const fallback = this.defaultFolderId;
+    for (const row of incomingBookmarks) {
+      if (this.#bookmarks.some((b) => b.id === row.id)) continue;
+      const target = this.#folders.find((f) => f.id === row.folderId && !f.deleted);
+      const candidate: Bookmark = {
+        ...row,
+        folderId: target?.id ?? fallback,
+        stamp: null,
+        deleted: false,
+        dirty: false,
+        rejected: false,
+        updatedAt: nowIso(),
+      };
+      const twin = this.#bookmarks.some(
+        (b) =>
+          !b.deleted && b.folderId === candidate.folderId && liveKeyOf(b) === liveKeyOf(candidate),
+      );
+      if (twin) continue;
+      this.#putBookmark(candidate);
+      added += 1;
+    }
+    return { folders, bookmarks: added };
   }
 
   // --- lifecycle ---

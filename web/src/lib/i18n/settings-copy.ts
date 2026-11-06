@@ -164,6 +164,18 @@ import {
   settings_storage_store_opfs,
   settings_storage_usage,
   settings_storage_used_of,
+  settings_data_error_future,
+  settings_data_error_malformed,
+  settings_data_error_not_export,
+  settings_data_error_read,
+  settings_data_export,
+  settings_data_export_note,
+  settings_data_import,
+  settings_data_import_done,
+  settings_data_import_invalid,
+  settings_data_import_note,
+  settings_data_intro,
+  settings_section_data,
   settings_title,
 } from "#lib/i18n/m/settings.js";
 import { theme_dark, theme_light, theme_system } from "#lib/i18n/m/theme.js";
@@ -193,6 +205,22 @@ export interface SettingsCopy {
     readonly app: string;
     readonly privacy: string;
     readonly account: string;
+    readonly data: string;
+  };
+  readonly data: {
+    readonly intro: string;
+    readonly exportLabel: string;
+    readonly exportNote: string;
+    readonly importLabel: string;
+    readonly importNote: string;
+    readonly imported: (added: number, skipped: number) => string;
+    readonly invalid: (count: number) => string;
+    readonly errors: {
+      readonly malformed: string;
+      readonly notExport: string;
+      readonly future: string;
+      readonly read: string;
+    };
   };
   readonly storage: {
     readonly intro: string;
@@ -374,6 +402,22 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
       app: noArgs(settings_section_app),
       privacy: noArgs(settings_section_privacy),
       account: noArgs(settings_section_account),
+      data: noArgs(settings_section_data),
+    },
+    data: {
+      intro: noArgs(settings_data_intro),
+      exportLabel: noArgs(settings_data_export),
+      exportNote: noArgs(settings_data_export_note),
+      importLabel: noArgs(settings_data_import),
+      importNote: noArgs(settings_data_import_note),
+      imported: (added, skipped) => settings_data_import_done({ added, skipped }, options),
+      invalid: (count) => settings_data_import_invalid({ count }, options),
+      errors: {
+        malformed: noArgs(settings_data_error_malformed),
+        notExport: noArgs(settings_data_error_not_export),
+        future: noArgs(settings_data_error_future),
+        read: noArgs(settings_data_error_read),
+      },
     },
     storage: {
       intro: noArgs(settings_storage_intro),

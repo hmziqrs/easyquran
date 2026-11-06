@@ -28,7 +28,7 @@ import { parseTimeHHMM, type ScheduleSlot } from "./schedule.js";
  */
 
 const STORAGE_KEY = "easyquran.home.cards";
-const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 1;
 
 export const CARD_KINDS = ["surah", "ayah", "range", "zikr", "snippet", "collection"] as const;
 export type CardKind = (typeof CARD_KINDS)[number];
