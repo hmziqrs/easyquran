@@ -57,7 +57,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 
 | Item                                                                                                        | Title                                                                 | Blocked by |
 | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------- |
-| [A12](plans/abuse-1-reader-login.md#a12-recovery-masking-reset-grants-email-change)                         | Recovery masking, reset grants, email change                          | A8         |
 | [A13](plans/abuse-1-reader-login.md#a13-challenge-maps-no-eviction-per-session-quota-session-payload-state) | Challenge maps: no eviction, per-session quota, session payload state | A12        |
 | [A14](plans/abuse-1-reader-login.md#a14-reader-path-cookie-and-cache-predicate)                             | Reader-path cookie and cache predicate                                | -          |
 | [A15](plans/abuse-1-reader-login.md#a15-web-origin-limiter-internal-bucket-split-prod-boot-error)           | Web-origin limiter, internal bucket split, prod boot error            | A1, A5     |

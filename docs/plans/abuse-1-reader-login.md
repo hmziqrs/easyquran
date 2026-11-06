@@ -4,21 +4,6 @@
 
 Measured first.
 
-#### A12. Recovery masking, reset grants, email change
-
-Build:
-
-1. `rust/backend/api/src/modules/forgot_password_v1/controller.rs` (~343–349): the unknown-email response is an account-existence oracle. Make status, body, and timing identical for known and unknown addresses. Update the tests that pin the old behavior.
-2. Mount the missing nest limiter (`rust/backend/api/src/router.rs` ~85).
-3. Count failures only on verify, not on request.
-4. Move reset grants into the session payload (process-local today in `services/fresh_auth.rs` ~60; lost on restart).
-5. Email change: `rust/backend/api/src/db/sea_models/user/actions.rs` (~142–166) sets `is_verified = false`, rotates the session secret, deletes verification rows, and sends nothing. Fix: verify the new address before switching, or send a code on change and return an explicit marker. A typo must be recoverable without operator help.
-
-Files: `rust/backend/api/src/modules/forgot_password_v1/*`, `rust/backend/api/src/modules/user_v1/*`, `rust/backend/api/src/db/sea_models/user/actions.rs`, `rust/backend/api/src/services/fresh_auth.rs`, `rust/backend/api/src/router.rs`.
-
-Done when: known vs unknown email response identical in status, body, and timing (test); email-change typo recoverable with a code (test); reset grant survives a process restart (test with session payload).
-Blocked by: A8
-
 #### A13. Challenge maps: no eviction, per-session quota, session payload state
 
 Build:
