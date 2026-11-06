@@ -1,13 +1,22 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import { describe, expect, it, vi } from "vite-plus/test";
+
+vi.mock("$app/env/public", () => ({
+  PUBLIC_API_BASE_URL: "https://eq.test/api",
+  PUBLIC_QURAN_API_BASE: undefined,
+  PUBLIC_ENV: undefined,
+  PUBLIC_FCM_VAPID_KEY: undefined,
+  PUBLIC_TURNSTILE_SITE_KEY: undefined,
+}));
 
 import { createAccountClient } from "#lib/auth/account-client.js";
 import type { AuthClient, AuthRequestResult } from "#lib/auth/auth-client.js";
 
 function catalog(locale: "en" | "ar"): Record<string, string> {
-  const url = new URL(`../../../../messages/${locale}.json`, import.meta.url);
-  return JSON.parse(readFileSync(url, "utf8"));
+  // Vitest runs from the web/ root (same as catalogue-sha-guard.test.ts).
+  return JSON.parse(readFileSync(resolve(process.cwd(), "messages", `${locale}.json`), "utf8"));
 }
 
 function mockClient(unsafeRequest: ReturnType<typeof vi.fn>): AuthClient {
