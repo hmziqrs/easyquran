@@ -25,12 +25,8 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 
 | Case                                           | Required behaviour                                                                                                    | Item       |
 | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------- |
-| Native app unused for weeks                    | 180-day session                                                                                                       | D6         |
 | Account deleted on another device              | Next call 401. Local data stays until cleared, per the survives-logout policy. Non-dirty cache dropped after 180 days | S7, F7     |
 | Minor flag set                                 | No device row; random stamp tail; existing rows deleted                                                               | D2, A34    |
-| Session rotation on a native client            | `x-eq-session` replaced, CSRF refetched; lost response means sign in again                                            | D6         |
-| Browser tries to use `x-eq-session`            | Refused; not in the CORS list                                                                                         | D6         |
-| Stale native cookie jar                        | Impossible: native clients have no jar                                                                                | D6         |
 
 ### Device identity
 
@@ -47,8 +43,6 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 
 | Case                                          | Required behaviour                                                 | Item     |
 | --------------------------------------------- | ------------------------------------------------------------------ | -------- |
-| New client implementation                     | Must pass all shared vectors and O32                               | D6       |
-| Many users behind one carrier IP              | User bucket governs; IP bucket at least 10×                        | A6, D6   |
 | Microphone or audio blocked by browser policy | Headers and CSP updated with the feature                           | F15, F19 |
 
 ### Native apps

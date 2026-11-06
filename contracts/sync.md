@@ -192,3 +192,9 @@ Each account may take 5,000 accepted mutations per UTC day, counted across readi
 | Remote sign-out while device is offline | Next call 401; dirty rows wait; after sign-in a new id via 409 |
 | Signature formats differ by platform | Fixed 64-byte raw form on the wire; vectors enforce |
 | Time-zone change or travel | Local day follows the user's zone; stamps are unaffected |
+| Native app unused for weeks | 180-day session |
+| Session rotation on a native client | `x-eq-session` replaced, CSRF refetched; lost response means sign in again |
+| Browser tries to use `x-eq-session` | Refused; not in the CORS list |
+| Stale native cookie jar | Impossible: native clients have no jar |
+| New client implementation | Must pass all shared vectors and O32 |
+| Many users behind one carrier IP | User bucket governs; IP bucket at least 10× |

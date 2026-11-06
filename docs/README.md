@@ -47,12 +47,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------- |
 | [A4b](plans/abuse-0-foundations.md#a4b-contact-addresses) | Contact addresses | O3 |
 
-### Devices
-
-| Item                                                                   | Title                                        | Blocked by |
-| ---------------------------------------------------------------------- | -------------------------------------------- | ---------- |
-| [D6](plans/devices.md#d6-native-client-contract-and-session-transport) | Native client contract and session transport | D3, D5     |
-
 ### Abuse phase 1
 
 | Item                                                                                                        | Title                                                                 | Blocked by |
