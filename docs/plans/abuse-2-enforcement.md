@@ -2,31 +2,11 @@
 
 [Back to index](../README.md)
 
-#### A19. Ban contract core: migration, admin API, session kill
+#### A19b. Evidence-safe user_bans
 
-Build:
-
-1. Migration (next free): explicit transaction; all statements `IF NOT EXISTS`.
-   - Partial unique index: `CREATE UNIQUE INDEX idx_user_bans_one_active ON user_bans (user_id) WHERE revoked_at IS NULL`. Dedupe active bans first (pattern `m000011`).
-   - Index `user_bans(user_id)`.
-   - Table `enforcement_notices`: `id`, `user_id` (INTEGER, no FK to users), `ban_id`, `reason_code`, `reason_text`, `decided_by`, `decided_at INTEGER`, `effective_at INTEGER`, `expires_at INTEGER NOT NULL CHECK (expires_at >= decided_at)`, `delivery_state`, `sent_at`, `appeal_token_hash`, `created_at`, `retention_class`. No FKs to `users`. The notice outlives the account.
-   - `audit_logs` indices.
-   - `down()` drops the index only and keeps the notices table and its rows.
-2. Module `rust/backend/api/src/modules/admin_user_bans_v1/`:
-   - `GET /admin/users/bans`, `POST /admin/users/bans`, `POST /admin/users/bans/{id}/revoke`, `POST /admin/users/bans/{id}/notice/resend`.
-   - `ROLE_ADMIN`, global CSRF, no export token.
-   - Create order in one transaction: revoke expired bans → insert ban → rotate `users.session_auth_secret` → insert notice row (`delivery_state` set later) → insert audit row → commit → send mail outside the transaction.
-   - Duplicate active ban → 409 with the existing ban id.
-   - Required fields on create: `corroborator` (closed enum: `credential_reuse | content_match | ip | none`) and an `expires_at`. No permanent bans: `expires_at` required. Pick the max length and record it in code.
-   - Refuse self-ban. Refuse ban of equal or higher role.
-3. Session kill: the single `UPDATE users SET session_auth_secret = …` in the ban transaction. The extractor already rejects sessions whose hash mismatches (`rust/backend/api/crates/rux-auth/src/session/extractor.rs` ~53–56). Do not delete `sessions` rows.
-4. Ban check and cache: the existing 5-minute ban cache stays. UI copy makes no timing promise.
-5. Renewal: longest ban auto-expires. `POST /admin/users/bans/{id}/renew` extends it only with a recorded self-review (`single_operator_control`).
-
-Files: new migration, `rust/backend/api/src/db/sea_models/user_ban/actions.rs`, new `rust/backend/api/src/db/sea_models/enforcement_notice/*`, `rust/backend/api/src/db/sea_models/user/actions.rs`, new `rust/backend/api/src/modules/admin_user_bans_v1/*`, `rust/backend/api/src/modules/mod.rs`, `rust/backend/api/src/router.rs`.
-
-Done when: `tests/ban_contract.rs` proves: second active ban → 409; `EXPLAIN QUERY PLAN` for `get_active_ban` uses the partial index; migration re-runnable; `down()` keeps notice rows; a notice row survives account deletion; self-ban refused; live session gets 401 on next request after ban.
-Owner: O2 before this migration reaches a live DB; O7 (default: no permanent bans).
+`user_bans` keeps `ON DELETE CASCADE` from `users`, against the standing rule for evidence tables. Rebuild the table without it (next free migration, dedupe first, re-runnable, up-twice test), and add the source-scan guard. Run before A32 and A33: until then, deleting a user deletes their ban history.
+Done when: deleting a user leaves `user_bans` rows; the guard fails on a cascade from `users` on an evidence table.
+Blocked by: -
 
 #### A20. Enforcement correctness and banned UX
 

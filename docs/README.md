@@ -53,16 +53,13 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------- |
 | [A13](plans/abuse-1-reader-login.md#a13-challenge-maps-no-eviction-per-session-quota-session-payload-state) | Challenge maps: no eviction, per-session quota, session payload state | A12        |
 | [A14](plans/abuse-1-reader-login.md#a14-reader-path-cookie-and-cache-predicate)                             | Reader-path cookie and cache predicate                                | -          |
-| [A15](plans/abuse-1-reader-login.md#a15-web-origin-limiter-internal-bucket-split-prod-boot-error)           | Web-origin limiter, internal bucket split, prod boot error            | A1, A5     |
-| [A16](plans/abuse-1-reader-login.md#a16-offline-pack-budget-and-cache-semantics)                            | Offline pack budget and cache semantics                               | A15        |
 | [A17](plans/abuse-1-reader-login.md#a17-canonical-redirects-no-store-errors-per-artifact-verified-set)      | Canonical redirects, no-store errors, per-artifact verified set       | -          |
-| [A18](plans/abuse-1-reader-login.md#a18-bulk-data-path-and-observability)                                   | Bulk-data path and observability                                      | A5         |
 
 ### Abuse phase 2
 
 | Item                                                                                                    | Title                                                             | Blocked by   |
 | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------ |
-| [A19](plans/abuse-2-enforcement.md#a19-ban-contract-core-migration-admin-api-session-kill)              | Ban contract core: migration, admin API, session kill             | -            |
+| [A19b](plans/abuse-2-enforcement.md#a19b-evidence-safe-user_bans) | Evidence-safe user_bans | - |
 | [A20](plans/abuse-2-enforcement.md#a20-enforcement-correctness-and-banned-ux)                           | Enforcement correctness and banned UX                             | A19          |
 | [A21](plans/abuse-2-enforcement.md#a21-notice-delivery-suppression-result-appeal-clock)                 | Notice delivery, suppression result, appeal clock                 | A19          |
 | [A35](plans/abuse-2-enforcement.md#a35-appeal-intake)                                                   | Appeal intake                                                     | A21          |
