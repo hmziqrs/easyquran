@@ -349,3 +349,115 @@ async fn p0_submit_dispatches_the_operator_alert() {
     }
     assert_eq!(rows.len(), 1, "one dispatch row per P0 report");
 }
+
+#[tokio::test]
+async fn translation_report_stores_source_id_and_verse_key() {
+    let h = harness(routes()).await;
+    let (status, body) = submit(
+        &h.app,
+        "203.0.113.40",
+        None,
+        json!({
+            "target_kind": "translation",
+            "target_id": " ar.jalalayn:02:255 ",
+            "reason": "other",
+            "details": "  wrong pronoun  "
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+
+    let rows = all_reports(&h.state.sea_db).await;
+    assert_eq!(rows.len(), 1);
+    let row = &rows[0];
+    assert_eq!(row.target_kind, "translation");
+    assert_eq!(
+        row.target_id, "ar.jalalayn:2:255",
+        "canonical source id and verse key"
+    );
+    assert_eq!(row.details.as_deref(), Some("wrong pronoun"), "trimmed");
+    assert_eq!(
+        row.snapshot, None,
+        "verse lives in an immutable DB, nothing captured"
+    );
+    assert_eq!(row.priority, "p1");
+
+    let audit = report_audit_rows(&h.state.sea_db).await;
+    assert_eq!(audit.len(), 1);
+    let meta = audit[0].metadata.clone().expect("metadata");
+    assert_eq!(meta["target_kind"], "translation");
+    assert!(!meta.to_string().contains("wrong pronoun"));
+}
+
+#[tokio::test]
+async fn invalid_translation_targets_are_refused_and_write_nothing() {
+    let h = harness(routes()).await;
+    let targets = [
+        "",
+        "ar.jalalayn",
+        "2:255",
+        "ar.jalalayn:0:1",
+        "ar.jalalayn:115:1",
+        "ar.jalalayn:2:0",
+        "ar.jalalayn:2:287",
+        "ar.jalalayn:2:255:1",
+        "ar.jalalayn:x:1",
+        "ar.jalalayn:2:-1",
+        "AR.jalalayn:2:255",
+        "ar.j/../x:2:1",
+    ];
+    for target in targets {
+        let (status, _) = submit(
+            &h.app,
+            "203.0.113.41",
+            None,
+            json!({ "target_kind": "translation", "target_id": target, "reason": "other" }),
+        )
+        .await;
+        assert!(
+            status.is_client_error(),
+            "{target:?} should be refused, got {status}"
+        );
+    }
+    let (status, _) = submit(
+        &h.app,
+        "203.0.113.41",
+        None,
+        json!({
+            "target_kind": "translation",
+            "target_id": "ar.jalalayn:2:255",
+            "reason": "other",
+            "details": "x".repeat(2001)
+        }),
+    )
+    .await;
+    assert!(
+        status.is_client_error(),
+        "details limit applies to translation"
+    );
+    assert!(all_reports(&h.state.sea_db).await.is_empty(), "no rows");
+    assert!(
+        report_audit_rows(&h.state.sea_db).await.is_empty(),
+        "no audit rows"
+    );
+}
+
+#[tokio::test]
+async fn p0_translation_report_is_recorded_without_snapshot() {
+    let h = harness(routes()).await;
+    let (status, body) = submit(
+        &h.app,
+        "203.0.113.42",
+        None,
+        json!({
+            "target_kind": "translation",
+            "target_id": "ar.jalalayn:2:255",
+            "reason": "threat"
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let rows = all_reports(&h.state.sea_db).await;
+    assert_eq!(rows[0].priority, "p0");
+    assert_eq!(rows[0].snapshot, None);
+}

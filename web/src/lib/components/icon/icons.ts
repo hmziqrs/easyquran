@@ -34,6 +34,7 @@ export type IconName =
   | "arrows-clockwise"
   | "dots"
   | "pin"
+  | "flag"
   | "device-phone"
   | "device-monitor"
   | "mic";
@@ -164,6 +165,12 @@ export const ICONS = {
   pin: {
     viewBox: "0 0 256 256",
     d: "M168 24H88a8 8 0 0 0 0 16h8v64l-24 32a8 8 0 0 0 6.4 12.8H128v56a8 8 0 0 0 16 0v-56h49.6a8 8 0 0 0 6.4-12.8L176 104V40h8a8 8 0 0 0 0-16Z",
+  },
+  // Lucide flag (outline): report a problem with a verse.
+  flag: {
+    viewBox: "0 0 24 24",
+    stroke: true,
+    d: "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7",
   },
   // Lucide smartphone (outline): a device row on iOS or Android.
   "device-phone": {

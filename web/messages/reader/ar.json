@@ -584,5 +584,16 @@
   "reader_lanes_layout_parallel": "جنبًا إلى جنب",
   "reader_lanes_text_smaller": "نص أصغر لـ {name}",
   "reader_lanes_text_larger": "نص أكبر لـ {name}",
-  "reader_lanes_text_reset": "إعادة حجم النص لـ {name}"
+  "reader_lanes_text_reset": "إعادة حجم النص لـ {name}",
+  "reader_report_verse": "الإبلاغ عن خطأ في الترجمة",
+  "reader_report_title": "الإبلاغ عن خطأ في الترجمة",
+  "reader_report_description": "اذكر ما الخطأ في هذه الآية في هذه الترجمة. تصل البلاغات إلى فريق easyquran ولا تغيّر نص الترجمة.",
+  "reader_report_details": "ما الخطأ؟",
+  "reader_report_contact": "البريد الإلكتروني للرد (اختياري)",
+  "reader_report_send": "إرسال البلاغ",
+  "reader_report_sending": "جارٍ الإرسال...",
+  "reader_report_sent": "شكرًا. تم استلام بلاغك.",
+  "reader_report_failed": "لم يُرسل البلاغ. حاول مرة أخرى.",
+  "reader_report_too_long": "اختصر البلاغ إلى {max} حرف.",
+  "reader_report_cancel": "إلغاء"
 }

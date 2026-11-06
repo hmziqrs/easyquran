@@ -4,8 +4,14 @@
  * limits (closed reason set, positive integer id, 2000-char details).
  */
 
-export const REPORT_TARGET_KINDS = ["post", "comment"] as const;
+export const REPORT_TARGET_KINDS = ["post", "comment", "translation"] as const;
 export type ReportTargetKind = (typeof REPORT_TARGET_KINDS)[number];
+
+/** Kinds the /report form offers. Translation reports come from the verse toolbar. */
+export const REPORT_FORM_TARGET_KINDS = [
+  "post",
+  "comment",
+] as const satisfies readonly ReportTargetKind[];
 
 export const REPORT_REASONS = [
   "spam",
@@ -44,16 +50,38 @@ export type ReportBuild =
   | { readonly ok: false; readonly error: "invalid_target" | "details_too_long" };
 
 const TARGET_ID = /^[1-9]\d{0,9}$/;
+const TRANSLATION_SOURCE_ID = /^[a-z]{2,3}\.[a-z0-9_-]{1,40}$/;
+const POSITIVE_INT = /^[1-9]\d*$/;
 
 function trimmedOrUndefined(raw: string): string | undefined {
   const value = raw.trim();
   return value === "" ? undefined : value;
 }
 
+/** `<source_id>:<surah 1-114>:<ayah 1-286>`, the same bounds the server checks. */
+export function isTranslationTarget(raw: string): boolean {
+  const parts = raw.split(":");
+  if (parts.length !== 3) return false;
+  const [source = "", surah = "", ayah = ""] = parts;
+  if (
+    !TRANSLATION_SOURCE_ID.test(source) ||
+    !POSITIVE_INT.test(surah) ||
+    !POSITIVE_INT.test(ayah)
+  ) {
+    return false;
+  }
+  return Number(surah) <= 114 && Number(ayah) <= 286;
+}
+
+function validTarget(kind: ReportTargetKind, targetId: string): boolean {
+  if (kind === "translation") return isTranslationTarget(targetId);
+  return TARGET_ID.test(targetId);
+}
+
 /** Normalise the form. Blank optional fields are omitted from the body. */
 export function buildReportPayload(input: ReportFormInput): ReportBuild {
   const targetId = input.targetId.trim();
-  if (!TARGET_ID.test(targetId)) return { ok: false, error: "invalid_target" };
+  if (!validTarget(input.targetKind, targetId)) return { ok: false, error: "invalid_target" };
 
   const details = trimmedOrUndefined(input.details);
   if (details !== undefined && details.length > REPORT_DETAILS_MAX) {

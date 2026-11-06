@@ -43,8 +43,8 @@ fn invalid_target() -> ErrorResponse {
     ErrorResponse::new(ErrorCode::InvalidValue).with_message("Target id is not valid")
 }
 
-/// Target ids are positive integers for both post and comment rows.
-fn parse_target_id(raw: &str) -> Result<i32, ErrorResponse> {
+/// Row ids are positive integers for post and comment rows.
+fn parse_row_id(raw: &str) -> Result<i32, ErrorResponse> {
     let id: i32 = raw.trim().parse().map_err(|_| invalid_target())?;
     if id <= 0 {
         return Err(invalid_target());
@@ -52,16 +52,59 @@ fn parse_target_id(raw: &str) -> Result<i32, ErrorResponse> {
     Ok(id)
 }
 
+/// Translation source ids look like `ar.jalalayn`: a 2-3 letter language, a dot,
+/// then a short name. Membership in the baked translation list stays a web concern.
+fn valid_source_id(raw: &str) -> bool {
+    let Some((lang, name)) = raw.split_once('.') else {
+        return false;
+    };
+    (2..=3).contains(&lang.len())
+        && lang.bytes().all(|b| b.is_ascii_lowercase())
+        && (1..=40).contains(&name.len())
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
+}
+
+/// Translation target `<source_id>:<surah>:<ayah>`. Rebuilt from the parsed parts,
+/// so the stored id is canonical (no `+`, no leading zeros, no stray spaces).
+fn parse_translation_target(raw: &str) -> Result<String, ErrorResponse> {
+    let parts: Vec<&str> = raw.trim().split(':').collect();
+    let [source, surah, ayah] = parts.as_slice() else {
+        return Err(invalid_target());
+    };
+    if !valid_source_id(source) {
+        return Err(invalid_target());
+    }
+    let surah: u16 = surah.parse().map_err(|_| invalid_target())?;
+    let ayah: u16 = ayah.parse().map_err(|_| invalid_target())?;
+    if !(1..=114).contains(&surah) || !(1..=286).contains(&ayah) {
+        return Err(invalid_target());
+    }
+    Ok(format!("{source}:{surah}:{ayah}"))
+}
+
+/// Canonical stored target id for the kind.
+fn parse_target(kind: ReportTargetKind, raw: &str) -> Result<String, ErrorResponse> {
+    match kind {
+        ReportTargetKind::Translation => parse_translation_target(raw),
+        ReportTargetKind::Post | ReportTargetKind::Comment => Ok(parse_row_id(raw)?.to_string()),
+    }
+}
+
 /// P0 capture (A24): copy the reported item into the report row at intake, so
-/// the content survives a later removal. `None` when the target no longer exists.
+/// the content survives a later removal. `None` when the target no longer exists,
+/// and always `None` for translation: the verse lives in an immutable database.
 async fn capture_snapshot(
     db: &DatabaseConnection,
     kind: ReportTargetKind,
-    id: i32,
+    target_id: &str,
 ) -> Result<Option<Value>, ErrorResponse> {
     let captured_at = Utc::now().to_rfc3339();
     match kind {
+        ReportTargetKind::Translation => Ok(None),
         ReportTargetKind::Comment => {
+            let id = parse_row_id(target_id)?;
             let Some(c) = post_comment::Entity::find_by_id(id).one(db).await? else {
                 return Ok(None);
             };
@@ -77,6 +120,7 @@ async fn capture_snapshot(
             })))
         }
         ReportTargetKind::Post => {
+            let id = parse_row_id(target_id)?;
             let Some(p) = post::Entity::find_by_id(id).one(db).await? else {
                 return Ok(None);
             };
@@ -118,12 +162,12 @@ pub async fn submit(
     )
     .await?;
 
-    let target_id = parse_target_id(&payload.target_id)?;
     let reason: ReportReason = payload.reason;
     let kind: ReportTargetKind = payload.target_kind;
+    let target_id = parse_target(kind, &payload.target_id)?;
 
     let snapshot = if reason.is_p0() {
-        capture_snapshot(&state.sea_db, kind, target_id).await?
+        capture_snapshot(&state.sea_db, kind, &target_id).await?
     } else {
         None
     };
@@ -142,7 +186,7 @@ pub async fn submit(
         NewReport {
             reporter_user_id: reporter,
             target_kind: kind,
-            target_id: target_id.to_string(),
+            target_id,
             reason,
             details: clean_details(payload.details.as_deref()),
             contact_email: clean_contact(payload.contact_email.as_deref()),

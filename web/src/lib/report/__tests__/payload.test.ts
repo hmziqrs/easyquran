@@ -58,4 +58,39 @@ describe("buildReportPayload", () => {
     const details = "x".repeat(REPORT_DETAILS_MAX);
     expect(buildReportPayload({ ...base, details }).ok).toBe(true);
   });
+
+  it("sends a translation target as source id and verse key", () => {
+    const built = buildReportPayload({
+      ...base,
+      targetKind: "translation",
+      targetId: "ar.jalalayn:2:255",
+      reason: "other",
+    });
+    expect(built).toEqual({
+      ok: true,
+      body: {
+        target_kind: "translation",
+        target_id: "ar.jalalayn:2:255",
+        reason: "other",
+      },
+    });
+  });
+
+  it("refuses translation targets outside the surah and ayah bounds", () => {
+    for (const targetId of [
+      "ar.jalalayn",
+      "ar.jalalayn:0:1",
+      "ar.jalalayn:115:1",
+      "ar.jalalayn:2:0",
+      "ar.jalalayn:2:287",
+      "ar.jalalayn:2:255:1",
+      "2:255",
+      "AR.jalalayn:2:255",
+    ]) {
+      expect(buildReportPayload({ ...base, targetKind: "translation", targetId })).toEqual({
+        ok: false,
+        error: "invalid_target",
+      });
+    }
+  });
 });

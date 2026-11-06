@@ -2,7 +2,7 @@
 //
 // Incident report page (/report). Renders without an account.
 //
-// 25 messages. Import this barrel, never
+// 26 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { report_contact_label } from "#lib/paraglide/messages/report_contact_label.js";
@@ -30,3 +30,4 @@ export { report_target_id_help } from "#lib/paraglide/messages/report_target_id_
 export { report_target_id_label } from "#lib/paraglide/messages/report_target_id_label.js";
 export { report_target_kind_label } from "#lib/paraglide/messages/report_target_kind_label.js";
 export { report_target_post } from "#lib/paraglide/messages/report_target_post.js";
+export { report_target_translation } from "#lib/paraglide/messages/report_target_translation.js";

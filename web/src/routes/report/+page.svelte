@@ -29,12 +29,13 @@
     report_target_id_label,
     report_target_kind_label,
     report_target_post,
+    report_target_translation,
   } from "#lib/i18n/m/report.js";
   import {
     buildReportPayload,
     REPORT_DETAILS_MAX,
+    REPORT_FORM_TARGET_KINDS,
     REPORT_REASONS,
-    REPORT_TARGET_KINDS,
     type ReportReason,
     type ReportTargetKind,
   } from "#lib/report/payload.js";
@@ -58,6 +59,7 @@
   const KIND_LABEL = {
     post: () => report_target_post(undefined, { locale }),
     comment: () => report_target_comment(undefined, { locale }),
+    translation: () => report_target_translation(undefined, { locale }),
   } satisfies Record<ReportTargetKind, () => string>;
 
   let targetKind = $state<ReportTargetKind>("post");
@@ -116,7 +118,7 @@
         <label class="flex flex-col gap-2 text-body font-medium text-foreground">
           {report_target_kind_label(undefined, { locale })}
           <select class={inputClass} bind:value={targetKind}>
-            {#each REPORT_TARGET_KINDS as kind (kind)}
+            {#each REPORT_FORM_TARGET_KINDS as kind (kind)}
               <option value={kind}>{KIND_LABEL[kind]()}</option>
             {/each}
           </select>

@@ -24,6 +24,7 @@
     reader_reading_bookmark_set,
     reader_pin_verse,
     reader_pins_full,
+    reader_report_verse,
     reader_unpin_verse,
     reader_verse_note,
     reader_verse_note_close,
@@ -71,6 +72,11 @@
     const ctx = routeContextFromParams(page.params);
     return ctx.kind === "translation" ? translationIdFromSegments(ctx.lang, ctx.translator) : null;
   }
+
+  // Translation correction report (F17): only where a translation is read, since
+  // the Arabic text has no translation source to correct. Dialog loads on demand.
+  const reportSourceId = $derived(currentSourceId());
+  let reportOpen = $state(false);
 
   // The reader's own place to return to. Automatic resume never touches it.
   const savedPlace = $derived(currentReadingBookmark());
@@ -253,6 +259,14 @@
       ariaLabel: reader_share_options(undefined, noteMsg),
       icon: "image",
     })}
+    {#if reportSourceId !== null}
+      {@render verseAction({
+        onclick: () => (reportOpen = true),
+        label: reader_report_verse(undefined, noteMsg),
+        ariaLabel: reader_report_verse(undefined, noteMsg),
+        icon: "flag",
+      })}
+    {/if}
     {@render verseAction({
       onclick: () => reader.toggleNote(verseKeyValue),
       label: reader_verse_note(undefined, noteMsg),
@@ -265,6 +279,12 @@
     })}
   </div>
 </div>
+
+{#if reportOpen && reportSourceId !== null}
+  {#await import("./ReportVerseDialog.svelte") then dialog}
+    <dialog.default bind:open={reportOpen} sourceId={reportSourceId} verseKey={vKey} />
+  {/await}
+{/if}
 
 {#if shareDialogOpen && shareTarget !== null}
   <ShareDialog

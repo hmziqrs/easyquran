@@ -485,6 +485,7 @@
   "report_target_kind_label": "ما هو",
   "report_target_post": "منشور",
   "report_target_comment": "تعليق",
+  "report_target_translation": "نص الترجمة",
   "report_target_id_label": "رقم العنصر",
   "report_target_id_help": "الرقم الظاهر مع العنصر.",
   "report_reason_label": "السبب",

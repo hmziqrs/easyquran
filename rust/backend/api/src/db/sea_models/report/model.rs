@@ -71,12 +71,15 @@ impl ReportReason {
     }
 }
 
-/// What a report points at. Only content the snapshot can capture today.
+/// What a report points at. Post and comment are database rows the snapshot can
+/// capture. Translation is one verse in an immutable translation database: the
+/// target id is `<source_id>:<surah>:<ayah>` and no row is captured.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReportTargetKind {
     Post,
     Comment,
+    Translation,
 }
 
 impl ReportTargetKind {
@@ -84,6 +87,7 @@ impl ReportTargetKind {
         match self {
             Self::Post => "post",
             Self::Comment => "comment",
+            Self::Translation => "translation",
         }
     }
 }

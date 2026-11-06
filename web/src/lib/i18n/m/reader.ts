@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 527 messages. Import this barrel, never
+// 538 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "#lib/paraglide/messages/reader_account.js";
@@ -371,6 +371,17 @@ export { reader_reload_page } from "#lib/paraglide/messages/reader_reload_page.j
 export { reader_reload_update } from "#lib/paraglide/messages/reader_reload_update.js";
 export { reader_remove_bookmark } from "#lib/paraglide/messages/reader_remove_bookmark.js";
 export { reader_remove_offline } from "#lib/paraglide/messages/reader_remove_offline.js";
+export { reader_report_cancel } from "#lib/paraglide/messages/reader_report_cancel.js";
+export { reader_report_contact } from "#lib/paraglide/messages/reader_report_contact.js";
+export { reader_report_description } from "#lib/paraglide/messages/reader_report_description.js";
+export { reader_report_details } from "#lib/paraglide/messages/reader_report_details.js";
+export { reader_report_failed } from "#lib/paraglide/messages/reader_report_failed.js";
+export { reader_report_send } from "#lib/paraglide/messages/reader_report_send.js";
+export { reader_report_sending } from "#lib/paraglide/messages/reader_report_sending.js";
+export { reader_report_sent } from "#lib/paraglide/messages/reader_report_sent.js";
+export { reader_report_title } from "#lib/paraglide/messages/reader_report_title.js";
+export { reader_report_too_long } from "#lib/paraglide/messages/reader_report_too_long.js";
+export { reader_report_verse } from "#lib/paraglide/messages/reader_report_verse.js";
 export { reader_retry } from "#lib/paraglide/messages/reader_retry.js";
 export { reader_ruku_item } from "#lib/paraglide/messages/reader_ruku_item.js";
 export { reader_sajda_obligatory } from "#lib/paraglide/messages/reader_sajda_obligatory.js";

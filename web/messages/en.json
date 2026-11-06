@@ -485,6 +485,7 @@
   "report_target_kind_label": "What is it",
   "report_target_post": "Post",
   "report_target_comment": "Comment",
+  "report_target_translation": "Translation text",
   "report_target_id_label": "Item ID",
   "report_target_id_help": "The number shown with the item.",
   "report_reason_label": "Reason",

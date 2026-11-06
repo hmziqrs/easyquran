@@ -584,5 +584,16 @@
   "reader_lanes_layout_parallel": "Side by side",
   "reader_lanes_text_smaller": "Smaller text for {name}",
   "reader_lanes_text_larger": "Larger text for {name}",
-  "reader_lanes_text_reset": "Reset text size for {name}"
+  "reader_lanes_text_reset": "Reset text size for {name}",
+  "reader_report_verse": "Report a translation issue",
+  "reader_report_title": "Report a translation issue",
+  "reader_report_description": "Say what is wrong with this verse in this translation. Reports go to the easyquran team and do not change the translation text.",
+  "reader_report_details": "What is wrong?",
+  "reader_report_contact": "Email for a reply (optional)",
+  "reader_report_send": "Send report",
+  "reader_report_sending": "Sending...",
+  "reader_report_sent": "Thanks. Your report was received.",
+  "reader_report_failed": "Report not sent. Try again.",
+  "reader_report_too_long": "Shorten the report to {max} characters.",
+  "reader_report_cancel": "Cancel"
 }
