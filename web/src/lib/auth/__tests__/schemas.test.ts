@@ -63,6 +63,7 @@ describe("registerSchema", () => {
     email: "sara@eq.test",
     password: VALID_PASSWORD,
     confirm_password: VALID_PASSWORD,
+    date_of_birth: "2000-01-01",
   };
 
   it("accepts a complete, matching form", () => {
@@ -94,12 +95,14 @@ describe("registerSchema", () => {
         email: "nope",
         password: "",
         confirm_password: "",
+        date_of_birth: "",
       }),
     ).toEqual({
       name: copy.nameRequired,
       email: copy.emailInvalid,
       password: copy.passwordRequired,
       confirm_password: copy.confirmRequired,
+      date_of_birth: copy.dobRequired,
     });
   });
 });

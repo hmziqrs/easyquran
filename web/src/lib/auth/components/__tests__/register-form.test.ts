@@ -104,6 +104,7 @@ describe("RegisterForm validation UX", () => {
       copy.emailInvalid,
       copy.passwordRequired,
       copy.confirmRequired,
+      copy.dobRequired,
     ]);
     expect(request).not.toHaveBeenCalled();
   });
@@ -114,6 +115,7 @@ describe("RegisterForm validation UX", () => {
     await type("register-name", "Sara");
     await type("register-email", "sara@eq.test");
     await type("register-password", PASSWORD);
+    await type("register-dob", "2000-01-01");
     await type("register-confirm", `${PASSWORD}!`);
     await submit();
 
@@ -128,6 +130,7 @@ describe("RegisterForm validation UX", () => {
 
     await type("register-name", "Sara");
     await type("register-email", "sara@eq.test");
+    await type("register-dob", "2000-01-01");
     await type("register-password", "short");
     await type("register-confirm", "short");
     await submit();
@@ -148,6 +151,7 @@ describe("RegisterForm validation UX", () => {
     await type("register-name", "  Sara  ");
     await type("register-email", " sara@eq.test ");
     await type("register-password", PASSWORD);
+    await type("register-dob", "2000-01-01");
     await type("register-confirm", PASSWORD);
     await submit();
 
@@ -158,6 +162,7 @@ describe("RegisterForm validation UX", () => {
         email: "sara@eq.test",
         password: PASSWORD,
         confirm_password: PASSWORD,
+        date_of_birth: "2000-01-01",
       },
     });
     expect(errorTexts()).toContain("That email is already registered.");
