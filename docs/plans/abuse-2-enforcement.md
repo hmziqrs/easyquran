@@ -2,22 +2,6 @@
 
 [Back to index](../README.md)
 
-#### A33. Erasure receipts, physical deletion, backups
-
-Build:
-
-1. `erasure_receipts`: subject ref only (no digest), scope, `retained[]` (basis and expiry per item), timestamp. Retention 24 months.
-2. Boot and post-restore replay re-deletes anything a restore resurrected (replay list from receipts).
-3. `PRAGMA secure_delete = ON` at connect. Scheduled `wal_checkpoint(TRUNCATE)`.
-4. Physical swap via `VACUUM INTO` copy only in a maintenance window. Default: do not implement the swap. Publish the claim as "removed from the live database; removed from backups within 30 days" (O15 decides whether the physical claim is needed).
-5. Nightly `VACUUM INTO` to a dated file, plus off-host encrypted copy (O2 provides destination). Hard 30-day cap on backup retention. Restore rehearsal documented in `deploy/README.md`.
-
-Files: new migration, `rust/backend/api/src/services/retention.rs`, `rust/backend/api/src/db/sea_connect.rs` (PRAGMA), `rust/backend/api/src/main.rs`, `deploy/README.md`, `justfile`.
-
-Done when: nightly backup completes without blocking writes (run test or manual with timestamp); restore followed by boot leaves erased subjects absent (test with a fixture backup); `PRAGMA secure_delete` reads back ON (test).
-Blocked by: A32
-Owner: O2, O15.
-
 #### A38. Erasure and data-request procedure
 
 Build: admin erase path writing an erasure receipt (A33), one-month response clock with queue-aging alert, runbook section in `deploy/legal-debt.md`. Self-service deletion is F7 and writes the same receipt.

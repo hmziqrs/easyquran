@@ -51,7 +51,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 
 | Item                                                                                                    | Title                                                             | Blocked by   |
 | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------ |
-| [A33](plans/abuse-2-enforcement.md#a33-erasure-receipts-physical-deletion-backups)                      | Erasure receipts, physical deletion, backups                      | A32          |
 | [A38](plans/abuse-2-enforcement.md#a38-erasure-and-data-request-procedure)                              | Erasure and data-request procedure                                | A26, A33     |
 | [A34](plans/abuse-2-enforcement.md#a34-policy-text-sentence-ledger-minors-code-side-of-legal-artifacts) | Policy text sentence ledger, minors, code side of legal artifacts | A4, A26, A32 |
 
