@@ -595,5 +595,12 @@
   "reader_report_sent": "Thanks. Your report was received.",
   "reader_report_failed": "Report not sent. Try again.",
   "reader_report_too_long": "Shorten the report to {max} characters.",
-  "reader_report_cancel": "Cancel"
+  "reader_report_cancel": "Cancel",
+  "reader_word_meaning": "Meaning",
+  "reader_word_transliteration": "Transliteration",
+  "reader_word_loading": "Loading word meanings…",
+  "reader_word_failed": "Word meanings couldn't be loaded right now.",
+  "reader_word_missing": "No entry for this word in {source}.",
+  "reader_word_attribution": "Source: {attribution}",
+  "reader_word_licence": "Licence: {licence}"
 }

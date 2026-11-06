@@ -1,10 +1,23 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import { TRANSLATION_BY_ID } from "#lib/data/translations.js";
 import {
   isTafsirTranslation,
   parseTransliterationSegments,
   stripTransliterationMarkup,
+  TAFSIR_TRANSLATION_IDS,
 } from "#lib/quran/text-marks.js";
+
+describe("tafsir allow-list guard (F22)", () => {
+  it("every tafsir id is a baked translation row with a direction and credit", () => {
+    for (const id of TAFSIR_TRANSLATION_IDS) {
+      const row = TRANSLATION_BY_ID.get(id);
+      expect(row, id).toBeDefined();
+      expect(row?.name.trim() ?? "", id).not.toBe("");
+      expect(["ltr", "rtl"], id).toContain(row?.direction);
+    }
+  });
+});
 
 describe("isTafsirTranslation (TRX-01 frozen allow-list)", () => {
   it("marks exactly the two Arabic tafsir works filed among translations", () => {

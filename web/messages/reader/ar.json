@@ -595,5 +595,12 @@
   "reader_report_sent": "شكرًا. تم استلام بلاغك.",
   "reader_report_failed": "لم يُرسل البلاغ. حاول مرة أخرى.",
   "reader_report_too_long": "اختصر البلاغ إلى {max} حرف.",
-  "reader_report_cancel": "إلغاء"
+  "reader_report_cancel": "إلغاء",
+  "reader_word_meaning": "المعنى",
+  "reader_word_transliteration": "النطق",
+  "reader_word_loading": "جارٍ تحميل معاني الكلمات…",
+  "reader_word_failed": "تعذّر تحميل معاني الكلمات الآن.",
+  "reader_word_missing": "لا يوجد إدخال لهذه الكلمة في {source}.",
+  "reader_word_attribution": "المصدر: {attribution}",
+  "reader_word_licence": "الترخيص: {licence}"
 }

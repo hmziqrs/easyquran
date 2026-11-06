@@ -11,9 +11,14 @@
  * never a reading translation. Frozen id allow-list — the catalogue itself
  * never changes (derive-only rule); every id maps to a baked row.
  */
-const TAFSIR_TRANSLATION_IDS: ReadonlySet<string> = new Set(["ar.jalalayn", "ar.muyassar"]);
+export const TAFSIR_TRANSLATION_IDS: ReadonlySet<string> = new Set(["ar.jalalayn", "ar.muyassar"]);
 
-/** True for catalogue ids that are commentary (tafsir), not translations. */
+/**
+ * True for catalogue ids that are commentary (tafsir), not translations.
+ * A new tafsir needs one entry above, its baked row (a new immutable id), and
+ * nothing else: routes, the Commentary section, lanes and offline all key off
+ * this predicate. Guarded by text-marks.test.ts.
+ */
 export function isTafsirTranslation(id: string): boolean {
   return TAFSIR_TRANSLATION_IDS.has(id);
 }

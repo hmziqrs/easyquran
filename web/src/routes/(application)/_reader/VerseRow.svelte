@@ -18,6 +18,9 @@
     reader_transliteration_legend,
   } from "#lib/i18n/m/reader.js";
   import type { StackedTranslation, TranslationDirection } from "#lib/data/quran-types.js";
+  import { WORD_SOURCES } from "#lib/quran/words/registry.js";
+  import { wordSourceFor } from "#lib/quran/words/gate.js";
+  import type { WordSource } from "#lib/quran/words/types.js";
   import StackedLanes from "./StackedLanes.svelte";
   import AyahOrnament from "./AyahOrnament.svelte";
   import IndoPakAyah from "./IndoPakAyah.svelte";
@@ -76,6 +79,11 @@
     vKey: string;
     lanes?: readonly StackedTranslation[];
   }> | null>(null);
+  // Word tokens (F21): the view is fetched only when a word source is registered.
+  let Words = $state<Component<{ text: string; vKey: string; source: WordSource }> | null>(
+    null,
+  );
+  const wordSource = $derived(wordSourceFor(script, WORD_SOURCES));
 
   const ayahId = $derived(`ayah-${vKey.replace(":", "-")}`);
   const tajweedSegments = $derived.by(() =>
@@ -145,6 +153,13 @@
         Tools = module.default;
       })
       .catch(() => {});
+    // Empty registry: no word module is requested, nothing else changes.
+    if (WORD_SOURCES.length === 0) return;
+    void import("./VerseWords.svelte")
+      .then((module) => {
+        Words = module.default;
+      })
+      .catch(() => {});
   });
 </script>
 
@@ -205,6 +220,8 @@
         {/each}
       {:else if script === QuranScript.IndoPak}
         <IndoPakAyah {text} {n} {vKey} />
+      {:else if Words !== null && wordSource !== undefined}
+        <Words {text} {vKey} source={wordSource} />
       {:else}
         {text}
       {/if}{#if script !== QuranScript.IndoPak || arabicPending}<AyahOrnament {vKey} {n} />{/if}
