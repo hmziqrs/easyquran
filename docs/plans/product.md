@@ -8,29 +8,29 @@ Product features, then the copy truth pass.
 
 #### F19. Recitation audio and player
 
-Build: update the CSP for audio hosts. Reciter/recording catalogue, verse timing, surah and ayah queue, play/pause/seek/next/previous, persistent mini and full player, playback speed, media-session controls, failure/retry, optional offline audio with explicit storage limits, attribution.
-Files: `web/src/lib/stores/reader-core.svelte.ts`, `web/src/lib/stores/reader.svelte.ts`, new: `web/src/lib/audio/`
+Build: Engine, queue, mini and full player, speed, media session, retry, offline limits and reader entry points are built and dark (`web/src/lib/audio/`). Left: add the licensed source to `web/src/lib/audio/catalogue.ts`, its CSP entries (listed in that file), and attribution text.
+Files: `web/src/lib/audio/catalogue.ts`, CSP config
 Done when: continuous surah playback survives navigation and backgrounding; failures recover.
 Blocked by: O22
 
 #### F20. Memorization repeat engine
 
-Build: verse/range selection, repeat counters, inter-ayah delay, boundaries, cancellation, screen-lock behaviour, saved presets.
-Files: new: `web/src/lib/audio/repeat.ts`
+Build: Built and dark (`web/src/lib/audio/repeat.ts`). Turns on with F19. Left: run it against a real recording.
+Files: none expected
 Done when: a 3-verse range repeats the set count with the delay and stops cleanly.
 Blocked by: F19
 
 #### F21. Word-by-word
 
-Build: canonical word coordinates, Arabic token display, per-word meaning and transliteration, popovers with keyboard and touch, offline delivery, attribution. Tests must prove Quran text is never rewritten.
-Files: `web/src/routes/(application)/_reader/VerseRow.svelte`, new: `web/src/lib/quran/words/`
+Build: Coordinates, tokens, popovers and gate are built and dark (`web/src/lib/quran/words/`). Left: add the licensed source to the registry with meaning, transliteration, licence and offline delivery.
+Files: `web/src/lib/quran/words/`
 Done when: every token maps to its source word; reader text bytes are unchanged.
 Blocked by: O23
 
 #### F22. More tafsir sources
 
-Build: add licensed tafsir beyond `ar.jalalayn` and `ar.muyassar`, each as a new immutable database id in the baked map: verse coverage, source switching, attribution, footnotes, citation links, offline rules, missing-source states.
-Files: `web/src/lib/data/translations.json`, `web/src/lib/components/translation/TranslationModal.svelte`
+Build: Source switching, credit, missing-verse note and offline rules already work. Left: add each licensed tafsir as a new immutable database id in the baked map and the tafsir allow-list. Footnotes and citation links need a data field the sources must supply.
+Files: `web/src/lib/data/translations.json`, tafsir allow-list
 Done when: each new source is credited and missing verses show a clear state.
 Blocked by: O24
 
