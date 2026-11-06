@@ -1198,8 +1198,14 @@ pub async fn seed_newsletter_subscribers(
                 newsletter_subscriber::SubscriberStatus::Unsubscribed
             };
 
+            let (expires_at, retention_class) = newsletter_subscriber::retention_for(
+                status.clone(),
+                chrono::Utc::now().timestamp(),
+            );
             let subscriber = newsletter_subscriber::Model {
                 id: 0,
+                expires_at,
+                retention_class: retention_class.to_string(),
                 email,
                 status,
                 token: format!("token_{}", rng.random_range(1000..9999)),
@@ -1209,6 +1215,8 @@ pub async fn seed_newsletter_subscribers(
 
             let active_model = newsletter_subscriber::ActiveModel {
                 id: Set(subscriber.id),
+                expires_at: Set(subscriber.expires_at),
+                retention_class: Set(subscriber.retention_class),
                 email: Set(subscriber.email),
                 status: Set(subscriber.status),
                 token: Set(subscriber.token),

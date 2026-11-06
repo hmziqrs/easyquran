@@ -5,7 +5,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use crate::db::sea_models::{
     category, comment_flag, email_verification, forgot_password, media, media_usage, media_variant,
     newsletter_subscriber, post, post_comment, post_revision, post_series, post_view, route_status,
-    scheduled_post, seed_run, tag, user, user_session,
+    scheduled_post, seed_run, tag, user_session,
 };
 
 use super::types::{SeedError, SeedResult, TableRange};

@@ -1266,8 +1266,14 @@ where
                 .collect();
             let now = chrono::Utc::now().fixed_offset();
 
+            let (expires_at, retention_class) = newsletter_subscriber::retention_for(
+                status.clone(),
+                chrono::Utc::now().timestamp(),
+            );
             let subscriber = newsletter_subscriber::Model {
                 id: 0,
+                expires_at,
+                retention_class: retention_class.to_string(),
                 email,
                 status,
                 token,
@@ -1277,6 +1283,8 @@ where
 
             let active_model = newsletter_subscriber::ActiveModel {
                 id: ActiveValue::NotSet,
+                expires_at: Set(subscriber.expires_at),
+                retention_class: Set(subscriber.retention_class),
                 email: Set(subscriber.email),
                 status: Set(subscriber.status),
                 token: Set(subscriber.token),

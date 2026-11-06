@@ -318,3 +318,34 @@ async fn report_table_has_no_fk_no_ip_and_expiry_columns() {
         0
     );
 }
+
+#[tokio::test]
+async fn p0_submit_dispatches_the_operator_alert() {
+    let h = harness(routes()).await;
+    let comment_id = seed_comment(&h, "alert words").await;
+    let (status, body) = submit(
+        &h.app,
+        "203.0.113.90",
+        None,
+        json!({
+            "target_kind": "comment",
+            "target_id": comment_id.to_string(),
+            "reason": "threat"
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let mut rows = Vec::new();
+    for _ in 0..50 {
+        rows = audit_log::Entity::find()
+            .filter(audit_log::Column::Action.eq("alert.dispatch"))
+            .all(&h.state.sea_db)
+            .await
+            .unwrap();
+        if !rows.is_empty() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert_eq!(rows.len(), 1, "one dispatch row per P0 report");
+}
