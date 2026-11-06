@@ -167,6 +167,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let sea_db = db::sea_connect::get_sea_connection().await;
 
+    // A10: fill the verification identity for accounts written before m000022.
+    // A failure stops boot, since a partly filled column undercounts the
+    // registration caps.
+    if let Err(err) =
+        ruxlog::db::sea_models::user::Entity::backfill_verification_identity(&sea_db).await
+    {
+        eprintln!("Verification identity backfill failed: {err:?}");
+        std::process::exit(1);
+    }
+
     let gate_store = std::sync::Arc::new(rux_request_gate::InMemoryStore::default());
 
     // rate_limit_state schema owned by migration m000002 (runs inside

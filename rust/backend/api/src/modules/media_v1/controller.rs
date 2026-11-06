@@ -924,6 +924,7 @@ mod tests {
             google_id: None,
             oauth_provider: None,
             session_auth_secret: format!("test-secret-{id}"),
+            verification_identity_hash: None,
             created_at: now,
             updated_at: now,
         }

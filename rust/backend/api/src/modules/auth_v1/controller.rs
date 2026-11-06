@@ -1515,6 +1515,7 @@ mod tests {
             google_id: None,
             oauth_provider: None,
             session_auth_secret: "s".repeat(64),
+            verification_identity_hash: None,
             created_at: chrono::Utc::now().fixed_offset(),
             updated_at: chrono::Utc::now().fixed_offset(),
         }
@@ -1624,6 +1625,7 @@ mod tests {
             google_id: None,
             oauth_provider: None,
             session_auth_secret: "s".repeat(64),
+            verification_identity_hash: None,
             created_at: chrono::Utc::now().fixed_offset(),
             updated_at: chrono::Utc::now().fixed_offset(),
         }

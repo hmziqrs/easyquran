@@ -1017,6 +1017,60 @@ pub fn admission() -> &'static AdmissionSettings {
     ADMISSION.get_or_init(AdmissionSettings::from_env)
 }
 
+/// Minimum length of `VERIFICATION_IDENTITY_KEY` in production.
+pub const VERIFICATION_IDENTITY_KEY_MIN_BYTES: usize = 32;
+
+/// Development-only key for the verification-identity HMAC. Never used in
+/// production: production boot refuses an unset or weak `VERIFICATION_IDENTITY_KEY`.
+const VERIFICATION_IDENTITY_DEV_KEY: &[u8] = b"easyquran-dev-only-verification-identity";
+
+static VERIFICATION_IDENTITY_KEY: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+
+/// Reads and validates `VERIFICATION_IDENTITY_KEY` (A10). Production requires a
+/// CSPRNG value of at least [`VERIFICATION_IDENTITY_KEY_MIN_BYTES`] bytes that is
+/// not a shipped placeholder. Other environments fall back to a fixed dev key.
+pub fn verification_identity_key_from_env() -> Result<Vec<u8>, String> {
+    let raw = std::env::var("VERIFICATION_IDENTITY_KEY").unwrap_or_default();
+    let is_prod = matches!(env_class(), EnvClass::Production);
+    if raw.trim().is_empty() {
+        if is_prod {
+            return Err("VERIFICATION_IDENTITY_KEY is unset/empty in production. \
+                 Generate with: openssl rand -hex 32."
+                .to_string());
+        }
+        return Ok(VERIFICATION_IDENTITY_DEV_KEY.to_vec());
+    }
+    if is_prod {
+        if is_placeholder_secret(&raw) {
+            return Err("VERIFICATION_IDENTITY_KEY is a shipped placeholder. \
+                 Generate with: openssl rand -hex 32."
+                .to_string());
+        }
+        if raw.len() < VERIFICATION_IDENTITY_KEY_MIN_BYTES {
+            return Err(format!(
+                "VERIFICATION_IDENTITY_KEY must be >= {VERIFICATION_IDENTITY_KEY_MIN_BYTES} \
+                 bytes in production (got {}); generate with: openssl rand -hex 32.",
+                raw.len()
+            ));
+        }
+    }
+    Ok(raw.into_bytes())
+}
+
+/// Process-wide verification-identity key. `Settings::from_env` validates it at
+/// boot; before that (tests) the dev key applies outside production.
+pub fn verification_identity_key() -> &'static [u8] {
+    VERIFICATION_IDENTITY_KEY
+        .get_or_init(|| match verification_identity_key_from_env() {
+            Ok(key) => key,
+            Err(_) if !matches!(env_class(), EnvClass::Production) => {
+                VERIFICATION_IDENTITY_DEV_KEY.to_vec()
+            }
+            Err(err) => panic!("{err}"),
+        })
+        .as_slice()
+}
+
 impl Settings {
     pub fn from_env() -> Result<Self, String> {
         let cookie_key =
@@ -1040,6 +1094,7 @@ impl Settings {
         let _ = WEB_AUTH.set(web_auth);
         let _ = ADMISSION.set(AdmissionSettings::from_env());
         let _ = INGRESS.set(IngressSettings::from_env()?);
+        let _ = VERIFICATION_IDENTITY_KEY.set(verification_identity_key_from_env()?);
 
         Ok(Self {
             cookie_key,
@@ -1056,6 +1111,48 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn verification_identity_key_is_required_strong_in_production() {
+        let _g = TEST_ENV_MUTEX.lock().unwrap();
+        let app_env = std::env::var("APP_ENV").ok();
+        let key = std::env::var("VERIFICATION_IDENTITY_KEY").ok();
+        std::env::set_var("APP_ENV", "production");
+        std::env::remove_var("VERIFICATION_IDENTITY_KEY");
+        assert!(
+            verification_identity_key_from_env().is_err(),
+            "unset in production"
+        );
+        std::env::set_var("VERIFICATION_IDENTITY_KEY", "CHANGE_ME_openssl_rand_hex_32");
+        assert!(verification_identity_key_from_env().is_err(), "placeholder");
+        std::env::set_var("VERIFICATION_IDENTITY_KEY", "too-short");
+        assert!(
+            verification_identity_key_from_env().is_err(),
+            "under 32 bytes"
+        );
+        std::env::set_var(
+            "VERIFICATION_IDENTITY_KEY",
+            "0123456789abcdef0123456789abcdef",
+        );
+        assert!(
+            verification_identity_key_from_env().is_ok(),
+            "strong key accepted"
+        );
+        std::env::set_var("APP_ENV", "development");
+        std::env::remove_var("VERIFICATION_IDENTITY_KEY");
+        assert!(
+            verification_identity_key_from_env().is_ok(),
+            "dev key outside production"
+        );
+        match app_env {
+            Some(v) => std::env::set_var("APP_ENV", v),
+            None => std::env::remove_var("APP_ENV"),
+        }
+        match key {
+            Some(v) => std::env::set_var("VERIFICATION_IDENTITY_KEY", v),
+            None => std::env::remove_var("VERIFICATION_IDENTITY_KEY"),
+        }
+    }
 
     fn set_cookie_key(strong: &str) {
         std::env::set_var("COOKIE_KEY", strong);

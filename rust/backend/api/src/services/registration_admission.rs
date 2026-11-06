@@ -128,6 +128,50 @@ pub async fn admit_anonymous_session(
     charge_daily(store, &anonymous_session_ip_key(ip), cap, now).await
 }
 
+/// Accounts one verification identity (canonical mailbox) may hold while still
+/// unverified (A10). A fourth pending registration is refused.
+pub const IDENTITY_PENDING_CAP: u64 = 3;
+
+/// Accounts one verification identity may hold over its lifetime (A10). The
+/// sixth account is refused, verified or not.
+pub const IDENTITY_LIFETIME_CAP: u64 = 5;
+
+/// Refuses a new or re-addressed account when its verification identity already
+/// holds the pending or the lifetime cap. `exclude` is the account being
+/// re-addressed so it never counts against itself. The refusal is a generic 429:
+/// it does not say which cap was reached. Runs inside the caller's transaction,
+/// so the count and the write see the same rows.
+pub async fn ensure_identity_capacity<C: ConnectionTrait>(
+    db: &C,
+    identity_hash: &str,
+    exclude: Option<i32>,
+) -> Result<(), ErrorResponse> {
+    let pending = count_identity(db, identity_hash, exclude, true).await?;
+    let lifetime = count_identity(db, identity_hash, exclude, false).await?;
+    if pending < IDENTITY_PENDING_CAP && lifetime < IDENTITY_LIFETIME_CAP {
+        return Ok(());
+    }
+    Err(ErrorResponse::new(ErrorCode::RateLimited)
+        .with_message("Too many requests. Try again later."))
+}
+
+async fn count_identity<C: ConnectionTrait>(
+    db: &C,
+    identity_hash: &str,
+    exclude: Option<i32>,
+    pending_only: bool,
+) -> Result<u64, ErrorResponse> {
+    let mut query =
+        user::Entity::find().filter(user::Column::VerificationIdentityHash.eq(identity_hash));
+    if let Some(id) = exclude {
+        query = query.filter(user::Column::Id.ne(id));
+    }
+    if pending_only {
+        query = query.filter(user::Column::IsVerified.eq(false));
+    }
+    Ok(query.count(db).await?)
+}
+
 fn disposable_set() -> &'static HashSet<&'static str> {
     static SET: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         DISPOSABLE_DOMAINS

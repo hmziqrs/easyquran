@@ -29,6 +29,10 @@ pub struct Model {
     pub oauth_provider: Option<String>,
     #[serde(skip_serializing)]
     pub session_auth_secret: String,
+    /// Keyed HMAC of the canonical mailbox (A10). Set on every write that sets
+    /// `email`, by `before_save`. Never returned to clients.
+    #[serde(skip_serializing)]
+    pub verification_identity_hash: Option<String>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }
@@ -147,6 +151,10 @@ impl ActiveModelBehavior for ActiveModel {
     where
         C: ConnectionTrait,
     {
+        if let sea_orm::ActiveValue::Set(email) = &self.email {
+            let hash = crate::utils::email::verification_identity_hash(email);
+            self.verification_identity_hash = sea_orm::ActiveValue::Set(Some(hash));
+        }
         match self.two_fa_secret.clone() {
             sea_orm::ActiveValue::Set(Some(value)) => {
                 let to_store = if looks_like_envelope(&value) {

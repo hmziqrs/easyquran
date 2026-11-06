@@ -26,6 +26,11 @@ const CFG: AbuseLimiterConfig = AbuseLimiterConfig {
 // non-production bypass.
 fn enforce() {
     std::env::set_var("APP_ENV", "production");
+    // Production refuses to run without a verification-identity key (A10).
+    std::env::set_var(
+        "VERIFICATION_IDENTITY_KEY",
+        "0123456789abcdef0123456789abcdef",
+    );
 }
 
 async fn database() -> DatabaseConnection {

@@ -283,6 +283,7 @@ fn user_json_never_leaks_secret_fields() {
         google_id: None,
         oauth_provider: None,
         session_auth_secret: "test-secret".into(),
+        verification_identity_hash: None,
         created_at: now,
         updated_at: now,
     };

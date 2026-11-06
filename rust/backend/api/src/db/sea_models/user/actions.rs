@@ -1,6 +1,7 @@
 use crate::{
     db::sea_models::email_verification,
     error::{DbResult, ErrorCode, ErrorResponse},
+    services::registration_admission,
 };
 use ruxlog_types::PaginatedList;
 use sea_orm::{
@@ -78,6 +79,7 @@ impl Entity {
         email_code_hash: String,
     ) -> DbResult<Model> {
         let now = chrono::Utc::now().fixed_offset();
+        let identity_hash = crate::utils::email::verification_identity_hash(&new_user.email);
         let hash = crate::services::password_work::run(move || {
             password_auth::generate_hash(new_user.password)
         })
@@ -100,6 +102,22 @@ impl Entity {
         match user.insert(&transaction).await {
             Ok(model) => {
                 tracing::Span::current().record("user_id", model.id);
+                // A10: counted inside the insert transaction, excluding the new
+                // row, so concurrent registrations for one mailbox see each
+                // other's rows. A refusal rolls the insert back.
+                if let Err(refused) = registration_admission::ensure_identity_capacity(
+                    &transaction,
+                    &identity_hash,
+                    Some(model.id),
+                )
+                .await
+                {
+                    transaction.rollback().await.map_err(|_| {
+                        ErrorResponse::new(ErrorCode::TransactionError)
+                            .with_message("Failed to rollback transaction")
+                    })?;
+                    return Err(refused);
+                }
                 email_verification::Entity::create(&transaction, model.id, email_code_hash).await?;
                 transaction.commit().await.map_err(|_| {
                     ErrorResponse::new(ErrorCode::TransactionError)
@@ -141,6 +159,13 @@ impl Entity {
 
             if let Some(email) = update_user.email {
                 if email != prev_email {
+                    let identity_hash = crate::utils::email::verification_identity_hash(&email);
+                    registration_admission::ensure_identity_capacity(
+                        &transaction,
+                        &identity_hash,
+                        Some(user_id),
+                    )
+                    .await?;
                     user_active.email = Set(email);
                     user_active.is_verified = Set(false);
                     user_active.session_auth_secret = Set(super::model::new_session_auth_secret()
@@ -182,6 +207,27 @@ impl Entity {
             warn!(user_id, "User not found for update");
             Ok(None)
         }
+    }
+
+    /// Fills `verification_identity_hash` for rows written before m000022. Runs
+    /// once at boot after migrations and touches only NULL rows, so it is safe to
+    /// repeat. Returns how many rows it filled.
+    pub async fn backfill_verification_identity(conn: &DbConn) -> DbResult<u64> {
+        let rows = Self::find()
+            .filter(Column::VerificationIdentityHash.is_null())
+            .all(conn)
+            .await?;
+        let mut filled = 0_u64;
+        for row in rows {
+            let hash = crate::utils::email::verification_identity_hash(&row.email);
+            Self::update_many()
+                .col_expr(Column::VerificationIdentityHash, Expr::value(Some(hash)))
+                .filter(Column::Id.eq(row.id))
+                .exec(conn)
+                .await?;
+            filled += 1;
+        }
+        Ok(filled)
     }
 
     #[instrument(skip(conn), fields(user_id))]

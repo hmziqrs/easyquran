@@ -216,6 +216,7 @@ mod tests {
             google_id: None,
             oauth_provider: None,
             session_auth_secret: "test-secret".to_string(),
+            verification_identity_hash: None,
             created_at: now,
             updated_at: now,
         }
