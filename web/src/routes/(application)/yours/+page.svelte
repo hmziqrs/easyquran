@@ -25,12 +25,13 @@
   import ContinueThreads from "./_components/ContinueThreads.svelte";
   import ThreadHistory from "./_components/ThreadHistory.svelte";
   import ReadingInsights from "./_components/ReadingInsights.svelte";
+  import NotesLibrary from "./_components/NotesLibrary.svelte";
+  import { Tabs, TabsList, TabsTrigger } from "#lib/components/ui/tabs/index.js";
   import { homeCards, type HomeCard } from "#lib/home/cards.svelte.js";
   import CardTile from "#lib/home/CardTile.svelte";
   import CardForm from "#lib/home/CardForm.svelte";
   import { cardUndoState, undoCardRemoval } from "#lib/home/card-undo.svelte.js";
   import { fetchDailyAyah, type DailyAyah } from "#lib/home/daily-ayah.js";
-  import { LOCAL_NOTES_OWNER, notesSource } from "#lib/home/notes-source.svelte.js";
   import {
     languageLabelFor,
     readingChoice,
@@ -65,6 +66,9 @@
     reader_cards_full,
     reader_cards_removed,
     reader_bookmarks_undo,
+    reader_notes_view_all,
+    reader_yours_tab_notes,
+    reader_yours_tab_overview,
   } from "#lib/i18n/m/reader.js";
 
   // Reader nav context for opening saved places: like /app/bookmarks, a personal
@@ -165,21 +169,17 @@
     undoCardRemoval();
   }
 
-  // Notes (BM-03): local-only, per-owner. Owner resolution mirrors the reader
-  // persistence layer (defer while auth is unresolved, EC-17) — the widget only
-  // ever reads the signed-in owner's key, `local` when signed out.
-  const notesOwner = $derived.by<string | null>(() => {
-    if (authState.status === "unknown") return null;
-    if (authState.status === "authenticated" && authState.user !== null) {
-      return String(authState.user.id);
-    }
-    return LOCAL_NOTES_OWNER;
-  });
+  // Notes (BM-03): local-only, per-owner. The reader store owns them; re-resolve the
+  // owner whenever auth settles so a login or logout never shows another owner's notes (EC-17).
   $effect(() => {
-    const owner = notesOwner;
-    if (owner !== null) notesSource.setOwner(owner);
+    void authState.status;
+    void authState.user;
+    reader.syncNotes();
   });
-  const notesRows = $derived(notesSource.rows.slice(0, 5));
+  const notesRows = $derived(reader.noteEntries.slice(0, 5));
+
+  // Overview is the widget grid; Notes is the full library (search, sort, edit, delete).
+  let view = $state<"overview" | "notes">("overview");
 
   // Daily ayah (D07): deterministic per UTC date server-side; one fetch, cached
   // by the browser until UTC midnight.
@@ -358,6 +358,20 @@
     </div>
   </div>
 
+  <div class="mt-4">
+    <Tabs
+      value={view}
+      onValueChange={(value) => {
+        view = value === "notes" ? "notes" : "overview";
+      }}
+    >
+      <TabsList>
+        <TabsTrigger value="overview">{reader_yours_tab_overview(undefined, msgOptions)}</TabsTrigger>
+        <TabsTrigger value="notes">{reader_yours_tab_notes(undefined, msgOptions)}</TabsTrigger>
+      </TabsList>
+    </Tabs>
+  </div>
+
   {#if mounted && readingChoice.chosen === null && choiceOptions.length > 1}
     <!-- First-run choice (HOME-04): one line, browser-language default; the pick
          persists and the line never returns. -->
@@ -394,7 +408,9 @@
     </div>
   {/if}
 
-  {#if mounted}
+  {#if view === "notes"}
+    <NotesLibrary {quranData} />
+  {:else if mounted}
   {#each widgets as widget (widget.id)}
   {#if widget.visible && widget.id === "continue-reading"}
     <section aria-labelledby="yours-continue" class="mt-5">
@@ -473,7 +489,12 @@
       <div class="flex items-center justify-between gap-3">
         <h2 id="yours-notes" class="eyebrow">{h.notesTitle}</h2>
         <span class="flex items-center gap-3 text-[12px] text-muted"
-          >{notesSource.rows.length}{@render editControls(widget.id)}</span
+          >{reader.noteEntries.length}
+          <button
+            type="button"
+            class="flex h-7 items-center rounded-pill border border-border px-2.5 text-[12px] text-foreground-secondary transition-colors hover:border-border-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            onclick={() => (view = "notes")}>{reader_notes_view_all(undefined, msgOptions)}</button
+          >{@render editControls(widget.id)}</span
         >
       </div>
       {#if notesRows.length === 0}

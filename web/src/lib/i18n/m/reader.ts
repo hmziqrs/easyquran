@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 401 messages. Import this barrel, never
+// 423 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "#lib/paraglide/messages/reader_account.js";
@@ -240,6 +240,23 @@ export { reader_no_translations } from "#lib/paraglide/messages/reader_no_transl
 export { reader_note_placeholder } from "#lib/paraglide/messages/reader_note_placeholder.js";
 export { reader_note_saved } from "#lib/paraglide/messages/reader_note_saved.js";
 export { reader_note_tafsir } from "#lib/paraglide/messages/reader_note_tafsir.js";
+export { reader_notes_cancel } from "#lib/paraglide/messages/reader_notes_cancel.js";
+export { reader_notes_delete } from "#lib/paraglide/messages/reader_notes_delete.js";
+export { reader_notes_device } from "#lib/paraglide/messages/reader_notes_device.js";
+export { reader_notes_edit } from "#lib/paraglide/messages/reader_notes_edit.js";
+export { reader_notes_edited } from "#lib/paraglide/messages/reader_notes_edited.js";
+export { reader_notes_empty_search } from "#lib/paraglide/messages/reader_notes_empty_search.js";
+export { reader_notes_open_verse } from "#lib/paraglide/messages/reader_notes_open_verse.js";
+export { reader_notes_removed } from "#lib/paraglide/messages/reader_notes_removed.js";
+export { reader_notes_save } from "#lib/paraglide/messages/reader_notes_save.js";
+export { reader_notes_search_label } from "#lib/paraglide/messages/reader_notes_search_label.js";
+export { reader_notes_search_placeholder } from "#lib/paraglide/messages/reader_notes_search_placeholder.js";
+export { reader_notes_sort_label } from "#lib/paraglide/messages/reader_notes_sort_label.js";
+export { reader_notes_sort_newest } from "#lib/paraglide/messages/reader_notes_sort_newest.js";
+export { reader_notes_sort_oldest } from "#lib/paraglide/messages/reader_notes_sort_oldest.js";
+export { reader_notes_sort_verse } from "#lib/paraglide/messages/reader_notes_sort_verse.js";
+export { reader_notes_source_arabic } from "#lib/paraglide/messages/reader_notes_source_arabic.js";
+export { reader_notes_view_all } from "#lib/paraglide/messages/reader_notes_view_all.js";
 export { reader_offline } from "#lib/paraglide/messages/reader_offline.js";
 export { reader_offline_cached } from "#lib/paraglide/messages/reader_offline_cached.js";
 export { reader_offline_copy_unavailable } from "#lib/paraglide/messages/reader_offline_copy_unavailable.js";
@@ -390,6 +407,9 @@ export { reader_translations_results } from "#lib/paraglide/messages/reader_tran
 export { reader_translations_results_one } from "#lib/paraglide/messages/reader_translations_results_one.js";
 export { reader_transliteration_legend } from "#lib/paraglide/messages/reader_transliteration_legend.js";
 export { reader_unsupported } from "#lib/paraglide/messages/reader_unsupported.js";
+export { reader_verse_note } from "#lib/paraglide/messages/reader_verse_note.js";
+export { reader_verse_note_close } from "#lib/paraglide/messages/reader_verse_note_close.js";
+export { reader_verse_note_open } from "#lib/paraglide/messages/reader_verse_note_open.js";
 export { reader_widget_daily_ayah_open } from "#lib/paraglide/messages/reader_widget_daily_ayah_open.js";
 export { reader_widget_daily_ayah_title } from "#lib/paraglide/messages/reader_widget_daily_ayah_title.js";
 export { reader_widget_daily_ayah_unavailable } from "#lib/paraglide/messages/reader_widget_daily_ayah_unavailable.js";
@@ -398,6 +418,8 @@ export { reader_widget_most_read_title } from "#lib/paraglide/messages/reader_wi
 export { reader_widget_notes_empty } from "#lib/paraglide/messages/reader_widget_notes_empty.js";
 export { reader_widget_notes_title } from "#lib/paraglide/messages/reader_widget_notes_title.js";
 export { reader_your_note } from "#lib/paraglide/messages/reader_your_note.js";
+export { reader_yours_tab_notes } from "#lib/paraglide/messages/reader_yours_tab_notes.js";
+export { reader_yours_tab_overview } from "#lib/paraglide/messages/reader_yours_tab_overview.js";
 export { reader_zikr_add_confirm } from "#lib/paraglide/messages/reader_zikr_add_confirm.js";
 export { reader_zikr_all_done } from "#lib/paraglide/messages/reader_zikr_all_done.js";
 export { reader_zikr_next } from "#lib/paraglide/messages/reader_zikr_next.js";

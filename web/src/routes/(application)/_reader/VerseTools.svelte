@@ -4,11 +4,18 @@
   import { bookmarks } from "#lib/bookmarks/store.svelte.js";
   import { toggleBookmark } from "#lib/bookmarks/feedback.svelte.js";
   import { parseVerseKey } from "#lib/bookmarks/schema.js";
-  import { routeContextFromParams, translationIdFromSegments } from "#lib/data/quran.js";
+  import {
+    routeContextFromParams,
+    translationIdFromSegments,
+    type VerseKey,
+  } from "#lib/data/quran.js";
   import { reader } from "#lib/stores/reader.svelte.js";
   import { Icon, type IconName } from "#lib/components/icon/index.js";
   import { Tooltip, TooltipTrigger, TooltipContent } from "#lib/components/ui/tooltip/index.js";
+  import { Textarea } from "#lib/components/ui/textarea/index.js";
   import { getReaderUiCopy } from "#lib/i18n/reader-copy.js";
+  import { reader_verse_note, reader_verse_note_close, reader_verse_note_open } from "#lib/i18n/m/reader.js";
+  import { appLocale } from "#lib/i18n/app-locale.js";
   import { cn } from "#lib/utils.js";
 
   const COPY_FEEDBACK_MS = 1500;
@@ -16,17 +23,33 @@
   let { text, vKey }: { text: string; vKey: string } = $props();
 
   const copy = getReaderUiCopy();
+  const noteMsg = { locale: appLocale() };
+  // SAFETY: vKey is the `surah:ayah` key of the rendered verse row, built from numeric surah and ayah.
+  const verseKeyValue = $derived(vKey as VerseKey);
   // One store for everyone (device-local signed out, synced signed in).
   const bookmarked = $derived(bookmarks.isMarkedKey(vKey));
+  const noteOpen = $derived(reader.openNote === verseKeyValue);
+  const hasNote = $derived(reader.getNote(verseKeyValue).length > 0);
+
+  // The translation being read (null on the Arabic reader). Bookmarks and notes
+  // both record it so they reopen in the same translation.
+  function currentSourceId(): string | null {
+    const ctx = routeContextFromParams(page.params);
+    return ctx.kind === "translation" ? translationIdFromSegments(ctx.lang, ctx.translator) : null;
+  }
 
   // Bookmarks reopen in the translation they were saved from.
   function onBookmark(): void {
     const coords = parseVerseKey(vKey);
     if (coords === null) return;
-    const ctx = routeContextFromParams(page.params);
-    const sourceId =
-      ctx.kind === "translation" ? translationIdFromSegments(ctx.lang, ctx.translator) : null;
-    toggleBookmark({ ...coords, sourceId });
+    toggleBookmark({ ...coords, sourceId: currentSourceId() });
+  }
+
+  // Notes autosave as you type; the note's source is the translation it was written in.
+  function onNote(event: Event): void {
+    // SAFETY: onNote is bound only to the Textarea oninput below; currentTarget is that textarea element.
+    const value = (event.currentTarget as HTMLTextAreaElement).value;
+    reader.setNote(verseKeyValue, value, currentSourceId());
   }
 
   let copied = $state(false);
@@ -138,8 +161,35 @@
       icon: sharedCopied ? "check" : "share",
       activeClass: sharedCopied ? "text-primary" : undefined,
     })}
+    {@render verseAction({
+      onclick: () => reader.toggleNote(verseKeyValue),
+      label: reader_verse_note(undefined, noteMsg),
+      ariaLabel: noteOpen
+        ? reader_verse_note_close(undefined, noteMsg)
+        : reader_verse_note_open(undefined, noteMsg),
+      icon: "note",
+      activeClass: noteOpen || hasNote ? "text-primary" : undefined,
+      pressed: noteOpen,
+    })}
   </div>
 </div>
+
+{#if noteOpen}
+  <div class="verse-note mt-[20px] flex flex-col gap-2 animate-fade-up">
+    <span class="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+      {copy.verse.yourNote}
+    </span>
+    <Textarea
+      value={reader.getNote(verseKeyValue)}
+      oninput={onNote}
+      rows={3}
+      aria-label={copy.verse.yourNote}
+      placeholder={copy.verse.notePlaceholder}
+      class="resize-y rounded-md border-border bg-surface px-3.5 py-3 text-[14.5px] leading-[1.6] text-foreground"
+    />
+    <span class="text-[12.5px] text-muted-foreground">{copy.verse.noteSaved}</span>
+  </div>
+{/if}
 
 <style>
   :global([data-reader-mode="reading"]) .verse-toolbar,

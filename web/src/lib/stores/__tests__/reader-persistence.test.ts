@@ -49,8 +49,19 @@ function fakeAuth(initial: AuthStatus = "anonymous") {
   return { source, stub };
 }
 
-function readNotes(owner: string = "local"): { v: number; notes: Record<string, string> } | null {
-  return JSON.parse(window.localStorage.getItem(`easyquran.notes.${owner}`) ?? "null");
+/** Text-only view of the stored notes envelope; per-note meta is asserted separately. */
+function readNotes(owner: string = "local") {
+  const envelope = decodeNotes(
+    JSON.parse(window.localStorage.getItem(`easyquran.notes.${owner}`) ?? "null"),
+  );
+  return envelope === undefined ? null : { v: envelope.v, notes: envelope.notes };
+}
+
+function readMeta(owner: string = "local") {
+  return (
+    decodeNotes(JSON.parse(window.localStorage.getItem(`easyquran.notes.${owner}`) ?? "null"))
+      ?.meta ?? {}
+  );
 }
 
 describe("decodeReader", () => {
@@ -128,7 +139,12 @@ describe("decodeReader", () => {
   });
 
   it("decodeNotes accepts the v1 envelope and rejects everything else", () => {
-    expect(decodeNotes({ v: 1, notes: { "1:1": "hi" } })).toEqual({ v: 1, notes: { "1:1": "hi" } });
+    // A v1 envelope written before per-note meta existed decodes to empty meta.
+    expect(decodeNotes({ v: 1, notes: { "1:1": "hi" } })).toEqual({
+      v: 1,
+      notes: { "1:1": "hi" },
+      meta: {},
+    });
     expect(decodeNotes({ v: 2, notes: {} })).toBeUndefined();
     expect(decodeNotes({ notes: { "1:1": "hi" } })).toBeUndefined();
     expect(decodeNotes("nope")).toBeUndefined();
@@ -505,5 +521,92 @@ describe("createReaderPersistence per-owner notes (v5, EC-17)", () => {
     window.dispatchEvent(new StorageEvent("storage", { key: NOTES_KEY_LOCAL }));
     expect(core.s.notes).toEqual({ "9:9": "tab2" });
     persistence.dispose();
+  });
+});
+
+describe("notes with per-note context (F3)", () => {
+  beforeEach(() => {
+    flag.value = true;
+    vi.useFakeTimers();
+    window.localStorage.clear();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  function openStore() {
+    const { stub } = fakeAuth();
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core, stub);
+    const annotations = createAnnotations(core, persistence);
+    persistence.hydrate();
+    return { core, persistence, annotations };
+  }
+
+  it("records the source and last-edit time when a note is saved", () => {
+    vi.setSystemTime(new Date("2026-03-01T10:00:00Z"));
+    const { core, persistence, annotations } = openStore();
+    annotations.setNote("2:255", "throne verse", "en.sahih");
+    expect(core.s.noteMeta["2:255"]).toEqual({
+      updatedAt: Date.parse("2026-03-01T10:00:00Z"),
+      sourceId: "en.sahih",
+    });
+    persistence.flushNoteWrite();
+    expect(readMeta()).toEqual({
+      "2:255": { updatedAt: Date.parse("2026-03-01T10:00:00Z"), sourceId: "en.sahih" },
+    });
+    persistence.dispose();
+  });
+
+  it("lists notes in mushaf order with their context and treats empty text as delete", () => {
+    const { annotations, persistence } = openStore();
+    annotations.setNote("2:255", "second", null);
+    annotations.setNote("1:1", "first", "en.sahih");
+    expect(annotations.noteEntries.map((n) => n.key)).toEqual(["1:1", "2:255"]);
+    expect(annotations.noteEntries[0]).toMatchObject({ text: "first", sourceId: "en.sahih" });
+    annotations.setNote("1:1", "", null);
+    expect(annotations.noteEntries.map((n) => n.key)).toEqual(["2:255"]);
+    expect(annotations.getNoteMeta("1:1")).toBeNull();
+    persistence.dispose();
+  });
+
+  it("removeNote then restoreNote brings back text and the original timestamp", () => {
+    vi.setSystemTime(new Date("2026-04-01T08:00:00Z"));
+    const { annotations, persistence } = openStore();
+    annotations.setNote("3:3", "keep me", "en.sahih");
+    const original = annotations.getNoteMeta("3:3");
+    vi.setSystemTime(new Date("2026-04-02T08:00:00Z"));
+    const snapshot = annotations.removeNote("3:3");
+    expect(snapshot).toEqual({ text: "keep me", meta: original });
+    expect(annotations.getNote("3:3")).toBe("");
+    expect(annotations.removeNote("3:3")).toBeNull();
+    if (snapshot === null) throw new Error("expected a snapshot");
+    annotations.restoreNote("3:3", snapshot);
+    expect(annotations.getNote("3:3")).toBe("keep me");
+    expect(annotations.getNoteMeta("3:3")).toEqual(original);
+    persistence.dispose();
+  });
+
+  it("hydrates per-note context from a stored envelope and keeps v1 notes without it", () => {
+    window.localStorage.setItem(
+      NOTES_KEY_LOCAL,
+      JSON.stringify({
+        v: 1,
+        notes: { "1:1": "old", "2:2": "new" },
+        meta: { "2:2": { updatedAt: 1234, sourceId: "ur.jalandhry" } },
+      }),
+    );
+    const { core, persistence } = openStore();
+    expect(core.s.noteMeta).toEqual({ "2:2": { updatedAt: 1234, sourceId: "ur.jalandhry" } });
+    expect(core.s.notes).toEqual({ "1:1": "old", "2:2": "new" });
+    persistence.dispose();
+  });
+
+  it("decodeNotes drops malformed meta entries", () => {
+    expect(
+      decodeNotes({
+        v: 1,
+        notes: { "1:1": "x" },
+        meta: { "1:1": { updatedAt: "soon" }, "2:2": "nope" },
+      })?.meta,
+    ).toEqual({});
   });
 });

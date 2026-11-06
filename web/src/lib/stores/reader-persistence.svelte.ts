@@ -12,6 +12,7 @@ import {
   asLiteral,
   asNumber,
   asObject,
+  asString,
   asStringRecord,
   onPageHide,
   onStorageKey,
@@ -32,6 +33,7 @@ import {
   TRANSLATION_FAMILY_VALUES,
   TRANSLATION_FONT_MAX,
   TRANSLATION_FONT_MIN,
+  type NoteMeta,
   type Persisted,
   type ReaderCore,
   type ReaderMode,
@@ -53,6 +55,8 @@ function notesKeyFor(owner: string): string {
 export interface NotesEnvelope {
   v: number;
   notes: Record<VerseKey, string>;
+  /** Optional per-note context; a v1 envelope without `meta` decodes to `{}`. */
+  meta: Record<VerseKey, NoteMeta>;
 }
 
 /**
@@ -64,12 +68,37 @@ export interface NotesOwnerSource {
   readonly user: { readonly id: number } | null;
 }
 
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is one untyped `meta` entry inside the notes envelope; each field is validated here.
+function decodeNoteMeta(raw: unknown): NoteMeta | null {
+  const entry = asObject(raw);
+  if (!entry) return null;
+  const updatedAt = asNumber(entry.updatedAt, 0, Number.MAX_SAFE_INTEGER);
+  if (updatedAt === undefined) return null;
+  return { updatedAt, sourceId: asString(entry.sourceId) ?? null };
+}
+
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the untyped `meta` object inside the notes envelope; each entry is validated by decodeNoteMeta.
+function decodeMeta(raw: unknown): NotesEnvelope["meta"] {
+  const record = asObject(raw);
+  if (!record) return {};
+  return Object.fromEntries(
+    Object.entries(record).flatMap(([key, value]) => {
+      const meta = decodeNoteMeta(value);
+      return meta === null ? [] : [[key, meta]];
+    }),
+  );
+}
+
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the untyped localStorage JSON boundary (readJSON → JSON.parse); this function is the parser (asObject/asStringRecord validate every field)
 export function decodeNotes(raw: unknown): NotesEnvelope | undefined {
   const stored = asObject(raw);
   if (!stored) return undefined;
   if (stored.v !== NOTES_SCHEMA_VERSION) return undefined;
-  return { v: NOTES_SCHEMA_VERSION, notes: asStringRecord(asObject(stored.notes) ?? {}) };
+  return {
+    v: NOTES_SCHEMA_VERSION,
+    notes: asStringRecord(asObject(stored.notes) ?? {}),
+    meta: decodeMeta(stored.meta),
+  };
 }
 
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the untyped localStorage JSON boundary (readJSON → JSON.parse); this function is the parser (asObject/asNumber/asLiteral validate every field)
@@ -197,7 +226,11 @@ export function createReaderPersistence(
 
   function writeNotes(): void {
     if (notesOwner === null) return;
-    writeJSON(notesKeyFor(notesOwner), { v: NOTES_SCHEMA_VERSION, notes: core.s.notes });
+    writeJSON(notesKeyFor(notesOwner), {
+      v: NOTES_SCHEMA_VERSION,
+      notes: core.s.notes,
+      meta: core.s.noteMeta,
+    });
   }
 
   function listenForNotes(owner: string): void {
@@ -205,8 +238,13 @@ export function createReaderPersistence(
     notesListener = onStorageKey(notesKeyFor(owner), () => {
       if (notesOwner === null) return;
       const envelope = decodeNotes(readJSON(notesKeyFor(notesOwner)));
-      if (envelope) core.s.notes = envelope.notes;
+      if (envelope) applyEnvelope(envelope);
     });
+  }
+
+  function applyEnvelope(envelope: NotesEnvelope): void {
+    core.s.notes = envelope.notes;
+    core.s.noteMeta = envelope.meta;
   }
 
   function loadNotes(legacy: Record<VerseKey, string> | undefined): void {
@@ -214,7 +252,7 @@ export function createReaderPersistence(
     const key = notesKeyFor(notesOwner);
     const envelope = decodeNotes(readJSON(key));
     if (envelope) {
-      core.s.notes = envelope.notes;
+      applyEnvelope(envelope);
       listenForNotes(notesOwner);
       return;
     }
@@ -226,12 +264,14 @@ export function createReaderPersistence(
       readRaw("local", LEGACY_NOTES_SEEDED_KEY) === null
     ) {
       core.s.notes = { ...legacy };
-      writeJSON(key, { v: NOTES_SCHEMA_VERSION, notes: core.s.notes });
+      core.s.noteMeta = {};
+      writeJSON(key, { v: NOTES_SCHEMA_VERSION, notes: core.s.notes, meta: core.s.noteMeta });
       writeRaw("local", LEGACY_NOTES_SEEDED_KEY, "1");
       listenForNotes(notesOwner);
       return;
     }
     core.s.notes = {};
+    core.s.noteMeta = {};
     listenForNotes(notesOwner);
   }
 
@@ -253,11 +293,15 @@ export function createReaderPersistence(
       // them over the loaded state so they survive the first load. With nothing
       // in memory, loadNotes above (or the seed inside it) already settled the key.
       const preAuth = { ...core.s.notes };
+      const preAuthMeta = { ...core.s.noteMeta };
       loadNotes(legacyNotes);
       if (Object.keys(preAuth).length > 0) {
         for (const [k, v] of Object.entries(preAuth)) {
           // SAFETY: preAuth was spread from core.s.notes (Record<VerseKey, string>), so every key is already a VerseKey.
-          core.s.notes[k as VerseKey] = v;
+          const key = k as VerseKey;
+          core.s.notes[key] = v;
+          const meta = preAuthMeta[key];
+          if (meta !== undefined) core.s.noteMeta[key] = meta;
         }
         writeNotes();
       }

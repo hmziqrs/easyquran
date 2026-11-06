@@ -3,10 +3,11 @@ import type { ReaderPositionState } from "#lib/data/mushaf-divisions.js";
 import type { QuranSourceId } from "#lib/data/quran-types.js";
 import type { VerseKey } from "#lib/data/quran.js";
 
-import { createAnnotations } from "./annotations.svelte";
+import { createAnnotations, type NoteEntry, type NoteSnapshot } from "./annotations.svelte";
 import {
   type BrowseMode,
   type LastReadAnchor,
+  type NoteMeta,
   type ReaderMode,
   createReaderCore,
 } from "./reader-core.svelte";
@@ -55,7 +56,15 @@ export interface ReaderApi {
   readonly position: ReaderPositionState | null;
   setPosition(position: ReaderPositionState | null): void;
   getNote(key: VerseKey): string;
-  setNote(key: VerseKey, v: string): void;
+  /** Saves note text; empty text deletes the note. `sourceId` = translation being read (null = Arabic). */
+  setNote(key: VerseKey, v: string, sourceId?: string | null): void;
+  getNoteMeta(key: VerseKey): NoteMeta | null;
+  /** Every saved note in mushaf order (reactive). */
+  readonly noteEntries: readonly NoteEntry[];
+  removeNote(key: VerseKey): NoteSnapshot | null;
+  restoreNote(key: VerseKey, snapshot: NoteSnapshot): void;
+  /** Re-resolves the notes owner after auth changes. Call from an effect. */
+  syncNotes(): void;
   readonly lastRead: { num: number; n: number; sourceId?: string } | null;
   readonly hasLastRead: boolean;
   readonly lastReadRef: string;
@@ -156,7 +165,15 @@ export function createReader(): ReaderApi {
     setPosition: (position: ReaderPositionState | null) => session.setPosition(position),
 
     getNote: (key: VerseKey) => annotations.getNote(key),
-    setNote: (key: VerseKey, v: string) => annotations.setNote(key, v),
+    setNote: (key: VerseKey, v: string, sourceId: string | null = null) =>
+      annotations.setNote(key, v, sourceId),
+    getNoteMeta: (key: VerseKey) => annotations.getNoteMeta(key),
+    get noteEntries() {
+      return annotations.noteEntries;
+    },
+    removeNote: (key: VerseKey) => annotations.removeNote(key),
+    restoreNote: (key: VerseKey, snapshot: NoteSnapshot) => annotations.restoreNote(key, snapshot),
+    syncNotes: () => annotations.syncNotes(),
     get lastRead() {
       return annotations.lastRead;
     },

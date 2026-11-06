@@ -43,9 +43,22 @@ export interface Persisted {
   notes: Record<VerseKey, string>;
 }
 
+/**
+ * Per-note context kept beside the note text (same per-owner key, EC-17). `updatedAt`
+ * is epoch ms from this device's clock: it orders the library and is never used for
+ * security. `sourceId` is the translation the note was written in (null = Arabic).
+ * Notes from before this field existed have no meta and show no date.
+ */
+export interface NoteMeta {
+  readonly updatedAt: number;
+  readonly sourceId: string | null;
+}
+
 export interface ReaderState extends Persisted {
   browse: BrowseMode;
   openNote: VerseKey | null;
+  /** Note context by verse key; a key is present only while its note has text. */
+  noteMeta: Record<VerseKey, NoteMeta>;
   pendingAnchor: LastReadAnchor | null;
   /** Live mushaf position for the sticky indicator. Transient — never persisted. */
   position: ReaderPositionState | null;
@@ -87,6 +100,7 @@ export const READER_DEFAULTS: ReaderState = {
   translationFamily: "sans",
   mode: "verse",
   notes: {},
+  noteMeta: {},
   pendingAnchor: null,
   browse: BrowseMode.Surah,
   openNote: null,
