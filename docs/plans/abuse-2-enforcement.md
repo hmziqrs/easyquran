@@ -2,23 +2,6 @@
 
 [Back to index](../README.md)
 
-#### A24. Incident intake: reports
-
-Build:
-
-1. Table `reports` (no FK to users on reporter). Expiry columns per retention rules; class 12 months.
-2. `POST /report/v1/submit`: CSRF; 5 per hour and 20 per day per IP. New module `rust/backend/api/src/modules/report_v1/`.
-3. `/report` page in web, rendered outside the auth `ready` gate.
-4. Report control on posts and comments (web components).
-5. Capture-at-intake for P0 classes (CSAM, credible threat): store the reported item snapshot at intake.
-6. Mail aliases: four working aliases on an MX-verified domain are an owner step (O3). Code reads them from settings.
-
-Files: new `rust/backend/api/src/modules/report_v1/*`, new `rust/backend/api/src/db/sea_models/report/*`, migration, `rust/backend/api/src/router.rs`, web `web/src/routes/report/**` (new), comment and post components.
-
-Done when: submitting a report creates a row and an audit row; rate limit enforced (test); `/report` renders without an account; P0 capture writes snapshot (test).
-Blocked by: A23
-Owner: O3.
-
 #### A25. Case evidence, legal holds, incident capture, delete guard
 
 Build:
