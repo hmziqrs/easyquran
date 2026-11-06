@@ -48,19 +48,6 @@ Files: `rust/backend/api/src/modules/admin_user_bans_v1/*`, new `deploy/moderati
 Done when: ban create without `shared_device_checked` → 400; SOP checklist committed; precedence rule tested (device signal alone cannot create a ban).
 Blocked by: A19
 
-#### A23. Audit writer and call sites
-
-Build:
-
-1. `rust/backend/api/src/services/audit.rs` (new): one writer function; writes `audit_logs` rows. Model exists at `rust/backend/api/src/db/sea_models/audit_log/` (no writers today).
-2. Call it from every destructive or enforcement action: route block and unblock; comment hide, unhide, delete; flag clear; ban create and revoke; user delete; media delete; newsletter send; suppression add and delete; seed run; device remove (D2).
-3. Source-scan guard test: the capability list above is the list of call sites (house pattern: a test that fails the build, with regex self-tests).
-
-Files: new `rust/backend/api/src/services/audit.rs`, `rust/backend/api/src/db/sea_models/audit_log/*`, `rust/backend/api/src/modules/{post_comment_v1,user_v1,media_v1,admin_route_v1,mail_v1,newsletter_v1,admin_user_bans_v1}/*`, `rust/backend/api/src/services/{route_blocker_service,notification}/*`, new `rust/backend/api/tests/audit_writer.rs`.
-
-Done when: every action listed writes one `audit_logs` row (test per action); source-scan guard green.
-Blocked by: A19
-
 #### A24. Incident intake: reports
 
 Build:

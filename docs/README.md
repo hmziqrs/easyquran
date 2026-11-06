@@ -54,7 +54,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 | [A21](plans/abuse-2-enforcement.md#a21-notice-delivery-suppression-result-appeal-clock)                 | Notice delivery, suppression result, appeal clock                 | A19          |
 | [A35](plans/abuse-2-enforcement.md#a35-appeal-intake)                                                   | Appeal intake                                                     | A21          |
 | [A22](plans/abuse-2-enforcement.md#a22-shared-device-precedence-and-ban-decision-fields)                | Shared-device precedence and ban-decision fields                  | A19          |
-| [A23](plans/abuse-2-enforcement.md#a23-audit-writer-and-call-sites)                                     | Audit writer and call sites                                       | A19          |
 | [A24](plans/abuse-2-enforcement.md#a24-incident-intake-reports)                                         | Incident intake: reports                                          | A23          |
 | [A25](plans/abuse-2-enforcement.md#a25-case-evidence-legal-holds-incident-capture-delete-guard)         | Case evidence, legal holds, incident capture, delete guard        | A23          |
 | [A26](plans/abuse-2-enforcement.md#a26-alerting-runbook-drill)                                          | Alerting, runbook, drill                                          | A24, A25     |
