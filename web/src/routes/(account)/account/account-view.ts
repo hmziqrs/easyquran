@@ -1,6 +1,7 @@
 import {
   identityProviderLabel,
   isIdentityProvider,
+  type DeviceInfo,
   type IdentityProvider,
 } from "#lib/auth/account-client.js";
 import type { AuthStatus } from "#lib/auth/auth-state.svelte.js";
@@ -115,4 +116,60 @@ export function sessionLastSeenLabel(iso: string | undefined, locale: string): s
     minute: "2-digit",
     hourCycle: "h23",
   }).format(parsed);
+}
+
+// Device labels (devices.md D4). Like the session labels above, every name comes from
+// a fixed table keyed by the closed server enums, so an unknown value falls back to
+// the localized unknown label and nothing from the wire is echoed as a label.
+const BROWSER_FAMILIES = new Map([
+  ["chrome", "Chrome"],
+  ["firefox", "Firefox"],
+  ["safari", "Safari"],
+  ["edge", "Edge"],
+]);
+
+const PLATFORM_LABELS = new Map([
+  ["macos", "Mac"],
+  ["windows", "Windows PC"],
+  ["linux", "Linux PC"],
+]);
+
+function webBrowserLabel(device: DeviceInfo, unknownLabel: string): string {
+  if (device.browser === null) return unknownLabel;
+  return BROWSER_FAMILIES.get(device.browser) ?? unknownLabel;
+}
+
+function mobileLabel(device: DeviceInfo): string | null {
+  const tablet = device.formFactor === "tablet";
+  if (device.platform === "ios") return tablet ? "iPad" : "iPhone";
+  if (device.platform === "android") return tablet ? "Android tablet" : "Android phone";
+  return null;
+}
+
+/** Browser for the web client, platform otherwise. The unnamed fallback for a device. */
+export function deviceTypeLabel(device: DeviceInfo, unknownLabel = "Unknown device"): string {
+  if (device.platform === "web") return webBrowserLabel(device, unknownLabel);
+  return mobileLabel(device) ?? PLATFORM_LABELS.get(device.platform) ?? unknownLabel;
+}
+
+/** The row title: the user's own name when set, else the device type. */
+export function deviceTitle(device: DeviceInfo, unknownLabel = "Unknown device"): string {
+  if (device.displayName !== null) return device.displayName;
+  return deviceTypeLabel(device, unknownLabel);
+}
+
+/** Phone-shaped for iOS and Android, monitor-shaped for everything else. */
+export function deviceIconName(device: DeviceInfo): "device-phone" | "device-monitor" {
+  const handheld = device.platform === "ios" || device.platform === "android";
+  return handheld ? "device-phone" : "device-monitor";
+}
+
+/** Names the server accepts: 1 to 40 characters after trimming. Null when out of range. */
+export const DEVICE_NAME_MAX_CHARS = 40;
+
+export function normaliseDeviceNameDraft(draft: string): string | null {
+  const name = draft.trim();
+  const length = Array.from(name).length;
+  if (length === 0 || length > DEVICE_NAME_MAX_CHARS) return null;
+  return name;
 }

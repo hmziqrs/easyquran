@@ -19,15 +19,23 @@ import {
   account_profile_saved,
   account_save_changes,
   account_saving,
-  account_sessions_heading,
-  account_sessions_description,
-  account_sessions_loading,
+  account_devices_heading,
+  account_devices_description,
+  account_devices_loading,
   account_sessions_empty,
   account_session_this,
   account_session_last_seen,
   account_session_ending,
   account_session_revoke,
   account_device_unknown,
+  account_device_this,
+  account_device_rename,
+  account_device_rename_label,
+  account_device_rename_save,
+  account_device_rename_cancel,
+  account_device_name_invalid,
+  account_device_sign_out,
+  account_device_signed_out,
   account_security_heading,
   account_passkeys_heading,
   account_passkeys_description,
@@ -62,15 +70,23 @@ export interface AccountCopy {
   profileSaved: string;
   saveChanges: string;
   saving: string;
-  sessionsHeading: string;
-  sessionsDescription: string;
-  sessionsLoading: string;
+  devicesHeading: string;
+  devicesDescription: string;
+  devicesLoading: string;
   sessionsEmpty: string;
   sessionThis: string;
   sessionLastSeen: (date: string) => string;
   sessionEnding: string;
   sessionRevoke: string;
   deviceUnknown: string;
+  deviceThis: string;
+  deviceRename: string;
+  deviceRenameLabel: string;
+  deviceRenameSave: string;
+  deviceRenameCancel: string;
+  deviceNameInvalid: string;
+  deviceSignOut: string;
+  deviceSignedOut: (name: string) => string;
   securityHeading: string;
   passkeysHeading: string;
   passkeysDescription: string;
@@ -106,15 +122,23 @@ export function getAccountCopy(locale: UiLocale = getLocale() as UiLocale): Acco
     profileSaved: account_profile_saved(undefined, { locale }),
     saveChanges: account_save_changes(undefined, { locale }),
     saving: account_saving(undefined, { locale }),
-    sessionsHeading: account_sessions_heading(undefined, { locale }),
-    sessionsDescription: account_sessions_description(undefined, { locale }),
-    sessionsLoading: account_sessions_loading(undefined, { locale }),
+    devicesHeading: account_devices_heading(undefined, { locale }),
+    devicesDescription: account_devices_description(undefined, { locale }),
+    devicesLoading: account_devices_loading(undefined, { locale }),
     sessionsEmpty: account_sessions_empty(undefined, { locale }),
     sessionThis: account_session_this(undefined, { locale }),
     sessionLastSeen: (date: string) => account_session_last_seen({ date }, { locale }),
     sessionEnding: account_session_ending(undefined, { locale }),
     sessionRevoke: account_session_revoke(undefined, { locale }),
     deviceUnknown: account_device_unknown(undefined, { locale }),
+    deviceThis: account_device_this(undefined, { locale }),
+    deviceRename: account_device_rename(undefined, { locale }),
+    deviceRenameLabel: account_device_rename_label(undefined, { locale }),
+    deviceRenameSave: account_device_rename_save(undefined, { locale }),
+    deviceRenameCancel: account_device_rename_cancel(undefined, { locale }),
+    deviceNameInvalid: account_device_name_invalid(undefined, { locale }),
+    deviceSignOut: account_device_sign_out(undefined, { locale }),
+    deviceSignedOut: (name: string) => account_device_signed_out({ name }, { locale }),
     securityHeading: account_security_heading(undefined, { locale }),
     passkeysHeading: account_passkeys_heading(undefined, { locale }),
     passkeysDescription: account_passkeys_description(undefined, { locale }),

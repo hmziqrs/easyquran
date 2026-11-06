@@ -1,6 +1,9 @@
 import { mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock("svelte-sonner", () => ({ toast: toasts }));
+
 const h = vi.hoisted(() => {
   const user = {
     id: 7,
@@ -118,6 +121,16 @@ function mountPage(): void {
 beforeEach(() => {
   h.url = new URL("https://eq.test/account");
   h.goto.mockClear();
+  toasts.success.mockClear();
+  toasts.error.mockClear();
+  h.authClient.unsafeRequest.mockReset();
+  h.authClient.unsafeRequest.mockImplementation((path: string) =>
+    Promise.resolve(
+      path === "/device/v1/list"
+        ? { ok: true, status: 200, data: { devices: [] }, error: null, rotated: false }
+        : undefined,
+    ),
+  );
   h.authClient.get.mockReset();
   h.authClient.get.mockImplementation((path: string) => {
     if (path === "/auth/v1/reauth/status") {
@@ -216,6 +229,149 @@ describe("account page sessions list rendering", () => {
     // Missing UA degrades to the generic label; unparsable stamp hides the line.
     expect(text).toContain("Unknown device");
     expect(text.indexOf("Last seen ")).toBe(text.lastIndexOf("Last seen "));
+  });
+});
+
+const DEVICE_LIST = {
+  devices: [
+    {
+      id: "dev-this",
+      displayName: null,
+      platform: "web",
+      client: "web",
+      formFactor: "desktop",
+      browser: "chrome",
+      osMajor: null,
+      lastSeenAt: "2026-10-12T07:47:12.919710Z",
+      isCurrent: true,
+    },
+    {
+      id: "dev-phone",
+      displayName: "<img src=x>Pixel",
+      platform: "android",
+      client: "react_native",
+      formFactor: "phone",
+      browser: null,
+      osMajor: 14,
+      lastSeenAt: "not-a-date",
+      isCurrent: false,
+    },
+    {
+      id: "dev-odd",
+      displayName: null,
+      platform: "plan9",
+      client: "web",
+      formFactor: "desktop",
+      browser: "opera",
+      osMajor: null,
+      isCurrent: false,
+    },
+  ],
+};
+
+const SESSION_LIST = {
+  data: [
+    {
+      id: 3,
+      is_current: true,
+      device_id: "dev-this",
+      device:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+      last_seen: "2026-10-12T07:47:12.919710Z",
+    },
+    { id: 4, is_current: false, device_id: null, device: "", last_seen: "not-a-date" },
+  ],
+};
+
+function okResult<T>(data: T) {
+  return { ok: true, status: 200, data, error: null, rotated: false };
+}
+
+function mockDeviceAccount(): void {
+  h.authClient.get.mockImplementation((path: string) => {
+    if (path === "/user/v1/identities") return Promise.resolve(okResult(IDENTITY_SUMMARY));
+    if (path === "/auth/v1/sessions/list") return Promise.resolve(okResult(SESSION_LIST));
+    return Promise.resolve(okResult({ data: [] }));
+  });
+  h.authClient.unsafeRequest.mockImplementation((path: string) => {
+    if (path === "/device/v1/list") return Promise.resolve(okResult(DEVICE_LIST));
+    if (path === "/device/v1/delete") return Promise.resolve(okResult({ revoked: true }));
+    if (path === "/device/v1/rename") return Promise.resolve(okResult({ renamed: true }));
+    return Promise.resolve(undefined);
+  });
+}
+
+function deviceRow(text: string): HTMLLIElement | undefined {
+  return [...target.querySelectorAll("li")].find((li) => (li.textContent ?? "").includes(text));
+}
+
+describe("account page devices (devices.md D4)", () => {
+  it("lists devices with their own names or type labels, and bound sessions only once", async () => {
+    mockDeviceAccount();
+    mountPage();
+    await settle();
+
+    const text = target.textContent ?? "";
+    expect(text).toContain("Chrome");
+    expect(text).toContain("This device");
+    expect(text.indexOf("This device")).toBe(text.lastIndexOf("This device"));
+    // The user's name is shown as text, never parsed as markup.
+    expect(text).toContain("<img src=x>Pixel");
+    expect(target.querySelector("img")).toBeNull();
+    expect(text).toContain("Android phone");
+    // An unknown platform or browser falls back to the localized unknown label, and the
+    // unbound session shows the same label. The bound session is not repeated.
+    expect(text.match(/Unknown device/gu)?.length).toBeGreaterThanOrEqual(2);
+    expect(text).not.toContain("Chrome · macOS");
+  });
+
+  it("signs a remote device out at once through the revoke call, with a toast", async () => {
+    mockDeviceAccount();
+    mountPage();
+    await settle();
+
+    const row = deviceRow("Pixel");
+    const button = [...(row?.querySelectorAll("button") ?? [])].find(
+      (b) => (b.textContent ?? "").trim() === "Sign out",
+    );
+    expect(button).toBeDefined();
+    button?.click();
+    await settle();
+
+    expect(h.authClient.unsafeRequest).toHaveBeenCalledWith("/device/v1/delete", {
+      method: "POST",
+      body: { expected_user_id: 7, device_id: "dev-phone" },
+    });
+    expect(toasts.success).toHaveBeenCalledTimes(1);
+    expect(h.goto).not.toHaveBeenCalled();
+  });
+
+  it("refuses an empty or over-long rename without calling the server", async () => {
+    mockDeviceAccount();
+    mountPage();
+    await settle();
+
+    const row = deviceRow("Pixel");
+    const rename = [...(row?.querySelectorAll("button") ?? [])].find(
+      (b) => (b.textContent ?? "").trim() === "Rename",
+    );
+    rename?.click();
+    await settle();
+
+    const input = target.querySelector<HTMLInputElement>("li input[type=text]");
+    expect(input).not.toBeNull();
+    if (input) {
+      input.value = "   ";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    row?.querySelector("form")?.requestSubmit();
+    await settle();
+
+    expect(target.textContent).toContain("Use 1 to 40 characters.");
+    expect(h.authClient.unsafeRequest).not.toHaveBeenCalledWith(
+      "/device/v1/rename",
+      expect.anything(),
+    );
   });
 });
 

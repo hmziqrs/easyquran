@@ -33,7 +33,9 @@ export type IconName =
   | "swatches"
   | "arrows-clockwise"
   | "dots"
-  | "pin";
+  | "pin"
+  | "device-phone"
+  | "device-monitor";
 
 export const ICONS = {
   sun: {
@@ -155,5 +157,17 @@ export const ICONS = {
   pin: {
     viewBox: "0 0 256 256",
     d: "M168 24H88a8 8 0 0 0 0 16h8v64l-24 32a8 8 0 0 0 6.4 12.8H128v56a8 8 0 0 0 16 0v-56h49.6a8 8 0 0 0 6.4-12.8L176 104V40h8a8 8 0 0 0 0-16Z",
+  },
+  // Lucide smartphone (outline): a device row on iOS or Android.
+  "device-phone": {
+    viewBox: "0 0 24 24",
+    stroke: true,
+    d: "M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM12 18h.01",
+  },
+  // Lucide monitor (outline): a device row on the web or a desktop app.
+  "device-monitor": {
+    viewBox: "0 0 24 24",
+    stroke: true,
+    d: "M4 3h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 21h8M12 17v4",
   },
 } satisfies Record<IconName, IconDef>;

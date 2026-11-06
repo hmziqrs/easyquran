@@ -2,24 +2,36 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { onMount } from "svelte";
+  import { toast } from "svelte-sonner";
   import { Button } from "#lib/components/ui/button/index.js";
   import { Card } from "#lib/components/ui/card/index.js";
+  import { Icon } from "#lib/components/icon/index.js";
   import { Input } from "#lib/components/ui/input/index.js";
   import { Label } from "#lib/components/ui/label/index.js";
   import { authState } from "#lib/auth/auth-state.svelte.js";
   import { authModal } from "#lib/auth/auth-modal.svelte.js";
   import { createLogoutFlow } from "#lib/auth/flows.svelte.js";
   import { createPasskeyFlow } from "#lib/auth/passkey-flow.svelte.js";
-  import { accountClient, type SessionInfo } from "#lib/auth/account-client.js";
+  import {
+    accountClient,
+    type DeviceInfo,
+    type SessionInfo,
+  } from "#lib/auth/account-client.js";
   import { consumeLinkProvider } from "#lib/auth/link-attempt.js";
+  import { deviceIdFor } from "#lib/device/identity.js";
   import { getAuthCopy } from "#lib/i18n/auth-copy.js";
   import { getAccountCopy } from "#lib/i18n/account-copy.js";
+  import { createClock, localClockStorage } from "#lib/sync/clock.js";
   import FreshAuthControls from "#lib/auth/components/FreshAuthControls.svelte";
   import TwoFactorControls from "#lib/auth/components/TwoFactorControls.svelte";
   import ConnectedAccounts from "#lib/auth/components/ConnectedAccounts.svelte";
   import {
     resolveAccountView,
     resolveLinkNotice,
+    deviceIconName,
+    deviceTitle,
+    deviceTypeLabel,
+    normaliseDeviceNameDraft,
     sessionDeviceLabel,
     sessionLastSeenLabel,
     ANONYMOUS_CTA_HREF,
@@ -41,6 +53,23 @@
   let sessions = $state<SessionInfo[]>([]);
   let sessionsLoading = $state(false);
   let sessionsError = $state<string | null>(null);
+
+  let devices = $state<DeviceInfo[]>([]);
+  let devicesLoading = $state(false);
+  let devicesError = $state<string | null>(null);
+  let devicePendingId = $state<string | null>(null);
+  let renameId = $state<string | null>(null);
+  let renameDraft = $state("");
+  let renameError = $state<string | null>(null);
+  let renamePending = $state(false);
+
+  // A session bound to a listed device shows under that device. Any other session has
+  // no device the server can name, so it shows as an unknown-device row.
+  const listedDeviceIds = $derived(new Set(devices.map((device) => device.id)));
+  const unboundSessions = $derived(
+    sessions.filter((s) => s.deviceId === undefined || !listedDeviceIds.has(s.deviceId)),
+  );
+  const hasRows = $derived(devices.length > 0 || unboundSessions.length > 0);
 
   let nameDraft = $state("");
   let profilePending = $state(false);
@@ -68,9 +97,28 @@
     if (view !== "authenticated" || initialized) return;
     initialized = true;
     if (user) nameDraft = user.name;
+    void loadDevices();
     void loadSessions();
     void passkey.list();
   });
+
+  async function loadDevices(): Promise<void> {
+    devicesLoading = true;
+    devicesError = null;
+    const res = await accountClient.listDevices();
+    devicesLoading = false;
+    if (res.status === "ok" && res.data) {
+      devices = res.data;
+    } else if (res.status === "anonymous") {
+      await goto(ANONYMOUS_CTA_HREF);
+    } else {
+      devicesError = copy.genericError;
+    }
+  }
+
+  async function refreshAll(): Promise<void> {
+    await Promise.all([loadDevices(), loadSessions()]);
+  }
 
   async function loadSessions(): Promise<void> {
     sessionsLoading = true;
@@ -119,12 +167,71 @@
         await logout.run();
         await goto(ANONYMOUS_CTA_HREF);
       } else {
-        await loadSessions();
+        await refreshAll();
       }
     } else if (res.status === "anonymous") {
       await goto(ANONYMOUS_CTA_HREF);
     } else {
       terminateError = copy.genericError;
+    }
+  }
+
+  /** Remote sign-out (devices.md D4): acts at once, with a toast and no dialog. */
+  async function signOutDevice(device: DeviceInfo): Promise<void> {
+    if (devicePendingId || !user) return;
+    devicePendingId = device.id;
+    const res = await accountClient.revokeDevice(user.id, device.id);
+    devicePendingId = null;
+    if (res.status === "ok") {
+      toast.success(copy.deviceSignedOut(deviceTitle(device, copy.deviceUnknown)));
+      await refreshAll();
+    } else if (res.status === "anonymous") {
+      await goto(ANONYMOUS_CTA_HREF);
+    } else {
+      toast.error(copy.genericError);
+    }
+  }
+
+  function startRename(device: DeviceInfo): void {
+    renameId = device.id;
+    renameDraft = device.displayName ?? "";
+    renameError = null;
+  }
+
+  function cancelRename(): void {
+    renameId = null;
+    renameError = null;
+  }
+
+  // Stamps the rename from this install's clock, so a newer name always wins (contracts/sync.md).
+  function deviceNameStamp(owner: number): string {
+    const key = String(owner);
+    return createClock(deviceIdFor(key), localClockStorage(key)).stamp();
+  }
+
+  async function saveRename(device: DeviceInfo): Promise<void> {
+    if (renamePending || !user) return;
+    const name = normaliseDeviceNameDraft(renameDraft);
+    if (name === null) {
+      renameError = copy.deviceNameInvalid;
+      return;
+    }
+    renamePending = true;
+    renameError = null;
+    const res = await accountClient.renameDevice(
+      user.id,
+      device.id,
+      name,
+      deviceNameStamp(user.id),
+    );
+    renamePending = false;
+    if (res.status === "ok") {
+      renameId = null;
+      await loadDevices();
+    } else if (res.status === "anonymous") {
+      await goto(ANONYMOUS_CTA_HREF);
+    } else {
+      renameError = copy.genericError;
     }
   }
 
@@ -228,19 +335,106 @@
 
     <section class="flex flex-col gap-4">
       <div class="flex flex-col gap-1">
-        <h2 class="text-lg font-medium">{copy.sessionsHeading}</h2>
-        <p class="text-sm text-fg-2">{copy.sessionsDescription}</p>
+        <h2 class="text-lg font-medium">{copy.devicesHeading}</h2>
+        <p class="text-sm text-fg-2">{copy.devicesDescription}</p>
       </div>
+      {#if devicesError}
+        <p role="alert" aria-live="assertive" class="text-sm text-destructive">{devicesError}</p>
+        <Button variant="ghost" size="sm" onclick={refreshAll}>{copy.retry}</Button>
+      {/if}
       {#if sessionsError}
         <p role="alert" aria-live="assertive" class="text-sm text-destructive">{sessionsError}</p>
         <Button variant="ghost" size="sm" onclick={loadSessions}>{copy.retry}</Button>
-      {:else if sessionsLoading && sessions.length === 0}
-        <p class="text-sm text-fg-2" role="status" aria-live="polite">{copy.sessionsLoading}</p>
-      {:else if sessions.length === 0}
-        <p class="text-sm text-fg-2">{copy.sessionsEmpty}</p>
+      {/if}
+      {#if !hasRows}
+        {#if devicesLoading || sessionsLoading}
+          <p class="text-sm text-fg-2" role="status" aria-live="polite">{copy.devicesLoading}</p>
+        {:else if !devicesError && !sessionsError}
+          <p class="text-sm text-fg-2">{copy.sessionsEmpty}</p>
+        {/if}
       {:else}
         <ul class="flex flex-col gap-2">
-          {#each sessions as s (s.id)}
+          {#each devices as device (device.id)}
+            {@const title = deviceTitle(device, copy.deviceUnknown)}
+            {@const typeLabel = deviceTypeLabel(device, copy.deviceUnknown)}
+            {@const lastSeen = sessionLastSeenLabel(device.lastSeenAt, copy.locale)}
+            <li>
+              <Card size="sm" class="flex-row flex-wrap items-center justify-between gap-3 px-4">
+                {#if renameId === device.id}
+                  <form
+                    class="flex w-full flex-col gap-2"
+                    onsubmit={(event: SubmitEvent) => {
+                      event.preventDefault();
+                      void saveRename(device);
+                    }}
+                  >
+                    <Label for="device-name-{device.id}">{copy.deviceRenameLabel}</Label>
+                    <Input
+                      id="device-name-{device.id}"
+                      type="text"
+                      maxlength={40}
+                      autocomplete="off"
+                      bind:value={renameDraft}
+                      disabled={renamePending}
+                    />
+                    {#if renameError}
+                      <p role="alert" aria-live="assertive" class="text-sm text-destructive">
+                        {renameError}
+                      </p>
+                    {/if}
+                    <div class="flex flex-wrap gap-2">
+                      <Button variant="accent" size="sm" type="submit" disabled={renamePending}>
+                        {copy.deviceRenameSave}
+                      </Button>
+                      <Button variant="ghost" size="sm" type="button" onclick={cancelRename}>
+                        {copy.deviceRenameCancel}
+                      </Button>
+                    </div>
+                  </form>
+                {:else}
+                  <div class="flex min-w-0 items-start gap-3">
+                    <Icon name={deviceIconName(device)} size={18} class="mt-0.5 flex-none text-fg-3" />
+                    <div class="flex min-w-0 flex-col gap-0.5">
+                      <span class="text-sm font-medium">
+                        {title}
+                        {#if device.isCurrent}
+                          <span
+                            class="ms-2 rounded-pill bg-accent-soft px-2 py-0.5 text-xs text-accent"
+                          >{copy.deviceThis}</span>
+                        {/if}
+                      </span>
+                      {#if device.displayName !== null}
+                        <span class="text-xs text-fg-2">{typeLabel}</span>
+                      {/if}
+                      {#if lastSeen}
+                        <span class="text-xs text-fg-3">{copy.sessionLastSeen(lastSeen)}</span>
+                      {/if}
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" onclick={() => startRename(device)}>
+                      {copy.deviceRename}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={devicePendingId === device.id}
+                      onclick={() => (device.isCurrent ? doLogout() : signOutDevice(device))}
+                    >
+                      {#if devicePendingId === device.id}
+                        {copy.signingOut}
+                      {:else if device.isCurrent}
+                        {copy.signOut}
+                      {:else}
+                        {copy.deviceSignOut}
+                      {/if}
+                    </Button>
+                  </div>
+                {/if}
+              </Card>
+            </li>
+          {/each}
+          {#each unboundSessions as s (s.id)}
             {@const device = sessionDeviceLabel(s.userAgent, copy.deviceUnknown)}
             {@const lastSeen = sessionLastSeenLabel(s.lastSeenAt, copy.locale)}
             <li>

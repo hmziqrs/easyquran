@@ -7,7 +7,7 @@ import { getAccountCopy, type AccountCopy } from "#lib/i18n/account-copy.js";
 const ARABIC_LETTERS = /\p{Script=Arabic}/u;
 
 // Non-text fields: locale metadata and the one parameterized formatter.
-const NON_TEXT_KEYS = new Set(["locale", "direction", "sessionLastSeen"]);
+const NON_TEXT_KEYS = new Set(["locale", "direction", "sessionLastSeen", "deviceSignedOut"]);
 
 function textFields(copy: AccountCopy): Map<string, string> {
   const fields = new Map<string, string>();
@@ -41,6 +41,9 @@ describe("account copy", () => {
   it("keeps the interpolation parameter in both locales", () => {
     expect(en.sessionLastSeen("X")).toContain("X");
     expect(ar.sessionLastSeen("X")).toContain("X");
+    expect(en.deviceSignedOut("X")).toContain("X");
+    expect(ar.deviceSignedOut("X")).toContain("X");
+    expect(ARABIC_LETTERS.test(ar.deviceSignedOut("X"))).toBe(true);
   });
 
   it("sets lang-direction from the locale", () => {

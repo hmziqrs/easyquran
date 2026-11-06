@@ -18,6 +18,21 @@ export interface SessionInfo {
   readonly createdAt?: string;
   readonly lastSeenAt?: string;
   readonly userAgent?: string;
+  /** The device this session is bound to. Absent for a session no device has claimed. */
+  readonly deviceId?: string;
+}
+
+/** One account device (devices.md D4). Names are user text: render them as text only. */
+export interface DeviceInfo {
+  readonly id: string;
+  readonly displayName: string | null;
+  readonly platform: string;
+  readonly client: string;
+  readonly formFactor: string;
+  readonly browser: string | null;
+  readonly osMajor: number | null;
+  readonly lastSeenAt?: string;
+  readonly isCurrent: boolean;
 }
 
 export interface SessionListResponse {
@@ -87,6 +102,7 @@ type SessionDraft = {
   createdAt?: string;
   lastSeenAt?: string;
   userAgent?: string;
+  deviceId?: string;
 };
 
 type ProfileUpdateWire = {
@@ -135,11 +151,51 @@ function decodeSession(raw: unknown): SessionInfo | null {
   const lastSeenAt = firstString(o, "last_seen", "lastSeenAt");
   const userAgent = firstString(o, "device", "user_agent", "userAgent");
   const createdAt = firstString(o, "created_at", "createdAt");
+  const deviceId = firstString(o, "device_id", "deviceId");
   const session: SessionDraft = { id, isCurrent: o.is_current === true || o.isCurrent === true };
   if (createdAt !== undefined) session.createdAt = createdAt;
   if (lastSeenAt !== undefined) session.lastSeenAt = lastSeenAt;
   if (userAgent !== undefined) session.userAgent = userAgent;
+  if (deviceId !== undefined) session.deviceId = deviceId;
   return session;
+}
+
+function optionalString(value: JsonValue | undefined): string | null {
+  return isString(value) && value.length > 0 ? value : null;
+}
+
+function decodeDevice(raw: JsonValue | undefined): DeviceInfo | null {
+  if (!isWireObject(raw)) return null;
+  const id = raw.id;
+  const platform = raw.platform;
+  const client = raw.client;
+  const formFactor = raw.formFactor;
+  if (!isString(id) || id.length === 0) return null;
+  if (!isString(platform) || !isString(client) || !isString(formFactor)) return null;
+  const lastSeenAt = firstString(raw, "lastSeenAt", "last_seen_at");
+  const device: DeviceInfo = {
+    id,
+    displayName: optionalString(raw.displayName),
+    platform,
+    client,
+    formFactor,
+    browser: optionalString(raw.browser),
+    osMajor: isNumber(raw.osMajor) ? raw.osMajor : null,
+    isCurrent: raw.isCurrent === true,
+  };
+  return lastSeenAt === undefined ? device : { ...device, lastSeenAt };
+}
+
+/** Decodes the `/device/v1/list` envelope `{ devices: [...] }`. Malformed rows drop out. */
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the unparsed JSON body from fetch; this function is the I/O boundary parser for the device list
+export function decodeDeviceList(raw: unknown): DeviceInfo[] {
+  if (!isWireObject(raw) || !Array.isArray(raw.devices)) return [];
+  const out: DeviceInfo[] = [];
+  for (const entry of raw.devices) {
+    const device = decodeDevice(entry);
+    if (device) out.push(device);
+  }
+  return out;
 }
 
 // eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the still-unparsed sessions payload (may be a bare array); each row is parsed by decodeSession below
@@ -248,6 +304,45 @@ export class AccountClient {
     );
     const status = statusFor(res.status, res.error);
     return { status, httpStatus: res.status, isCurrent: false };
+  }
+
+  async listDevices(): Promise<AccountResult<DeviceInfo[]>> {
+    const res = await this.auth.unsafeRequest<unknown>("/device/v1/list", { method: "POST" });
+    const status = statusFor(res.status, res.error);
+    const data = res.ok ? decodeDeviceList(res.data) : null;
+    return { status, httpStatus: res.status, data, error: res.error };
+  }
+
+  /** Resolves to `renamed: false` when a newer name already won on the server. */
+  async renameDevice(
+    expectedUserId: number,
+    deviceId: string,
+    name: string,
+    nameStamp: string,
+  ): Promise<AccountResult<boolean>> {
+    const res = await this.auth.unsafeRequest<WireObject>("/device/v1/rename", {
+      method: "POST",
+      body: {
+        expected_user_id: expectedUserId,
+        device_id: deviceId,
+        name,
+        name_stamp: nameStamp,
+      },
+    });
+    const status = statusFor(res.status, res.error);
+    const data = res.ok && isWireObject(res.data) ? res.data.renamed === true : null;
+    return { status, httpStatus: res.status, data, error: res.error };
+  }
+
+  /** Remote sign-out: ends every session on that device and retires its id. */
+  async revokeDevice(expectedUserId: number, deviceId: string): Promise<AccountResult<boolean>> {
+    const res = await this.auth.unsafeRequest<WireObject>("/device/v1/delete", {
+      method: "POST",
+      body: { expected_user_id: expectedUserId, device_id: deviceId },
+    });
+    const status = statusFor(res.status, res.error);
+    const data = res.ok ? true : null;
+    return { status, httpStatus: res.status, data, error: res.error };
   }
 
   async getIdentities(): Promise<AccountResult<IdentitySummary>> {

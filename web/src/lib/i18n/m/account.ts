@@ -2,13 +2,24 @@
 //
 // Account page (/account): chrome, profile, sessions, security. Lazy: ships only inside the account route chunk.
 //
-// 37 messages. Import this barrel, never
+// 45 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { account_anonymous_body } from "#lib/paraglide/messages/account_anonymous_body.js";
 export { account_checking_session } from "#lib/paraglide/messages/account_checking_session.js";
 export { account_create_account } from "#lib/paraglide/messages/account_create_account.js";
+export { account_device_name_invalid } from "#lib/paraglide/messages/account_device_name_invalid.js";
+export { account_device_rename } from "#lib/paraglide/messages/account_device_rename.js";
+export { account_device_rename_cancel } from "#lib/paraglide/messages/account_device_rename_cancel.js";
+export { account_device_rename_label } from "#lib/paraglide/messages/account_device_rename_label.js";
+export { account_device_rename_save } from "#lib/paraglide/messages/account_device_rename_save.js";
+export { account_device_sign_out } from "#lib/paraglide/messages/account_device_sign_out.js";
+export { account_device_signed_out } from "#lib/paraglide/messages/account_device_signed_out.js";
+export { account_device_this } from "#lib/paraglide/messages/account_device_this.js";
 export { account_device_unknown } from "#lib/paraglide/messages/account_device_unknown.js";
+export { account_devices_description } from "#lib/paraglide/messages/account_devices_description.js";
+export { account_devices_heading } from "#lib/paraglide/messages/account_devices_heading.js";
+export { account_devices_loading } from "#lib/paraglide/messages/account_devices_loading.js";
 export { account_field_email } from "#lib/paraglide/messages/account_field_email.js";
 export { account_field_name } from "#lib/paraglide/messages/account_field_name.js";
 export { account_generic_error } from "#lib/paraglide/messages/account_generic_error.js";
@@ -34,10 +45,7 @@ export { account_session_ending } from "#lib/paraglide/messages/account_session_
 export { account_session_last_seen } from "#lib/paraglide/messages/account_session_last_seen.js";
 export { account_session_revoke } from "#lib/paraglide/messages/account_session_revoke.js";
 export { account_session_this } from "#lib/paraglide/messages/account_session_this.js";
-export { account_sessions_description } from "#lib/paraglide/messages/account_sessions_description.js";
 export { account_sessions_empty } from "#lib/paraglide/messages/account_sessions_empty.js";
-export { account_sessions_heading } from "#lib/paraglide/messages/account_sessions_heading.js";
-export { account_sessions_loading } from "#lib/paraglide/messages/account_sessions_loading.js";
 export { account_sign_in } from "#lib/paraglide/messages/account_sign_in.js";
 export { account_sign_out } from "#lib/paraglide/messages/account_sign_out.js";
 export { account_signed_in_body } from "#lib/paraglide/messages/account_signed_in_body.js";
