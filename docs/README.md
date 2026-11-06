@@ -41,12 +41,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 
 ## Build order
 
-### Abuse phase 0
-
-| Item                                                                                                             | Title                                                                         | Blocked by |
-| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------- |
-| [A4b](plans/abuse-0-foundations.md#a4b-contact-addresses) | Contact addresses | O3 |
-
 ### Product
 
 | Item                                                               | Title                                  | Blocked by |
