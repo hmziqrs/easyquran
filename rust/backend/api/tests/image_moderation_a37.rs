@@ -29,7 +29,8 @@ fn collect(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
 
 #[test]
 fn production_boot_refuses_media_upload_without_moderator() {
-    assert!(MEDIA_UPLOAD_MOUNTED, "media_v1 is mounted in router.rs");
+    // Compile-time guard: fails the build if media_v1 is unmounted.
+    const _: () = assert!(MEDIA_UPLOAD_MOUNTED, "media_v1 is mounted in router.rs");
     let refused = moderation_boot_gate(EnvClass::Production, MEDIA_UPLOAD_MOUNTED, false);
     assert!(
         refused.is_err(),
