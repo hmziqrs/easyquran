@@ -1,6 +1,6 @@
 import { JUZ_ALIASES, PAGE_ALIASES, SURAH_ALIASES } from "../aliases";
 import { PaletteGroups } from "../groups";
-import { hasKeyword, isBareNumber, referenceNumbers } from "../query";
+import { hasKeyword, isBareNumber, rangeNumbers, referenceNumbers, type AyahRange } from "../query";
 import {
   JUZ_COUNT,
   MUSHAF_PAGE_COUNT,
@@ -54,6 +54,40 @@ function ayahEntry(query: PaletteQuery, num: number, ayah: number): PaletteEntry
   };
 }
 
+/**
+ * An ayah range (`2:255-286`, `2:255-3:5`) lands on its first verse, the same
+ * target the nav matcher uses. Both ends must sit inside their surahs and the
+ * end may not come before the start; a bad range drops, never truncates.
+ */
+function rangeEntry(query: PaletteQuery, range: AyahRange): PaletteEntry | null {
+  const { quranData } = query;
+  const start = quranData.surahByNum(range.startSurah);
+  const end = quranData.surahByNum(range.endSurah);
+  if (!start || !end || range.endAyah < 1 || range.endAyah > end.ayahCount) return null;
+  const from = quranData.globalIndexOf(range.startSurah, range.startAyah);
+  const to = quranData.globalIndexOf(range.endSurah, range.endAyah);
+  if (from === undefined || to === undefined || to < from) return null;
+  const href = ayahHref(query.routeContext, quranData, range.startSurah, range.startAyah);
+  if (!href) return null;
+  const tail =
+    range.startSurah === range.endSurah
+      ? `${range.endAyah}`
+      : `${range.endSurah}:${range.endAyah}`;
+  return {
+    id: `quran.reference:range:${range.startSurah}:${range.startAyah}-${tail}`,
+    sourceId: quranReferenceSource.id,
+    groupId: PaletteGroups.JumpTo.id,
+    label: `${start.name} ${range.startSurah}:${range.startAyah}-${tail}`,
+    detail: "Verse range",
+    arabic: start.arabic,
+    icon: "book",
+    score: 1,
+    href,
+    run: openVerse(range.startSurah),
+    dedupeKey: `range:${range.startSurah}:${range.startAyah}-${tail}`,
+  };
+}
+
 const juzEntry = (query: PaletteQuery, n: number, score: number): PaletteEntry => ({
   id: `quran.reference:juz:${n}`,
   sourceId: quranReferenceSource.id,
@@ -94,6 +128,11 @@ export const quranReferenceSource: PaletteSource = {
     const { parsed } = query;
     const ref = referenceNumbers(parsed);
     if (!ref) return [];
+    const range = rangeNumbers(parsed);
+    if (range && (parsed.keyword === null || hasKeyword(parsed, SURAH_ALIASES))) {
+      const entry = rangeEntry(query, range);
+      return entry ? [entry] : [];
+    }
     const entries: (PaletteEntry | null)[] = [];
 
     if (hasKeyword(parsed, SURAH_ALIASES)) {

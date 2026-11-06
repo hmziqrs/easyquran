@@ -15,6 +15,9 @@ export const BrowseMode = {
   Ayah: "ayah",
   Juz: "juz",
   Page: "page",
+  Ruku: "ruku",
+  Manzil: "manzil",
+  Sajda: "sajda",
 } as const;
 export type BrowseMode = (typeof BrowseMode)[keyof typeof BrowseMode];
 export type ReaderMode = "verse" | "reading";

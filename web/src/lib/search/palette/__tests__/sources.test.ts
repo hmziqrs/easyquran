@@ -107,6 +107,32 @@ describe("quran.reference source", () => {
     }
   });
 
+  it("jumps a verse range to its first verse, in either range spelling", () => {
+    for (const raw of ["2:255-2:286", "2:255-286", "2 255-286"]) {
+      const [entry] = run(quranReferenceSource, raw);
+      expect(entry?.label, raw).toBe("Al-Baqarah 2:255-286");
+      expect(entry?.href, raw).toBe("/al-baqarah#ayah-2-255");
+    }
+  });
+
+  it("keeps a cross-surah range and names both ends", () => {
+    const [entry] = run(quranReferenceSource, "2:255-3:5");
+    expect(entry?.label).toBe("Al-Baqarah 2:255-3:5");
+    expect(entry?.href).toBe("/al-baqarah#ayah-2-255");
+  });
+
+  it("keeps the translation context on a range jump", () => {
+    const [entry] = run(quranReferenceSource, "2:255-286", TRANSLATED);
+    expect(entry?.href).toBe("/al-baqarah/t/ms/basmeih#ayah-2-255");
+  });
+
+  it("drops a range whose end is past its surah or before its start", () => {
+    expect(run(quranReferenceSource, "1:1-1:8")).toHaveLength(0);
+    expect(run(quranReferenceSource, "2:286-255")).toHaveLength(0);
+    expect(run(quranReferenceSource, "surah 1:1-7")).toHaveLength(1);
+    expect(run(quranReferenceSource, "surah 1:1-8")).toHaveLength(0);
+  });
+
   it("drops an ayah past the end of the surah", () => {
     expect(run(quranReferenceSource, "1:7")).toHaveLength(1);
     expect(run(quranReferenceSource, "1:8")).toHaveLength(0);

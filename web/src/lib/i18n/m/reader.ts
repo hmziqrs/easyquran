@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 458 messages. Import this barrel, never
+// 468 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "#lib/paraglide/messages/reader_account.js";
@@ -78,7 +78,10 @@ export { reader_bookmarks_undo } from "#lib/paraglide/messages/reader_bookmarks_
 export { reader_browse } from "#lib/paraglide/messages/reader_browse.js";
 export { reader_browse_ayah } from "#lib/paraglide/messages/reader_browse_ayah.js";
 export { reader_browse_juz } from "#lib/paraglide/messages/reader_browse_juz.js";
+export { reader_browse_manzil } from "#lib/paraglide/messages/reader_browse_manzil.js";
 export { reader_browse_page } from "#lib/paraglide/messages/reader_browse_page.js";
+export { reader_browse_ruku } from "#lib/paraglide/messages/reader_browse_ruku.js";
+export { reader_browse_sajda } from "#lib/paraglide/messages/reader_browse_sajda.js";
 export { reader_browse_surah } from "#lib/paraglide/messages/reader_browse_surah.js";
 export { reader_cards_activity } from "#lib/paraglide/messages/reader_cards_activity.js";
 export { reader_cards_add } from "#lib/paraglide/messages/reader_cards_add.js";
@@ -235,6 +238,7 @@ export { reader_lanes_text_reset } from "#lib/paraglide/messages/reader_lanes_te
 export { reader_lanes_text_smaller } from "#lib/paraglide/messages/reader_lanes_text_smaller.js";
 export { reader_larger_arabic_text } from "#lib/paraglide/messages/reader_larger_arabic_text.js";
 export { reader_light } from "#lib/paraglide/messages/reader_light.js";
+export { reader_manzil_item } from "#lib/paraglide/messages/reader_manzil_item.js";
 export { reader_more_ayahs_unavailable } from "#lib/paraglide/messages/reader_more_ayahs_unavailable.js";
 export { reader_nav_manual_pages } from "#lib/paraglide/messages/reader_nav_manual_pages.js";
 export { reader_navigation_description } from "#lib/paraglide/messages/reader_navigation_description.js";
@@ -330,6 +334,9 @@ export { reader_reload_update } from "#lib/paraglide/messages/reader_reload_upda
 export { reader_remove_bookmark } from "#lib/paraglide/messages/reader_remove_bookmark.js";
 export { reader_remove_offline } from "#lib/paraglide/messages/reader_remove_offline.js";
 export { reader_retry } from "#lib/paraglide/messages/reader_retry.js";
+export { reader_ruku_item } from "#lib/paraglide/messages/reader_ruku_item.js";
+export { reader_sajda_obligatory } from "#lib/paraglide/messages/reader_sajda_obligatory.js";
+export { reader_sajda_recommended } from "#lib/paraglide/messages/reader_sajda_recommended.js";
 export { reader_saved_on } from "#lib/paraglide/messages/reader_saved_on.js";
 export { reader_search_quran } from "#lib/paraglide/messages/reader_search_quran.js";
 export { reader_seo_breadcrumb_surah } from "#lib/paraglide/messages/reader_seo_breadcrumb_surah.js";
@@ -365,6 +372,9 @@ export { reader_sidebar_toggle } from "#lib/paraglide/messages/reader_sidebar_to
 export { reader_sign_in } from "#lib/paraglide/messages/reader_sign_in.js";
 export { reader_site_panel } from "#lib/paraglide/messages/reader_site_panel.js";
 export { reader_smaller_arabic_text } from "#lib/paraglide/messages/reader_smaller_arabic_text.js";
+export { reader_sort_label } from "#lib/paraglide/messages/reader_sort_label.js";
+export { reader_sort_mushaf } from "#lib/paraglide/messages/reader_sort_mushaf.js";
+export { reader_sort_revelation } from "#lib/paraglide/messages/reader_sort_revelation.js";
 export { reader_source } from "#lib/paraglide/messages/reader_source.js";
 export { reader_source_qul } from "#lib/paraglide/messages/reader_source_qul.js";
 export { reader_source_quranenc } from "#lib/paraglide/messages/reader_source_quranenc.js";

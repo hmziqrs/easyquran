@@ -11,6 +11,7 @@
     parseKey,
     type SurahRouteContext,
   } from "#lib/data/quran.js";
+  import { SurahSort, surahsInSortOrder } from "#lib/data/quran-browse.js";
   import { loadQuranData } from "#lib/data/quran-data-client.js";
   import { RangeKind, type QuranData } from "#lib/data/quran-data.js";
   import { hizbRange, juzOfPage } from "#lib/data/mushaf-divisions.js";
@@ -32,7 +33,18 @@
   import SidebarVirtualList from "./SidebarVirtualList.svelte";
   import { ayahTabSurah } from "./ayah-tab";
 
-  const BROWSE = [BrowseMode.Surah, BrowseMode.Ayah, BrowseMode.Juz, BrowseMode.Page] as const;
+  const BROWSE = [
+    BrowseMode.Surah,
+    BrowseMode.Ayah,
+    BrowseMode.Juz,
+    BrowseMode.Page,
+    BrowseMode.Ruku,
+    BrowseMode.Manzil,
+    BrowseMode.Sajda,
+  ] as const;
+  const SORTS = [SurahSort.Mushaf, SurahSort.Revelation] as const;
+  /** Range families the sidebar lists. Each value is a QuranData `RangeKind` literal. */
+  type BrowseRangeKind = "juz" | "page" | "ruku" | "manzil";
   // Active rows take a soft primary fill instead of the grey sidebar accent.
   const ROW =
     "h-auto items-center gap-2 px-3 py-2.5 data-[active=true]:bg-primary/15 data-[active=true]:hover:bg-primary/15";
@@ -41,6 +53,7 @@
   const dataPromise = $derived(sidebar.openMobile ? loadQuranData() : null);
 
   let contentEl: HTMLDivElement | null = $state(null);
+  let surahSort = $state<SurahSort>(SurahSort.Mushaf);
 
   function onItemClick() {
     sidebar.setOpenMobile(false);
@@ -55,28 +68,47 @@
     });
   }
 
-  function browseLabel(browse: BrowseMode): string {
-    switch (browse) {
-      case BrowseMode.Surah:
-        return copy.sidebar.mode(browse);
-      case BrowseMode.Ayah:
-        return copy.sidebar.mode(browse);
-      case BrowseMode.Juz:
-        return copy.sidebar.mode(browse);
-      case BrowseMode.Page:
-        return copy.sidebar.mode(browse);
-    }
-  }
-
   const routeCtx = $derived<SurahRouteContext>(routeContextFromParams(page.params));
 
   function surahHref(slug: string): `/${string}` {
     return readerHrefFor(copy.locale, surahPathFor(routeCtx, slug));
   }
 
-  function rangeHref(useJuz: boolean, index: number): `/${string}` {
-    const quranHref = useJuz ? juzPathFor(routeCtx, index) : globalPagePathFor(routeCtx, index);
-    return readerHrefFor(copy.locale, quranHref);
+  function rangeKindFor(browse: BrowseMode): BrowseRangeKind {
+    if (browse === BrowseMode.Juz) return "juz";
+    if (browse === BrowseMode.Ruku) return "ruku";
+    if (browse === BrowseMode.Manzil) return "manzil";
+    return "page";
+  }
+
+  /** The surah and ayah a row opens, or null when the key names no surah in the data. */
+  function verseTarget(
+    quranData: QuranData,
+    key: string,
+  ): { surah: CatalogEntry; ayah: number } | null {
+    const { num, n } = parseKey(key);
+    const surah = quranData.surahByNum(num);
+    return surah ? { surah, ayah: n } : null;
+  }
+
+  function verseHref(target: { surah: CatalogEntry; ayah: number }): string {
+    return publicHref(
+      readerHrefFor(copy.locale, surahAyahPathFor(routeCtx, target.surah, target.ayah)),
+    );
+  }
+
+  /**
+   * Juz and page rows link to their index routes. Ruku and manzil have no route
+   * of their own, so they open the surah at the first verse they start on.
+   */
+  function rangeHref(kind: BrowseRangeKind, rg: RangeEntry, quranData: QuranData): string | null {
+    if (kind === "ruku" || kind === "manzil") {
+      const target = verseTarget(quranData, rg.first);
+      return target ? verseHref(target) : null;
+    }
+    const quranHref =
+      kind === "juz" ? juzPathFor(routeCtx, rg.index) : globalPagePathFor(routeCtx, rg.index);
+    return publicHref(readerHrefFor(copy.locale, quranHref));
   }
 
   const isJuzRoute = $derived((page.route.id ?? "").includes("/juz/"));
@@ -158,6 +190,14 @@
     return `→ ${surahNameOf(quranData, end.num)} ${rg.last}`;
   }
 
+  /** Second line of a range row: where it ends, plus the juz or page count where that helps. */
+  function rangeDetail(quranData: QuranData, kind: BrowseRangeKind, rg: RangeEntry): string {
+    const end = rangeEnd(quranData, rg);
+    if (kind === "juz") return `${end} · ${copy.index.pageCount(pagesInJuz(quranData, rg))}`;
+    if (kind === "manzil") return end;
+    return `${end} · ${copy.sidebar.rangeItem("juz", juzOfPage(quranData, rg.startGlobal))}`;
+  }
+
   function rangeRow(ranges: readonly RangeEntry[], global: number | null): number {
     if (global === null) return -1;
     return ranges.findIndex((r) => global >= r.startGlobal && global <= r.endGlobal);
@@ -215,10 +255,38 @@
               : "text-muted-foreground hover:text-foreground-secondary",
           )}
         >
-          {browseLabel(b)}
+          {copy.sidebar.mode(b)}
         </button>
       {/each}
     </div>
+    {#if reader.browseSurah}
+      <div class="mt-2 flex items-center gap-2">
+        <span id="surah-sort-label" class="flex-none text-[12px] text-muted-foreground">
+          {copy.sidebar.sortLabel}
+        </span>
+        <div
+          class="grid flex-1 grid-cols-2 gap-1 rounded-md bg-background-subtle p-1"
+          role="group"
+          aria-labelledby="surah-sort-label"
+        >
+          {#each SORTS as sort (sort)}
+            <button
+              type="button"
+              aria-pressed={surahSort === sort}
+              onclick={() => (surahSort = sort)}
+              class={cn(
+                "rounded-sm py-1.5 text-[12px] font-medium transition-colors",
+                surahSort === sort
+                  ? "bg-foreground text-background hover:text-background"
+                  : "text-muted-foreground hover:text-foreground-secondary",
+              )}
+            >
+              {sort === SurahSort.Revelation ? copy.sidebar.sortRevelation : copy.sidebar.sortMushaf}
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/if}
   </SidebarHeader>
 
   <SidebarContent bind:ref={contentEl}>
@@ -230,16 +298,17 @@
       {:then quranData}
         {@const current = ayahTabSurah(quranData, page.params, reader.current)}
         {#if reader.browseSurah}
+          {@const surahs = surahsInSortOrder(quranData.surahs, surahSort)}
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarVirtualList
                 getScrollElement={() => contentEl}
-                count={quranData.surahs.length}
+                count={surahs.length}
                 estimateSize={56}
-                activeIndex={quranData.surahs.findIndex((s) => s.slug === page.params.surah)}
+                activeIndex={surahs.findIndex((s) => s.slug === page.params.surah)}
               >
                 {#snippet item(i)}
-                  {@const s = quranData.surahs[i]!}
+                  {@const s = surahs[i]!}
                   {@const active = page.params.surah === s.slug}
                   {#snippet body()}
                     <span
@@ -315,12 +384,52 @@
             </SidebarGroupContent>
           </SidebarGroup>
           {/key}
+        {:else if reader.browseMode === BrowseMode.Sajda}
+          {@const sajdas = quranData.sajdas()}
+          {@const cur = currentGlobal(quranData)}
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarVirtualList
+                getScrollElement={() => contentEl}
+                count={sajdas.length}
+                estimateSize={44}
+                activeIndex={sajdas.findIndex((s) => s.globalIndex === cur)}
+              >
+                {#snippet item(i)}
+                  {@const sajda = sajdas[i]!}
+                  {@const target = verseTarget(quranData, `${sajda.surah}:${sajda.ayah}`)}
+                  {#if target}
+                    {@const active = sajda.globalIndex === cur}
+                    {#snippet body()}
+                      <span
+                        class={[
+                          "w-11 flex-none text-[19px] font-medium tabular-nums",
+                          active ? "text-primary" : "text-foreground",
+                        ]}
+                      >
+                        <span class="sr-only">{copy.index.sajda} {i + 1}</span>
+                        <span aria-hidden="true">{i + 1}</span>
+                      </span>
+                      <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span class="truncate text-[14.5px] font-medium text-foreground">
+                          {target.surah.name} {sajda.surah}:{sajda.ayah}
+                        </span>
+                        <span class="truncate text-[12.5px] text-foreground-secondary">
+                          {copy.index.sajda} · {copy.sidebar.sajdaKind(sajda.kind)}
+                        </span>
+                      </span>
+                    {/snippet}
+                    {@render navRow(verseHref(target), active, active ? "page" : undefined, ROW, body)}
+                  {/if}
+                {/snippet}
+              </SidebarVirtualList>
+            </SidebarGroupContent>
+          </SidebarGroup>
         {:else}
-          {@const ranges = quranData.ranges(
-            reader.browseJuz ? RangeKind.Juz : RangeKind.Page,
-          )}
+          {@const rangeKind = rangeKindFor(reader.browseMode)}
+          {@const ranges = quranData.ranges(rangeKind)}
           {@const activeRange = rangeRow(ranges, currentGlobal(quranData))}
-          {#key reader.browseJuz ? "juz" : "page"}
+          {#key rangeKind}
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarVirtualList
@@ -332,33 +441,30 @@
                 {#snippet item(i)}
                   {@const rg = ranges[i]!}
                   {@const { num } = parseKey(rg.first)}
-                  {@const href = publicHref(rangeHref(reader.browseJuz, rg.index))}
+                  {@const href = rangeHref(rangeKind, rg, quranData)}
                   {@const active = i === activeRange}
-                  {#snippet body()}
-                    <span
-                      class={[
-                        "w-11 flex-none text-[19px] font-medium tabular-nums",
-                        active ? "text-primary" : "text-foreground",
-                      ]}
-                    >
-                      <span class="sr-only">{copy.sidebar.rangeItem(reader.browseJuz ? "juz" : "page", rg.index)}</span>
-                      <span aria-hidden="true">{rg.index}</span>
-                    </span>
-                    <span class="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span class="truncate text-[14.5px] font-medium text-foreground">
-                        {surahNameOf(quranData, num)} {rg.first}
+                  {#if href}
+                    {#snippet body()}
+                      <span
+                        class={[
+                          "w-11 flex-none text-[19px] font-medium tabular-nums",
+                          active ? "text-primary" : "text-foreground",
+                        ]}
+                      >
+                        <span class="sr-only">{copy.sidebar.rangeItem(rangeKind, rg.index)}</span>
+                        <span aria-hidden="true">{rg.index}</span>
                       </span>
-                      <span class="truncate text-[12.5px] text-foreground-secondary">
-                        {rangeEnd(quranData, rg)} ·
-                        {#if reader.browseJuz}
-                          {copy.index.pageCount(pagesInJuz(quranData, rg))}
-                        {:else}
-                          {copy.sidebar.rangeItem("juz", juzOfPage(quranData, rg.startGlobal))}
-                        {/if}
+                      <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span class="truncate text-[14.5px] font-medium text-foreground">
+                          {surahNameOf(quranData, num)} {rg.first}
+                        </span>
+                        <span class="truncate text-[12.5px] text-foreground-secondary">
+                          {rangeDetail(quranData, rangeKind, rg)}
+                        </span>
                       </span>
-                    </span>
-                  {/snippet}
-                  {@render navRow(href, active, active ? "page" : undefined, ROW, body)}
+                    {/snippet}
+                    {@render navRow(href, active, active ? "page" : undefined, ROW, body)}
+                  {/if}
                 {/snippet}
               </SidebarVirtualList>
             </SidebarGroupContent>

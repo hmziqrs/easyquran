@@ -37,7 +37,10 @@ import {
   reader_browse,
   reader_browse_ayah,
   reader_browse_juz,
+  reader_browse_manzil,
   reader_browse_page,
+  reader_browse_ruku,
+  reader_browse_sajda,
   reader_browse_surah,
   reader_clear_search,
   reader_close_note_tafsir,
@@ -73,6 +76,13 @@ import {
   reader_juz,
   reader_juz_count,
   reader_juz_item,
+  reader_manzil_item,
+  reader_ruku_item,
+  reader_sajda_obligatory,
+  reader_sajda_recommended,
+  reader_sort_label,
+  reader_sort_mushaf,
+  reader_sort_revelation,
   reader_larger_arabic_text,
   reader_light,
   reader_more_ayahs_unavailable,
@@ -214,8 +224,8 @@ import type { FooterResolvedCopy, NavResolvedCopy } from "#lib/i18n/marketing-co
 import { getLocale } from "#lib/paraglide/runtime.js";
 import type { TranslationProvenance } from "#lib/quran/catalogue.js";
 
-type BrowseMode = "surah" | "ayah" | "juz" | "page";
-type RangeKind = "juz" | "page" | "hizb";
+type BrowseMode = "surah" | "ayah" | "juz" | "page" | "ruku" | "manzil" | "sajda";
+type RangeKind = "juz" | "page" | "hizb" | "ruku" | "manzil";
 
 export interface ReaderUiCopy {
   readonly locale: UiLocale;
@@ -269,6 +279,10 @@ export interface ReaderUiCopy {
     readonly pageAbbreviation: string;
     readonly juzLabel: string;
     readonly rangeItem: (kind: RangeKind, index: number) => string;
+    readonly sortLabel: string;
+    readonly sortMushaf: string;
+    readonly sortRevelation: string;
+    readonly sajdaKind: (kind: "recommended" | "obligatory") => string;
   };
   readonly range: {
     readonly juz: string;
@@ -432,6 +446,12 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
         return noArgs(reader_browse_juz);
       case "page":
         return noArgs(reader_browse_page);
+      case "ruku":
+        return noArgs(reader_browse_ruku);
+      case "manzil":
+        return noArgs(reader_browse_manzil);
+      case "sajda":
+        return noArgs(reader_browse_sajda);
     }
   };
 
@@ -443,6 +463,10 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
         return reader_page_item({ index }, options);
       case "hizb":
         return reader_hizb_item({ index }, options);
+      case "ruku":
+        return reader_ruku_item({ index }, options);
+      case "manzil":
+        return reader_manzil_item({ index }, options);
     }
   };
 
@@ -497,6 +521,11 @@ function createReaderUiCopy(locale: UiLocale): ReaderUiCopy {
       pageAbbreviation: noArgs(reader_page_abbreviation),
       juzLabel: noArgs(reader_juz),
       rangeItem,
+      sortLabel: noArgs(reader_sort_label),
+      sortMushaf: noArgs(reader_sort_mushaf),
+      sortRevelation: noArgs(reader_sort_revelation),
+      sajdaKind: (kind) =>
+        kind === "obligatory" ? noArgs(reader_sajda_obligatory) : noArgs(reader_sajda_recommended),
     },
     range: {
       juz: noArgs(reader_juz),
