@@ -34,14 +34,17 @@ function currentOwner(): string {
 }
 
 class GoalsStore {
-  #owner: string | null = null;
+  #owner = $state<string | null>(null);
   #goals = $state.raw<readonly ReadingGoal[]>([]);
 
   /** Goals for the current owner. Reads storage directly when the owner has changed. */
   get entries(): readonly ReadingGoal[] {
     const owner = currentOwner();
+    // Read the state field first so a derived over this getter tracks later writes
+    // (a storage-only read left the list stale until reload).
+    const current = this.#goals;
     if (!browser) return [];
-    if (owner === this.#owner) return this.#goals;
+    if (owner === this.#owner) return current;
     return decodeGoals(readJSON(storageKeyFor(owner)));
   }
 
