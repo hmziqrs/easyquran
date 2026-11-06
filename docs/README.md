@@ -54,7 +54,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 | [A26](plans/abuse-2-enforcement.md#a26-alerting-runbook-drill)                                          | Alerting, runbook, drill                                          | A24, A25     |
 | [A27](plans/abuse-2-enforcement.md#a27-moderation-notice-and-comment-hardening)                         | Moderation notice and comment hardening                           | A21, A25     |
 | [A28](plans/abuse-2-enforcement.md#a28-admin-safety)                                                    | Admin safety                                                      | A23          |
-| [A29](plans/abuse-2-enforcement.md#a29-mail-budget-bounce-guard-suppression-governance-unsubscribe)     | Mail budget, bounce guard, suppression governance, unsubscribe    | A21, A23     |
 | [A36](plans/abuse-2-enforcement.md#a36-device-token-hygiene)                                            | Device token hygiene                                              | A23          |
 | [A30](plans/abuse-2-enforcement.md#a30-media-takedown-variants-tombstones-sweep)                        | Media takedown: variants, tombstones, sweep                       | A23, A28     |
 | [A37](plans/abuse-2-enforcement.md#a37-image-moderation-and-csam-path)                                  | Image moderation and CSAM path                                    | A26, A30     |

@@ -54,26 +54,6 @@ Done when: every destructive action in the A23 list has an audit row; category d
 Blocked by: A23
 Owner: O8 (default: no moderator role until this lands).
 
-#### A29. Mail budget, bounce guard, suppression governance, unsubscribe
-
-Build:
-
-1. Global transactional caps in `MailRouter::check_rate` (`rust/backend/api/src/services/mail/router.rs` ~137–159; provider cap currently applies only when not transactional):
-   - `mail:send:global:reset` 500 per hour.
-   - `mail:send:global:verify` 500 per hour (separate keys so verification cannot starve recovery).
-   - `mail:send:domain:{domain}` 100 per hour, all classes.
-2. Bounce guard: if hourly bounce rate > 5%, pause sends 15 minutes (`mail:guard:paused`).
-3. Suppression: fail closed on DB error (same `suppressed` result from A21). Manual suppression requires rank and reason and writes an audit row. Webhook-sourced suppressions get `blocks_transactional = 0` and go through review before they block transactional mail. A webhook-triggered complaint must not permanently suppress a third party.
-4. Webhook `/mail/v1/webhook/{provider}` (`rust/backend/api/src/modules/mail_v1/mod.rs` ~26): add a limiter. Document `CLOUDFLARE_EMAIL_WEBHOOK_SECRET` as a production prerequisite. Ship the secret only together with item 3's review rule (the secret alone arms a chain where any address can be suppressed by its owner's spam click). Owner provides the secret (O14).
-5. Newsletter: table already exists (`m000015`). Add `List-Unsubscribe` and `List-Unsubscribe-Post` headers on newsletter mail. One-click unsubscribe endpoint: no login, always 200 (including unknown token). Store HMAC of token instead of plaintext (`rust/backend/api/src/db/sea_models/newsletter_subscriber/actions.rs` token handling). Retention class 30 days for unsubscribed/pending, 12 months for confirmed. Fix the web confirm link if it targets a route that does not exist.
-6. Per-recipient cooldown: `mail:send:cooldown:{template}:{recipient}` at 60 s, using the dedup primitive, not the abuse limiter (the abuse limiter's long tier would become a 24-hour lockout lever).
-
-Files: `rust/backend/api/src/services/mail/{router,provider,cloudflare,smtp}.rs`, `rust/backend/api/src/modules/{mail_v1,newsletter_v1,email_verification_v1}/*`, `rust/backend/api/src/router.rs`, `.env.example`, new migration (`blocks_transactional`, token hash), web newsletter routes.
-
-Done when: a 10,000-address registration burst cannot exceed the global cap and pauses on bounce rate (test); one-click unsubscribe returns 200 for an unknown token (test); `grep -r List-Unsubscribe rust/backend/api/src` non-empty; webhook suppression does not block transactional mail until reviewed (test).
-Blocked by: A21, A23
-Owner: O14 for the webhook secret.
-
 #### A36. Device token hygiene
 
 Build:
