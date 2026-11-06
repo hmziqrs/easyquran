@@ -193,7 +193,21 @@ async fn sign_in(app: &Router, origin: &str, email: &str) -> (String, String) {
     )
     .await;
     assert_eq!(login.status, StatusCode::OK, "{}", login.body);
-    (set_cookie(&login), token)
+    // Login rotates the session id and CSRF is bound to it, so the pre-login token is stale.
+    // Mint a fresh pair for the signed-in session, as the browser does after sign-in.
+    let session = set_cookie(&login);
+    let fresh = call(
+        app,
+        Method::POST,
+        "/csrf/v1/generate",
+        Some(&session),
+        &[("origin", origin)],
+        None,
+    )
+    .await;
+    assert_eq!(fresh.status, StatusCode::OK, "{}", fresh.body);
+    let fresh_token = fresh.body["token"].as_str().unwrap().to_string();
+    (session, fresh_token)
 }
 
 #[tokio::test]
@@ -305,13 +319,13 @@ async fn minor_analytics_events_store_nothing() {
         Some(&cookie),
         &[("csrf-token", &token), ("origin", &origin)],
         Some(json!({
-            "expected_user_id": minor.id,
+            "expectedUserId": minor.id,
             "events": [{
                 "id": DEVICE,
                 "surah": 1,
                 "ayah": 1,
                 "ms": 1000,
-                "local_day": "2026-11-01",
+                "localDay": "2026-11-01",
                 "at": "2026-11-01T00:00:00.000Z",
             }],
         })),
