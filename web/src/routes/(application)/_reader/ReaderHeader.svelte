@@ -3,6 +3,7 @@
   import { ReadingTextPicker } from "#lib/components/translation/index.js";
   import { reader } from "#lib/stores/reader.svelte.js";
   import type { ReadingText } from "#lib/stores/reading-text.svelte.js";
+  import { AUDIO_ENABLED } from "#lib/audio/catalogue.js";
 
   let {
     initial,
@@ -45,6 +46,15 @@
     </span>
     <span class="text-[13.5px] text-foreground-secondary">{surahMeta(initial.surah)}</span>
   </div>
+
+  {#if AUDIO_ENABLED}
+    <!-- F19: surah playback loads only once a recording is licensed (O22). -->
+    {#await import("#lib/components/audio/AudioSurahAction.svelte") then surahAudio}
+      <div class="sm:ms-auto">
+        <surahAudio.default surah={initial.surah.num} ayahCount={initial.surah.ayahCount} />
+      </div>
+    {/await}
+  {/if}
 
   {#if clientMounted && reader.isReadingMode}
     <!-- Ayah-by-Ayah / Reading lives in the sticky bar (ReaderModeToggle), reachable from

@@ -549,5 +549,8 @@
   "audio_preset_delete": "حذف",
   "audio_presets": "الإعدادات المحفوظة",
   "audio_preset_full": "قائمة الإعدادات ممتلئة. احذف إعداداً لحفظ آخر.",
-  "audio_preset_failed": "تعذّر حفظ الإعداد."
+  "audio_preset_failed": "تعذّر حفظ الإعداد.",
+  "audio_play_from_here": "تشغيل من هنا",
+  "audio_repeat_verse": "كرر هذه الآية",
+  "audio_play_surah": "تشغيل السورة"
 }

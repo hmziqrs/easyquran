@@ -18,7 +18,8 @@
   const copy = getAudioCopy();
   const WINDOW = 30;
 
-  let expanded = $state(false);
+  // Panel state lives in the engine so reader actions can open it.
+  const expanded = $derived(audio.panelOpen);
   let notice = $state<string | null>(null);
   let busy = $state(false);
 
@@ -38,9 +39,9 @@
     if (!entry) return null;
     return surahAyahPathFor(routeContextFromParams(page.params), entry, item.ayah);
   });
-  const ayahCount = $derived(
-    item ? (peekQuranData()?.surahByNum(item.surah)?.ayahCount ?? 0) : 0,
-  );
+  // The repeat panel follows a range the reader requested, else the playing surah.
+  const panelSurah = $derived(audio.repeatRequest?.surah ?? item?.surah ?? 0);
+  const ayahCount = $derived(peekQuranData()?.surahByNum(panelSurah)?.ayahCount ?? 0);
   const windowItems = $derived.by(() => {
     if (!queue) return [];
     const start = Math.max(0, queue.index - WINDOW);
@@ -156,7 +157,7 @@
       <Button
         variant="ghost"
         size="sm"
-        onclick={() => (expanded = !expanded)}
+        onclick={() => audio.setPanelOpen(!audio.panelOpen)}
         aria-expanded={expanded}
         aria-controls="audio-full-player">{expanded ? copy.collapse : copy.expand}</Button
       >
@@ -237,7 +238,7 @@
         </div>
 
         {#if ayahCount > 0}
-          <RepeatPanel surah={item.surah} {ayahCount} recordingId={recording.id} />
+          <RepeatPanel surah={panelSurah} {ayahCount} recordingId={recording.id} />
         {/if}
       </div>
     {/if}

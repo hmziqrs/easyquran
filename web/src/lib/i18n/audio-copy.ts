@@ -46,6 +46,9 @@ import {
   audio_retrying,
   audio_seek,
   audio_speed,
+  audio_play_from_here,
+  audio_play_surah,
+  audio_repeat_verse,
 } from "#lib/i18n/m/audio.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
 
@@ -97,6 +100,9 @@ export interface AudioCopy {
   readonly presets: string;
   readonly presetFull: string;
   readonly presetFailed: string;
+  readonly playFromHere: string;
+  readonly playSurah: string;
+  readonly repeatVerse: string;
 }
 
 // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.
@@ -150,5 +156,8 @@ export function getAudioCopy(locale: UiLocale = getLocale() as UiLocale): AudioC
     presets: audio_presets(undefined, options),
     presetFull: audio_preset_full(undefined, options),
     presetFailed: audio_preset_failed(undefined, options),
+    playFromHere: audio_play_from_here(undefined, options),
+    playSurah: audio_play_surah(undefined, options),
+    repeatVerse: audio_repeat_verse(undefined, options),
   };
 }

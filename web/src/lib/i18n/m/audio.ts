@@ -2,7 +2,7 @@
 //
 // Recitation player (F19) and repeat engine (F20). Lazy: downloaded only with the dock, which mounts only once a recording is licensed (web/src/lib/audio/catalogue.ts).
 //
-// 45 messages. Import this barrel, never
+// 48 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { audio_attribution } from "#lib/paraglide/messages/audio_attribution.js";
@@ -25,6 +25,8 @@ export { audio_offline_saved } from "#lib/paraglide/messages/audio_offline_saved
 export { audio_open_ayah } from "#lib/paraglide/messages/audio_open_ayah.js";
 export { audio_pause } from "#lib/paraglide/messages/audio_pause.js";
 export { audio_play } from "#lib/paraglide/messages/audio_play.js";
+export { audio_play_from_here } from "#lib/paraglide/messages/audio_play_from_here.js";
+export { audio_play_surah } from "#lib/paraglide/messages/audio_play_surah.js";
 export { audio_preset_delete } from "#lib/paraglide/messages/audio_preset_delete.js";
 export { audio_preset_failed } from "#lib/paraglide/messages/audio_preset_failed.js";
 export { audio_preset_full } from "#lib/paraglide/messages/audio_preset_full.js";
@@ -46,6 +48,7 @@ export { audio_repeat_start } from "#lib/paraglide/messages/audio_repeat_start.j
 export { audio_repeat_stop } from "#lib/paraglide/messages/audio_repeat_stop.js";
 export { audio_repeat_title } from "#lib/paraglide/messages/audio_repeat_title.js";
 export { audio_repeat_to } from "#lib/paraglide/messages/audio_repeat_to.js";
+export { audio_repeat_verse } from "#lib/paraglide/messages/audio_repeat_verse.js";
 export { audio_retry } from "#lib/paraglide/messages/audio_retry.js";
 export { audio_retrying } from "#lib/paraglide/messages/audio_retrying.js";
 export { audio_seek } from "#lib/paraglide/messages/audio_seek.js";

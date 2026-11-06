@@ -10,6 +10,8 @@
     type VerseKey,
   } from "#lib/data/quran.js";
   import { reader } from "#lib/stores/reader.svelte.js";
+  import { AUDIO_ENABLED } from "#lib/audio/catalogue.js";
+  import { peekQuranData } from "#lib/data/quran-data-client.js";
   import { pins, PINS_MAX, type PinnedLane } from "#lib/stores/pins.svelte.js";
   import type { StackedTranslation } from "#lib/data/quran-types.js";
   import { Icon, type IconName } from "#lib/components/icon/index.js";
@@ -266,6 +268,16 @@
         ariaLabel: reader_report_verse(undefined, noteMsg),
         icon: "flag",
       })}
+    {/if}
+    {#if AUDIO_ENABLED && shareTarget !== null}
+      <!-- F19/F20: audio actions load only once a recording is licensed (O22). -->
+      {#await import("#lib/components/audio/AudioVerseActions.svelte") then audioActions}
+        <audioActions.default
+          surah={shareTarget.surah}
+          ayah={shareTarget.ayah}
+          ayahCount={peekQuranData()?.surahByNum(shareTarget.surah)?.ayahCount ?? 0}
+        />
+      {/await}
     {/if}
     {@render verseAction({
       onclick: () => reader.toggleNote(verseKeyValue),

@@ -43,6 +43,15 @@
       : copy.repeatProgress(audio.repeatStep.ayah, audio.repeatStep.pass, audio.repeatStep.passes),
   );
 
+  // A reader's "Repeat this verse" fills the range here. Runs on mount too, so a
+  // request made while the panel was closed still applies.
+  $effect(() => {
+    const request = audio.repeatRequest;
+    if (request === null) return;
+    from = request.from;
+    to = request.to;
+  });
+
   function start(): void {
     if (plan === null) {
       message = copy.repeatInvalid;

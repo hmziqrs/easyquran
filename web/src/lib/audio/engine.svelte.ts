@@ -106,6 +106,15 @@ class AudioEngine {
   attempt = $state(0);
   /** True while a queue is being saved for offline listening. */
   caching = $state(false);
+  /** Whether the full player panel is open. Owned here so reader actions can open it. */
+  panelOpen = $state(false);
+  /** A range the reader asked the repeat panel to load. `seq` changes on every request. */
+  repeatRequest = $state.raw<{
+    readonly surah: number;
+    readonly from: number;
+    readonly to: number;
+    readonly seq: number;
+  } | null>(null);
 
   #el: HTMLAudioElement | null = null;
   #settle: ((outcome: Outcome) => void) | null = null;
@@ -206,6 +215,17 @@ class AudioEngine {
     this.rate = rate;
     if (this.#el) this.#el.playbackRate = rate;
     this.#persist();
+  }
+
+  setPanelOpen(open: boolean): void {
+    this.panelOpen = open;
+  }
+
+  /** Opens the full player with the repeat panel set to this range. */
+  requestRepeat(surah: number, from: number, to: number): void {
+    const seq = (this.repeatRequest?.seq ?? 0) + 1;
+    this.repeatRequest = { surah, from, to, seq };
+    this.panelOpen = true;
   }
 
   /** Retries the current ayah after a failure. */

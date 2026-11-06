@@ -549,5 +549,8 @@
   "audio_preset_delete": "Delete",
   "audio_presets": "Saved presets",
   "audio_preset_full": "Preset list is full. Delete one to save another.",
-  "audio_preset_failed": "Could not save the preset."
+  "audio_preset_failed": "Could not save the preset.",
+  "audio_play_from_here": "Play from here",
+  "audio_repeat_verse": "Repeat this verse",
+  "audio_play_surah": "Play surah"
 }
