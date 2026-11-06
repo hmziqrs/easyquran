@@ -47,12 +47,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------- |
 | [A4b](plans/abuse-0-foundations.md#a4b-contact-addresses) | Contact addresses | O3 |
 
-### Abuse phase 2
-
-| Item                                                                                                    | Title                                                             | Blocked by   |
-| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------ |
-| [A34](plans/abuse-2-enforcement.md#a34-policy-text-sentence-ledger-minors-code-side-of-legal-artifacts) | Policy text sentence ledger, minors, code side of legal artifacts | A4, A26, A32 |
-
 ### Product
 
 | Item                                                               | Title                                  | Blocked by |

@@ -25,7 +25,6 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 
 | Case                                           | Required behaviour                                                                                                    | Item       |
 | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------- |
-| Minor flag set                                 | No device row; random stamp tail; existing rows deleted                                                               | D2, A34    |
 
 ### Device identity
 
