@@ -38,7 +38,8 @@ describe("sliceWords word coordinates", () => {
   it("keeps Arabic marks and joiners inside their word", () => {
     const words = sliceWords("بِسْمِ ٱللَّهِ ‌ٱلرَّحِيمِ").filter((slice) => slice.word !== null);
     expect(words).toHaveLength(3);
-    expect(words[2]?.text).toBe("ٱلرَّحِيمِ");
+    // ZWNJ (U+200C) stays in the word: text is verbatim from the source.
+    expect(words[2]?.text).toBe("\u200cٱلرَّحِيمِ");
   });
 
   it("maps a word to a canonical surah:ayah:word key", () => {
