@@ -131,6 +131,11 @@ pub struct V1AdminDeleteUserPayload {
 }
 
 #[derive(Debug, Deserialize, Validate)]
+pub struct V1AdminOpenDataRequestPayload {
+    pub user_id: i32,
+}
+
+#[derive(Debug, Deserialize, Validate)]
 pub struct V1UnlinkIdentityPayload {
     #[validate(length(min = 1, max = 32))]
     pub provider: String,

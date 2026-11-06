@@ -5,6 +5,7 @@ pub mod acl_service;
 pub mod audit;
 pub mod auth;
 pub mod billing;
+pub mod data_request;
 pub mod fresh_auth;
 pub mod image_moderation;
 pub mod image_optimizer;

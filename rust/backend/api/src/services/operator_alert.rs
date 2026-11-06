@@ -271,6 +271,27 @@ pub async fn send_retention_alert(state: &AppState, alerts: &[String]) {
     );
 }
 
+/// Data-request clock (A38): open requests past the one-month deadline. Counts only.
+pub async fn send_overdue_alert(state: &AppState, overdue: i64, oldest_days: i64) -> MailStatus {
+    let cfg = OperatorConfig::from_env();
+    let text = format!(
+        "Data requests past the one-month deadline: {overdue}. Oldest is {oldest_days} days past it. \
+         Answer through the erasure runbook in deploy/legal-debt.md. No subject ids are included."
+    );
+    let mail = send_mail(
+        &state.mailer,
+        &cfg,
+        "EasyQuran: data request overdue",
+        &text,
+    )
+    .await;
+    info!(
+        mail = mail.label(),
+        overdue, "data request overdue alert dispatched"
+    );
+    mail
+}
+
 /// Counts only. No ids, no content.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Digest {

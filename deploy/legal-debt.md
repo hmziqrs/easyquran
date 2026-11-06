@@ -24,3 +24,30 @@ Status as of this commit: no item is closed.
 | 13 | Licensed tafsir sources. | O24 | F22 | Open |
 | 14 | Operator alert mailbox and FCM device: `abuse@` mailbox provisioned and MX verified; operator device registered. | O3, O12 | Before relying on P0 alerts | Open |
 | 15 | External uptime monitor on `/healthz`. | O19 | Before relying on the digest or alerts | Open |
+
+## Erasure and data requests (A38)
+
+Clock: one month from `data_requests.received_at` (`due_at`). The `data_request_clock` job runs every 6 h and mails the operator when any open request is past `due_at`. The mail carries counts and days only, no subject ids. Check `job_runs` for `data_request_clock`.
+
+Admin procedure (routes under `/user/v1/admin/`, admin role, all `POST`):
+
+1. Confirm the requester controls the account. The code has no in-app identity check; do it out of band.
+2. `data_request/open` with `{"user_id": N}`. Writes `data_request.open` to `audit_logs`. Note `due_at`.
+3. `POST data_request/list` shows the open queue, earliest deadline first.
+4. Before erasing, check the subject for legal holds (`legal_holds`, `legal_hold_subjects`). A live user hold keeps every user-keyed row and the `users` row. The receipt lists what was kept. Tell the subject what was kept and why (owner wording).
+5. `POST data_request/erase/{request_id}` with `{"confirm_email": "..."}`. Returns `receipt_id`, `deleted`, `retained_tables`, `user_row_erased`.
+6. Check the `erasure_receipts` row and the closed `data_requests` row.
+
+What the erase does (code: `services/data_request.rs`, `services/retention.rs`):
+
+- Deletes the subject's rows in every user-keyed table not in the evidence list (`ERASE_EVIDENCE`, `ERASE_EXTRA_TABLES`), except rows under a live hold.
+- Scrubs the `users` row when no live user hold applies: name, mailbox (set to `erased-<id>@erased.invalid`), password, 2FA, OAuth link, mailbox hash. Rotates the session secret. The id stays.
+- Writes the receipt (A33) and closes the request, in one transaction.
+
+What it does not do. Do not publish a claim about these:
+
+- Keeps evidence: `audit_logs`, `user_bans`, `enforcement_notices`, `media_deletions`, `reports`, `case_evidence`.
+- Does not delete authored posts or uploaded media or avatar files.
+- Does not physically remove data. Rows leave the live database. Backups keep them until the 30-day cap (A33). The public erasure wording stays unpublished until row 4 closes (O15).
+
+Self-service deletion (F7) reuses the same path: `data_request::open` with origin `self`, then `data_request::erase` with the subject as actor. No self-service route exists yet.

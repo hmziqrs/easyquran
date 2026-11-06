@@ -54,6 +54,8 @@ pub enum AuditAction {
     RetentionSweep,
     ErasureRecord,
     ErasureReplay,
+    DataRequestOpen,
+    DataRequestClose,
 }
 
 impl AuditAction {
@@ -93,6 +95,8 @@ impl AuditAction {
         Self::RetentionSweep,
         Self::ErasureRecord,
         Self::ErasureReplay,
+        Self::DataRequestOpen,
+        Self::DataRequestClose,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -132,6 +136,8 @@ impl AuditAction {
             Self::RetentionSweep => "retention.sweep",
             Self::ErasureRecord => "erasure.record",
             Self::ErasureReplay => "erasure.replay",
+            Self::DataRequestOpen => "data_request.open",
+            Self::DataRequestClose => "data_request.close",
         }
     }
 
@@ -165,6 +171,7 @@ impl AuditAction {
             }
             Self::RetentionSweep => "retention",
             Self::ErasureRecord | Self::ErasureReplay => "erasure",
+            Self::DataRequestOpen | Self::DataRequestClose => "data_request",
         }
     }
 }

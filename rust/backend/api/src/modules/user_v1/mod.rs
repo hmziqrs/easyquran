@@ -29,6 +29,18 @@ pub fn routes() -> Router<AppState> {
         .route("/update/{user_id}", post(controller::admin_update))
         .route("/delete/{user_id}", post(controller::admin_delete))
         .route(
+            "/data_request/open",
+            post(controller::admin_open_data_request),
+        )
+        .route(
+            "/data_request/list",
+            post(controller::admin_list_data_requests),
+        )
+        .route(
+            "/data_request/erase/{request_id}",
+            post(controller::admin_erase_data_request),
+        )
+        .route(
             "/change_password/{user_id}",
             post(controller::admin_change_password),
         )

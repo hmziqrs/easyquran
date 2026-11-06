@@ -38,6 +38,7 @@ mod m000120_media_deletions;
 mod m000140_media_upload_indexes;
 mod m000150_retention_sweep;
 mod m000160_erasure_receipts;
+mod m000170_data_requests;
 
 pub struct Migrator;
 
@@ -152,6 +153,8 @@ impl MigratorTrait for Migrator {
             Box::new(m000150_retention_sweep::Migration),
             // m000160 adds erasure_receipts (A33): subject erasure receipts, replay list for boot. No FK, 24-month class.
             Box::new(m000160_erasure_receipts::Migration),
+            // m000170 adds data_requests (A38): one-month erasure request clock. No FK, 24-month class.
+            Box::new(m000170_data_requests::Migration),
         ]
     }
 }

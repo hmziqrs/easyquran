@@ -27,6 +27,7 @@ pub fn start_scheduler(state: AppState) {
     ));
     tokio::spawn(crate::services::retention::run_backups(state.clone()));
     tokio::spawn(crate::services::operator_alert::run_digest(state.clone()));
+    tokio::spawn(crate::services::data_request::run_clock(state.clone()));
     match state.fcm.clone() {
         Some(fcm) => {
             tokio::spawn(run_reminders(state, fcm));

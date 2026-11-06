@@ -24,6 +24,7 @@ use crate::{
         abuse_limiter,
         account_methods::{can_unlink, total_sign_in_methods},
         auth::AuthSession,
+        data_request::{self, RequestError},
     },
     AppState,
 };
@@ -499,6 +500,123 @@ async fn user_delete_snapshot(
         "session_count": session_count,
         "report_ids": report_ids,
     }))
+}
+
+/// Maps the data-request service errors to the admin API's error codes.
+fn data_request_error(err: RequestError) -> ErrorResponse {
+    match err {
+        RequestError::Db(e) => e.into(),
+        RequestError::AlreadyOpen => ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("This user already has an open data request"),
+        RequestError::NotFound => ErrorResponse::new(ErrorCode::RecordNotFound)
+            .with_message("Data request does not exist"),
+        RequestError::Closed => ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("Data request is already answered"),
+    }
+}
+
+/// Opens an erasure request for a user and starts its one-month clock (A38).
+#[debug_handler]
+#[instrument(skip(auth, state, payload))]
+pub async fn admin_open_data_request(
+    auth: AuthSession,
+    state: State<AppState>,
+    payload: ValidatedJson<V1AdminOpenDataRequestPayload>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let caller = auth.user.ok_or_else(|| {
+        ErrorResponse::new(ErrorCode::Unauthorized).with_message("Not authenticated")
+    })?;
+    let Some(target) = User::get_by_id(&state.sea_db, payload.0.user_id).await? else {
+        return Err(
+            ErrorResponse::new(ErrorCode::RecordNotFound).with_message("User does not exist")
+        );
+    };
+    let now = crate::services::job_log::epoch_now();
+    let id = data_request::open(
+        &state.sea_db,
+        Some(caller.id),
+        data_request::ORIGIN_ADMIN,
+        target.id,
+        now,
+    )
+    .await
+    .map_err(data_request_error)?;
+    info!(request_id = id, "Admin opened data request");
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({ "request_id": id, "due_at": now + data_request::RESPONSE_SECS })),
+    ))
+}
+
+/// Open data requests, earliest deadline first.
+#[debug_handler]
+#[instrument(skip(auth, state))]
+pub async fn admin_list_data_requests(
+    auth: AuthSession,
+    state: State<AppState>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    if auth.user.is_none() {
+        return Err(ErrorResponse::new(ErrorCode::Unauthorized).with_message("Not authenticated"));
+    }
+    let rows = data_request::open_queue(&state.sea_db).await?;
+    Ok((StatusCode::OK, Json(json!(rows))))
+}
+
+/// Answers an open request by erasing its subject (A38). Same guards as admin delete:
+/// no self-erase, no equal or higher role, typed email confirmation. Returns the receipt.
+#[debug_handler]
+#[instrument(skip(auth, state, payload))]
+pub async fn admin_erase_data_request(
+    auth: AuthSession,
+    state: State<AppState>,
+    Path(request_id): Path<i64>,
+    payload: ValidatedJson<V1AdminDeleteUserPayload>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let caller = auth.user.ok_or_else(|| {
+        ErrorResponse::new(ErrorCode::Unauthorized).with_message("Not authenticated")
+    })?;
+    let Some(req) = data_request::get(&state.sea_db, request_id).await? else {
+        return Err(ErrorResponse::new(ErrorCode::RecordNotFound)
+            .with_message("Data request does not exist"));
+    };
+    if req.closed_at.is_some() {
+        return Err(data_request_error(RequestError::Closed));
+    }
+    let Some(user_id) = req.user_id() else {
+        return Err(data_request_error(RequestError::NotFound));
+    };
+    let Some(target) = User::get_by_id(&state.sea_db, user_id).await? else {
+        return Err(
+            ErrorResponse::new(ErrorCode::RecordNotFound).with_message("User does not exist")
+        );
+    };
+    if caller.id == target.id {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("You cannot erase your own account via the admin path"));
+    }
+    if target.role.to_i32() >= caller.role.to_i32() {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
+            .with_message("You cannot erase a user at or above your own role"));
+    }
+    let typed = crate::utils::email::normalize_email(&payload.0.confirm_email);
+    if typed != crate::utils::email::normalize_email(&target.email) {
+        return Err(ErrorResponse::new(ErrorCode::InvalidInput)
+            .with_message("Confirmation does not match the user's email"));
+    }
+    let now = crate::services::job_log::epoch_now();
+    let out = data_request::erase(&state.sea_db, Some(caller.id), request_id, now)
+        .await
+        .map_err(data_request_error)?;
+    info!(request_id, "Admin answered data request");
+    Ok((
+        StatusCode::OK,
+        Json(json!({
+            "receipt_id": out.receipt_id,
+            "deleted": out.deleted,
+            "retained_tables": out.retained_tables,
+            "user_row_erased": out.user_row_erased,
+        })),
+    ))
 }
 
 #[debug_handler]

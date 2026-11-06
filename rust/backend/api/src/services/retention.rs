@@ -186,6 +186,15 @@ pub const TABLES: &[Table] = &[
         hold: None,
         tombstone_domain: None,
     },
+    // Data requests (A38), 24 months. Like the receipts, no subject FK.
+    Table {
+        name: "data_requests",
+        expiry: Expiry::ExpiresAt,
+        extra: None,
+        user_col: None,
+        hold: None,
+        tombstone_domain: None,
+    },
     // Account data, 90 days.
     Table {
         name: "user_sessions",
@@ -683,11 +692,44 @@ pub struct ErasureReport {
     pub retained_tables: usize,
 }
 
-/// User-keyed tables an erasure clears: every table with an owner column, minus evidence.
+const fn account_table(name: &'static str) -> Table {
+    Table {
+        name,
+        expiry: Expiry::ExpiresAt,
+        extra: None,
+        user_col: Some("user_id"),
+        hold: None,
+        tombstone_domain: None,
+    }
+}
+
+/// Account-lifetime rows outside `TABLES` (never swept there): sign-in identities,
+/// credentials, pending mail codes, preferences, reminders, sync counters, device salts
+/// and Quran-state rows. Erasure clears them under the same user hold as every other table.
+const ERASE_EXTRA_TABLES: &[Table] = &[
+    account_table("user_oauth_identities"),
+    account_table("passkey_credentials"),
+    account_table("email_verifications"),
+    account_table("forgot_passwords"),
+    account_table("email_change_pending"),
+    account_table("user_preferences"),
+    account_table("reminder_schedules"),
+    account_table("post_likes"),
+    account_table("reading_progress"),
+    account_table("reading_events"),
+    account_table("reading_daily"),
+    account_table("reading_ayah_totals"),
+    account_table("user_device_salts"),
+    account_table("sync_counters"),
+];
+
+/// User-keyed tables an erasure clears: every table with an owner column, minus evidence,
+/// plus the account-lifetime extras.
 fn erase_tables() -> impl Iterator<Item = &'static Table> {
     TABLES
         .iter()
         .filter(|t| t.user_col.is_some() && !ERASE_EVIDENCE.contains(&t.name))
+        .chain(ERASE_EXTRA_TABLES.iter())
 }
 
 async fn scalar<C: ConnectionTrait>(conn: &C, stmt: Statement) -> Result<i64, DbErr> {
@@ -753,7 +795,7 @@ async fn count_subject_rows<C: ConnectionTrait>(
 
 /// Latest expiry among the subject's live user holds. `NEVER_EXPIRES` for a hold that
 /// never auto-releases, 0 when none.
-async fn user_hold_expiry<C: ConnectionTrait>(
+pub(crate) async fn user_hold_expiry<C: ConnectionTrait>(
     conn: &C,
     subject: &str,
     now: i64,
@@ -775,24 +817,37 @@ async fn user_hold_expiry<C: ConnectionTrait>(
     .await
 }
 
-/// Erase one account's user-keyed data (A33). In one transaction: delete the subject's
-/// rows across the erase tables that no live hold covers, write the receipt (subject
-/// ref, scope, what was kept with basis and expiry), and write one audit row. The
-/// `users` row is not touched; the admin erase path (A38) owns it.
+/// Erase one account's user-keyed data (A33). Own transaction. See `erase_subject_in`.
 pub async fn erase_subject(
     db: &DatabaseConnection,
     actor: Option<i32>,
     user_id: i32,
     now: i64,
 ) -> Result<ErasureReport, DbErr> {
-    let subject = user_id.to_string();
     let txn = db.begin().await?;
-    let hold_expiry = user_hold_expiry(&txn, &subject, now).await?;
+    let report = erase_subject_in(&txn, actor, user_id, now).await?;
+    txn.commit().await?;
+    Ok(report)
+}
+
+/// Erase one account's user-keyed data inside the caller's transaction (A33, A38). Deletes
+/// the subject's rows across the erase tables that no live hold covers, writes the receipt
+/// (subject ref, scope, what was kept with basis and expiry), and writes one audit row.
+/// The `users` row is never touched here: a live user hold lists it as retained, and
+/// the data-request path (`services::data_request`) scrubs it when no hold applies.
+pub async fn erase_subject_in<C: ConnectionTrait>(
+    conn: &C,
+    actor: Option<i32>,
+    user_id: i32,
+    now: i64,
+) -> Result<ErasureReport, DbErr> {
+    let subject = user_id.to_string();
+    let hold_expiry = user_hold_expiry(conn, &subject, now).await?;
     let mut deleted = 0;
     let mut retained = Vec::new();
     for table in erase_tables() {
-        deleted += delete_subject_rows(&txn, table, &subject, now).await?;
-        let left = count_subject_rows(&txn, table, &subject).await?;
+        deleted += delete_subject_rows(conn, table, &subject, now).await?;
+        let left = count_subject_rows(conn, table, &subject).await?;
         if left > 0 {
             retained.push(json!({
                 "table": table.name,
@@ -802,9 +857,17 @@ pub async fn erase_subject(
             }));
         }
     }
+    if hold_expiry != 0 {
+        retained.push(json!({
+            "table": "users",
+            "rows": 1,
+            "basis": "legal_hold",
+            "expires_at": hold_expiry,
+        }));
+    }
     let retained_tables = retained.len();
     let retained_json = serde_json::Value::Array(retained).to_string();
-    let res = txn
+    let res = conn
         .execute(Statement::from_sql_and_values(
             DatabaseBackend::Sqlite,
             "INSERT INTO erasure_receipts \
@@ -822,7 +885,7 @@ pub async fn erase_subject(
         .await?;
     let receipt_id = res.last_insert_id() as i64;
     audit::record(
-        &txn,
+        conn,
         AuditEvent {
             actor_id: actor,
             action: AuditAction::ErasureRecord,
@@ -831,7 +894,6 @@ pub async fn erase_subject(
         },
     )
     .await?;
-    txn.commit().await?;
     Ok(ErasureReport {
         receipt_id,
         deleted,
