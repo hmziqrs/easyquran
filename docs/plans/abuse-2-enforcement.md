@@ -2,16 +2,6 @@
 
 [Back to index](../README.md)
 
-#### A38. Erasure and data-request procedure
-
-Build: admin erase path writing an erasure receipt (A33), one-month response clock with queue-aging alert, runbook section in `deploy/legal-debt.md`. Self-service deletion is F7 and writes the same receipt.
-
-Files: `rust/backend/api/src/modules/user_v1/`, `rust/backend/api/src/services/retention.rs`, `deploy/legal-debt.md`.
-
-Done when: an admin erase leaves evidence under hold intact, deletes the rest, and writes a receipt (test); overdue requests alert.
-
-Blocked by: A26, A33
-
 #### A34. Policy text sentence ledger, minors, code side of legal artifacts
 
 Build:
