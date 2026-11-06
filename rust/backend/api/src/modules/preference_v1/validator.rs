@@ -5,13 +5,14 @@ use validator::Validate;
 pub const VALUE_MAX_BYTES: usize = 16 * 1024;
 const KEY_MAX: usize = 64;
 
-/// Synced keys: `settings.*`, the home layout, the reading bookmark. Anything else
-/// is refused, so this route can never become general storage.
+/// Synced keys: `settings.*`, the home layout, the reading bookmark, reading goals
+/// (`goals.reading`, one whole document). Anything else is refused, so this route
+/// can never become general storage.
 pub fn valid_key(key: &str) -> bool {
     if key.is_empty() || key.len() > KEY_MAX {
         return false;
     }
-    if key == "home.layout" || key == "reading.bookmark" {
+    if key == "home.layout" || key == "reading.bookmark" || key == "goals.reading" {
         return true;
     }
     let Some(rest) = key.strip_prefix("settings.") else {

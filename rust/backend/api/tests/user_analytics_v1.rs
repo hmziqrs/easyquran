@@ -105,6 +105,57 @@ async fn accounts_are_isolated() {
     assert_eq!(b["topAyahs"][0]["surah"], 1);
 }
 
+async fn days(h: &Harness, cookie: &str, query: &str) -> (StatusCode, Value) {
+    send(&h.app, "GET", &format!("/days?{query}"), Some(cookie), None).await
+}
+
+#[tokio::test]
+async fn days_returns_each_local_day_in_range_for_one_account() {
+    let h = setup().await;
+    let mut later = read(2, 2, 255, 1_000);
+    later["localDay"] = json!("2026-10-15");
+    let mut outside = read(3, 1, 1, 500);
+    outside["localDay"] = json!("2026-11-01");
+    post(
+        &h,
+        &h.cookie_a,
+        h.uid_a,
+        vec![read(1, 2, 255, 4_000), later, outside],
+    )
+    .await;
+    post(&h, &h.cookie_b, h.uid_b, vec![read(1, 1, 1, 9_000)]).await;
+
+    let (status, body) = days(&h, &h.cookie_a, "from=2026-10-14&to=2026-10-15").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        body["days"],
+        json!([
+            { "localDay": "2026-10-14", "ayahsRead": 1, "ms": 4_000 },
+            { "localDay": "2026-10-15", "ayahsRead": 1, "ms": 1_000 },
+        ])
+    );
+    // B sees only B's read on that day.
+    let (_, other) = days(&h, &h.cookie_b, "from=2026-10-14&to=2026-10-14").await;
+    assert_eq!(
+        other["days"],
+        json!([{ "localDay": "2026-10-14", "ayahsRead": 1, "ms": 9_000 }])
+    );
+}
+
+#[tokio::test]
+async fn days_refuses_reversed_bad_and_over_wide_ranges() {
+    let h = setup().await;
+    let (status, _) = days(&h, &h.cookie_a, "from=2026-10-15&to=2026-10-14").await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, _) = days(&h, &h.cookie_a, "from=2026-13-01&to=2026-10-14").await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, _) = days(&h, &h.cookie_a, "from=2025-01-01&to=2026-10-14").await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, body) = days(&h, &h.cookie_a, "from=2025-10-01&to=2026-10-14").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["days"], json!([]));
+}
+
 #[tokio::test]
 async fn validation_rejects_the_whole_batch() {
     let h = setup().await;

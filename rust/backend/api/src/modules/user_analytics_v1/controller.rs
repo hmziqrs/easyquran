@@ -303,6 +303,67 @@ pub async fn events(
     Ok((StatusCode::OK, Json(json!({ "accepted": accepted }))))
 }
 
+/// Widest `GET /days` range: a year plus slack, so a yearly goal and its streak
+/// calendar fit in one request.
+const DAYS_QUERY_MAX_SPAN: i64 = 400;
+
+/// Per-day totals for one inclusive local-day range, from the rollup. Days with
+/// no reads are absent; the client treats absence as zero.
+pub async fn days_for_user(
+    db: &DatabaseConnection,
+    user_id: i32,
+    from: &str,
+    to: &str,
+) -> Result<Value, ErrorResponse> {
+    let rows = db
+        .query_all(Statement::from_sql_and_values(
+            DatabaseBackend::Sqlite,
+            "SELECT local_day, CAST(SUM(ayahs_read) AS INTEGER) AS ayahs_read, \
+                    CAST(SUM(ms) AS INTEGER) AS ms \
+             FROM reading_daily WHERE user_id = ? AND local_day >= ? AND local_day <= ? \
+             GROUP BY local_day ORDER BY local_day ASC",
+            [user_id.into(), from.into(), to.into()],
+        ))
+        .await
+        .map_err_to_response()?;
+    Ok(json!({
+        "days": rows.iter().map(|r| json!({
+            "localDay": str_col(r, "local_day"),
+            "ayahsRead": i64_col(r, "ayahs_read"),
+            "ms": i64_col(r, "ms"),
+        })).collect::<Vec<_>>(),
+    }))
+}
+
+/// `from <= to` and at most `DAYS_QUERY_MAX_SPAN` days apart. Both already passed
+/// the `YYYY-MM-DD` check, so the parse cannot fail here.
+fn ensure_day_span(from: &str, to: &str) -> Result<(), ErrorResponse> {
+    let parse = |day: &str| chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d").ok();
+    let (Some(start), Some(end)) = (parse(from), parse(to)) else {
+        return Err(ErrorResponse::new(ErrorCode::InvalidInput)
+            .with_message("from and to must be valid YYYY-MM-DD days"));
+    };
+    let span = (end - start).num_days();
+    if !(0..=DAYS_QUERY_MAX_SPAN).contains(&span) {
+        return Err(ErrorResponse::new(ErrorCode::InvalidInput)
+            .with_message("from must not be after to, and the range is at most 400 days"));
+    }
+    Ok(())
+}
+
+#[debug_handler]
+#[instrument(skip(state, auth, query), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
+pub async fn days(
+    state: State<AppState>,
+    auth: AuthSession,
+    query: crate::extractors::ValidatedQuery<super::validator::V1DaysQuery>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let user = auth.user_required()?;
+    ensure_day_span(&query.0.from, &query.0.to)?;
+    let body = days_for_user(&state.sea_db, user.id, &query.0.from, &query.0.to).await?;
+    Ok((StatusCode::OK, Json(body)))
+}
+
 #[debug_handler]
 #[instrument(skip(state, auth), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
 pub async fn summary(

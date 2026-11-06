@@ -2,6 +2,7 @@ import { browser } from "$app/env";
 
 import { authClient } from "#lib/auth/auth-client.js";
 import { authState } from "#lib/auth/auth-state.svelte.js";
+import type { ReadingDay } from "#lib/goals/goal-progress.js";
 import { todayLocal } from "#lib/quran/engagement-state.js";
 import {
   asArray,
@@ -331,6 +332,55 @@ async function fetchSummary(): Promise<ReadingSummary | null> {
   }
 }
 
+/** Per-day totals for an inclusive local-day range, oldest first. Days with no reads are absent. */
+export function daysFromRollup(rollup: LocalRollup, from: string, to: string): ReadingDay[] {
+  const out: ReadingDay[] = [];
+  for (const [localDay, verses] of Object.entries(rollup.days)) {
+    if (localDay < from || localDay > to) continue;
+    let ayahsRead = 0;
+    let ms = 0;
+    for (const [reads, verseMs] of Object.values(verses)) {
+      ayahsRead += reads;
+      ms += verseMs;
+    }
+    out.push({ localDay, ayahsRead, ms });
+  }
+  return out.sort((a, b) => a.localDay.localeCompare(b.localDay));
+}
+
+// eslint-disable-next-line anti-slop/no-unknown-parameters -- raw is the unparsed GET /user/analytics/v1/days body; this decoder is its boundary parser.
+export function decodeDays(raw: unknown): ReadingDay[] {
+  return asArray(asObject(raw)?.days, (row) => {
+    const d = asObject(row);
+    const localDay = asString(d?.localDay);
+    if (localDay === undefined) return undefined;
+    return {
+      localDay,
+      ayahsRead: asNumber(d?.ayahsRead, 0, Number.MAX_SAFE_INTEGER) ?? 0,
+      ms: asNumber(d?.ms, 0, Number.MAX_SAFE_INTEGER) ?? 0,
+    };
+  });
+}
+
+/**
+ * Days for goals and the streak calendar. Signed in: the server rollup, so reads
+ * from every device count. Signed out: this device's rollup, which keeps 60 days.
+ */
+async function fetchDays(from: string, to: string): Promise<ReadingDay[] | null> {
+  if (!browser) return null;
+  const owner = currentOwner();
+  if (owner === LOCAL_OWNER)
+    return daysFromRollup(decodeLocalRollup(readJSON(ROLLUP_KEY)), from, to);
+  await flushNow();
+  try {
+    const res = await authClient.get(`/user/analytics/v1/days?from=${from}&to=${to}`);
+    return res.ok && res.data ? decodeDays(res.data) : null;
+  } catch {
+    // Null means "unknown", not "no reads": the UI must not show a zero streak for a failed load.
+    return null;
+  }
+}
+
 if (browser) onPageHide(() => void flushNow());
 
-export const readingAnalytics = { emit, flushNow, fetchSummary };
+export const readingAnalytics = { emit, flushNow, fetchSummary, fetchDays };

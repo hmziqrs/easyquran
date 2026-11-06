@@ -13,5 +13,6 @@ pub fn routes() -> Router<AppState> {
     Router::<AppState>::new()
         .route("/events", post(controller::events))
         .route("/summary", get(controller::summary))
+        .route("/days", get(controller::days))
         .route_layer(middleware::from_fn(auth_guard::verified))
 }

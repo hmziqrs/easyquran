@@ -31,6 +31,7 @@ A register is `{ "stamp": string | null, "value": any }`. Each row carries one p
 | Same scope on two devices offline | None | Keep both threads. Continue shows the newest per scope; the other stays reachable in History |
 | Settings | One per setting key | Highest stamp wins, so two settings changed on two devices both survive |
 | Home layout | Whole document | Highest stamp wins |
+| Reading goals | Whole document under `goals.reading` | Highest stamp wins, same as the home layout. Progress is never stored |
 | Reading bookmark | Whole value: `surah`, `ayah`, `sourceId`, `setAt`. Null when cleared | Highest stamp wins. Only an explicit set, replace, clear or undo writes it. Automatic resume never does |
 | Reading events | Insert-once by id | Idempotent |
 
@@ -84,7 +85,18 @@ Each result is `{id, status, stamps?}`:
 | `rejected` | Keep the row, stop resending until it is edited, surface the count |
 | `capped` | Keep it dirty, surface it, retry when room appears |
 
-`POST /preference/v1/sync` carries settings, the home layout and the reading bookmark. Rows are `{key, value, stamp}`, where `key` is `settings.*`, `home.layout` or `reading.bookmark`, and any other key is `rejected`. A row is one register. There are no tombstones: clearing writes a null value with a newer stamp. The response has `preferences` in place of thread or bookmark rows. Consent flags and notes never sync.
+`POST /preference/v1/sync` carries settings, the home layout, the reading bookmark and reading goals. Rows are `{key, value, stamp}`, where `key` is `settings.*`, `home.layout`, `reading.bookmark` or `goals.reading`, and any other key is `rejected`.
+
+### Reading goals
+
+`goals.reading` holds `{ "goals": [...] }`, at most 10 goals. A goal is `{id, kind, dailyMinutes, startDay, endDay, pausedFrom, pausedDays}`. The clients enforce the limits: the server checks only the key and the value size, not the goal count or shape.
+
+- `kind` is `daily_minutes` (`dailyMinutes` 1 to 600 per day) or `finish_quran` (`dailyMinutes` null). Days are `YYYY-MM-DD` in the device's zone. A window is at most 400 days.
+- Target: `daily_minutes` is `dailyMinutes` times the days from `startDay` to `endDay`, both inclusive. `finish_quran` is 6,236 verse reads.
+- Credit for a day is `max(ms / 60000, ayahsRead)`, so a verse read always counts at least one minute. Fast readers are never penalised.
+- Progress sums the credited minutes (or verse reads) of days from `startDay` through the window end. The window end is `endDay` plus `pausedDays`, plus the days a live pause has run. It comes from server day totals, so reads on every device count.
+- Pause sets `pausedFrom` to today. Paused days never use up the window: the end moves on by each paused day. Resume adds the paused days to `pausedDays` and clears `pausedFrom`, so the end is the same before and after. The target does not change.
+- Streaks come from reads alone, not from goals: consecutive days with one or more verse reads, counting back from today, or from yesterday while today has none. A row is one register. There are no tombstones: clearing writes a null value with a newer stamp. The response has `preferences` in place of thread or bookmark rows. Consent flags and notes never sync.
 
 ## Pull
 

@@ -26,6 +26,7 @@
   import ReadingBookmarkCard from "./_components/ReadingBookmarkCard.svelte";
   import ThreadHistory from "./_components/ThreadHistory.svelte";
   import ReadingInsights from "./_components/ReadingInsights.svelte";
+  import ReadingGoals from "./_components/ReadingGoals.svelte";
   import NotesLibrary from "./_components/NotesLibrary.svelte";
   import { Tabs, TabsList, TabsTrigger } from "#lib/components/ui/tabs/index.js";
   import { homeCards, type HomeCard } from "#lib/home/cards.svelte.js";
@@ -534,6 +535,7 @@
         {@render editControls(widget.id)}
       </div>
       <ReadingInsights {quranData} {locale} />
+      <ReadingGoals {locale} />
     </section>
   {:else if widget.visible && widget.id === "daily-ayah"}
     <section aria-labelledby="yours-daily-ayah" class="mt-6">

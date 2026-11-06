@@ -1,3 +1,4 @@
+import { goals, GOALS_KEY } from "#lib/goals/store.svelte.js";
 import { homeLayout } from "#lib/home/layout.svelte.js";
 import { applySyncedSettings, toSettingsDoc } from "#lib/settings/settings-document.js";
 import type { JsonValue } from "#lib/storage/decoders.js";
@@ -20,8 +21,12 @@ export const settingsSource: PreferenceSource = {
   read() {
     const doc = toSettingsDoc();
     const entries = [
-      ...Object.entries(doc.appearance).map(([k, v]) => [`${SETTINGS_PREFIX}appearance.${k}`, plain(v)] as const),
-      ...Object.entries(doc.reading).map(([k, v]) => [`${SETTINGS_PREFIX}reading.${k}`, plain(v)] as const),
+      ...Object.entries(doc.appearance).map(
+        ([k, v]) => [`${SETTINGS_PREFIX}appearance.${k}`, plain(v)] as const,
+      ),
+      ...Object.entries(doc.reading).map(
+        ([k, v]) => [`${SETTINGS_PREFIX}reading.${k}`, plain(v)] as const,
+      ),
     ];
     return new Map(entries);
   },
@@ -49,15 +54,28 @@ export const layoutSource: PreferenceSource = {
   },
 };
 
+/** Reading goals: one whole document under `goals.reading`, the same rule as the layout. */
+export const goalsSource: PreferenceSource = {
+  read() {
+    return new Map([[GOALS_KEY, plain({ goals: goals.entries })]]);
+  },
+  apply(values) {
+    const value = values.get(GOALS_KEY);
+    if (value !== undefined) goals.replace(value);
+  },
+};
+
 /** Boot once: wire the sources and re-capture whenever their values change. */
 export function startPreferenceSync(): () => void {
   preferences.addSource(settingsSource);
   preferences.addSource(layoutSource);
+  preferences.addSource(goalsSource);
   preferences.hydrate();
   return $effect.root(() => {
     $effect(() => {
       settingsSource.read();
       layoutSource.read();
+      goalsSource.read();
       preferences.noteChanged();
     });
   });

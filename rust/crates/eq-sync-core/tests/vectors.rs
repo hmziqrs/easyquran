@@ -31,7 +31,8 @@ fn shared_vectors_pass() {
             "bookmark" => assert_same(name, &merge_bookmark(a, b), &v["expected"]),
             "folder" => assert_same(name, &merge_folder(a, b), &v["expected"]),
             "settings" => assert_same(name, &merge_settings(a, b), &v["expected"]),
-            "layout" => assert_same(name, &merge_layout(a, b), &v["expected"]),
+            // Reading goals are one whole document: the same rule as the home layout.
+            "layout" | "goals" => assert_same(name, &merge_layout(a, b), &v["expected"]),
             "event" => assert_same(name, &merge_event(a, b), &v["expected"]),
             "threadSet" => assert_same(
                 name,

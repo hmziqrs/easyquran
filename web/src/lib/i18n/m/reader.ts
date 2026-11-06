@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 491 messages. Import this barrel, never
+// 527 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "#lib/paraglide/messages/reader_account.js";
@@ -198,6 +198,42 @@ export { reader_downloading_offline_pack } from "#lib/paraglide/messages/reader_
 export { reader_downloading_quran } from "#lib/paraglide/messages/reader_downloading_quran.js";
 export { reader_enable } from "#lib/paraglide/messages/reader_enable.js";
 export { reader_full_surah } from "#lib/paraglide/messages/reader_full_surah.js";
+export { reader_goals_calendar } from "#lib/paraglide/messages/reader_goals_calendar.js";
+export { reader_goals_create } from "#lib/paraglide/messages/reader_goals_create.js";
+export { reader_goals_custom_heading } from "#lib/paraglide/messages/reader_goals_custom_heading.js";
+export { reader_goals_day_none } from "#lib/paraglide/messages/reader_goals_day_none.js";
+export { reader_goals_day_read } from "#lib/paraglide/messages/reader_goals_day_read.js";
+export { reader_goals_end_label } from "#lib/paraglide/messages/reader_goals_end_label.js";
+export { reader_goals_error_dates } from "#lib/paraglide/messages/reader_goals_error_dates.js";
+export { reader_goals_error_limit } from "#lib/paraglide/messages/reader_goals_error_limit.js";
+export { reader_goals_error_minutes } from "#lib/paraglide/messages/reader_goals_error_minutes.js";
+export { reader_goals_error_span } from "#lib/paraglide/messages/reader_goals_error_span.js";
+export { reader_goals_kind } from "#lib/paraglide/messages/reader_goals_kind.js";
+export { reader_goals_kind_finish } from "#lib/paraglide/messages/reader_goals_kind_finish.js";
+export { reader_goals_kind_minutes } from "#lib/paraglide/messages/reader_goals_kind_minutes.js";
+export { reader_goals_local_note } from "#lib/paraglide/messages/reader_goals_local_note.js";
+export { reader_goals_minutes_label } from "#lib/paraglide/messages/reader_goals_minutes_label.js";
+export { reader_goals_minutes_note } from "#lib/paraglide/messages/reader_goals_minutes_note.js";
+export { reader_goals_none } from "#lib/paraglide/messages/reader_goals_none.js";
+export { reader_goals_pause } from "#lib/paraglide/messages/reader_goals_pause.js";
+export { reader_goals_per_day } from "#lib/paraglide/messages/reader_goals_per_day.js";
+export { reader_goals_preset_finish_30 } from "#lib/paraglide/messages/reader_goals_preset_finish_30.js";
+export { reader_goals_preset_finish_365 } from "#lib/paraglide/messages/reader_goals_preset_finish_365.js";
+export { reader_goals_preset_minutes } from "#lib/paraglide/messages/reader_goals_preset_minutes.js";
+export { reader_goals_progress_minutes } from "#lib/paraglide/messages/reader_goals_progress_minutes.js";
+export { reader_goals_progress_verses } from "#lib/paraglide/messages/reader_goals_progress_verses.js";
+export { reader_goals_remove } from "#lib/paraglide/messages/reader_goals_remove.js";
+export { reader_goals_resume } from "#lib/paraglide/messages/reader_goals_resume.js";
+export { reader_goals_start_heading } from "#lib/paraglide/messages/reader_goals_start_heading.js";
+export { reader_goals_start_label } from "#lib/paraglide/messages/reader_goals_start_label.js";
+export { reader_goals_state_active } from "#lib/paraglide/messages/reader_goals_state_active.js";
+export { reader_goals_state_completed } from "#lib/paraglide/messages/reader_goals_state_completed.js";
+export { reader_goals_state_ended } from "#lib/paraglide/messages/reader_goals_state_ended.js";
+export { reader_goals_state_paused } from "#lib/paraglide/messages/reader_goals_state_paused.js";
+export { reader_goals_streak } from "#lib/paraglide/messages/reader_goals_streak.js";
+export { reader_goals_title } from "#lib/paraglide/messages/reader_goals_title.js";
+export { reader_goals_unavailable } from "#lib/paraglide/messages/reader_goals_unavailable.js";
+export { reader_goals_window } from "#lib/paraglide/messages/reader_goals_window.js";
 export { reader_hizb_item } from "#lib/paraglide/messages/reader_hizb_item.js";
 export { reader_home_done } from "#lib/paraglide/messages/reader_home_done.js";
 export { reader_home_edit } from "#lib/paraglide/messages/reader_home_edit.js";

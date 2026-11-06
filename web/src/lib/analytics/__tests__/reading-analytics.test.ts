@@ -24,7 +24,10 @@ vi.mock("#lib/auth/auth-client.js", async (importOriginal) => {
 
 import { scrubReaderPath } from "#lib/firebase/analytics.js";
 import { todayLocal } from "#lib/quran/engagement-state.js";
+
 import {
+  daysFromRollup,
+  decodeDays,
   decodeLocalRollup,
   decodeSummary,
   readingAnalytics,
@@ -146,5 +149,35 @@ describe("reading insights are always on", () => {
     }
     expect(scrubReaderPath("/yours/cards/abc")).toBe("/yours/cards");
     expect(scrubReaderPath("/ar/yours/cards/abc")).toBe("/yours/cards");
+  });
+});
+
+describe("goal days", () => {
+  it("returns only the requested local-day range, oldest first, with each day's totals", () => {
+    const rollup = decodeLocalRollup({
+      v: 2,
+      days: {
+        "2026-11-04": { "2:255": [2, 60_000], "1:1": [1, 0] },
+        "2026-11-02": { "2:255": [1, 5_000] },
+        "2026-10-30": { "2:255": [9, 9_000] },
+        "2026-11-07": { "2:1": [1, 1_000] },
+      },
+    });
+    expect(daysFromRollup(rollup, "2026-11-01", "2026-11-06")).toEqual([
+      { localDay: "2026-11-02", ayahsRead: 1, ms: 5_000 },
+      { localDay: "2026-11-04", ayahsRead: 3, ms: 60_000 },
+    ]);
+  });
+
+  it("decodes the server days body and drops rows without a day", () => {
+    expect(
+      decodeDays({
+        days: [
+          { localDay: "2026-11-02", ayahsRead: 4, ms: 90_000 },
+          { ayahsRead: 1, ms: 1 },
+        ],
+      }),
+    ).toEqual([{ localDay: "2026-11-02", ayahsRead: 4, ms: 90_000 }]);
+    expect(decodeDays("nope")).toEqual([]);
   });
 });

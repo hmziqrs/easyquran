@@ -42,6 +42,8 @@ const ROW_MERGES = new Map([
   ["folder", mergeFolder],
   ["settings", mergeSettings],
   ["layout", mergeLayout],
+  // Reading goals are one whole document too: same rule as the home layout.
+  ["goals", mergeLayout],
   ["event", mergeEvent],
 ]);
 

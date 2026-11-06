@@ -130,6 +130,30 @@ async fn clearing_a_key_is_a_newer_null() {
 }
 
 #[tokio::test]
+async fn reading_goals_is_one_synced_key_and_nothing_else_under_goals() {
+    let h = harness(preference_v1::routes()).await;
+    let goals = json!({ "goals": [{ "id": "a", "kind": "finish_quran" }] });
+    let res = round(
+        &h,
+        0,
+        vec![
+            pref("goals.reading", goals.clone(), &st(5, "a")),
+            pref("goals.other", json!(1), &st(5, "a")),
+        ],
+    )
+    .await;
+    let statuses: Vec<&str> = res["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["status"].as_str().unwrap())
+        .collect();
+    assert_eq!(statuses, vec!["applied", "rejected"]);
+    let pulled = round(&h, 0, vec![]).await;
+    assert_eq!(value_of(&pulled, "goals.reading"), Some(&goals));
+}
+
+#[tokio::test]
 async fn bad_rows_are_refused_alone() {
     let h = harness(preference_v1::routes()).await;
     let huge = "x".repeat(17 * 1024);

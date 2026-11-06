@@ -79,3 +79,14 @@ pub struct V1EventsPayload {
     #[validate(length(max = 100), nested)]
     pub events: Option<Vec<ReadingEventItem>>,
 }
+
+/// Query for `GET /days`: an inclusive device-local day range. The span cap and
+/// `from <= to` are checked in the controller, next to the query they guard.
+#[derive(Debug, Deserialize, Validate)]
+#[serde(rename_all = "camelCase")]
+pub struct V1DaysQuery {
+    #[validate(custom(function = valid_local_day))]
+    pub from: String,
+    #[validate(custom(function = valid_local_day))]
+    pub to: String,
+}
