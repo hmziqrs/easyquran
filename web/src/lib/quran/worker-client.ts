@@ -1,12 +1,11 @@
 import { QURAN } from "#lib/config/site.js";
-import { isArabicSourceId } from "#lib/data/quran-types.js";
+import { isArabicSourceId, QuranSourceId } from "#lib/data/quran-types.js";
 import type {
   Ayah,
   CanonicalQuranCoordinates,
   DownloadProgress,
   QuranRangeText,
   QuranReaderSource,
-  QuranSourceId,
   QuranSurahText,
   ArtifactSpec,
   TranslationCatalogueEntry,
@@ -487,6 +486,14 @@ function defaultArabicSource(): QuranSourceId {
   return preferredArabicSource;
 }
 
+// The rust API cannot serve `uthmani-annotated` yet (Script::parse does not know it;
+// documentation/quran-system.md, Rollout limits). Its API tier therefore serves the plain
+// Uthmani seat, the same fail-soft fallback the worker and SSR reader seat use. The served
+// source id on the response is the plain one, so nothing is labelled as annotated.
+function apiArabicSource(reader: QuranReaderSource): QuranReaderSource {
+  return reader === QuranSourceId.AnnotatedUthmani ? QuranSourceId.TanzilUthmani : reader;
+}
+
 function scriptEnabled(sourceId: QuranSourceId): boolean {
   return isScriptEnabled(sourceId, QURAN.dataEnvironment);
 }
@@ -636,7 +643,7 @@ export const quranWorker = {
         hasLocal: () => quranWorker.ready,
         workerReq: (id) => ({ id, type: "readSurah", num, source: reader }),
         decode: decodeQuranSurahText,
-        apiFetch: (signal) => quranApi.readSurah(reader, num, signal),
+        apiFetch: (signal) => quranApi.readSurah(apiArabicSource(reader), num, signal),
         errorMessage: `arabic surah unavailable: ${reader}/${num}`,
         onStatus,
         hedgeAfterMs: options?.hedgeAfterMs,
@@ -673,7 +680,8 @@ export const quranWorker = {
         hasLocal: () => quranWorker.ready,
         workerReq: (id) => ({ id, type: "readRange", from, to, source: reader }),
         decode: (raw) => decodeQuranRangeText(raw, validateCoordinate),
-        apiFetch: (signal) => quranApi.readRange(reader, from, to, signal, validateCoordinate),
+        apiFetch: (signal) =>
+          quranApi.readRange(apiArabicSource(reader), from, to, signal, validateCoordinate),
         errorMessage: `arabic range unavailable: ${reader} ${from}-${to}`,
         onStatus,
         hedgeAfterMs: options?.hedgeAfterMs,

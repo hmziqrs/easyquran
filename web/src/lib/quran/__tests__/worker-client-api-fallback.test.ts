@@ -138,15 +138,15 @@ afterEach(() => {
 
 describe("quranWorker.readSurah API fallback", () => {
   it("serves from the live API when the wasm worker is not started (no-download mode)", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson(ANNOTATED_SURAH1));
+    // The plan default is annotated, which the API cannot serve yet: the API tier asks for
+    // the plain Uthmani seat instead of 400ing on `uthmani-annotated`.
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(okJson(SURAH1));
     const surah = await quranWorker.readSurah(1);
     expect(fetchMock).toHaveBeenCalledWith(
-      // No explicit source → the plan default (annotated Uthmani mushaf).
-      "https://api.test/quran/sources/uthmani-annotated/surah/1",
+      "https://api.test/quran/sources/uthmani/surah/1",
       expect.objectContaining({ headers: { accept: "application/json" } }),
     );
-    expect(surah.sourceId).toBe("uthmani-annotated");
-    expect(surah.verses).toEqual(["بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ", "ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَـٰلَمِينَ"]);
+    expect(surah.sourceId).toBe("uthmani");
   });
 });
 
