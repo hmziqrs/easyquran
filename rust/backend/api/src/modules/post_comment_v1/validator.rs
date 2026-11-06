@@ -40,6 +40,14 @@ impl V1UpdatePostCommentPayload {
     }
 }
 
+/// `?confirm_evidence=true` on a comment removal: the caller accepts that the
+/// comment's open flags are copied into a case before the row goes (A25).
+#[derive(Debug, Default, Deserialize)]
+pub struct V1ConfirmEvidenceQuery {
+    #[serde(default)]
+    pub confirm_evidence: bool,
+}
+
 #[derive(Debug, Deserialize, Serialize, Validate, Clone)]
 pub struct V1AdminPostCommentListQuery {
     pub page: Option<u64>,

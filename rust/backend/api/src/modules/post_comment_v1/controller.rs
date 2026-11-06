@@ -1,11 +1,11 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
 };
 use axum_macros::debug_handler;
-use sea_orm::{ConnectionTrait, EntityTrait, TransactionTrait};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, TransactionTrait};
 use serde_json::json;
 use tracing::{error, info, instrument, warn};
 
@@ -17,7 +17,7 @@ use crate::{
         abuse_limiter,
         audit::{self, AuditAction, AuditEvent},
         auth::AuthSession,
-        registration_admission,
+        incident_capture, registration_admission,
     },
     AppState,
 };
@@ -33,9 +33,35 @@ const COMMENT_ABUSE_CONFIG: abuse_limiter::AbuseLimiterConfig = abuse_limiter::A
 };
 
 use super::validator::{
-    V1AdminCommentFlagListQuery, V1AdminPostCommentListQuery, V1CreatePostCommentPayload,
-    V1FlagCommentPayload, V1UpdatePostCommentPayload,
+    V1AdminCommentFlagListQuery, V1AdminPostCommentListQuery, V1ConfirmEvidenceQuery,
+    V1CreatePostCommentPayload, V1FlagCommentPayload, V1UpdatePostCommentPayload,
 };
+
+/// Removal guard (A25). A comment with open flags is evidence: removal is refused
+/// unless the caller passes `confirm_evidence`. When passed, the case is copied in
+/// the same transaction, before the row and its flags cascade away.
+async fn guard_open_flags<C: ConnectionTrait>(
+    conn: &C,
+    comment_id: i32,
+    confirm_evidence: bool,
+) -> Result<(), ErrorResponse> {
+    if comment_flag::Entity::count_for_comment(conn, comment_id).await? == 0 {
+        return Ok(());
+    }
+    if !confirm_evidence {
+        return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed).with_message(
+            "Comment has open flags. Resend with confirm_evidence=true to remove it and keep the flags as case evidence.",
+        ));
+    }
+    incident_capture::capture_comment(
+        conn,
+        &incident_capture::removal_case_ref(comment_id),
+        comment_id,
+        chrono::Utc::now(),
+    )
+    .await?;
+    Ok(())
+}
 
 async fn require_post_visibility<C: ConnectionTrait>(
     conn: &C,
@@ -154,11 +180,23 @@ pub async fn delete(
     State(state): State<AppState>,
     auth: AuthSession,
     Path(comment_id): Path<i32>,
+    Query(evidence): Query<V1ConfirmEvidenceQuery>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user = auth.user.unwrap();
     let deleted = async {
         let txn = state.sea_db.begin().await?;
-        let affected = post_comment::Entity::delete(&txn, comment_id, user.id).await?;
+        // Only the author's own comment reaches the guard, so no one can trigger a capture of another's comment.
+        let owned = post_comment::Entity::find_by_id(comment_id)
+            .filter(post_comment::Column::UserId.eq(user.id))
+            .one(&txn)
+            .await?;
+        let affected = match owned {
+            Some(_) => {
+                guard_open_flags(&txn, comment_id, evidence.confirm_evidence).await?;
+                post_comment::Entity::delete(&txn, comment_id, user.id).await?
+            }
+            None => 0,
+        };
         if affected > 0 {
             audit::record(
                 &txn,
@@ -371,11 +409,21 @@ pub async fn admin_delete(
     State(state): State<AppState>,
     auth: AuthSession,
     Path(comment_id): Path<i32>,
+    Query(evidence): Query<V1ConfirmEvidenceQuery>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user = auth.user.unwrap();
     let result = async {
         let txn = state.sea_db.begin().await?;
-        let affected = post_comment::Entity::admin_delete(&txn, comment_id).await?;
+        let exists = post_comment::Entity::find_by_id(comment_id)
+            .one(&txn)
+            .await?
+            .is_some();
+        let affected = if exists {
+            guard_open_flags(&txn, comment_id, evidence.confirm_evidence).await?;
+            post_comment::Entity::admin_delete(&txn, comment_id).await?
+        } else {
+            0
+        };
         if affected > 0 {
             audit::record(
                 &txn,

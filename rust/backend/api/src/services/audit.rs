@@ -38,6 +38,9 @@ pub enum AuditAction {
     SeedRun,
     DeviceRemove,
     ReportSubmit,
+    IncidentCapture,
+    LegalHoldPlace,
+    LegalHoldRenew,
 }
 
 impl AuditAction {
@@ -61,6 +64,9 @@ impl AuditAction {
         Self::SeedRun,
         Self::DeviceRemove,
         Self::ReportSubmit,
+        Self::IncidentCapture,
+        Self::LegalHoldPlace,
+        Self::LegalHoldRenew,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -84,6 +90,9 @@ impl AuditAction {
             Self::SeedRun => "seed.run",
             Self::DeviceRemove => "device.remove",
             Self::ReportSubmit => "report.submit",
+            Self::IncidentCapture => "incident.capture",
+            Self::LegalHoldPlace => "legal_hold.place",
+            Self::LegalHoldRenew => "legal_hold.renew",
         }
     }
 
@@ -104,6 +113,8 @@ impl AuditAction {
             Self::SeedRun => "seed_run",
             Self::DeviceRemove => "device",
             Self::ReportSubmit => "report",
+            Self::IncidentCapture => "case",
+            Self::LegalHoldPlace | Self::LegalHoldRenew => "legal_hold",
         }
     }
 }

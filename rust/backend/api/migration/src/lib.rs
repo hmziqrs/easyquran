@@ -30,6 +30,7 @@ mod m000034_appeals;
 mod m000035_shared_device_check;
 mod m000050_audit_logs_evidence;
 mod m000060_reports;
+mod m000061_case_evidence;
 
 pub struct Migrator;
 
@@ -126,6 +127,8 @@ impl MigratorTrait for Migrator {
             Box::new(m000035_shared_device_check::Migration),
             // m000060 ships incident intake reports (A24): no FK to users, expiry columns, 12-month class.
             Box::new(m000060_reports::Migration),
+            // m000061 adds case_evidence, legal_holds and legal_hold_subjects (A25). No FK to users.
+            Box::new(m000061_case_evidence::Migration),
         ]
     }
 }

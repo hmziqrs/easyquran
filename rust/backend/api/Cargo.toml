@@ -211,6 +211,10 @@ path = "scripts/seed_now.rs"
 required-features = ["seed-system"]
 
 [[bin]]
+name = "incident_capture"
+path = "scripts/incident_capture.rs"
+
+[[bin]]
 name = "quran_digest_audit"
 path = "scripts/quran_digest_audit.rs"
 required-features = ["seed-system"]

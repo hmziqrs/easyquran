@@ -159,6 +159,15 @@ impl Entity {
         })
     }
 
+    /// Flag rows still on a comment. Any row counts as open evidence: flags-clear
+    /// zeroes the cached count but keeps the rows (A25), so the removal guard holds.
+    pub async fn count_for_comment<C: ConnectionTrait>(conn: &C, comment_id: i32) -> DbResult<u64> {
+        Ok(Entity::find()
+            .filter(Column::CommentId.eq(comment_id))
+            .count(conn)
+            .await?)
+    }
+
     pub async fn sync_flags_count<C: ConnectionTrait>(conn: &C, comment_id: i32) -> DbResult<i64> {
         use super::super::post_comment::Entity as PostCommentEntity;
 

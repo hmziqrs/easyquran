@@ -114,6 +114,15 @@ abuse-report db="rust/data/easyquran.db":
     sqlite3 -readonly "{{db}}" ".backup '$tmp/copy.db'"
     cd rust && cargo run -q -p ruxlog --bin abuse_report -- "$tmp/copy.db"
 
+# Incident capture (A25): `just incident capture <report-id>` copies the comment behind an
+# intake report (comment reports only) into case_evidence, plus one audit row. Writes the
+# live database, so run it on the api host with the same DATABASE_URL the api uses.
+incident action ref:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{action}}" != "capture" ]; then echo "usage: just incident capture <report-id>" >&2; exit 2; fi
+    cd rust && cargo run -q -p ruxlog --bin incident_capture -- "{{ref}}"
+
 # --- Images -------------------------------------------------------------------------------
 # Both images are packaging-only: everything is compiled outside Docker, and the
 # Dockerfiles just COPY the artifacts in. Nothing installs a toolchain or hits the network

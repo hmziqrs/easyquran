@@ -12,6 +12,8 @@ pub mod newsletter_subscriber;
 
 pub mod app_constant;
 pub mod audit_log;
+pub mod case_evidence;
+pub mod legal_hold;
 pub mod media;
 pub mod media_usage;
 pub mod media_variant;
