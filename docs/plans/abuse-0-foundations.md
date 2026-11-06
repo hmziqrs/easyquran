@@ -9,24 +9,6 @@ Needs MX proof first, so it waits for O3. Replace `corrections@easyquran.app` (`
 Done when: no `easyquran.app` address remains in messages; `/contact` no longer shows the owner's personal address.
 Blocked by: O3
 
-#### A6. Subject-keyed limiters for authenticated write routes
-
-Build:
-
-1. Amplification test for the folder cap: write a test that creates 200 folders and asserts the 201st new-id create is refused and reported in `skipped`. Same for a rename at the cap (renames must still work). Location: near `bookmark_folder/actions.rs` tests or in `tests/bookmarks_v1.rs`.
-2. Key classes (new) in `rust/backend/api/src/middlewares/rate_limit.rs`:
-   - `session:sync:user:{id}` 60 per 60 s (reading-session sync).
-   - `analytics:events:user:{id}` 30 per 60 s (user analytics events).
-   - `bookmark:sync:user:{id}` 60 per 60 s (bookmark sync).
-     No long tier. A 429 carries `Retry-After`, capped at 900 s.
-3. Dual bucket: effective limit = min(IP+route bucket, user+route bucket); both must pass. Set the IP bucket well above the user bucket on these routes (at least 10×), because a mobile carrier can put many users on one IP and IP penalties are closed. Unauthenticated requests keep the IP-only layer. The user id is server-derived from the session. Never client-authored.
-4. `rate_limit_layer` gains a verified-user variant. Current route layers: reading-session, bookmark, user-analytics nests each at 100/60 in `rust/backend/api/src/router.rs` (~lines 178–186).
-5. Key structure: subject bucket keys contain the user id and never the IP.
-
-Files: `rust/backend/api/src/middlewares/rate_limit.rs`, `rust/backend/api/src/router.rs`, new `rust/backend/api/tests/rate_limit_user.rs`, `rust/backend/api/src/db/sea_models/bookmark_folder/actions.rs` (test), `rust/backend/api/tests/bookmarks_v1.rs` (harness reuse).
-
-Done when: `tests/rate_limit_user.rs` proves: a user on two IPs cannot exceed the user bucket; a 429'd user's next request carries `Retry-After`; subject-class bucket keys contain the user id and never an IP. Folder amplification test passes.
-
 #### A7. Daily cross-domain ceiling, sync envelope, snapshot guard, subject_score seam
 
 Build:
