@@ -2,12 +2,22 @@
 //
 // Account page (/account): chrome, profile, sessions, security. Lazy: ships only inside the account route chunk.
 //
-// 45 messages. Import this barrel, never
+// 55 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { account_anonymous_body } from "#lib/paraglide/messages/account_anonymous_body.js";
 export { account_checking_session } from "#lib/paraglide/messages/account_checking_session.js";
 export { account_create_account } from "#lib/paraglide/messages/account_create_account.js";
+export { account_delete_deleting } from "#lib/paraglide/messages/account_delete_deleting.js";
+export { account_delete_description } from "#lib/paraglide/messages/account_delete_description.js";
+export { account_delete_done } from "#lib/paraglide/messages/account_delete_done.js";
+export { account_delete_export } from "#lib/paraglide/messages/account_delete_export.js";
+export { account_delete_export_hint } from "#lib/paraglide/messages/account_delete_export_hint.js";
+export { account_delete_field_email } from "#lib/paraglide/messages/account_delete_field_email.js";
+export { account_delete_fresh_auth } from "#lib/paraglide/messages/account_delete_fresh_auth.js";
+export { account_delete_heading } from "#lib/paraglide/messages/account_delete_heading.js";
+export { account_delete_mismatch } from "#lib/paraglide/messages/account_delete_mismatch.js";
+export { account_delete_submit } from "#lib/paraglide/messages/account_delete_submit.js";
 export { account_device_name_invalid } from "#lib/paraglide/messages/account_device_name_invalid.js";
 export { account_device_rename } from "#lib/paraglide/messages/account_device_rename.js";
 export { account_device_rename_cancel } from "#lib/paraglide/messages/account_device_rename_cancel.js";

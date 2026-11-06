@@ -45,6 +45,16 @@ import {
   account_passkey_adding,
   account_passkey_add,
   account_generic_error,
+  account_delete_heading,
+  account_delete_description,
+  account_delete_export_hint,
+  account_delete_export,
+  account_delete_field_email,
+  account_delete_mismatch,
+  account_delete_fresh_auth,
+  account_delete_submit,
+  account_delete_deleting,
+  account_delete_done,
 } from "#lib/i18n/m/account.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
 
@@ -96,6 +106,16 @@ export interface AccountCopy {
   passkeyAdding: string;
   passkeyAdd: string;
   genericError: string;
+  deleteHeading: string;
+  deleteDescription: string;
+  deleteExportHint: string;
+  deleteExport: string;
+  deleteFieldEmail: string;
+  deleteMismatch: string;
+  deleteFreshAuth: string;
+  deleteSubmit: string;
+  deleteDeleting: string;
+  deleteDone: string;
 }
 
 // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.
@@ -148,5 +168,15 @@ export function getAccountCopy(locale: UiLocale = getLocale() as UiLocale): Acco
     passkeyAdding: account_passkey_adding(undefined, { locale }),
     passkeyAdd: account_passkey_add(undefined, { locale }),
     genericError: account_generic_error(undefined, { locale }),
+    deleteHeading: account_delete_heading(undefined, { locale }),
+    deleteDescription: account_delete_description(undefined, { locale }),
+    deleteExportHint: account_delete_export_hint(undefined, { locale }),
+    deleteExport: account_delete_export(undefined, { locale }),
+    deleteFieldEmail: account_delete_field_email(undefined, { locale }),
+    deleteMismatch: account_delete_mismatch(undefined, { locale }),
+    deleteFreshAuth: account_delete_fresh_auth(undefined, { locale }),
+    deleteSubmit: account_delete_submit(undefined, { locale }),
+    deleteDeleting: account_delete_deleting(undefined, { locale }),
+    deleteDone: account_delete_done(undefined, { locale }),
   };
 }

@@ -4,8 +4,7 @@
   import type { SettingsCopy } from "#lib/i18n/settings-copy.js";
   import {
     applyImport,
-    buildExportBundle,
-    collectExportSources,
+    downloadExportFile,
     livePorts,
     parseExportBundle,
     type ParseFailure,
@@ -25,26 +24,6 @@
 
   const quiet =
     "rounded-lg border border-border-strong px-3.5 py-2.5 text-caption text-foreground-secondary transition-colors hover:border-border hover:text-foreground";
-
-  function exportFileName(now: Date): string {
-    const day = now.toISOString().slice(0, 10);
-    return `easyquran-export-${day}.json`;
-  }
-
-  function download(): void {
-    const now = new Date();
-    const bundle = buildExportBundle(collectExportSources(), now);
-    const blob = new Blob([JSON.stringify(bundle)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = exportFileName(now);
-    document.body.append(link);
-    link.click();
-    link.remove();
-    // Revoke after the browser has started the download; revoking inside the click can cancel it.
-    setTimeout(() => URL.revokeObjectURL(url), 1_000);
-  }
 
   function failureMessage(reason: ParseFailure): string {
     if (reason === "future-version") return copy.errors.future;
@@ -86,7 +65,7 @@
         <h3 class="text-[14.5px] font-medium text-foreground">{copy.exportLabel}</h3>
         <p class="mt-0.5 text-caption leading-snug text-muted">{copy.exportNote}</p>
       </div>
-      <button type="button" onclick={download} class={cn(quiet, "shrink-0")}>
+      <button type="button" onclick={() => downloadExportFile()} class={cn(quiet, "shrink-0")}>
         {copy.exportLabel}
       </button>
     </div>

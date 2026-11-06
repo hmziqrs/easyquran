@@ -306,3 +306,18 @@ export function collectExportSources(): ExportSources {
     cards: [...homeCards.list],
   };
 }
+
+/** Save this device's export as one dated JSON file. Settings and the account delete flow both use it. */
+export function downloadExportFile(now: Date = new Date()): void {
+  const bundle = buildExportBundle(collectExportSources(), now);
+  const blob = new Blob([JSON.stringify(bundle)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `easyquran-export-${now.toISOString().slice(0, 10)}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  // Revoke after the browser has started the download; revoking inside the click can cancel it.
+  setTimeout(() => URL.revokeObjectURL(url), 1_000);
+}

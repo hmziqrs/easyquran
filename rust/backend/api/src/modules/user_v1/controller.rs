@@ -5,7 +5,7 @@ use axum::{
     Json,
 };
 use axum_macros::debug_handler;
-use sea_orm::{EntityTrait, TransactionError, TransactionTrait};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, TransactionError, TransactionTrait};
 use serde_json::json;
 use std::sync::Arc;
 use tracing::{error, info, instrument, warn};
@@ -16,7 +16,7 @@ use crate::{
     db::sea_models::{
         email_change_pending, email_verification, passkey_credential,
         user::{Entity as User, Model as UserModel, UserRole},
-        user_oauth_identity,
+        user_oauth_identity, user_session,
     },
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
@@ -610,6 +610,58 @@ pub async fn admin_erase_data_request(
     info!(request_id, "Admin answered data request");
     Ok((
         StatusCode::OK,
+        Json(json!({
+            "receipt_id": out.receipt_id,
+            "deleted": out.deleted,
+            "retained_tables": out.retained_tables,
+            "user_row_erased": out.user_row_erased,
+        })),
+    ))
+}
+
+/// Self-service account deletion (F7). Fresh auth first, then the typed email, then every
+/// session of the caller ends, then the A38 self path erases the account in one
+/// transaction. Immediate: no grace period. Authored posts and uploaded media stay.
+#[debug_handler]
+#[instrument(skip(auth, state, payload), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
+pub async fn self_delete_account(
+    mut auth: AuthSession,
+    state: State<AppState>,
+    payload: ValidatedJson<V1DeleteAccountPayload>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let user = auth.user.clone().ok_or_else(|| {
+        ErrorResponse::new(ErrorCode::Unauthorized)
+            .with_message("You must be logged in to access this resource")
+    })?;
+    crate::services::fresh_auth::consume(&auth, &state.sea_db).await?;
+    let typed = crate::utils::email::normalize_email(&payload.0.confirm_email);
+    if typed != crate::utils::email::normalize_email(&user.email) {
+        return Err(ErrorResponse::new(ErrorCode::InvalidInput)
+            .with_message("Confirmation does not match your email"));
+    }
+    // End every session first, so no cookie survives the erase. Sessions are not evidence,
+    // so this runs even when a legal hold keeps the rows.
+    let sessions = user_session::Entity::find()
+        .filter(user_session::Column::UserId.eq(user.id))
+        .all(&state.sea_db)
+        .await?;
+    for session in sessions {
+        crate::modules::auth_v1::controller::terminate_session(&state, &auth, session.id).await?;
+    }
+    let now = crate::services::job_log::epoch_now();
+    let out = data_request::erase_self(&state.sea_db, user.id, now)
+        .await
+        .map_err(data_request_error)?;
+    if let Err(err) = auth.logout().await {
+        warn!(error = ?err, "self delete: logout of current session failed");
+    }
+    if let Err(err) = auth.session().flush().await {
+        warn!(error = ?err, "self delete: failed to flush current session");
+    }
+    info!("Self-service account deletion answered");
+    Ok((
+        StatusCode::OK,
+        crate::middlewares::auth_marker::clear_headers(state.settings.http.cookie_secure),
         Json(json!({
             "receipt_id": out.receipt_id,
             "deleted": out.deleted,

@@ -381,6 +381,17 @@ export class AccountClient {
     return { status, httpStatus: res.status, data, error: res.error };
   }
 
+  /** Self-service erasure (F7). Needs a fresh-auth grant; the server ends the session on success. */
+  async deleteAccount(confirmEmail: string): Promise<AccountResult<boolean>> {
+    const res = await this.auth.unsafeRequest<WireObject>("/user/v1/delete", {
+      method: "POST",
+      body: { confirmEmail },
+    });
+    const status = statusFor(res.status, res.error);
+    const data = res.ok ? true : null;
+    return { status, httpStatus: res.status, data, error: res.error };
+  }
+
   async unlinkIdentity(provider: IdentityProvider): Promise<AccountResult<IdentitySummary>> {
     const res = await this.auth.unsafeRequest<WireObject>("/user/v1/identities/unlink", {
       method: "POST",

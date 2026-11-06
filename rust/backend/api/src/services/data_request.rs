@@ -137,10 +137,47 @@ pub async fn open(
     user_id: i32,
     now: i64,
 ) -> Result<i64, RequestError> {
-    let subject = user_id.to_string();
+    let txn = db.begin().await?;
+    let id = open_in(&txn, actor, origin, user_id, now).await?;
+    txn.commit().await?;
+    Ok(id)
+}
+
+/// Self-service erasure (F7): open and answer in one transaction, through the same
+/// `open_in` and `erase_in` the operator path uses. An open request already on file for
+/// the subject is answered as is, so its clock is never restarted.
+pub async fn erase_self(
+    db: &DatabaseConnection,
+    user_id: i32,
+    now: i64,
+) -> Result<EraseOutcome, RequestError> {
     let txn = db.begin().await?;
     let existing = scalar_i64(
         &txn,
+        "SELECT id FROM data_requests WHERE subject_kind = ? AND subject_id = ? \
+         AND closed_at IS NULL ORDER BY id LIMIT 1",
+        vec![SUBJECT_USER.into(), user_id.to_string().into()],
+    )
+    .await?;
+    let id = match existing {
+        Some(id) => id,
+        None => open_in(&txn, Some(user_id), ORIGIN_SELF, user_id, now).await?,
+    };
+    let out = erase_in(&txn, Some(user_id), id, now).await?;
+    txn.commit().await?;
+    Ok(out)
+}
+
+async fn open_in<C: ConnectionTrait>(
+    txn: &C,
+    actor: Option<i32>,
+    origin: &str,
+    user_id: i32,
+    now: i64,
+) -> Result<i64, RequestError> {
+    let subject = user_id.to_string();
+    let existing = scalar_i64(
+        txn,
         "SELECT COUNT(*) FROM data_requests WHERE subject_kind = ? AND subject_id = ? AND closed_at IS NULL",
         vec![SUBJECT_USER.into(), subject.clone().into()],
     )
@@ -171,7 +208,7 @@ pub async fn open(
         .await?;
     let id = res.last_insert_id() as i64;
     audit::record(
-        &txn,
+        txn,
         AuditEvent {
             actor_id: actor,
             action: AuditAction::DataRequestOpen,
@@ -180,7 +217,6 @@ pub async fn open(
         },
     )
     .await?;
-    txn.commit().await?;
     Ok(id)
 }
 
@@ -218,7 +254,18 @@ pub async fn erase(
     now: i64,
 ) -> Result<EraseOutcome, RequestError> {
     let txn = db.begin().await?;
-    let Some(req) = load(&txn, request_id).await? else {
+    let out = erase_in(&txn, actor, request_id, now).await?;
+    txn.commit().await?;
+    Ok(out)
+}
+
+async fn erase_in<C: ConnectionTrait>(
+    txn: &C,
+    actor: Option<i32>,
+    request_id: i64,
+    now: i64,
+) -> Result<EraseOutcome, RequestError> {
+    let Some(req) = load(txn, request_id).await? else {
         return Err(RequestError::NotFound);
     };
     if req.closed_at.is_some() {
@@ -227,10 +274,10 @@ pub async fn erase(
     let Some(user_id) = req.user_id() else {
         return Err(RequestError::NotFound);
     };
-    let report = retention::erase_subject_in(&txn, actor, user_id, now).await?;
-    let held = retention::user_hold_expiry(&txn, &user_id.to_string(), now).await? != 0;
+    let report = retention::erase_subject_in(txn, actor, user_id, now).await?;
+    let held = retention::user_hold_expiry(txn, &user_id.to_string(), now).await? != 0;
     if !held {
-        scrub_user_row(&txn, user_id).await?;
+        scrub_user_row(txn, user_id).await?;
     }
     txn.execute(Statement::from_sql_and_values(
         DatabaseBackend::Sqlite,
@@ -239,7 +286,7 @@ pub async fn erase(
     ))
     .await?;
     audit::record(
-        &txn,
+        txn,
         AuditEvent {
             actor_id: actor,
             action: AuditAction::DataRequestClose,
@@ -253,7 +300,6 @@ pub async fn erase(
         },
     )
     .await?;
-    txn.commit().await?;
     info!(
         request_id,
         receipt_id = report.receipt_id,
@@ -451,6 +497,79 @@ mod tests {
         assert_eq!(receipts, 1);
         let again = erase(&db, Some(1), id, now).await;
         assert!(matches!(again, Err(RequestError::Closed)));
+    }
+
+    #[tokio::test]
+    async fn self_erase_opens_answers_and_clears_rows_sessions_and_device_tokens() {
+        let db = test_db().await;
+        let now = job_log::epoch_now();
+        insert_user(&db, 77).await;
+        insert_notification(&db, 77).await;
+        exec(
+            &db,
+            "INSERT INTO user_sessions (user_id, last_seen) VALUES (77, '2019-01-01 00:00:00')",
+        )
+        .await;
+        exec(
+            &db,
+            "INSERT INTO user_devices (user_id, id, platform, client, form_factor, last_seen_at) \
+             VALUES (77, 'dev-77', 'web', 'web', 'desktop', '2019-01-01 00:00:00')",
+        )
+        .await;
+
+        let out = erase_self(&db, 77, now).await.unwrap();
+
+        assert!(out.user_row_erased);
+        let open = count(
+            &db,
+            "SELECT COUNT(*) FROM data_requests WHERE subject_id = '77' AND closed_at IS NULL",
+        )
+        .await;
+        assert_eq!(open, 0, "request opened and answered in one step");
+        let origin = count(
+            &db,
+            "SELECT COUNT(*) FROM data_requests WHERE subject_id = '77' AND origin = 'self'",
+        )
+        .await;
+        assert_eq!(origin, 1);
+        let left = count(&db, "SELECT COUNT(*) FROM notifications WHERE user_id = 77").await;
+        assert_eq!(left, 0);
+        let sessions = count(&db, "SELECT COUNT(*) FROM user_sessions WHERE user_id = 77").await;
+        assert_eq!(sessions, 0, "sessions gone");
+        let devices = count(&db, "SELECT COUNT(*) FROM user_devices WHERE user_id = 77").await;
+        assert_eq!(devices, 0, "device rows and their push tokens gone");
+        let scrubbed = count(
+            &db,
+            "SELECT COUNT(*) FROM users WHERE id = 77 AND name = 'Erased user' AND password IS NULL",
+        )
+        .await;
+        assert_eq!(scrubbed, 1);
+    }
+
+    #[tokio::test]
+    async fn self_erase_answers_an_open_operator_request_without_restarting_clock() {
+        let db = test_db().await;
+        let now = job_log::epoch_now();
+        insert_user(&db, 78).await;
+        let admin_id = open(&db, Some(1), ORIGIN_ADMIN, 78, now - 100)
+            .await
+            .unwrap();
+
+        let out = erase_self(&db, 78, now).await.unwrap();
+
+        assert!(out.user_row_erased);
+        let closed = count(
+            &db,
+            &format!("SELECT COUNT(*) FROM data_requests WHERE id = {admin_id} AND origin = 'admin' AND closed_at IS NOT NULL"),
+        )
+        .await;
+        assert_eq!(closed, 1);
+        let total = count(
+            &db,
+            "SELECT COUNT(*) FROM data_requests WHERE subject_id = '78'",
+        )
+        .await;
+        assert_eq!(total, 1, "no second request row");
     }
 
     #[tokio::test]

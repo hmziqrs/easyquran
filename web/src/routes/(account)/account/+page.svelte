@@ -25,6 +25,7 @@
   import FreshAuthControls from "#lib/auth/components/FreshAuthControls.svelte";
   import TwoFactorControls from "#lib/auth/components/TwoFactorControls.svelte";
   import ConnectedAccounts from "#lib/auth/components/ConnectedAccounts.svelte";
+  import DeleteAccountControls from "#lib/auth/components/DeleteAccountControls.svelte";
   import {
     resolveAccountView,
     resolveLinkNotice,
@@ -521,5 +522,7 @@
     <FreshAuthControls />
 
     <ConnectedAccounts refreshKey={passkeyKey} onAnonymous={handleAnonymous} />
+
+    <DeleteAccountControls />
   </div>
 {/if}

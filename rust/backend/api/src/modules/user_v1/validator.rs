@@ -130,6 +130,14 @@ pub struct V1AdminDeleteUserPayload {
     pub confirm_email: String,
 }
 
+/// Typed confirmation for self-service deletion: must equal the caller's own email.
+#[derive(Debug, Deserialize, Validate)]
+#[serde(rename_all = "camelCase")]
+pub struct V1DeleteAccountPayload {
+    #[validate(length(min = 3, max = 320))]
+    pub confirm_email: String,
+}
+
 #[derive(Debug, Deserialize, Validate)]
 pub struct V1AdminOpenDataRequestPayload {
     pub user_id: i32,

@@ -43,5 +43,15 @@
   "account_passkey_remove": "Remove",
   "account_passkey_adding": "Adding…",
   "account_passkey_add": "Add a passkey",
-  "account_generic_error": "Something went wrong. Please try again."
+  "account_generic_error": "Something went wrong. Please try again.",
+  "account_delete_heading": "Delete account",
+  "account_delete_description": "Deletion is immediate, with no grace period. Your account data leaves the live database and every session ends. Audit and moderation records, the deletion record and data under a legal hold are kept. Backups keep copies for up to 30 days. Authored posts and uploaded media are not removed.",
+  "account_delete_export_hint": "Export first if you want a copy. The file holds bookmarks, folders, reading threads, notes, home cards and settings.",
+  "account_delete_export": "Export my data",
+  "account_delete_field_email": "Type your email to confirm",
+  "account_delete_mismatch": "Type the email on this account to confirm.",
+  "account_delete_fresh_auth": "Confirm your identity in Security confirmation above, then delete again.",
+  "account_delete_submit": "Delete account",
+  "account_delete_deleting": "Deleting…",
+  "account_delete_done": "Your account was deleted."
 }
