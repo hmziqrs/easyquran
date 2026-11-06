@@ -13,6 +13,17 @@
 > [Amiri, wrapped](gpui/harfrust-amiri-wrapped.jpg)). The numbered `gpui/` shots
 > predate this and show the bug. Checked on macOS only.
 
+## NSH (Native Shell 0.4.0, CoreText): Arabic and Urdu work on macOS and iOS Simulator
+
+App: [`../nsh-quran-sample`](../nsh-quran-sample). Shots: `nsh/`, vision-checked,
+no pixel diff. Checked in the selector reader: hafs, taha-v1-bold, amiri (Arabic);
+noto, awami, mehr (Urdu); uthmani, indopak. Checked on the earlier test page, iOS
+only: noto-naskh, scheherazade, gulzar, bidi. Not looked at: taha-v1, katibeh,
+mirza, lateef, aref-ruqaa, lalezar, noto-sans-arabic, simple in the reader.
+
+Joining, harakat, RTL, ayah markers and Nastaliq match the Flutter shots. No y-flip
+bug. Failure: Awami Nastaliq does not join (Graphite only, no `GSUB`), on both.
+
 Same faces, same data extract (`gpui-kit-sample/data/quran-sample.json`),
 same type settings (Arabic 30px / line-height 1.9, Urdu 20px with per-font
 Nastaliq leading), macOS + Retina, captured per combo.
