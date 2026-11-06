@@ -448,5 +448,12 @@
   "search_recents_resume": "استئناف حفظ البحث",
   "search_recents_clear": "مسح",
   "reader_bookmarks_rows_rejected": "تعذرت مزامنة {count} من العلامات المرجعية. تبقى على هذا الجهاز.",
-  "reader_bookmarks_rows_capped": "{count} من العلامات المرجعية بانتظار توفر مساحة في حسابك. تبقى على هذا الجهاز."
+  "reader_bookmarks_rows_capped": "{count} من العلامات المرجعية بانتظار توفر مساحة في حسابك. تبقى على هذا الجهاز.",
+  "daily_ayah_title": "آية اليوم · EasyQuran",
+  "daily_ayah_description": "آية واحدة كل يوم، وهي نفسها لكل زائر. تتغير عند 00:00 بتوقيت UTC.",
+  "daily_ayah_heading": "آية اليوم",
+  "daily_ayah_intro": "الآية نفسها للجميع في هذا التاريخ بالتوقيت العالمي، وتتغير عند 00:00 UTC.",
+  "daily_ayah_date": "{date} (بالتوقيت العالمي)",
+  "daily_ayah_open": "اقرأ في السياق",
+  "daily_ayah_unavailable": "تعذّر تحميل آية اليوم. أعد تحميل الصفحة للمحاولة مرة أخرى."
 }

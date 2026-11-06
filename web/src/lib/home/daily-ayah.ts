@@ -29,6 +29,40 @@ function decodeDailyAyah(raw: unknown): DailyAyah | null {
   return { surah, ayah: num, text };
 }
 
+/*
+ * Mirrors `random_global` in rust/backend/api/src/modules/quran_v1/controller.rs
+ * (K, C over the 6236-verse permutation, 1-based). Keep the two in lockstep: the
+ * public page and the API must name the same verse for the same UTC date.
+ */
+const DAILY_K = 1103;
+const DAILY_C = 4177;
+const DAILY_VERSE_COUNT = 6236;
+const DAY_MS = 86_400_000;
+
+/** The UTC calendar date of `now` as `YYYY-MM-DD`: the key every visitor shares for a day. */
+export function utcDateKey(now: Date): string {
+  return now.toISOString().slice(0, 10);
+}
+
+/** Seconds from `now` to the next 00:00 UTC, at least 1. The cache horizon for a day's ayah. */
+export function secondsUntilUtcMidnight(now: Date): number {
+  const nextMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+  return Math.max(1, Math.ceil((nextMidnight - now.getTime()) / 1000));
+}
+
+/** 1-based global ayah index for a `YYYY-MM-DD` UTC date. Same verse for every caller that day. */
+export function dailyGlobalIndex(utcDate: string): number {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(utcDate);
+  if (!match) throw new RangeError(`daily ayah date must be YYYY-MM-DD: ${utcDate}`);
+  const [, year, month, day] = match;
+  const days = Math.round(
+    (Date.UTC(Number(year), Number(month) - 1, Number(day)) - Date.UTC(1970, 0, 1)) / DAY_MS,
+  );
+  const slot =
+    (((days * DAILY_K + DAILY_C) % DAILY_VERSE_COUNT) + DAILY_VERSE_COUNT) % DAILY_VERSE_COUNT;
+  return slot + 1;
+}
+
 export async function fetchDailyAyah(signal?: AbortSignal): Promise<DailyAyah | null> {
   if (!QURAN.apiBase) return null;
   try {

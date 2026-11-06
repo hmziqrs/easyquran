@@ -448,5 +448,12 @@
   "search_recents_resume": "Resume search history",
   "search_recents_clear": "Clear",
   "reader_bookmarks_rows_rejected": "{count} bookmarks could not sync. They stay on this device.",
-  "reader_bookmarks_rows_capped": "{count} bookmarks wait for room in your account. They stay on this device."
+  "reader_bookmarks_rows_capped": "{count} bookmarks wait for room in your account. They stay on this device.",
+  "daily_ayah_title": "Ayah of the day · EasyQuran",
+  "daily_ayah_description": "One verse a day, the same for every visitor. It changes at 00:00 UTC.",
+  "daily_ayah_heading": "Ayah of the day",
+  "daily_ayah_intro": "The same verse for everyone on this UTC date. It changes at 00:00 UTC.",
+  "daily_ayah_date": "{date} (UTC)",
+  "daily_ayah_open": "Read in context",
+  "daily_ayah_unavailable": "Today's ayah could not be loaded. Reload the page to try again."
 }

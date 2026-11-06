@@ -35,6 +35,11 @@
       "prefixes": ["landing", "seo"]
     },
     {
+      "id": "daily",
+      "description": "Public ayah of the day (/daily-ayah): one SSR verse per UTC date, with its reader link.",
+      "prefixes": ["daily_ayah"]
+    },
+    {
       "id": "about",
       "description": "About page.",
       "prefixes": ["about"]
