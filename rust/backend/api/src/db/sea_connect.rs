@@ -46,27 +46,6 @@ fn connect_options(db_url: &str) -> ConnectOptions {
     opt
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use sea_orm::{DbBackend, Statement};
-
-    #[tokio::test]
-    async fn secure_delete_reads_back_on_for_pooled_connection() {
-        let conn = Database::connect(connect_options("sqlite::memory:"))
-            .await
-            .unwrap();
-        let row = conn
-            .query_one(Statement::from_string(
-                DbBackend::Sqlite,
-                "PRAGMA secure_delete".to_string(),
-            ))
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(row.try_get_by_index::<i64>(0).unwrap(), 1);
-    }
-}
 
 async fn configure_sqlite(conn: &DatabaseConnection) {
     for pragma in [
@@ -124,4 +103,26 @@ pub async fn try_connect(run_migrations: bool) -> Result<DatabaseConnection, Str
 #[instrument]
 pub async fn get_sea_connection() -> DatabaseConnection {
     init_db(true).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sea_orm::{DbBackend, Statement};
+
+    #[tokio::test]
+    async fn secure_delete_reads_back_on_for_pooled_connection() {
+        let conn = Database::connect(connect_options("sqlite::memory:"))
+            .await
+            .unwrap();
+        let row = conn
+            .query_one(Statement::from_string(
+                DbBackend::Sqlite,
+                "PRAGMA secure_delete".to_string(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.try_get_by_index::<i64>(0).unwrap(), 1);
+    }
 }
