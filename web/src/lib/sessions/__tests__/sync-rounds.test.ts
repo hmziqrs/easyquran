@@ -49,7 +49,7 @@ function roundBody(over: Row = {}) {
 }
 
 /** Echoes every sent row as applied, unless a test queues its own answers. */
-function harness(userId = 7) {
+function harness(userId = 7, archive: Row[] = []) {
   const bodies: Row[] = [];
   const answers: Array<FakeResponse | "throw"> = [];
   const respond = (body: Row): AuthRequestResult<never> => {
@@ -92,7 +92,12 @@ function harness(userId = 7) {
         // SAFETY: test double — `never` data is assignable to whatever the domain asks for.
         return respond(body) as AuthRequestResult<T>;
       },
-      get: async <T>(): Promise<{ ok: boolean; data?: T | null }> => ({ ok: false }),
+      // Archive pages, in order. Past the last page the server is unreachable.
+      get: async <T>(): Promise<{ ok: boolean; data?: T | null }> => {
+        const page = archive.shift();
+        // SAFETY: test double — the store decodes the page as unknown; any shape is valid input.
+        return page === undefined ? { ok: false } : { ok: true, data: page as T };
+      },
     },
     state: auth,
     register: (domain) => registered.push(domain),
@@ -453,6 +458,91 @@ describe("delta pull", () => {
     answers.push({ body: roundBody({ sessions: [row], rev: 7, latestRev: 7 }) });
     await round();
     expect(store.open).toEqual([]);
+  });
+});
+
+describe("clear-all history", () => {
+  const ARCHIVED = "019a0000-0000-7000-8000-00000000000a";
+  const archived = (id: string) => ({
+    id,
+    origin: "index",
+    originRef: null,
+    scope: "surah:36",
+    boundEnd: null,
+    surah: 36,
+    ayah: 9,
+    localPage: null,
+    ratio: null,
+    sourceId: null,
+    device: "phone",
+    deviceId: "other",
+    startedAt: "2026-10-01T00:00:00.000Z",
+    updatedAt: "2026-10-01T00:00:00.000Z",
+    endedAt: "2026-10-01T00:00:00.000Z",
+    endReason: "completed",
+    state: "ended",
+    identityStamp: "1000-0000-other",
+    cursorStamp: "1000-0000-other",
+    lifecycleStamp: "1000-0000-other",
+    rev: 2,
+  });
+
+  it("tombstones every ended thread, server pages included, and syncs the deletes", async () => {
+    const { store, round, bodies } = harness(7, [
+      { sessions: [archived(ARCHIVED)], next: "c1" },
+      { sessions: [], next: null },
+    ]);
+    const done = read(store, 2, 10);
+    store.dismiss(done);
+    const open = read(store, 3, 4);
+    await round();
+
+    const cleared = await store.clearHistory();
+    expect(cleared?.threads.map((t) => t.id).sort()).toEqual([done, ARCHIVED].sort());
+    expect(store.archive).toMatchObject({ items: [], next: null, loaded: true });
+    expect(store.open.map((t) => t.id)).toEqual([open]);
+    expect(
+      store.dirtyRows().find((r) => r.kind === "session.upsert" && r.id === done),
+    ).toMatchObject({ state: "deleted" });
+
+    await round();
+    // SAFETY: test double — the store always sends an array of rows.
+    const sent = bodies.at(-1)?.mutations as Row[];
+    expect(sent.find((m) => m.id === done)).toMatchObject({ state: "deleted" });
+    expect(sent.find((m) => m.id === ARCHIVED)).toMatchObject({ state: "deleted" });
+    expect(store.dirtyRows().filter((r) => r.kind === "session.upsert")).toEqual([]);
+  });
+
+  it("undo writes the threads back with fresh stamps, and they sync", async () => {
+    const { store, round, bodies } = harness(7, [{ sessions: [], next: null }]);
+    const done = read(store, 2, 10);
+    store.dismiss(done);
+    await round();
+    const cleared = await store.clearHistory();
+    expect(cleared).not.toBeNull();
+    if (cleared === null) return;
+
+    store.restoreHistory(cleared);
+    expect(store.archive.items.map((t) => t.id)).toEqual([done]);
+    const back = store.dirtyRows().find((r) => r.kind === "session.upsert" && r.id === done);
+    expect(back).toMatchObject({ state: "ended", endReason: "dismissed" });
+    expect(back?.kind === "session.upsert" && back.lifecycleStamp).not.toBe(
+      cleared.threads[0]?.lifecycleStamp,
+    );
+    await round();
+    // SAFETY: test double — the store always sends an array of rows.
+    const sent = bodies.at(-1)?.mutations as Row[];
+    expect(sent.find((m) => m.id === done)).toMatchObject({ state: "ended" });
+  });
+
+  it("clears nothing when the history cannot be read whole", async () => {
+    const { store, round } = harness(7, []);
+    const done = read(store, 2, 10);
+    store.dismiss(done);
+    await round();
+    expect(await store.clearHistory()).toBeNull();
+    expect(store.dirtyRows()).toEqual([]);
+    expect(store.archive.items).toEqual([]);
   });
 });
 

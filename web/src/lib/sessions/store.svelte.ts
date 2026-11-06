@@ -57,6 +57,12 @@ import {
   type ThreadTombstone,
 } from "./schema";
 
+/** Threads cleared by `clearHistory`, kept so Undo can put them back. */
+export interface HistoryClear {
+  readonly owner: string;
+  readonly threads: readonly ReadingThread[];
+}
+
 /** Engine surface the store depends on; the real SyncEngine satisfies it structurally. */
 export interface SessionsEngineLike {
   flush(domain?: string): Promise<void>;
@@ -122,6 +128,17 @@ const IDLE_ACCOUNT_MS = 180 * 24 * 60 * 60 * 1000;
 const PUSH_DEBOUNCE_MS = 4000;
 const PERSIST_DEBOUNCE_MS = 400;
 const ARCHIVE_PAGE = 20;
+/** Bounds the whole-history walk: 500 pages of 20 is 10,000 threads. */
+const MAX_ARCHIVE_PAGES = 500;
+
+/**
+ * Undo writes a thread back newer than the tombstone it replaces: a signed-out row
+ * with no stamps merges by `updatedAt`, so an equal or older time would keep the delete.
+ */
+function restoreStamp(tombstone: ReadingThread | undefined): string {
+  const after = tombstone === undefined ? 0 : Date.parse(tombstone.updatedAt) + 1;
+  return new Date(Math.max(Date.now(), after)).toISOString();
+}
 
 function keyFor(owner: string): string {
   return `easyquran.sessions.${owner}`;
@@ -534,6 +551,61 @@ export class SessionsStore {
     }
     if (thread === undefined) return;
     this.#write({ ...thread, state: "deleted", updatedAt: nowIso() });
+  }
+
+  /**
+   * Clear-all history: tombstone every ended thread, server pages included. Returns
+   * the threads as they were so Undo can restore them. Null when the whole history
+   * could not be read, so nothing is cleared and nothing is half-cleared.
+   */
+  async clearHistory(): Promise<HistoryClear | null> {
+    this.syncOwner();
+    await this.#loadWholeArchive();
+    if (!this.#archive.loaded || this.#archive.next !== null) return null;
+    const now = this.#now();
+    const ended = new Map<string, ReadingThread>();
+    // Local rows first: they carry this device's newest copy of a thread.
+    for (const thread of [...this.#env.threads, ...this.#archive.items]) {
+      if (thread.state === "deleted" || isOpen(thread, now) || ended.has(thread.id)) continue;
+      ended.set(thread.id, thread);
+    }
+    const threads = [...ended.values()];
+    for (const thread of threads) {
+      if (this.#tabId === thread.id) this.#clearTab();
+      this.#write({ ...thread, state: "deleted", updatedAt: nowIso() });
+    }
+    this.#archive = { items: [], next: null, loading: false, loaded: true };
+    return { owner: this.#owner, threads };
+  }
+
+  /** Undo for `clearHistory`: write each thread back with a fresh lifecycle stamp. */
+  restoreHistory(clear: HistoryClear): void {
+    this.syncOwner();
+    // Another account is signed in now: its history must not gain these rows.
+    if (clear.owner !== this.#owner) return;
+    for (const thread of clear.threads) {
+      const tombstone = this.#env.threads.find((t) => t.id === thread.id);
+      this.#write({ ...thread, updatedAt: restoreStamp(tombstone) });
+    }
+    // The snapshot was the whole history (clearHistory needs it complete), so the
+    // view goes back to exactly that, without a refetch that could race the sync.
+    this.#archive = {
+      items: [...clear.threads].sort(byNewest),
+      next: null,
+      loading: false,
+      loaded: true,
+    };
+  }
+
+  /** Load every archive page, stopping early if the server stops advancing. */
+  async #loadWholeArchive(): Promise<void> {
+    await this.loadArchive(true);
+    for (let page = 0; page < MAX_ARCHIVE_PAGES; page += 1) {
+      const cursor = this.#archive.next;
+      if (!this.#archive.loaded || cursor === null) return;
+      await this.loadArchive();
+      if (this.#archive.next === cursor) return;
+    }
   }
 
   /** History: ended + stale threads, newest first. Account pages come from the server. */

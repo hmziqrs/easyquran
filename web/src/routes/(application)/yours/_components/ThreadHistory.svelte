@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { toast } from "svelte-sonner";
   import { Icon } from "#lib/components/icon/index.js";
   import { Badge } from "#lib/components/ui/badge/index.js";
   import { Button } from "#lib/components/ui/button/index.js";
@@ -9,6 +10,10 @@
   import type { SurahRouteContext } from "#lib/data/quran.js";
   import type { UiLocale } from "#lib/i18n/locales.js";
   import {
+    reader_bookmarks_undo,
+    reader_threads_clear_all,
+    reader_threads_clear_failed,
+    reader_threads_cleared,
     reader_threads_completed,
     reader_threads_delete,
     reader_threads_history_empty,
@@ -48,6 +53,21 @@
     return reader_threads_paused(undefined, msg);
   }
 
+  /** One toast slot, no dialog: clear-all is undone from the toast. */
+  const TOAST_ID = "thread-history";
+
+  async function clearAll(): Promise<void> {
+    const cleared = await sessions.clearHistory();
+    if (cleared === null) {
+      toast(reader_threads_clear_failed(undefined, msg), { id: TOAST_ID });
+      return;
+    }
+    toast(reader_threads_cleared(undefined, msg), {
+      id: TOAST_ID,
+      action: { label: reader_bookmarks_undo(undefined, msg), onClick: () => sessions.restoreHistory(cleared) },
+    });
+  }
+
   function showMore(): void {
     if (!expanded) {
       expanded = true;
@@ -64,6 +84,11 @@
 {#if archive.loaded && archive.items.length === 0}
   <p class="mt-2 text-[13px] text-muted">{reader_threads_history_empty(undefined, msg)}</p>
 {:else if items.length > 0}
+  <div class="mt-2 flex justify-end">
+    <Button variant="ghost" size="sm" disabled={archive.loading} onclick={clearAll}>
+      {reader_threads_clear_all(undefined, msg)}
+    </Button>
+  </div>
   <ul class="mt-2 divide-y divide-border overflow-hidden rounded-md border border-border bg-surface">
     {#each items as thread (thread.id)}
       <li class="flex items-center gap-3 px-4 py-2.5">

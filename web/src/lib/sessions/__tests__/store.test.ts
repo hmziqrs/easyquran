@@ -180,6 +180,53 @@ describe("thread lifecycle", () => {
     expect(store.archive.items).toEqual([]);
   });
 
+  it("clear-all tombstones every ended thread, keeps open ones, and Undo restores them", async () => {
+    const { store } = makeStore(anon());
+    const first = store.enter(surah(112)).thread;
+    store.cursor(112, 4, null);
+    store.dismiss(first.id);
+    const second = store.enter(surah(18)).thread;
+    store.cursor(18, 2, null);
+    store.dismiss(second.id);
+    const reading = store.enter(surah(1)).thread;
+    store.cursor(1, 3, null);
+
+    const cleared = await store.clearHistory();
+    expect(cleared?.threads.map((t) => t.id).sort()).toEqual([first.id, second.id].sort());
+    expect(store.archive).toMatchObject({ items: [], next: null, loaded: true });
+    expect(store.open.map((t) => t.id)).toEqual([reading.id]);
+    await store.loadArchive(true);
+    expect(store.archive.items).toEqual([]);
+
+    if (cleared === null) throw new Error("anon history is always complete");
+    store.restoreHistory(cleared);
+    expect(store.archive.items.map((t) => t.id).sort()).toEqual([first.id, second.id].sort());
+    await store.loadArchive(true);
+    expect(store.archive.items.map((t) => t.id).sort()).toEqual([first.id, second.id].sort());
+    expect(store.open.map((t) => t.id)).toEqual([reading.id]);
+  });
+
+  it("clear-all with nothing ended clears nothing and still reports success", async () => {
+    const { store } = makeStore(anon());
+    store.enter(surah(36));
+    store.cursor(36, 2, null);
+    const cleared = await store.clearHistory();
+    expect(cleared?.threads).toEqual([]);
+    expect(store.open).toHaveLength(1);
+  });
+
+  it("undo is ignored once another account owns the store", async () => {
+    const { store } = makeStore(anon());
+    const done = store.enter(surah(112)).thread;
+    store.cursor(112, 4, null);
+    store.dismiss(done.id);
+    const cleared = await store.clearHistory();
+    if (cleared === null) throw new Error("anon history is always complete");
+    const stale = { ...cleared, owner: "7" };
+    store.restoreHistory(stale);
+    expect(store.archive.items).toEqual([]);
+  });
+
   it("threads written by another tab survive this tab's next write (merge-on-write)", () => {
     vi.useFakeTimers();
     const tabA = makeStore(anon()).store;
