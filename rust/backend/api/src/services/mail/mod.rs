@@ -31,6 +31,44 @@ pub fn mail_error_kind(err: &MailError) -> &'static str {
 
 use provider::{TEMPLATE_PASSWORD_RESET, TEMPLATE_VERIFICATION};
 
+/// Fields of an account-enforcement notice (A21). Copy is bilingual (en and ar)
+/// inside the template. `appeal_url` is set only once an appeal page exists (A35).
+pub struct EnforcementNoticeMail<'a> {
+    pub app_name: &'a str,
+    pub user_name: &'a str,
+    pub reason_en: &'a str,
+    pub reason_ar: &'a str,
+    pub expires_at: &'a str,
+    pub appeal_url: Option<&'a str>,
+}
+
+/// Sends the notice through the router. The returned receipt is the only proof of
+/// delivery: callers record `sent` only when `accepted_by_provider()` holds.
+pub async fn send_enforcement_notice(
+    mailer: &MailRouter,
+    email: &str,
+    notice: &EnforcementNoticeMail<'_>,
+) -> Result<SendReceipt, MailError> {
+    let mut ctx = tera::Context::new();
+    ctx.insert("app_name", notice.app_name);
+    ctx.insert("user_name", notice.user_name);
+    ctx.insert("reason_en", notice.reason_en);
+    ctx.insert("reason_ar", notice.reason_ar);
+    ctx.insert("expires_at", notice.expires_at);
+    ctx.insert("appeal_url", &notice.appeal_url);
+    let html = templates::render("enforcement_notice", &ctx)
+        .map_err(|e| MailError::Other(format!("enforcement notice template: {e}")))?;
+    mailer
+        .send(OutboundEmail {
+            to: email.to_string(),
+            subject: "Notice about your account / إشعار بخصوص حسابك".to_string(),
+            html: Some(html),
+            text: None,
+            template: Some(provider::TEMPLATE_ENFORCEMENT_NOTICE),
+        })
+        .await
+}
+
 pub async fn send_email_verification_code(
     mailer: &MailRouter,
     email: &str,

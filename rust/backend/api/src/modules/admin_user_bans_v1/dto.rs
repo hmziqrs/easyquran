@@ -74,4 +74,6 @@ pub struct BanCreated {
     pub notice_id: i64,
     pub user_id: i32,
     pub expires_at: i64,
+    /// Provider-confirmed notice outcome; `null` when the record write failed (unknown).
+    pub delivery_state: Option<String>,
 }

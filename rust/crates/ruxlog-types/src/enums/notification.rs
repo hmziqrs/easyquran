@@ -31,4 +31,11 @@ pub enum NotificationKind {
     #[serde(rename = "System")]
     #[cfg_attr(feature = "backend", sea_orm(string_value = "system"))]
     System,
+
+    /// In-app copy of an account-enforcement decision (A21). Shown only after the
+    /// account is unbanned. The inbox is not a delivery channel: the email notice
+    /// is the delivery record.
+    #[serde(rename = "Enforcement")]
+    #[cfg_attr(feature = "backend", sea_orm(string_value = "enforcement"))]
+    Enforcement,
 }

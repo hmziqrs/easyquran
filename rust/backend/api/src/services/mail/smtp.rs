@@ -120,6 +120,7 @@ impl MailProvider for SmtpMailProvider {
             delivered: 1,
             queued: 0,
             permanent_bounces: Vec::new(),
+            suppressed: false,
         })
     }
 }

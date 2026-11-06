@@ -1,5 +1,6 @@
 pub mod controller;
 pub mod dto;
+pub mod notice;
 
 use axum::{
     middleware,

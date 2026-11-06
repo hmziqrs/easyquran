@@ -9,7 +9,7 @@ use sea_orm::{ActiveModelTrait, ConnectionTrait, EntityTrait, Set, TransactionTr
 use serde_json::json;
 use tracing::{info, instrument, warn};
 
-use crate::db::sea_models::enforcement_notice::{self, NewNotice};
+use crate::db::sea_models::enforcement_notice::{self, DeliveryState, NewNotice};
 use crate::db::sea_models::user::{self, new_session_auth_secret};
 use crate::db::sea_models::user_ban::{self, NewUserBan, UserBanQuery};
 use crate::error::{ErrorCode, ErrorResponse};
@@ -19,6 +19,7 @@ use crate::services::auth::AuthSession;
 use crate::AppState;
 
 use super::dto::{BanCreated, CreateBanPayload, RenewBanPayload};
+use super::notice as delivery;
 
 /// Longest ban a single decision can set (A19). Bans always expire; there is no
 /// permanent ban. Renewal is capped at the same length from now.
@@ -180,6 +181,17 @@ pub async fn create_ban(
         warn!(user_id = target.id, error = ?err, "ban created; identity limiter clear failed");
     }
 
+    // Notice goes out after the ban commits: the row already exists (state NULL)
+    // and the send result is recorded on it. A delivery error leaves the state NULL,
+    // which reads as unknown, never as sent.
+    let delivery_state = match deliver_notice(&state, &notice, Some(&target)).await {
+        Ok(delivery) => Some(delivery.as_str().to_string()),
+        Err(err) => {
+            warn!(notice_id = notice.id, error = ?err, "ban created; notice delivery record failed");
+            None
+        }
+    };
+
     info!(ban_id = ban.id, user_id = target.id, "account ban created");
     Ok((
         StatusCode::CREATED,
@@ -188,8 +200,29 @@ pub async fn create_ban(
             notice_id: notice.id,
             user_id: target.id,
             expires_at: payload.expires_at.timestamp(),
+            delivery_state,
         }),
     ))
+}
+
+/// Sends a notice for the account, or records `no_contact_details` when the
+/// account is gone. The appeal link is not attached until A35 issues tokens.
+async fn deliver_notice(
+    state: &AppState,
+    notice: &enforcement_notice::Model,
+    target: Option<&user::Model>,
+) -> Result<DeliveryState, ErrorResponse> {
+    let contact = target.map(|user| (user.email.as_str(), user.name.as_str()));
+    let delivery = delivery::deliver(
+        &state.sea_db,
+        &state.mailer,
+        &state.settings.site.name,
+        notice,
+        contact,
+        None,
+    )
+    .await?;
+    Ok(delivery)
 }
 
 #[instrument(skip(state, auth))]
@@ -287,22 +320,44 @@ pub async fn renew_ban(
     ))
 }
 
-/// Notice delivery is A21. Until it lands this route refuses and sends nothing,
-/// so no notice can read as delivered.
+/// Re-sends the latest notice for a ban. The stored state is overwritten with the
+/// new attempt's result and the attempt is audited.
 #[instrument(skip(state, auth))]
 pub async fn resend_notice(
     State(state): State<AppState>,
     auth: AuthSession,
     Path(ban_id): Path<i32>,
-) -> Result<StatusCode, ErrorResponse> {
-    let _admin = actor(&auth)?;
-    let exists = user_ban::Entity::find_by_id(ban_id)
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let admin = actor(&auth)?;
+    let ban = user_ban::Entity::find_by_id(ban_id)
         .one(&state.sea_db)
         .await?
-        .is_some();
-    if !exists {
-        return Err(ErrorResponse::new(ErrorCode::RecordNotFound));
-    }
-    Err(ErrorResponse::new(ErrorCode::ServiceUnavailable)
-        .with_message("notice delivery is not enabled yet (A21)"))
+        .ok_or_else(|| ErrorResponse::new(ErrorCode::RecordNotFound))?;
+    let notice = enforcement_notice::Entity::find_latest_for_ban(&state.sea_db, ban_id)
+        .await?
+        .ok_or_else(|| ErrorResponse::new(ErrorCode::RecordNotFound))?;
+    let target = user::Entity::find_by_id(ban.user_id)
+        .one(&state.sea_db)
+        .await?;
+    let delivery = deliver_notice(&state, &notice, target.as_ref()).await?;
+    write_audit(
+        &state.sea_db,
+        admin.id,
+        "ban.notice_resend",
+        ban_id,
+        json!({
+            "noticeId": notice.id,
+            "userId": ban.user_id,
+            "deliveryState": delivery.as_str(),
+        }),
+    )
+    .await?;
+    Ok((
+        StatusCode::OK,
+        Json(json!({
+            "banId": ban_id,
+            "noticeId": notice.id,
+            "deliveryState": delivery.as_str(),
+        })),
+    ))
 }

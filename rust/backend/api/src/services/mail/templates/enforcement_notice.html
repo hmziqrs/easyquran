@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Notice about your account</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f5f7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #f4f5f7;">
+    <tr>
+      <td align="center" style="padding: 32px 16px;">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 8px;">
+          <tr>
+            <td style="padding: 32px 24px;">
+              <h1 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 700; color: #111827;">Your account has been suspended</h1>
+              <p style="margin: 0 0 12px 0; font-size: 16px; line-height: 1.6; color: #374151;">Hello {{ user_name | default(value="there") }},</p>
+              <p style="margin: 0 0 12px 0; font-size: 15px; line-height: 1.6; color: #374151;">A moderator suspended your {{ app_name | default(value="Ruxlog") }} account. Reason category: {{ reason_en }}.</p>
+              <p style="margin: 0 0 12px 0; font-size: 15px; line-height: 1.6; color: #374151;">The suspension ends on {{ expires_at }} (UTC).</p>
+              {% if appeal_url %}
+              <p style="margin: 0 0 12px 0; font-size: 15px; line-height: 1.6; color: #374151;">You can contest this decision here: <a href="{{ appeal_url }}" style="color: #2563eb;">{{ appeal_url }}</a></p>
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td dir="rtl" lang="ar" style="padding: 0 24px 32px 24px; font-family: 'Noto Naskh Arabic', 'Geeza Pro', Tahoma, sans-serif;">
+              <h2 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 700; color: #111827;">تم تعليق حسابك</h2>
+              <p style="margin: 0 0 12px 0; font-size: 15px; line-height: 1.8; color: #374151;">قام مشرف بتعليق حسابك في {{ app_name | default(value="Ruxlog") }}. فئة السبب: {{ reason_ar }}.</p>
+              <p style="margin: 0 0 12px 0; font-size: 15px; line-height: 1.8; color: #374151;">ينتهي التعليق في {{ expires_at }} (UTC).</p>
+              {% if appeal_url %}
+              <p style="margin: 0 0 12px 0; font-size: 15px; line-height: 1.8; color: #374151;">يمكنك الاعتراض على هذا القرار هنا: <a href="{{ appeal_url }}" style="color: #2563eb;">{{ appeal_url }}</a></p>
+              {% endif %}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

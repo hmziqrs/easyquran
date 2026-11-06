@@ -13,11 +13,17 @@ pub struct OutboundEmail {
 pub const TEMPLATE_VERIFICATION: &str = "verification";
 pub const TEMPLATE_PASSWORD_RESET: &str = "password_reset";
 pub const TEMPLATE_NEWSLETTER: &str = "newsletter";
+/// Account-enforcement notice (A21). Enforcement-scoped: it is sent even to an
+/// address with a complaint suppression, and it is dropped (with a `suppressed`
+/// result) for bounce or manual suppression.
+pub const TEMPLATE_ENFORCEMENT_NOTICE: &str = "enforcement_notice";
 
 pub fn is_transactional(template: Option<&str>) -> bool {
     matches!(
         template,
-        Some(TEMPLATE_VERIFICATION) | Some(TEMPLATE_PASSWORD_RESET)
+        Some(TEMPLATE_VERIFICATION)
+            | Some(TEMPLATE_PASSWORD_RESET)
+            | Some(TEMPLATE_ENFORCEMENT_NOTICE)
     )
 }
 
@@ -29,6 +35,18 @@ pub struct SendReceipt {
     pub queued: u32,
     #[serde(default)]
     pub permanent_bounces: Vec<String>,
+    /// The router dropped the message because the recipient is suppressed. Nothing
+    /// reached a provider. Transactional callers that must not reveal suppression
+    /// (verification, reset) ignore it; enforcement records it as `suppressed`.
+    #[serde(default)]
+    pub suppressed: bool,
+}
+
+impl SendReceipt {
+    /// True only when a provider accepted the message (delivered or queued).
+    pub fn accepted_by_provider(&self) -> bool {
+        !self.suppressed && self.delivered + self.queued > 0
+    }
 }
 
 pub use rux_provider_core::WebhookEvent;

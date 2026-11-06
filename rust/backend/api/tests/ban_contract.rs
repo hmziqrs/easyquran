@@ -2,6 +2,11 @@
 //! session kill on ban, notice survives the account, self-ban and equal-role refusal.
 mod reading_common;
 
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
+use async_trait::async_trait;
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use axum::middleware;
@@ -12,13 +17,20 @@ use tower::ServiceExt;
 
 use reading_common::{harness, login_cookie, router_with_state, seed_user, Harness};
 use rux_request_gate::{AbuseLimiterConfig, GateDecision, RateLimitStore};
+use ruxlog::db::sea_models::email_suppression::{self, SuppressionUpsert};
 use ruxlog::db::sea_models::enforcement_notice;
 use ruxlog::db::sea_models::user::{self, UserRole};
 use ruxlog::db::sea_models::user_ban;
 use ruxlog::middlewares::auth_guard;
 use ruxlog::modules::admin_user_bans_v1;
 use ruxlog::services::abuse_limiter::{self, Attempt, FailureMode};
+use ruxlog::services::mail::provider::{
+    MailError, MailProvider, OutboundEmail, SendReceipt, TEMPLATE_ENFORCEMENT_NOTICE,
+    TEMPLATE_VERIFICATION,
+};
+use ruxlog::services::mail::router::{MailRouter, MailRouterLimits};
 use ruxlog::AppState;
+use ruxlog_types::enums::SuppressionReason;
 use sea_orm::{ActiveModelTrait, ConnectionTrait, DbBackend, EntityTrait, Set, Statement};
 
 fn req(method: &str, path: &str, cookie: &str, body: Option<Value>) -> Request<Body> {
@@ -191,7 +203,8 @@ async fn notice_survives_account_deletion() {
     assert_eq!(notices[0].user_id, h.uid_b);
     assert_eq!(notices[0].corroborator, "credential_reuse");
     assert_eq!(notices[0].retention_class, "enforcement_12m");
-    assert!(notices[0].delivery_state.is_none());
+    // No mail backend in this harness: the attempt is recorded, never as sent.
+    assert_eq!(notices[0].delivery_state.as_deref(), Some("send_failed"));
 }
 
 #[tokio::test]
@@ -363,16 +376,196 @@ async fn renew_needs_self_review_and_extends_only() {
     );
 }
 
-#[tokio::test]
-async fn resend_refuses_until_delivery_lands() {
+/// Provider double for notice delivery (A21). Counts sends and reports either an
+/// accepted message or an `Ok` that accepted nothing.
+struct RecordingProvider {
+    accept: bool,
+    calls: Arc<AtomicUsize>,
+}
+
+#[async_trait]
+impl MailProvider for RecordingProvider {
+    fn provider_name(&self) -> &'static str {
+        "test"
+    }
+
+    async fn send(&self, _msg: OutboundEmail) -> Result<SendReceipt, MailError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(SendReceipt {
+            delivered: u32::from(self.accept),
+            ..SendReceipt::default()
+        })
+    }
+}
+
+/// Admin harness whose mailer routes to a recording provider. Same DB and session
+/// store, so the existing admin cookie still works.
+async fn admin_with_provider(accept: bool) -> (Harness, Arc<AtomicUsize>) {
     let h = admin_harness().await;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let providers: HashMap<String, Arc<dyn MailProvider>> = [(
+        "test".to_string(),
+        Arc::new(RecordingProvider {
+            accept,
+            calls: calls.clone(),
+        }) as Arc<dyn MailProvider>,
+    )]
+    .into_iter()
+    .collect();
+    let mailer = MailRouter::new(
+        providers,
+        "test".to_string(),
+        h.state.gate_store.clone(),
+        h.state.sea_db.clone(),
+        MailRouterLimits::default(),
+        false,
+    );
+    let state = AppState {
+        mailer: Arc::new(mailer),
+        ..h.state.clone()
+    };
+    let app = router_with_state(state.clone(), admin_user_bans_v1::routes());
+    (Harness { app, state, ..h }, calls)
+}
+
+async fn notice_row_state(h: &Harness) -> (Option<String>, Option<i64>, String) {
+    let row = h
+        .state
+        .sea_db
+        .query_one(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT delivery_state, sent_at, notice_channel FROM enforcement_notices \
+             ORDER BY id DESC LIMIT 1"
+                .to_string(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    (
+        row.try_get_by_index(0).unwrap(),
+        row.try_get_by_index(1).unwrap(),
+        row.try_get_by_index(2).unwrap(),
+    )
+}
+
+#[tokio::test]
+async fn notice_is_sent_only_when_the_provider_accepts() {
+    let (h, calls) = admin_with_provider(true).await;
+    let (status, body) = send(
+        &h.app,
+        req("POST", "/", &h.cookie_a, Some(create_body(h.uid_b, 1))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "ban: {body}");
+    assert_eq!(body["deliveryState"], "sent");
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    let (state, sent_at, channel) = notice_row_state(&h).await;
+    assert_eq!(state.as_deref(), Some("sent"));
+    assert!(sent_at.is_some(), "sent_at set on sent");
+    assert_eq!(channel, "email");
+}
+
+#[tokio::test]
+async fn ok_that_accepted_nothing_is_send_failed_not_sent() {
+    let (h, calls) = admin_with_provider(false).await;
+    let (status, body) = send(
+        &h.app,
+        req("POST", "/", &h.cookie_a, Some(create_body(h.uid_b, 1))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "ban: {body}");
+    assert_eq!(body["deliveryState"], "send_failed");
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    let (state, sent_at, _) = notice_row_state(&h).await;
+    assert_eq!(state.as_deref(), Some("send_failed"));
+    assert!(sent_at.is_none(), "no sent_at without delivery");
+}
+
+#[tokio::test]
+async fn no_mail_backend_records_send_failed() {
+    let h = admin_harness().await;
+    let (status, body) = send(
+        &h.app,
+        req("POST", "/", &h.cookie_a, Some(create_body(h.uid_b, 1))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "ban: {body}");
+    assert_eq!(body["deliveryState"], "send_failed");
+}
+
+#[tokio::test]
+async fn bounced_address_records_suppressed_and_sends_nothing() {
+    let (h, calls) = admin_with_provider(true).await;
+    let email = user::Entity::find_by_id(h.uid_b)
+        .one(&h.state.sea_db)
+        .await
+        .unwrap()
+        .unwrap()
+        .email;
+    email_suppression::Entity::upsert(
+        &h.state.sea_db,
+        &email,
+        SuppressionUpsert {
+            reason: SuppressionReason::Bounce,
+            source: Some("test".to_string()),
+            diagnostic: None,
+            permanent: true,
+        },
+    )
+    .await
+    .unwrap();
+    let (status, body) = send(
+        &h.app,
+        req("POST", "/", &h.cookie_a, Some(create_body(h.uid_b, 1))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "ban: {body}");
+    assert_eq!(body["deliveryState"], "suppressed");
+    assert_eq!(calls.load(Ordering::SeqCst), 0, "no provider call");
+    let (state, sent_at, _) = notice_row_state(&h).await;
+    assert_eq!(state.as_deref(), Some("suppressed"));
+    assert!(sent_at.is_none());
+}
+
+#[tokio::test]
+async fn empty_contact_records_no_contact_details() {
+    let (h, calls) = admin_with_provider(true).await;
+    let current = user::Entity::find_by_id(h.uid_b)
+        .one(&h.state.sea_db)
+        .await
+        .unwrap()
+        .unwrap();
+    user::ActiveModel {
+        id: Set(h.uid_b),
+        email: Set(String::new()),
+        session_auth_secret: Set(current.session_auth_secret),
+        ..Default::default()
+    }
+    .update(&h.state.sea_db)
+    .await
+    .expect("blank email");
+    let (status, body) = send(
+        &h.app,
+        req("POST", "/", &h.cookie_a, Some(create_body(h.uid_b, 1))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "ban: {body}");
+    assert_eq!(body["deliveryState"], "no_contact_details");
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    let (state, _, _) = notice_row_state(&h).await;
+    assert_eq!(state.as_deref(), Some("no_contact_details"));
+}
+
+#[tokio::test]
+async fn resend_records_the_new_attempt() {
+    let (h, calls) = admin_with_provider(true).await;
     let (_, body) = send(
         &h.app,
         req("POST", "/", &h.cookie_a, Some(create_body(h.uid_b, 1))),
     )
     .await;
     let ban_id = body["banId"].as_i64().unwrap();
-    let (status, _) = send(
+    let (status, body) = send(
         &h.app,
         req(
             "POST",
@@ -382,7 +575,80 @@ async fn resend_refuses_until_delivery_lands() {
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(status, StatusCode::OK, "resend: {body}");
+    assert_eq!(body["deliveryState"], "sent");
+    assert_eq!(calls.load(Ordering::SeqCst), 2, "create + resend");
+    let (state, _, _) = notice_row_state(&h).await;
+    assert_eq!(state.as_deref(), Some("sent"));
+}
+
+#[tokio::test]
+async fn complaint_suppression_sends_enforcement_but_drops_verification() {
+    let (h, calls) = admin_with_provider(true).await;
+    let address = "complained@example.test";
+    email_suppression::Entity::upsert(
+        &h.state.sea_db,
+        address,
+        SuppressionUpsert {
+            reason: SuppressionReason::Complaint,
+            source: Some("test".to_string()),
+            diagnostic: None,
+            permanent: true,
+        },
+    )
+    .await
+    .unwrap();
+    let router = h.state.mailer.clone();
+    let verification = OutboundEmail {
+        to: address.to_string(),
+        subject: "Email verification code".to_string(),
+        html: None,
+        text: None,
+        template: Some(TEMPLATE_VERIFICATION),
+    };
+    let receipt = router.send(verification).await.expect("verification is Ok");
+    assert!(receipt.suppressed, "verification dropped by the router");
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        0,
+        "verification never reaches a provider"
+    );
+
+    let notice = OutboundEmail {
+        to: address.to_string(),
+        subject: "Notice".to_string(),
+        html: None,
+        text: None,
+        template: Some(TEMPLATE_ENFORCEMENT_NOTICE),
+    };
+    let receipt = router.send(notice).await.expect("enforcement is Ok");
+    assert!(
+        receipt.accepted_by_provider(),
+        "enforcement reaches the provider"
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn lookup_error_fails_closed_for_enforcement_only() {
+    let (h, calls) = admin_with_provider(true).await;
+    // Dropping the suppression table makes the lookup fail with a DB error.
+    h.state
+        .sea_db
+        .execute_unprepared("DROP TABLE email_suppression")
+        .await
+        .unwrap();
+    let router = h.state.mailer.clone();
+    let enforcement = OutboundEmail {
+        to: "any@example.test".to_string(),
+        subject: "Notice".to_string(),
+        html: None,
+        text: None,
+        template: Some(TEMPLATE_ENFORCEMENT_NOTICE),
+    };
+    let receipt = router.send(enforcement).await.expect("Ok, not sent");
+    assert!(receipt.suppressed, "enforcement fails closed");
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
 
 // Source-scan guards (house pattern): the ban contract writes no DELETE and
@@ -394,6 +660,7 @@ fn ban_contract_source_has_no_delete_or_user_cascade() {
         include_str!("../src/db/sea_models/enforcement_notice/actions.rs"),
         include_str!("../src/db/sea_models/enforcement_notice/model.rs"),
         include_str!("../src/modules/admin_user_bans_v1/controller.rs"),
+        include_str!("../src/modules/admin_user_bans_v1/notice.rs"),
     ];
     for src in sources {
         assert!(

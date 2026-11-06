@@ -44,6 +44,15 @@ fn tera_instance() -> Result<Tera, TemplateError> {
         source: e,
     })?;
 
+    tera.add_raw_template(
+        "enforcement_notice",
+        include_str!("enforcement_notice.html"),
+    )
+    .map_err(|e| TemplateError::Render {
+        name: "enforcement_notice".into(),
+        source: e,
+    })?;
+
     tera.add_raw_template("payment_receipt", include_str!("payment_receipt.html"))
         .map_err(|e| TemplateError::Render {
             name: "payment_receipt".into(),
@@ -150,6 +159,22 @@ mod tests {
         let html = render("subscription_confirmation", &ctx).unwrap();
         assert!(html.contains("Enterprise"));
         assert!(html.contains("2026-06-12"));
+    }
+
+    #[test]
+    fn render_enforcement_notice_en_and_ar() {
+        let mut ctx = tera::Context::new();
+        ctx.insert("app_name", "TestApp");
+        ctx.insert("user_name", "Frank");
+        ctx.insert("reason_en", "Spam");
+        ctx.insert("reason_ar", "رسائل مزعجة");
+        ctx.insert("expires_at", "2027-01-01 00:00");
+        let html = render("enforcement_notice", &ctx).unwrap();
+        assert!(html.contains("Spam"));
+        assert!(html.contains("تم تعليق حسابك"));
+        assert!(html.contains("dir=\"rtl\""));
+        // No appeal block without an appeal URL: nothing is promised that does not exist.
+        assert!(!html.contains("contest this decision"));
     }
 
     #[test]

@@ -8,6 +8,30 @@ use super::*;
 /// Retention class for ban decisions and their notices (the A32 sweeper reads it).
 pub const RETENTION_ENFORCEMENT_12M: &str = "enforcement_12m";
 
+pub const CHANNEL_EMAIL: &str = "email";
+
+/// Outcome of one delivery attempt. Stored as `delivery_state` (CHECK-constrained).
+/// `Sent` means the provider accepted the message for delivery or queued it. A
+/// provider `Ok` that accepted nothing is `SendFailed`, never `Sent`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeliveryState {
+    Sent,
+    Suppressed,
+    NoContactDetails,
+    SendFailed,
+}
+
+impl DeliveryState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Sent => "sent",
+            Self::Suppressed => "suppressed",
+            Self::NoContactDetails => "no_contact_details",
+            Self::SendFailed => "send_failed",
+        }
+    }
+}
+
 pub struct NewNotice {
     pub user_id: i32,
     pub ban_id: i32,
@@ -40,9 +64,40 @@ impl Entity {
             appeal_token_hash: Set(None),
             created_at: Set(now),
             retention_class: Set(RETENTION_ENFORCEMENT_12M.to_string()),
+            notice_channel: Set(CHANNEL_EMAIL.to_string()),
             ..Default::default()
         };
         Ok(row.insert(conn).await?)
+    }
+
+    /// The most recent notice for a ban decision (the one a resend targets).
+    pub async fn find_latest_for_ban<C: ConnectionTrait>(
+        conn: &C,
+        ban_id: i32,
+    ) -> DbResult<Option<Model>> {
+        Ok(Self::find()
+            .filter(Column::BanId.eq(ban_id))
+            .order_by_desc(Column::Id)
+            .one(conn)
+            .await?)
+    }
+
+    /// Record the provider-confirmed outcome. `sent_at` is set only for `sent`.
+    pub async fn record_delivery<C: ConnectionTrait>(
+        conn: &C,
+        notice_id: i64,
+        state: DeliveryState,
+        sent_at: Option<i64>,
+    ) -> DbResult<()> {
+        ActiveModel {
+            id: Set(notice_id),
+            delivery_state: Set(Some(state.as_str().to_string())),
+            sent_at: Set(sent_at),
+            ..Default::default()
+        }
+        .update(conn)
+        .await?;
+        Ok(())
     }
 
     pub async fn list_for_user<C: ConnectionTrait>(conn: &C, user_id: i32) -> DbResult<Vec<Model>> {

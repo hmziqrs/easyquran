@@ -151,6 +151,7 @@ impl MailProvider for CloudflareMailProvider {
             delivered: result.delivered.len() as u32,
             queued: result.queued.len() as u32,
             permanent_bounces: result.permanent_bounces,
+            suppressed: false,
         })
     }
 

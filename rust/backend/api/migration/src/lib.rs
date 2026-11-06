@@ -26,6 +26,7 @@ mod m000030_user_ban_contract;
 mod m000031_reminder_schedules;
 mod m000032_user_bans_evidence_safe;
 mod m000050_audit_logs_evidence;
+mod m000033_notice_channel;
 
 pub struct Migrator;
 
@@ -113,6 +114,8 @@ impl MigratorTrait for Migrator {
             // m000050 rebuilds audit_logs with no FK to users and adds expires_at and
             // retention_class (A23). Numbers m000033 to m000049 are skipped on purpose.
             Box::new(m000050_audit_logs_evidence::Migration),
+            // m000033 adds enforcement_notices.notice_channel (A21). Constant default, guarded add.
+            Box::new(m000033_notice_channel::Migration),
         ]
     }
 }

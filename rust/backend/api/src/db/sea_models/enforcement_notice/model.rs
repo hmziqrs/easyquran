@@ -22,6 +22,7 @@ pub struct Model {
     pub appeal_token_hash: Option<String>,
     pub created_at: i64,
     pub retention_class: String,
+    pub notice_channel: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

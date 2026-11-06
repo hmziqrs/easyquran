@@ -14,7 +14,7 @@ use ruxlog_types::enums::SuppressionReason;
 
 use super::provider::{
     is_transactional, MailError, MailProvider, OutboundEmail, ParsedMailEvent, SendReceipt,
-    WebhookEvent, TEMPLATE_NEWSLETTER,
+    WebhookEvent, TEMPLATE_ENFORCEMENT_NOTICE, TEMPLATE_NEWSLETTER,
 };
 
 pub const MAIL_RCPT_CFG: AbuseLimiterConfig = AbuseLimiterConfig {
@@ -116,22 +116,27 @@ impl MailRouter {
         }
     }
 
-    async fn lookup_suppressed(&self, recipient: &str) -> Result<bool, ()> {
+    /// `Some(reason)` when the recipient is suppressed for sending. The caller
+    /// decides what the reason means for the template being sent.
+    async fn lookup_suppressed(&self, recipient: &str) -> Result<Option<SuppressionReason>, ()> {
         let row = match SuppressionEntity::find_by_recipient(&self.db, recipient).await {
             Ok(m) => m,
             Err(e) => {
                 // PII: log only the recipient domain, never the full address.
                 let domain = recipient.split('@').nth(1).unwrap_or("unknown");
-                warn!(error = %e, %domain, "suppression lookup failed (fail-open)");
+                warn!(error = %e, %domain, "suppression lookup failed");
                 return Err(());
             }
         };
         let Some(row) = row else {
-            return Ok(false);
+            return Ok(None);
         };
         let now = Utc::now().timestamp();
         let within_cooldown = now - row.last_seen.timestamp() <= self.limits.soft_cooldown_secs;
-        Ok(row.permanent || (row.reason == SuppressionReason::Bounce && within_cooldown))
+        if row.permanent || (row.reason == SuppressionReason::Bounce && within_cooldown) {
+            return Ok(Some(row.reason));
+        }
+        Ok(None)
     }
 
     async fn check_rate(&self, recipient: &str, transactional: bool) -> Result<(), MailError> {
@@ -240,20 +245,27 @@ impl MailProvider for MailRouter {
 
         let transactional = is_transactional(msg.template);
 
+        // Enforcement notices (A21) go out despite a complaint suppression, and
+        // fail closed on a lookup error. Every other template keeps the old rules.
+        let enforcement = msg.template == Some(TEMPLATE_ENFORCEMENT_NOTICE);
         let suppressed = match self.lookup_suppressed(&msg.to).await {
-            Ok(true) => true,
-            Ok(false) => false,
+            Ok(Some(reason)) => !(enforcement && reason == SuppressionReason::Complaint),
+            Ok(None) => false,
             Err(()) => {
                 router_metrics.suppression_check_failed.add(1, &[]);
-                false
+                enforcement
             }
         };
         if suppressed {
             router_metrics.suppressed.add(1, &[]);
             if transactional {
                 // Anti-enumeration: MUST return Ok and look identical to a real send — erroring would leak that the account is suppressed.
+                // The receipt flag is internal: callers that must not reveal suppression ignore it.
                 debug!(template = ?msg.template, "suppressed transactional send dropped");
-                return Ok(SendReceipt::default());
+                return Ok(SendReceipt {
+                    suppressed: true,
+                    ..SendReceipt::default()
+                });
             }
             return Err(MailError::Suppressed);
         }
