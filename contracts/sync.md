@@ -176,3 +176,6 @@ Each account may take 5,000 accepted mutations per UTC day, counted across readi
 | Very large first sync or import above the daily ceiling | Stays dirty, continues next day, surfaced; pulls still work |
 | Rate limited, many devices or tabs | One polling tab; `Retry-After` honoured |
 | Two settings changed on two devices | Both survive |
+| Second account signs in on one device | Separate partition, id, key and hint; nothing crosses |
+| Remote sign-out while device is offline | Next call 401; dirty rows wait; after sign-in a new id via 409 |
+| Signature formats differ by platform | Fixed 64-byte raw form on the wire; vectors enforce |

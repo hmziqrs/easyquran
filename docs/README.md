@@ -51,7 +51,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 
 | Item                                                                   | Title                                        | Blocked by |
 | ---------------------------------------------------------------------- | -------------------------------------------- | ---------- |
-| [D3](plans/devices.md#d3-device-fingerprint-and-continuity)            | Device fingerprint and continuity            | D2         |
 | [D4](plans/devices.md#d4-devices-on-the-account-page)                  | Devices on the account page                  | D2, U1     |
 | [D5](plans/devices.md#d5-handoff-by-device)                            | Handoff by device                            | D3, S9     |
 | [D6](plans/devices.md#d6-native-client-contract-and-session-transport) | Native client contract and session transport | D3, D5     |
@@ -103,13 +102,9 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 | [F7](plans/product.md#f7-self-service-account-deletion)            | Self-service account deletion          | F6, A38    |
 | [F8](plans/product.md#f8-reading-goals-and-streaks)                | Reading goals and streaks              | S7         |
 | [F9](plans/product.md#f9-goal-reminders)                           | Goal reminders                         | F8         |
-| [F10](plans/product.md#f10-pin-and-compare-verses)                 | Pin and compare verses                 | -          |
-| [F11](plans/product.md#f11-parallel-translation-layout)            | Parallel translation layout            | -          |
-| [F12](plans/product.md#f12-deeper-navigation)                      | Deeper navigation                      | -          |
 | [F13](plans/product.md#f13-share-dialog-and-image-card)            | Share dialog and image card            | -          |
 | [F14](plans/product.md#f14-bookmark-bulk-actions)                  | Bookmark bulk actions                  | S7         |
 | [F15](plans/product.md#f15-voice-search)                           | Voice search                           | -          |
-| [F16](plans/product.md#f16-public-daily-ayah-route)                | Public daily ayah route                | -          |
 | [F17](plans/product.md#f17-translation-correction-report)          | Translation correction report          | A24        |
 | [F18](plans/product.md#f18-rtl-polish-and-localized-text-variants) | RTL polish and localized text variants | -          |
 | [F19](plans/product.md#f19-recitation-audio-and-player)            | Recitation audio and player            | O22        |

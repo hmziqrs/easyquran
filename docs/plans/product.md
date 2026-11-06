@@ -33,24 +33,6 @@ Files: `rust/backend/api/src/modules/notification_v1/`, `web/src/lib/firebase/`,
 Done when: a scheduled reminder fires at the user's local time, respects quiet hours, and stops on unsubscribe.
 Blocked by: F8
 
-#### F10. Pin and compare verses
-
-Build: device-local ordered pin set (no sync at launch) with add, remove and reorder; compare drawer with composed Arabic and translation selection; mobile and overflow handling; convert pins into a bookmark folder.
-Files: `web/src/routes/(application)/_reader/VerseTools.svelte`, new: `web/src/lib/stores/pins.svelte.ts`
-Done when: pins survive navigation, compare renders on phone and desktop, conversion creates a folder.
-
-#### F11. Parallel translation layout
-
-Build: side-by-side presentation for stacked translations (extras stack vertically today, verse mode only); per-extra font controls. Keep the current extras limit if one exists; otherwise set 5. Stays client-only, no change to cache keys.
-Files: `web/src/routes/(application)/_reader/StackedLanes.svelte`, `web/src/routes/(application)/_reader/stacked-translations.svelte.ts`
-Done when: side-by-side works with up to 5 extras, collapses on narrow screens, and SSR/cache keys are untouched.
-
-#### F12. Deeper navigation
-
-Build: revelation-order sort in the sidebar (`revelationOrder` is in the data); `surah:ayah` and range jump from anywhere in the palette, extending the existing go-to-verse action in the palette's Quran source rather than adding a second one; browse by ruku, manzil and sajda from existing metadata and `/quran/v1` routes.
-Files: `web/src/routes/(application)/_reader/Sidebar.svelte`, `web/src/routes/(application)/_reader/IndexTabs.svelte`, `web/src/lib/components/search/GlobalSearchPalette.svelte`
-Done when: `2:255` and `2:255-2:286` jump correctly from any route with translation context preserved; revelation sort and new browse lists are tested.
-
 #### F13. Share dialog and image card
 
 Build: dialog for range, source and format with attribution options and the canonical link (`…/{slug}?ayah=2:255-2:286`); branded accessible image card with download. Plain copy/share stays the fast path. Video waits for audio.
@@ -69,12 +51,6 @@ Blocked by: S7
 Build: voice input in the palette and `/search` with unsupported, permission and error states. Preserve the Arabic normalization/parity contract. The microphone is blocked today by `Permissions-Policy: microphone=()` in `web/src/hooks.server.ts`, `web/server.ts` and `security_headers.rs`; allow `self` on the web tier only and update `web/scripts/assert-headers.sh`. Browser speech recognition can send audio to the browser vendor, so add a privacy sentence and the A34 ledger reference.
 Files: `web/src/lib/components/search/GlobalSearchPalette.svelte`, `web/src/routes/(application)/search/+page.svelte`, `web/src/hooks.server.ts`, `web/server.ts`, `web/scripts/assert-headers.sh`
 Done when: control is hidden where unsupported; denied and failed states are handled and tested.
-
-#### F16. Public daily ayah route
-
-Build: indexable daily route from `/quran/random`, which is already deterministic per UTC date and cached to UTC midnight. Source-aware link, share metadata.
-Files: `web/src/lib/home/daily-ayah.ts`, `web/src/routes/(marketing)/`
-Done when: every visitor sees the same ayah on a UTC day; link preserves translation context.
 
 #### F17. Translation correction report
 

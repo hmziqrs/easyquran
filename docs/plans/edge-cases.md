@@ -27,8 +27,6 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 | Case                                           | Required behaviour                                                                                                    | Item       |
 | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------- |
 | Native app unused for weeks                    | 180-day session                                                                                                       | D6         |
-| Second account signs in on one device          | Separate partition, id, key and hint; nothing crosses                                                                 | S2, D3, S9 |
-| Remote sign-out while device is offline        | Next call 401; dirty rows wait; after sign-in a new id via 409                                                        | D2, D3, S9 |
 | Account deleted on another device              | Next call 401. Local data stays until cleared, per the survives-logout policy. Non-dirty cache dropped after 180 days | S7, F7     |
 | Minor flag set                                 | No device row; random stamp tail; existing rows deleted                                                               | D2, A34    |
 | Session rotation on a native client            | `x-eq-session` replaced, CSRF refetched; lost response means sign in again                                            | D6         |
@@ -42,16 +40,7 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 | iOS reinstall                                              | Keychain survives: same row                                   | D3, O32     |
 | Android reinstall                                          | Hint matches: same row                                        | D3, O32     |
 | Backup restored onto a new phone or Mac                    | `ThisDeviceOnly` and hardware keys absent: new row            | D3, O32     |
-| Keychain item visible but key unusable                     | Treated as lost                                               | D3          |
-| Android lock screen removed                                | No user-auth binding, so key survives                         | D3          |
 | Android device-to-device transfer                          | Identity excluded by `dataExtractionRules`; new row           | D3, M3, O32 |
-| Phone locked during background sync                        | Sync uses no key                                              | D3          |
-| Web IndexedDB or `localStorage` cleared, session alive     | Rung 2: same row                                              | D3          |
-| Private window, insecure origin, WebCrypto failure         | `key_store: none`; still reads and syncs                      | D3          |
-| Two browsers, or browser and installed PWA, on one machine | Separate devices, by design                                   | D3          |
-| Two machines sharing `MachineGuid` or `machine-id`         | Detected on the second install; rows split; nobody signed out | D3          |
-| Full disk clone with keys intact                           | Accepted limit: one row; sync still correct                   | D3, S9      |
-| Android multi-user or work profile                         | Separate devices                                              | D3          |
 | Tablet, foldable, or desktop-mode iPad changes form factor | Latest register wins; label follows the last write            | D2, D5      |
 | Device removed while its threads remain                    | Label falls back to device kind                               | D5          |
 | Push token rotates or goes stale                           | Re-uploaded on refresh; terminal errors prune it              | D2, A36     |
@@ -61,7 +50,6 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 
 | Case                                          | Required behaviour                                                 | Item     |
 | --------------------------------------------- | ------------------------------------------------------------------ | -------- |
-| Signature formats differ by platform          | Fixed 64-byte raw form on the wire; vectors enforce                | D3       |
 | New client implementation                     | Must pass all shared vectors and O32                               | D6       |
 | Many users behind one carrier IP              | User bucket governs; IP bucket at least 10×                        | A6, D6   |
 | Microphone or audio blocked by browser policy | Headers and CSP updated with the feature                           | F15, F19 |

@@ -89,3 +89,12 @@ Retired and merged rows never appear in the device list. Sync rows keep their de
 | Remote sign-out while offline | `a_removed_id_cannot_register_again` (D2) |
 
 Manual only (need a device): iOS and Android reinstall (server side: `rung_three_*`), Android lock-screen removal, Android device-to-device transfer, Android multi-user and work profile, backup restored onto a new phone or Mac, phone locked during background sync, and iOS key detection.
+| Keychain item visible but key unusable | Treated as lost |
+| Android lock screen removed | No user-auth binding, so key survives |
+| Phone locked during background sync | Sync uses no key |
+| Web IndexedDB or `localStorage` cleared, session alive | Rung 2: same row |
+| Private window, insecure origin, WebCrypto failure | `key_store: none`; still reads and syncs |
+| Two browsers, or browser and installed PWA, on one machine | Separate devices, by design |
+| Two machines sharing `MachineGuid` or `machine-id` | Detected on the second install; rows split; nobody signed out |
+| Full disk clone with keys intact | Accepted limit: one row; sync still correct |
+| Android multi-user or work profile | Separate devices |

@@ -84,6 +84,8 @@
         onClick: () => restoreReadingBookmark(previous),
       },
     });
+  }
+
   // Pins keep the row's main text and the lanes it shows, device-local, in pin order.
   function onPin(): void {
     const result = pins.toggle({
