@@ -179,8 +179,3 @@ export const toEasternDigits = (n: number | string): string =>
 
 export const surahMeta = (s: Pick<CatalogEntry, "place" | "ayahCount">): string =>
   `${s.place === "meccan" ? "Meccan" : "Medinan"} · ${s.ayahCount} verses`;
-
-export const tafsirFor = (key: VerseKey): string => {
-  const { num } = parseKey(key);
-  return `Sample commentary for Surah ${num}, ${key} — in the full app this slot carries a short, credited tafsir summary.`;
-};
