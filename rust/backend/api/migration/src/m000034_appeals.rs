@@ -16,7 +16,7 @@ const STMTS: &[&str] = &[
         notice_id INTEGER NOT NULL,
         user_id INTEGER NOT NULL,
         statement TEXT NOT NULL CHECK (length(statement) BETWEEN 1 AND 2000),
-        status TEXT NOT NULL CHECK (status IN ('open', 'decided')),
+        status TEXT NOT NULL CHECK (status IN ('open', 'upheld', 'overturned')),
         submitted_at INTEGER NOT NULL,
         due_at INTEGER NOT NULL CHECK (due_at >= submitted_at),
         decided_at INTEGER,
