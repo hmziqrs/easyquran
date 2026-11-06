@@ -15,6 +15,7 @@ mod m000012_bookmark_context;
 mod m000013_reading_sessions;
 mod m000014_user_analytics;
 mod m000015_newsletter_subscribers;
+mod m000017_sync_protocol;
 
 pub struct Migrator;
 
@@ -72,6 +73,7 @@ impl MigratorTrait for Migrator {
             // m000015 restores newsletter_subscribers, dropped from the chain by
             // the m000001 squash (4876e8e1); the seeder and newsletter_v1 need it.
             Box::new(m000015_newsletter_subscribers::Migration),
+            Box::new(m000017_sync_protocol::Migration),
         ]
     }
 }

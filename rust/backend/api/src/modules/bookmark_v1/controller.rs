@@ -1,12 +1,19 @@
+//! Folders and bookmarks: one POST /sync pushes rows and pulls a delta inside a
+//! single transaction. Rows merge by stamp through `eq-sync-core`
+//! (contracts/sync.md), each row gets its own result, and a pull delivers changes
+//! by `rev`, tombstones included.
+
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use axum_macros::debug_handler;
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::Utc;
+use eq_sync_core::{format_stamp, parse_stamp};
 use sea_orm::{DatabaseTransaction, TransactionTrait};
-use serde_json::json;
+use serde_json::{json, Value};
 use tracing::instrument;
+use validator::Validate;
 
 use crate::{
-    db::sea_models::{bookmark, bookmark_folder},
+    db::sea_models::{bookmark, bookmark_folder, sync_counter},
     error::{DbResult, DbResultExt, ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
     quran::QuranStore,
@@ -16,38 +23,33 @@ use crate::{
 
 use super::validator::{MutationKind, SyncMutation, V1BookmarkSyncPayload};
 
-/// Kind-specific requiredness the derive can't express on the flat wire
-/// struct: bookmark.upsert needs surah + ayah, folder.upsert needs name.
-fn ensure_kind_fields(m: &SyncMutation) -> Result<(), ErrorResponse> {
-    let message = match m.kind {
-        MutationKind::BookmarkUpsert if m.surah.is_none() || m.ayah.is_none() => {
-            Some("surah and ayah are required for bookmark.upsert")
-        }
-        MutationKind::FolderUpsert if m.name.is_none() => {
-            Some("name is required for folder.upsert")
-        }
-        _ => None,
-    };
-    match message {
-        Some(msg) => Err(ErrorResponse::new(ErrorCode::InvalidInput).with_message(msg)),
-        None => Ok(()),
+const CLOCK_SKEW_ALLOWANCE_MS: i64 = 60_000;
+const PULL_PAGE: u64 = 200;
+pub const MIN_PROTOCOL: u32 = 1;
+
+fn bounded_stamp(stamp: &str, server_ms: i64) -> Option<String> {
+    let parsed = parse_stamp(stamp)?;
+    let ceiling = server_ms + CLOCK_SKEW_ALLOWANCE_MS;
+    if parsed.ms as i64 > ceiling {
+        return Some(format_stamp(ceiling as u64, parsed.counter, &parsed.device));
     }
+    Some(stamp.to_string())
 }
 
 /// Cross-field range validation the flat derive can't express (EC-39): the
 /// end must not precede the start, every endpoint must exist (per-surah ayah
 /// counts via `global_of` — the flat 1..=286 bound alone lets 1:8 through),
 /// and the span is capped at 50 verses like the reader's `?keys` API.
-fn ensure_valid_range(quran: &QuranStore, m: &SyncMutation) -> Result<(), ErrorResponse> {
+fn ensure_valid_range(quran: &QuranStore, m: &SyncMutation) -> Result<(), &'static str> {
     if m.kind != MutationKind::BookmarkUpsert {
         return Ok(());
     }
-    let bad =
-        |msg: &'static str| Err(ErrorResponse::new(ErrorCode::InvalidInput).with_message(msg));
-    let (surah, ayah) = (m.surah.unwrap_or_default(), m.ayah.unwrap_or_default());
+    let (Some(surah), Some(ayah)) = (m.surah, m.ayah) else {
+        return Err("surah and ayah are required for bookmark.upsert");
+    };
     let (end_surah, end_ayah) = (m.end_surah.unwrap_or(surah), m.end_ayah.unwrap_or(ayah));
     if (end_surah, end_ayah) < (surah, ayah) {
-        return bad("range end must not precede its start");
+        return Err("range end must not precede its start");
     }
     let meta = quran.meta();
     let start = meta
@@ -57,126 +59,223 @@ fn ensure_valid_range(quran: &QuranStore, m: &SyncMutation) -> Result<(), ErrorR
         .sura(end_surah as u16)
         .and_then(|s| s.global_of(end_ayah as u16));
     let (Some(start), Some(end)) = (start, end) else {
-        return bad("range endpoint is not a verse");
+        return Err("range endpoint is not a verse");
     };
     if end - start + 1 > 50 {
-        return bad("range span exceeds 50 verses");
+        return Err("range span exceeds 50 verses");
     }
     Ok(())
 }
 
-/// Same clock-skew clamp as reading_session_v1: a fast device cannot stamp a
-/// write into the future and win every later LWW comparison.
-const CLOCK_SKEW_ALLOWANCE_SECS: i64 = 60;
-
-fn clamp_ts(ts: DateTime<FixedOffset>) -> DateTime<FixedOffset> {
-    let ceiling = Utc::now() + chrono::Duration::seconds(CLOCK_SKEW_ALLOWANCE_SECS);
-    if ts.with_timezone(&Utc) > ceiling {
-        ceiling.fixed_offset()
-    } else {
-        ts
-    }
+fn rejected(id: String, reason: &str) -> Value {
+    json!({ "id": id, "status": "rejected", "reason": reason })
 }
 
-/// Resolve the wire folder_id against THIS user's LIVE folders: absent,
-/// unknown, foreign, or tombstoned ids file the bookmark in the default
-/// folder — never a dead or foreign folder.
-async fn resolve_folder_id(
-    tx: &DatabaseTransaction,
-    user_id: i32,
-    folder_id: Option<&str>,
-) -> Result<String, ErrorResponse> {
-    match folder_id {
-        Some(fid) if bookmark_folder::Entity::live_for_user(tx, user_id, fid).await? => {
-            Ok(fid.to_string())
-        }
-        _ => Ok(bookmark_folder::default_folder_id(user_id)),
-    }
+fn updated_at_of(raw: &Value) -> String {
+    raw.get("updatedAt")
+        .and_then(Value::as_str)
+        .map_or_else(|| Utc::now().to_rfc3339(), str::to_string)
 }
 
-/// Apply one mutation, LWW-resolved. Returns 1 when a row changed (applied),
-/// 0 when skipped by LWW, quota, or the default-folder delete guard.
-async fn apply_mutation(
+fn folder_registers(m: &SyncMutation, server_ms: i64) -> Value {
+    let mut row = json!({ "id": m.id });
+    if let (Some(stamp), Some(name)) = (
+        m.name_stamp
+            .as_deref()
+            .and_then(|s| bounded_stamp(s, server_ms)),
+        m.name.as_deref(),
+    ) {
+        row["name"] = json!({ "stamp": stamp, "value": name });
+    }
+    if let Some(stamp) = m
+        .position_stamp
+        .as_deref()
+        .and_then(|s| bounded_stamp(s, server_ms))
+    {
+        row["position"] = json!({ "stamp": stamp, "value": m.position });
+    }
+    if let Some(stamp) = m
+        .deleted_stamp
+        .as_deref()
+        .and_then(|s| bounded_stamp(s, server_ms))
+    {
+        row["deleted"] = json!({ "stamp": stamp, "value": m.deleted.unwrap_or(false) });
+    }
+    row
+}
+
+fn folder_stamps(row: &bookmark_folder::Model) -> Value {
+    json!({ "name": row.name_stamp, "position": row.position_stamp, "deleted": row.deleted_stamp })
+}
+
+async fn apply_folder(
     tx: &DatabaseTransaction,
     user_id: i32,
     m: &SyncMutation,
-) -> Result<u64, ErrorResponse> {
-    let updated_at = clamp_ts(m.updated_at);
+    raw: &Value,
+    server_ms: i64,
+) -> DbResult<Value> {
+    use bookmark_folder::FolderOutcome as Out;
+    let incoming = folder_registers(m, server_ms);
+    let updated_at = updated_at_of(raw);
+    let verdict = match bookmark_folder::Entity::merge_write(
+        tx,
+        user_id,
+        &m.id,
+        &incoming,
+        &updated_at,
+    )
+    .await?
+    {
+        Out::Applied(row) => {
+            json!({ "id": m.id, "status": "applied", "stamps": folder_stamps(&row), "rev": row.rev })
+        }
+        Out::Superseded(row) => {
+            json!({ "id": m.id, "status": "superseded", "stamps": folder_stamps(&row), "rev": row.rev })
+        }
+        Out::Capped => json!({ "id": m.id, "status": "capped" }),
+        Out::SupersededBelowFloor => json!({ "id": m.id, "status": "superseded" }),
+        Out::Incomplete => rejected(m.id.clone(), "a new folder needs a name"),
+    };
+    Ok(verdict)
+}
+
+async fn apply_bookmark(
+    tx: &DatabaseTransaction,
+    user_id: i32,
+    m: &SyncMutation,
+    raw: &Value,
+    server_ms: i64,
+) -> DbResult<Value> {
+    use bookmark::BookmarkOutcome as Out;
+    let Some(stamp) = m.stamp.as_deref().and_then(|s| bounded_stamp(s, server_ms)) else {
+        return Ok(rejected(m.id.clone(), "bookmark.upsert needs a stamp"));
+    };
+    let default_id = bookmark_folder::default_folder_id(user_id);
+    let surah = m.surah.unwrap_or_default();
+    let ayah = m.ayah.unwrap_or_default();
+    let updated_at = updated_at_of(raw);
+    let write = bookmark::BookmarkWrite {
+        id: &m.id,
+        stamp: &stamp,
+        folder_id: m.folder_id.as_deref().unwrap_or(&default_id),
+        source_id: m.source_id.as_deref(),
+        surah,
+        ayah,
+        end_surah: m.end_surah.unwrap_or(surah),
+        end_ayah: m.end_ayah.unwrap_or(ayah),
+        deleted: m.deleted.unwrap_or(false),
+        updated_at: &updated_at,
+    };
+    let verdict = match bookmark::Entity::merge_write(tx, user_id, &write).await? {
+        Out::Applied(row) => {
+            json!({ "id": m.id, "status": "applied", "stamps": { "row": row.stamp }, "rev": row.rev })
+        }
+        Out::Superseded(row) => {
+            json!({ "id": m.id, "status": "superseded", "stamps": { "row": row.stamp }, "rev": row.rev })
+        }
+        Out::Capped => json!({ "id": m.id, "status": "capped" }),
+        Out::SupersededBelowFloor => json!({ "id": m.id, "status": "superseded" }),
+    };
+    Ok(verdict)
+}
+
+/// One row, one verdict. A bad row is refused alone; the others still land.
+async fn apply_row(
+    tx: &DatabaseTransaction,
+    quran: &QuranStore,
+    user_id: i32,
+    raw: &Value,
+    server_ms: i64,
+) -> DbResult<Value> {
+    let row_id: String = raw
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .chars()
+        .take(36)
+        .collect();
+    let Ok(m) = serde_json::from_value::<SyncMutation>(raw.clone()) else {
+        return Ok(rejected(row_id, "row does not parse"));
+    };
+    if m.validate().is_err() {
+        return Ok(rejected(row_id, "row fails validation"));
+    }
+    if let Err(reason) = ensure_valid_range(quran, &m) {
+        return Ok(rejected(row_id, reason));
+    }
     match m.kind {
-        MutationKind::FolderUpsert => {
-            // ensure_kind_fields guaranteed Some(name) for folder.upsert.
-            let name = m.name.as_deref().unwrap_or_default();
-            bookmark_folder::Entity::upsert_lww(tx, user_id, &m.id, name, m.position, updated_at)
-                .await
-        }
-        MutationKind::FolderDelete => {
-            bookmark_folder::Entity::delete_lww(tx, user_id, &m.id, updated_at).await
-        }
-        MutationKind::BookmarkUpsert => {
-            let folder_id = resolve_folder_id(tx, user_id, m.folder_id.as_deref()).await?;
-            let surah = m.surah.unwrap_or_default();
-            let ayah = m.ayah.unwrap_or_default();
-            // Absent wire end = single ayah (end = start); ensure_valid_range
-            // proved the endpoints real and the end ≥ the start.
-            let write = bookmark::BookmarkWrite {
-                id: &m.id,
-                folder_id: &folder_id,
-                source_id: m.source_id.as_deref(),
-                surah,
-                ayah,
-                end_surah: m.end_surah.unwrap_or(surah),
-                end_ayah: m.end_ayah.unwrap_or(ayah),
-            };
-            bookmark::Entity::upsert_lww(tx, user_id, &write, updated_at).await
-        }
-        MutationKind::BookmarkDelete => {
-            bookmark::Entity::delete_lww(tx, user_id, &m.id, updated_at).await
-        }
+        MutationKind::FolderUpsert => apply_folder(tx, user_id, &m, raw, server_ms).await,
+        MutationKind::BookmarkUpsert => apply_bookmark(tx, user_id, &m, raw, server_ms).await,
     }
 }
 
-/// One full round inside the caller's transaction: apply every mutation
-/// (LWW-resolved), then read the snapshot from the SAME transaction — the
-/// response can never observe a half-applied round.
-async fn sync_round(
+fn folder_wire(row: &bookmark_folder::Model) -> Value {
+    if row.deleted_at.is_some() {
+        return json!({
+            "id": row.id, "deleted": true, "rev": row.rev,
+            "nameStamp": row.name_stamp, "positionStamp": row.position_stamp,
+            "deletedStamp": row.deleted_stamp,
+        });
+    }
+    json!({
+        "id": row.id, "name": row.name, "isDefault": row.is_default, "position": row.position,
+        "deleted": false, "rev": row.rev, "updatedAt": row.updated_at,
+        "nameStamp": row.name_stamp, "positionStamp": row.position_stamp,
+        "deletedStamp": row.deleted_stamp,
+    })
+}
+
+fn bookmark_wire(row: &bookmark::Model) -> Value {
+    // A tombstone keeps its key: the rival-key rule needs it.
+    let mut wire = json!({
+        "id": row.id, "folderId": row.folder_id, "surah": row.surah, "ayah": row.ayah,
+        "endSurah": row.end_surah, "endAyah": row.end_ayah,
+        "deleted": row.deleted_at.is_some(), "stamp": row.stamp, "rev": row.rev,
+    });
+    if row.deleted_at.is_none() {
+        wire["sourceId"] = json!(row.source_id);
+        wire["createdAt"] = json!(row.created_at);
+        wire["updatedAt"] = json!(row.updated_at);
+    }
+    wire
+}
+
+struct PullPage {
+    folders: Vec<bookmark_folder::Model>,
+    bookmarks: Vec<bookmark::Model>,
+    high: i64,
+    more: bool,
+}
+
+async fn pull_page(
     tx: &DatabaseTransaction,
     user_id: i32,
-    mutations: &[SyncMutation],
-) -> DbResult<(
-    u64,
-    u64,
-    Vec<bookmark_folder::FolderListItem>,
-    Vec<bookmark::BookmarkListItem>,
-)> {
-    bookmark_folder::Entity::ensure_default(tx, user_id).await?;
-    let mut applied: u64 = 0;
-    let mut skipped: u64 = 0;
-    for m in mutations {
-        if apply_mutation(tx, user_id, m).await? > 0 {
-            applied += 1;
-        } else {
-            skipped += 1;
-        }
-    }
-
-    // Snapshot is unbounded by design: every round returns the user's ENTIRE
-    // folder + bookmark set (full pull, server truth). Fine at bookmark scale
-    // — rows are tiny and bounded by one account's history. If scale ever
-    // demands it, the pagination seam is exactly these two list_for_user
-    // reads (swap for a cursor variant); the LWW mutation core above stays
-    // untouched.
-    let folders: Vec<bookmark_folder::FolderListItem> =
-        bookmark_folder::Entity::list_for_user(tx, user_id)
-            .await?
-            .into_iter()
-            .map(Into::into)
-            .collect();
-    let bookmarks: Vec<bookmark::BookmarkListItem> = bookmark::Entity::list_for_user(tx, user_id)
-        .await?
-        .into_iter()
-        .map(Into::into)
+    after: i64,
+    full: bool,
+) -> DbResult<PullPage> {
+    let folders =
+        bookmark_folder::Entity::page_since(tx, user_id, after, full, PULL_PAGE + 1).await?;
+    let bookmarks = bookmark::Entity::page_since(tx, user_id, after, full, PULL_PAGE + 1).await?;
+    let mut revs: Vec<i64> = folders
+        .iter()
+        .map(|f| f.rev)
+        .chain(bookmarks.iter().map(|b| b.rev))
         .collect();
-    Ok((applied, skipped, folders, bookmarks))
+    revs.sort_unstable();
+    let more = revs.len() as u64 > PULL_PAGE;
+    let high = revs
+        .iter()
+        .take(PULL_PAGE as usize)
+        .last()
+        .copied()
+        .unwrap_or(after);
+    Ok(PullPage {
+        folders: folders.into_iter().filter(|f| f.rev <= high).collect(),
+        bookmarks: bookmarks.into_iter().filter(|b| b.rev <= high).collect(),
+        high,
+        more,
+    })
 }
 
 #[debug_handler]
@@ -191,23 +290,40 @@ pub async fn sync(
         return Err(ErrorResponse::new(ErrorCode::OperationNotAllowed)
             .with_message("Bookmark sync account changed"));
     }
-    let mutations = payload.mutations.as_deref().unwrap_or(&[]);
-
-    // Validate every mutation before applying any: a bad item mid-queue must
-    // reject the whole round, not leave a half-applied push. Range endpoints
-    // check against the Quran meta (EC-39) — reads only, the DBs stay
-    // immutable.
-    for m in mutations {
-        ensure_kind_fields(m)?;
-        ensure_valid_range(&state.quran, m)?;
+    if payload.client.as_ref().map_or(MIN_PROTOCOL, |c| c.protocol) < MIN_PROTOCOL {
+        return Ok((
+            StatusCode::UPGRADE_REQUIRED,
+            Json(json!({ "error": "protocol_too_old", "minProtocol": MIN_PROTOCOL })),
+        ));
     }
+    let mutations = payload.mutations.as_deref().unwrap_or(&[]);
+    let since = payload.since.unwrap_or(0);
+    let server_ms = Utc::now().timestamp_millis();
 
-    // Push and pull share ONE transaction: resolve_folder_id's
-    // SELECT-then-insert cannot race a concurrent folder delete into an FK
-    // violation (SQLite serializes writers inside the tx), and any error rolls
-    // the whole round back — no partial state survives.
+    // Push and pull share ONE transaction, so a folder delete cannot race a write
+    // into it and any error rolls the whole round back.
     let tx = state.sea_db.begin().await.map_err_to_response()?;
-    let (applied, skipped, folders, bookmarks) = match sync_round(&tx, user.id, mutations).await {
+    let round = async {
+        bookmark_folder::Entity::ensure_default(&tx, user.id).await?;
+        let mut results = Vec::with_capacity(mutations.len());
+        for raw in mutations {
+            results.push(apply_row(&tx, &state.quran, user.id, raw, server_ms).await?);
+        }
+        let full = since == 0;
+        let after = if full {
+            payload.after.unwrap_or(-1)
+        } else {
+            since
+        };
+        let page = pull_page(&tx, user.id, after, full).await?;
+        let domain = bookmark::BOOKMARKS_DOMAIN;
+        let latest = sync_counter::current_rev(&tx, user.id, domain).await?;
+        let floor = sync_counter::floor_rev(&tx, user.id, domain).await?;
+        let epoch = sync_counter::sync_epoch(&tx).await?;
+        DbResult::Ok((results, page, latest, floor, epoch))
+    }
+    .await;
+    let (results, page, latest, floor, epoch) = match round {
         Ok(round) => round,
         Err(err) => {
             tx.rollback().await.map_err_to_response()?;
@@ -216,14 +332,29 @@ pub async fn sync(
     };
     tx.commit().await.map_err_to_response()?;
 
+    let count = |status: &str| results.iter().filter(|r| r["status"] == status).count();
+    let rev = if page.more || since > 0 {
+        page.high
+    } else {
+        latest
+    };
     Ok((
         StatusCode::OK,
         Json(json!({
-            "serverTime": chrono::Utc::now().timestamp_millis(),
-            "applied": applied,
-            "skipped": skipped,
-            "folders": folders,
-            "bookmarks": bookmarks,
+            "serverTime": server_ms,
+            "syncEpoch": epoch,
+            "results": results,
+            "applied": count("applied"),
+            "superseded": count("superseded"),
+            "rejected": count("rejected"),
+            "capped": count("capped"),
+            "folders": page.folders.iter().map(folder_wire).collect::<Vec<_>>(),
+            "bookmarks": page.bookmarks.iter().map(bookmark_wire).collect::<Vec<_>>(),
+            "defaultFolderId": bookmark_folder::default_folder_id(user.id),
+            "rev": rev,
+            "latestRev": latest,
+            "more": page.more,
+            "tombstoneFloor": floor,
         })),
     ))
 }

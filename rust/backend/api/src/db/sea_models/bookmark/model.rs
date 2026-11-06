@@ -22,6 +22,9 @@ pub struct Model {
     pub deleted_at: Option<DateTimeWithTimeZone>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
+    /// Whole-row register stamp; NULL ranks lowest.
+    pub stamp: Option<String>,
+    pub rev: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

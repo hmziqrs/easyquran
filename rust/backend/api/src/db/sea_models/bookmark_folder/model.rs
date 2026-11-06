@@ -19,6 +19,10 @@ pub struct Model {
     pub deleted_at: Option<DateTimeWithTimeZone>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
+    pub name_stamp: Option<String>,
+    pub position_stamp: Option<String>,
+    pub deleted_stamp: Option<String>,
+    pub rev: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

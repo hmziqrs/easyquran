@@ -45,5 +45,6 @@ pub mod bookmark_folder;
 // Reading threads + account progress. Reading
 // insights SQL lives in user_analytics_v1.
 pub mod reading_session;
+pub mod sync_counter;
 
 pub use crate::utils::color as color_utils;

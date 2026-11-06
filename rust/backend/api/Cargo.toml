@@ -23,6 +23,7 @@ vendored-openssl = ["dep:openssl", "openssl/vendored"]
 [dependencies]
 rux-auth = { path = "./crates/rux-auth" }
 migration = { path = "./migration" }
+eq-sync-core = { path = "../../crates/eq-sync-core" }
 ruxlog-types = { path = "../../crates/ruxlog-types", features = ["backend", "slug"] }
 rux-webhook-crypto = { path = "./crates/rux-webhook-crypto" }
 rux-request-gate = { path = "./crates/rux-request-gate" }

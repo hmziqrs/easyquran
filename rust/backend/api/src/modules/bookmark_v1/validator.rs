@@ -2,21 +2,17 @@ use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 use validator::{Validate, ValidationError};
 
-/// The four offline-sync mutation kinds. Dotted wire names ("bookmark.upsert")
+/// Row kinds. Dotted wire names ("bookmark.upsert")
 /// carry per-variant `rename`s — serde's rename_all can't express them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MutationKind {
     #[serde(rename = "bookmark.upsert")]
     BookmarkUpsert,
-    #[serde(rename = "bookmark.delete")]
-    BookmarkDelete,
     #[serde(rename = "folder.upsert")]
     FolderUpsert,
-    #[serde(rename = "folder.delete")]
-    FolderDelete,
 }
 
-/// Client-minted ids are UUIDs (v4, or the v5 default folder): 8-4-4-4-12
+/// Client-minted ids are UUIDs (v7, or the v5 default folder): 8-4-4-4-12
 /// hex groups, 36 chars total.
 fn valid_client_uuid(id: &str) -> Result<(), ValidationError> {
     fn invalid(detail: &'static str) -> ValidationError {
@@ -50,20 +46,37 @@ fn valid_source_id(id: &str) -> Result<(), ValidationError> {
     }
 }
 
-/// Flat wire struct for one queued mutation: `kind` picks the semantics, the
-/// kind-specific fields are required (cross-checked in the controller — the
-/// derive cannot express per-variant requiredness on a flat struct).
+fn valid_stamp(stamp: &str) -> Result<(), ValidationError> {
+    if eq_sync_core::is_valid_stamp(stamp) {
+        Ok(())
+    } else {
+        Err(ValidationError::new("invalid_stamp").with_message("stamp fails the format".into()))
+    }
+}
+
+/// One row to write (contracts/sync.md). A bookmark is one whole-row register. A
+/// folder has three, each with its stamp; an absent one is no change, never a clear.
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncMutation {
     pub kind: MutationKind,
     #[validate(custom(function = valid_client_uuid))]
     pub id: String,
+    #[validate(custom(function = valid_stamp))]
+    pub name_stamp: Option<String>,
     #[validate(length(min = 1, max = 100))]
     pub name: Option<String>,
+    #[validate(custom(function = valid_stamp))]
+    pub position_stamp: Option<String>,
     pub position: Option<i32>,
-    /// Target folder for bookmark.upsert. Absent, unknown, foreign, or
-    /// tombstoned ids land in the account's default folder.
+    #[validate(custom(function = valid_stamp))]
+    pub deleted_stamp: Option<String>,
+    /// Whole-row register stamp for bookmark.upsert.
+    #[validate(custom(function = valid_stamp))]
+    pub stamp: Option<String>,
+    pub deleted: Option<bool>,
+    /// Target folder for bookmark.upsert. Absent, unknown or foreign ids land in
+    /// the account's default folder.
     #[validate(custom(function = valid_client_uuid))]
     pub folder_id: Option<String>,
     #[validate(range(min = 1, max = 114))]
@@ -80,8 +93,18 @@ pub struct SyncMutation {
     pub end_ayah: Option<i32>,
     #[validate(custom(function = valid_source_id))]
     pub source_id: Option<String>,
-    /// RFC3339, enforced by chrono's serde deserializer.
-    pub updated_at: DateTime<FixedOffset>,
+    /// Display only. Stamps decide conflicts.
+    pub updated_at: Option<DateTime<FixedOffset>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Validate)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientInfo {
+    pub protocol: u32,
+    #[validate(length(max = 16))]
+    pub platform: Option<String>,
+    #[validate(length(max = 32))]
+    pub app_version: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Validate)]
@@ -90,6 +113,15 @@ pub struct V1BookmarkSyncPayload {
     /// REQUIRED: a mismatch is always a stale tab / account switch, rejected
     /// before any write.
     pub expected_user_id: i32,
-    #[validate(length(max = 200), nested)]
-    pub mutations: Option<Vec<SyncMutation>>,
+    /// Rows parse one at a time, so one bad row never refuses the others.
+    #[validate(length(max = 200))]
+    pub mutations: Option<Vec<serde_json::Value>>,
+    /// Last `rev` this client applied. 0 is a full pull.
+    #[validate(range(min = 0))]
+    pub since: Option<i64>,
+    /// Page cursor inside a full pull.
+    #[validate(range(min = -1))]
+    pub after: Option<i64>,
+    #[validate(nested)]
+    pub client: Option<ClientInfo>,
 }
