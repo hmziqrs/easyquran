@@ -37,6 +37,7 @@ mod m000110_device_token_hygiene;
 mod m000120_media_deletions;
 mod m000140_media_upload_indexes;
 mod m000150_retention_sweep;
+mod m000160_erasure_receipts;
 
 pub struct Migrator;
 
@@ -149,6 +150,8 @@ impl MigratorTrait for Migrator {
             Box::new(m000140_media_upload_indexes::Migration),
             // m000150 ships the retention sweeper's guard indexes (A32). No new tables.
             Box::new(m000150_retention_sweep::Migration),
+            // m000160 adds erasure_receipts (A33): subject erasure receipts, replay list for boot. No FK, 24-month class.
+            Box::new(m000160_erasure_receipts::Migration),
         ]
     }
 }

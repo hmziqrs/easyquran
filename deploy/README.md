@@ -575,6 +575,37 @@ Ship order: set `dry_run`, read the logged counts, then set `enforce`. Alerts
 ban. Retention does not erase physical bytes: `DELETE` leaves freelist and WAL
 data on this build, so do not claim physical erasure (A33).
 
+## Erasure, WAL checkpoint, backups (A33)
+
+What runs, all in the api process:
+
+- `secure_delete=ON` on every pooled SQLite connection (set at connect).
+- `PRAGMA wal_checkpoint(TRUNCATE)` every 6 h, one `job_runs` row each (`wal_checkpoint`).
+- Nightly `VACUUM INTO` copy to `BACKUP_DIR` (default `./data/backups`) as
+  `easyquran-YYYYMMDD-HHMMSS.db`, through a read-only handle. Writes continue. One
+  `job_runs` row each (`db_backup`, `bytes=... pruned=...`). Files older than 30 days
+  are deleted; other files in the directory are left alone.
+- Boot replay: before serving, rows that erased subjects have again (from a restore)
+  are deleted, unless a live legal hold covers them. Replay failure stops boot.
+
+What is not built: off-host encrypted copy (needs the O2 destination), the physical
+`VACUUM INTO` swap, and the published "removed from backups within 30 days" wording
+(O15). Until the swap ships, deleted content can remain in the live file's free pages
+and in backups for up to 30 days. Do not claim more than that.
+
+Restore rehearsal (owner-run, on a copy, never the live volume):
+
+1. Stop the api. Copy the backup to a scratch path. Do not write it over the live DB.
+2. Point `DATABASE_URL` at the copy and remove any `-wal` and `-shm` beside it.
+3. Boot once. Check the log for `erasure replay removed rows` (or none) and that
+   `erasure_receipts` rows match the expected erasures.
+4. Gap: a backup taken before an erasure has no receipt for it, so boot
+   replay cannot catch that subject. Before restoring an older backup, copy the
+   current `erasure_receipts` table into the restored copy, then boot.
+5. Record the rehearsal date and result here.
+
+Manual backup: `just db-backup` (default paths, or pass `db` and `dir`).
+
 ## Registration admission (A9): caps, Turnstile, smoke test
 
 ### Caps (`AdmissionSettings`, `rust/backend/api/src/config/settings.rs`)

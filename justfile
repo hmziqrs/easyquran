@@ -114,7 +114,17 @@ abuse-report db="rust/data/easyquran.db":
     sqlite3 -readonly "{{db}}" ".backup '$tmp/copy.db'"
     cd rust && cargo run -q -p ruxlog --bin abuse_report -- "$tmp/copy.db"
 
-# Incident capture (A25): `just incident capture <report-id>` copies the comment behind an
+# Manual backup (A33): one dated VACUUM INTO copy through a read-only handle, the same
+# shape as the nightly job. Production: run on the api host against the live DB file.
+# Off-host copy is a separate, owner-run step (see deploy/README.md).
+db-backup db="rust/data/easyquran.db" dir="rust/data/backups":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f "{{db}}" ]; then echo "no database at {{db}}" >&2; exit 1; fi
+    mkdir -p "{{dir}}"
+    sqlite3 -readonly "{{db}}" "VACUUM INTO '{{dir}}/easyquran-$(date -u +%Y%m%d-%H%M%S).db'"
+
+# Incident capture (A25):`just incident capture <report-id>` copies the comment behind an
 # intake report (comment reports only) into case_evidence, plus one audit row. Writes the
 # live database, so run it on the api host with the same DATABASE_URL the api uses.
 incident action ref:

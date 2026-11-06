@@ -52,6 +52,8 @@ pub enum AuditAction {
     MediaHashMatch,
     MediaUploadRefused,
     RetentionSweep,
+    ErasureRecord,
+    ErasureReplay,
 }
 
 impl AuditAction {
@@ -89,6 +91,8 @@ impl AuditAction {
         Self::MediaHashMatch,
         Self::MediaUploadRefused,
         Self::RetentionSweep,
+        Self::ErasureRecord,
+        Self::ErasureReplay,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -126,6 +130,8 @@ impl AuditAction {
             Self::MediaHashMatch => "media.hash_match",
             Self::MediaUploadRefused => "media.upload_refused",
             Self::RetentionSweep => "retention.sweep",
+            Self::ErasureRecord => "erasure.record",
+            Self::ErasureReplay => "erasure.replay",
         }
     }
 
@@ -158,6 +164,7 @@ impl AuditAction {
                 "media"
             }
             Self::RetentionSweep => "retention",
+            Self::ErasureRecord | Self::ErasureReplay => "erasure",
         }
     }
 }

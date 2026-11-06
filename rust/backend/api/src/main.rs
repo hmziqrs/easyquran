@@ -177,6 +177,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     }
 
+    // A33: re-delete rows a restore brought back for erased subjects, before serving.
+    // Fail closed: an erased row that survives boot stops the process.
+    if let Err(err) = ruxlog::services::retention::replay_erasures(
+        &sea_db,
+        ruxlog::services::job_log::epoch_now(),
+    )
+    .await
+    {
+        eprintln!("Erasure replay failed: {err:?}");
+        std::process::exit(1);
+    }
+
     let gate_store = std::sync::Arc::new(rux_request_gate::InMemoryStore::default());
 
     // rate_limit_state schema owned by migration m000002 (runs inside
