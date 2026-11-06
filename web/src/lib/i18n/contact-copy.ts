@@ -1,4 +1,5 @@
 import {
+  contact_abuse_title,
   contact_email_title,
   contact_heading,
   contact_intro,
@@ -13,6 +14,7 @@ export interface ContactResolvedCopy {
   heading: string;
   intro: string;
   emailTitle: string;
+  abuseTitle: string;
   xTitle: string;
 }
 
@@ -27,6 +29,7 @@ export function resolveContactCopy(locale: MarketingLocale): ContactResolvedCopy
     heading: contact_heading(undefined, { locale }),
     intro: contact_intro(undefined, { locale }),
     emailTitle: contact_email_title(undefined, { locale }),
+    abuseTitle: contact_abuse_title(undefined, { locale }),
     xTitle: contact_x_title(undefined, { locale }),
   };
 }

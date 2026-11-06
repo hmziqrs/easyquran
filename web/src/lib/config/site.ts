@@ -7,7 +7,8 @@ export const SITE = {
   makerUrl: "https://oxlabs.dev",
   owner: "hmziq.rs",
   ownerUrl: "https://hmziq.rs",
-  contactEmail: "hmziqrs@gmail.com",
+  contactEmail: "support@easyquran.fyi",
+  abuseEmail: "abuse@easyquran.fyi",
   tanzilUrl: "https://tanzil.net",
 } as const;
 

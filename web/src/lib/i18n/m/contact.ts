@@ -2,9 +2,10 @@
 //
 // Contact page.
 //
-// 6 messages. Import this barrel, never
+// 7 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
+export { contact_abuse_title } from "#lib/paraglide/messages/contact_abuse_title.js";
 export { contact_email_title } from "#lib/paraglide/messages/contact_email_title.js";
 export { contact_heading } from "#lib/paraglide/messages/contact_heading.js";
 export { contact_intro } from "#lib/paraglide/messages/contact_intro.js";

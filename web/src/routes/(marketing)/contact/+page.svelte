@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { Container, Icon, Seo } from "#lib/components/index.js";
+  import { SITE } from "#lib/config/site.js";
   import { resolveContactCopy } from "#lib/i18n/contact-copy.js";
   import { marketingLocaleFromPath } from "#lib/i18n/marketing-copy.js";
   import { externalLinkAttrs } from "#lib/utils.js";
@@ -40,6 +41,20 @@
           <span class="flex min-w-0 flex-col">
             <span class="text-caption text-muted">{copy.emailTitle}</span>
             <span class="truncate text-body font-medium text-foreground">{data.owner.email}</span>
+          </span>
+          <Icon name="arrow-right" size={15} class="ms-auto flex-none text-muted group-hover:text-foreground" />
+        </a>
+      </li>
+      <li>
+        <a href="mailto:{SITE.abuseEmail}" class={row}>
+          <span
+            class="flex size-9 flex-none items-center justify-center rounded-md bg-background-subtle text-foreground"
+          >
+            <Icon name="mail" size={17} />
+          </span>
+          <span class="flex min-w-0 flex-col">
+            <span class="text-caption text-muted">{copy.abuseTitle}</span>
+            <span class="truncate text-body font-medium text-foreground">{SITE.abuseEmail}</span>
           </span>
           <Icon name="arrow-right" size={15} class="ms-auto flex-none text-muted group-hover:text-foreground" />
         </a>
