@@ -14,7 +14,7 @@ use ruxlog::db::sea_models::device;
 use ruxlog::db::sea_models::user::{self};
 use ruxlog::db::sea_models::user_device::{self, NewUserDevice};
 use ruxlog::db::sea_models::user_session::{self, NewUserSession};
-use ruxlog::modules::device_v1;
+use ruxlog::modules::{device_v1, reading_session_v1};
 use ruxlog::services::auth::AuthBackend;
 use ruxlog::state::AppState;
 use sea_orm::{ConnectionTrait, EntityTrait};
@@ -968,4 +968,194 @@ async fn an_account_only_ever_sees_its_own_rows_for_recognition() {
         .await
         .merged_into
         .is_none());
+}
+
+// ---- Handoff by device (devices.md D5) -------------------------------------------
+//
+// Threads are written and pulled through the reading-session sync route on the same
+// state, so a pulled thread's `deviceName` is checked end to end.
+
+const THREAD_A: &str = "d5d5d5d5-d5d5-7d5d-8d5d-d5d5d5d5d501";
+const THREAD_B: &str = "d5d5d5d5-d5d5-7d5d-8d5d-d5d5d5d5d502";
+const THREAD_C: &str = "d5d5d5d5-d5d5-7d5d-8d5d-d5d5d5d5d503";
+const THREAD_D: &str = "d5d5d5d5-d5d5-7d5d-8d5d-d5d5d5d5d504";
+
+fn sync_app(ctx: &Ctx) -> axum::Router {
+    router_with_state(ctx.state.clone(), reading_session_v1::routes())
+}
+
+/// One open thread written from `device_id`, with all three registers stamped.
+fn thread_from(id: &str, device_id: &str) -> Value {
+    let stamp = stamp_now(device_id);
+    json!({
+        "kind": "session.upsert", "id": id,
+        "identityStamp": stamp, "origin": "index", "scope": "surah:1",
+        "startedAt": "2026-11-01T00:00:00.000Z",
+        "cursorStamp": stamp, "surah": 1, "ayah": 1, "device": "phone",
+        "deviceId": device_id,
+        "lifecycleStamp": stamp, "state": "open",
+        "updatedAt": "2026-11-01T00:00:00.000Z",
+    })
+}
+
+/// A full pull (`since` 0) that also writes `mutations` first, as one round.
+async fn sync_round(ctx: &Ctx, uid: i32, cookie: &str, mutations: Vec<Value>) -> Value {
+    let body = json!({ "expectedUserId": uid, "mutations": mutations, "since": 0 });
+    let (status, res) = send(&sync_app(ctx), "POST", "/sync", Some(cookie), Some(&body)).await;
+    assert_eq!(status, StatusCode::OK, "{res}");
+    res
+}
+
+fn pulled<'a>(res: &'a Value, id: &str) -> &'a Value {
+    res["sessions"]
+        .as_array()
+        .expect("sessions array")
+        .iter()
+        .find(|s| s["id"] == id)
+        .unwrap_or_else(|| panic!("thread {id} not pulled: {res}"))
+}
+
+async fn name_device(ctx: &Ctx, cookie: &str, uid: i32, id: &str, name: &str) {
+    let body = json!({
+        "expected_user_id": uid,
+        "device_id": id,
+        "name": name,
+        "name_stamp": stamp_now(id),
+    });
+    let (status, res) = send(&ctx.app, "POST", "/rename", Some(cookie), Some(&body)).await;
+    assert_eq!(status, StatusCode::OK, "{res}");
+    assert_eq!(res["renamed"], true, "{res}");
+}
+
+#[tokio::test]
+async fn a_thread_from_another_phone_carries_that_phones_name() {
+    let ctx = setup().await;
+    register(&ctx, &ctx.cookie_a, &keyless(ctx.uid_a, "dev-pixel")).await;
+    name_device(&ctx, &ctx.cookie_a, ctx.uid_a, "dev-pixel", "Pixel 8").await;
+
+    let res = sync_round(
+        &ctx,
+        ctx.uid_a,
+        &ctx.cookie_a,
+        vec![thread_from(THREAD_A, "dev-pixel")],
+    )
+    .await;
+    let row = pulled(&res, THREAD_A);
+    assert_eq!(row["deviceId"], "dev-pixel");
+    assert_eq!(row["deviceName"], "Pixel 8");
+}
+
+#[tokio::test]
+async fn a_removed_or_unknown_device_stores_the_thread_and_resolves_to_no_name() {
+    let ctx = setup().await;
+    // Registered from its own session, so revoking it leaves the caller's session alive.
+    let gone_session = login_as(&ctx, ctx.uid_a).await;
+    register(&ctx, &gone_session, &keyless(ctx.uid_a, "dev-gone")).await;
+    name_device(&ctx, &gone_session, ctx.uid_a, "dev-gone", "Old phone").await;
+    let (status, body) = send(
+        &ctx.app,
+        "POST",
+        "/delete",
+        Some(&ctx.cookie_a),
+        Some(&json!({ "expected_user_id": ctx.uid_a, "device_id": "dev-gone" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    // Dirty rows from the removed device land after a fresh sign-in (S9 rule): kept as
+    // sent, applied, and labelled by nothing, so the client shows its device kind.
+    let resigned = login_as(&ctx, ctx.uid_a).await;
+    let res = sync_round(
+        &ctx,
+        ctx.uid_a,
+        &resigned,
+        vec![
+            thread_from(THREAD_B, "dev-gone"),
+            thread_from(THREAD_C, "never-registered"),
+        ],
+    )
+    .await;
+    for (id, device) in [(THREAD_B, "dev-gone"), (THREAD_C, "never-registered")] {
+        let landed = res["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == id)
+            .expect("a result per row");
+        assert_eq!(landed["status"], "applied", "{res}");
+        let row = pulled(&res, id);
+        assert_eq!(row["deviceId"], device);
+        assert!(row["deviceName"].is_null(), "{row}");
+    }
+}
+
+#[tokio::test]
+async fn a_reinstalled_device_keeps_its_name_and_its_old_threads_still_resolve() {
+    let ctx = setup().await;
+    let old_phone = new_device();
+    let (nonce, salt) = challenge(&ctx, &ctx.cookie_a).await;
+    let hint = hint_for(&salt, "0a1b2c-pixel.guid");
+    register(
+        &ctx,
+        &ctx.cookie_a,
+        &keyed(ctx.uid_a, "dev-old-pixel", &old_phone, &nonce, Some(&hint)),
+    )
+    .await;
+    name_device(&ctx, &ctx.cookie_a, ctx.uid_a, "dev-old-pixel", "Pixel 8").await;
+
+    // Reinstall: new id and key, same hint. The old row is merged into the new one.
+    let reinstalled = login_as(&ctx, ctx.uid_a).await;
+    let new_phone = new_device();
+    let (nonce, _) = challenge(&ctx, &reinstalled).await;
+    let (status, body) = register(
+        &ctx,
+        &reinstalled,
+        &keyed(ctx.uid_a, "dev-new-pixel", &new_phone, &nonce, Some(&hint)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["device_id"], "dev-new-pixel");
+    assert_eq!(
+        row(&ctx, ctx.uid_a, "dev-new-pixel")
+            .await
+            .display_name
+            .as_deref(),
+        Some("Pixel 8"),
+        "the name carries over the merge"
+    );
+
+    // A thread the old install wrote before the reinstall still reads its name.
+    let res = sync_round(
+        &ctx,
+        ctx.uid_a,
+        &reinstalled,
+        vec![thread_from(THREAD_D, "dev-old-pixel")],
+    )
+    .await;
+    assert_eq!(pulled(&res, THREAD_D)["deviceName"], "Pixel 8");
+}
+
+#[tokio::test]
+async fn device_names_never_cross_accounts() {
+    let ctx = setup().await;
+    // The same client id under two accounts is two devices, each with its own name.
+    register(&ctx, &ctx.cookie_a, &keyless(ctx.uid_a, "dev-both")).await;
+    name_device(&ctx, &ctx.cookie_a, ctx.uid_a, "dev-both", "A phone").await;
+    register(&ctx, &ctx.cookie_b, &keyless(ctx.uid_b, "dev-both")).await;
+    name_device(&ctx, &ctx.cookie_b, ctx.uid_b, "dev-both", "B phone").await;
+
+    let res_b = sync_round(
+        &ctx,
+        ctx.uid_b,
+        &ctx.cookie_b,
+        vec![thread_from(THREAD_A, "dev-both")],
+    )
+    .await;
+    assert_eq!(pulled(&res_b, THREAD_A)["deviceName"], "B phone");
+    let res_a = sync_round(&ctx, ctx.uid_a, &ctx.cookie_a, vec![]).await;
+    assert!(res_a["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|s| s["id"] != THREAD_A));
 }

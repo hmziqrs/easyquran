@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::Utc;
 use sea_orm::{entity::prelude::*, Order, QueryOrder, Set};
 
@@ -7,6 +9,10 @@ use super::{
     ActiveModel, Column, Entity, Model, NewUserDevice, DEVICE_RETENTION_CLASS,
     DEVICE_RETENTION_DAYS,
 };
+
+/// How many `merged_into` hops a name may follow. A reinstall is one hop. Anything
+/// longer is a chain nobody should see, so its name is withheld.
+const MERGE_HOPS: usize = 4;
 
 fn utc_now() -> DateTimeWithTimeZone {
     Utc::now().fixed_offset()
@@ -174,6 +180,45 @@ impl Entity {
         am.revoked_at = Set(Some(utc_now()));
         am.update(conn).await.map_err_to_response()
     }
+
+    /// Names for the device ids a pull is about to return (devices.md D5). Only this
+    /// account's rows are read. Unknown, revoked or unnamed ids resolve to nothing, and
+    /// the client falls back to the device kind.
+    pub async fn names_for<C: ConnectionTrait>(
+        conn: &C,
+        user_id: i32,
+        ids: &[String],
+    ) -> DbResult<HashMap<String, String>> {
+        if ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let rows = Self::find()
+            .filter(Column::UserId.eq(user_id))
+            .all(conn)
+            .await
+            .map_err_to_response()?;
+        let by_id: HashMap<&str, &Model> = rows.iter().map(|row| (row.id.as_str(), row)).collect();
+        Ok(ids
+            .iter()
+            .filter_map(|id| resolved_name(&by_id, id).map(|name| (id.clone(), name)))
+            .collect())
+    }
+}
+
+/// The name a device id resolves to: follow `merged_into` to the row that holds it now.
+/// Revoked rows, unnamed rows, unknown ids and over-long chains resolve to nothing.
+fn resolved_name(rows: &HashMap<&str, &Model>, id: &str) -> Option<String> {
+    let mut current: &Model = rows.get(id)?;
+    for _ in 0..MERGE_HOPS {
+        let Some(next) = current.merged_into.as_deref() else {
+            break;
+        };
+        current = rows.get(next)?;
+    }
+    if current.merged_into.is_some() || current.revoked_at.is_some() {
+        return None;
+    }
+    current.display_name.clone().filter(|name| !name.is_empty())
 }
 
 /// Ids to retire so the live count fits `cap`. `live` is oldest-idle first. The

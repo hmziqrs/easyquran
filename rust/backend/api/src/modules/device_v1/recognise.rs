@@ -154,7 +154,8 @@ async fn restore_shared(
 }
 
 /// Rung 3. A new id whose hint matches a live row with no conflict. The new id gets
-/// its own row, and the old row is merged into it and retired.
+/// its own row, and the old row is merged into it and retired. The name carries over,
+/// so a reinstalled device keeps its label (devices.md D5).
 async fn merge_by_hint(db: &DbConn, new: &NewUserDevice) -> Result<Option<String>, ErrorResponse> {
     let (true, Some(hint)) = (new.key.is_some(), new.continuity_hint.as_deref()) else {
         return Ok(None);
@@ -166,9 +167,13 @@ async fn merge_by_hint(db: &DbConn, new: &NewUserDevice) -> Result<Option<String
         return Ok(None);
     };
     let old_thumbprint = old.key_thumbprint.clone();
-    let fresh = user_device::Entity::register(db, new.clone(), None).await?;
+    let inherited_name = old.display_name.clone().zip(old.name_stamp.clone());
+    let mut fresh = user_device::Entity::register(db, new.clone(), None).await?;
     if let Some(thumbprint) = old_thumbprint {
-        user_device::Entity::set_merged_key_thumbprint(db, fresh, thumbprint).await?;
+        fresh = user_device::Entity::set_merged_key_thumbprint(db, fresh, thumbprint).await?;
+    }
+    if let Some((name, stamp)) = inherited_name {
+        user_device::Entity::set_name(db, fresh, name, stamp).await?;
     }
     user_device::Entity::mark_merged(db, old, &new.id).await?;
     Ok(Some(new.id.clone()))

@@ -81,6 +81,7 @@ function thread(overrides: Partial<ReadingThread> = {}): ReadingThread {
     endReason: null,
     state: "open",
     deviceId: null,
+    deviceName: null,
     identityStamp: null,
     cursorStamp: null,
     lifecycleStamp: null,

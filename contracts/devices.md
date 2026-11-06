@@ -8,6 +8,17 @@ What every client must do for account devices.
 | --- | --- |
 | More than 20 devices | Oldest idle evicted, never the caller |
 | Sign-out on a shared phone | Push token deleted first |
+| Device removed while its threads remain | Label falls back to device kind; its dirty rows still land as sent |
+| Unknown device id on a thread | Stored as sent; resolves to no name |
+| Reinstalled device with a live hint | Name carries over the merge; threads under the old id still resolve through `merged_into` |
+
+## Handoff labels (D5)
+
+- A pulled thread row carries `deviceName`: the name of its `deviceId`, followed through `merged_into` in the user's own rows. Null for an unknown, revoked or unnamed device, and never sent back.
+- A cursor move writes the cursor's `device` and `deviceId` from the install that made it. Lifecycle-only writes keep the last cursor writer.
+- "Here" means the same `deviceId`. Two phones are two devices. A row with no `deviceId` falls back to comparing the kind.
+- Label order: this device (no label), then the device's name, then "on your {kind}".
+- Not yet built: export and import (F6) must drop `device_id` and stamps, and import may only add ids it does not hold.
 
 ## Device keys and continuity (D3)
 

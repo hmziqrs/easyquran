@@ -485,6 +485,7 @@
   "reader_threads_on_phone": "على هاتفك",
   "reader_threads_on_tablet": "على جهازك اللوحي",
   "reader_threads_on_desktop": "على حاسوبك",
+  "reader_threads_on_device": "على {name}",
   "reader_threads_dismiss": "إزالة من المتابعة",
   "reader_threads_history": "السجل",
   "reader_threads_history_empty": "تظهر هنا القراءات المكتملة والمتوقفة.",

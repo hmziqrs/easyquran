@@ -485,6 +485,7 @@
   "reader_threads_on_phone": "on your phone",
   "reader_threads_on_tablet": "on your tablet",
   "reader_threads_on_desktop": "on your computer",
+  "reader_threads_on_device": "on {name}",
   "reader_threads_dismiss": "Remove from Continue",
   "reader_threads_history": "History",
   "reader_threads_history_empty": "Finished and paused readings show up here.",

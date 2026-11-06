@@ -22,8 +22,8 @@ import {
   syncEngine,
   type RegisteredSyncDomain,
 } from "#lib/sync/index.js";
-import { mergedDirty } from "#lib/sync/round-status.js";
 import { compareStamps, mergeThread, roundRatio, type JsonObject } from "#lib/sync/merge.js";
+import { mergedDirty } from "#lib/sync/round-status.js";
 
 import { deviceKind } from "./device";
 import {
@@ -148,7 +148,6 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-
 function registersOf(thread: ReadingThread): JsonObject {
   return {
     id: thread.id,
@@ -219,7 +218,13 @@ function decodeMerged(merged: JsonObject): Partial<ReadingThread> {
     lifecycleStamp: stampOf("lifecycle"),
   });
   if (row === null) return {};
-  const { updatedAt: _updatedAt, dirty: _dirty, rejected: _rejected, extras: _extras, ...rest } = row;
+  const {
+    updatedAt: _updatedAt,
+    dirty: _dirty,
+    rejected: _rejected,
+    extras: _extras,
+    ...rest
+  } = row;
   return rest;
 }
 
@@ -257,7 +262,8 @@ function mergeProgress(a: ProgressBySurah, b: ProgressBySurah): ProgressBySurah 
 }
 
 function wireOf(thread: ReadingThread): SessionWireRow {
-  const { dirty: _dirty, rejected: _rejected, extras, ...row } = thread;
+  // deviceName is the server's label for a pulled row, never something this device sends.
+  const { dirty: _dirty, rejected: _rejected, deviceName: _deviceName, extras, ...row } = thread;
   return { kind: "session.upsert", ...extras, ...row };
 }
 
@@ -334,6 +340,11 @@ export class SessionsStore {
   }
 
   // --- reads ---
+
+  /** This install's device id for the signed-in account, or null when signed out. */
+  get deviceId(): string | null {
+    return this.#deviceId;
+  }
 
   /** Open threads (not ended, touched within 30 days), newest first. */
   get open(): readonly ReadingThread[] {
@@ -470,7 +481,13 @@ export class SessionsStore {
     if (thread === null || thread === this.#draft) return;
     const rounded = roundRatio(ratio);
     if (thread.localPage === localPage && thread.ratio === rounded) return;
-    this.#write({ ...thread, localPage, ratio: rounded, device: this.#device, updatedAt: nowIso() });
+    this.#write({
+      ...thread,
+      localPage,
+      ratio: rounded,
+      device: this.#device,
+      updatedAt: nowIso(),
+    });
   }
 
   /** A verse was actually read (read tracker): bounded threads complete at their end. */
@@ -718,7 +735,9 @@ export class SessionsStore {
     for (const row of round.sessions) {
       this.#observeRow(row);
       const mine = byId.get(row.id);
-      byId.set(row.id, mine === undefined ? row : mergeRow(mine, row));
+      // The server's device label is authoritative for the row it was sent with.
+      const merged = mine === undefined ? row : mergeRow(mine, row);
+      byId.set(row.id, { ...merged, deviceName: row.deviceName });
       this.#fullPullSeen?.add(row.id);
     }
     for (const tombstone of round.tombstones) this.#applyTombstone(tombstone, byId);
@@ -764,7 +783,9 @@ export class SessionsStore {
     this.#store();
 
     const sentAll = sent.length >= SYNC_PAGE;
-    const progressed = round.results.some((r) => r.status === "applied" || r.status === "superseded");
+    const progressed = round.results.some(
+      (r) => r.status === "applied" || r.status === "superseded",
+    );
     const dirtyLeft = this.dirtyRows().length > 0;
     return { more: reset || round.more || (sentAll && progressed && dirtyLeft) };
   }
@@ -912,6 +933,7 @@ export class SessionsStore {
       endReason: null,
       state: "open",
       deviceId: null,
+      deviceName: null,
       identityStamp: null,
       cursorStamp: null,
       lifecycleStamp: null,
@@ -999,9 +1021,12 @@ export class SessionsStore {
       prev.ratio !== thread.ratio ||
       prev.sourceId !== thread.sourceId ||
       prev.device !== thread.device;
+    // A cursor move is written by this install, so the cursor register names it (devices.md D5).
+    // Lifecycle-only writes keep whoever last moved the cursor.
+    const deviceId = cursorMoved ? (this.#deviceId ?? thread.deviceId) : thread.deviceId;
     return {
       ...thread,
-      deviceId: thread.deviceId ?? this.#deviceId,
+      deviceId: deviceId ?? this.#deviceId,
       identityStamp: thread.identityStamp ?? clock.stamp(),
       cursorStamp: cursorMoved || thread.cursorStamp === null ? clock.stamp() : thread.cursorStamp,
       lifecycleStamp:
@@ -1224,7 +1249,8 @@ export class SessionsStore {
     const now = Date.now();
     try {
       const keys = Object.keys(localStorage).filter(
-        (key) => key.startsWith(prefix) && key !== keyFor(this.#owner) && key !== keyFor(LOCAL_OWNER),
+        (key) =>
+          key.startsWith(prefix) && key !== keyFor(this.#owner) && key !== keyFor(LOCAL_OWNER),
       );
       for (const key of keys) {
         const env = decodeEnvelope(readJSON(key));

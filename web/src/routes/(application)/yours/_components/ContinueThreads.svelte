@@ -9,6 +9,7 @@
     reader_threads_dismiss,
     reader_threads_empty,
     reader_threads_on_desktop,
+    reader_threads_on_device,
     reader_threads_on_phone,
     reader_threads_on_tablet,
     reader_threads_rows_capped,
@@ -19,6 +20,7 @@
   import { timeAgo } from "#lib/i18n/relative-time.js";
   import { resumeThread } from "#lib/reader/resume.js";
   import { deviceKind } from "#lib/sessions/device.js";
+  import { handoffPlace } from "#lib/sessions/handoff.js";
   import type { DeviceKind, ReadingThread } from "#lib/sessions/schema.js";
   import { sessions } from "#lib/sessions/store.svelte.js";
 
@@ -41,7 +43,7 @@
   } = $props();
 
   const msg = $derived({ locale });
-  const here = deviceKind();
+  const kind = deviceKind();
   const DEVICE_LABEL = {
     phone: () => reader_threads_on_phone(undefined, msg),
     tablet: () => reader_threads_on_tablet(undefined, msg),
@@ -52,10 +54,15 @@
   const lead = $derived(threads[0]);
   const rest = $derived(threads.slice(1));
 
+  // Read at render time: this install's id is set when the account loads, after mount.
   function where(thread: ReadingThread): string {
     const ago = timeAgo(thread.updatedAt, locale);
-    if (thread.device === here) return ago;
-    return `${DEVICE_LABEL[thread.device]()} · ${ago}`;
+    const place = handoffPlace(thread, { deviceId: sessions.deviceId, kind });
+    if (place.kind === "here") return ago;
+    if (place.kind === "named") {
+      return `${reader_threads_on_device({ name: place.name }, msg)} · ${ago}`;
+    }
+    return `${DEVICE_LABEL[place.device]()} · ${ago}`;
   }
 
   function surahName(thread: ReadingThread): string {

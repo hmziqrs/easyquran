@@ -1,5 +1,5 @@
-import { asArray, asLiteral, asNumber, asObject, asString } from "#lib/storage/index.js";
 import type { JsonRecord, JsonValue } from "#lib/storage/decoders.js";
+import { asArray, asLiteral, asNumber, asObject, asString } from "#lib/storage/index.js";
 import { parseStamp } from "#lib/sync/merge.js";
 
 /**
@@ -54,6 +54,11 @@ export interface ReadingThread extends ThreadStamps {
   readonly endReason: EndReason | null;
   readonly state: ThreadState;
   readonly deviceId: string | null;
+  /**
+   * The server's name for `deviceId` (devices.md D5): null for an unknown, removed or
+   * unnamed device. Set only by a pull; never sent back to the server.
+   */
+  readonly deviceName: string | null;
   /** The row is the queue: true until a result acknowledges these exact stamps. */
   readonly dirty: boolean;
   /** Refused by the server. Kept locally, not resent until the next edit. */
@@ -206,6 +211,7 @@ const KNOWN_THREAD_FIELDS = new Set([
   "sourceId",
   "device",
   "deviceId",
+  "deviceName",
   "startedAt",
   "updatedAt",
   "endedAt",
@@ -277,6 +283,7 @@ export function decodeThread(raw: unknown): ReadingThread | null {
     endReason: endedAt === null ? null : endReason,
     state: stateOf(obj),
     deviceId: stringOrNull(obj.deviceId),
+    deviceName: stringOrNull(obj.deviceName),
     identityStamp: stringOrNull(obj.identityStamp),
     cursorStamp: stringOrNull(obj.cursorStamp),
     lifecycleStamp: stringOrNull(obj.lifecycleStamp),

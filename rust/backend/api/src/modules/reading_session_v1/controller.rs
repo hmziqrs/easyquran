@@ -3,6 +3,8 @@
 //! (contracts/sync.md); each row gets its own result, and a pull delivers changes
 //! by `rev`, tombstones included. GET /archive pages through ended + stale threads.
 
+use std::collections::HashMap;
+
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use axum_macros::debug_handler;
 use chrono::Utc;
@@ -17,7 +19,7 @@ use crate::{
         reading_session::{
             self, ProgressListItem, SessionListItem, ThreadOutcome, SESSIONS_DOMAIN,
         },
-        sync_counter,
+        sync_counter, user_device,
     },
     error::{DbResult, DbResultExt, ErrorCode, ErrorResponse},
     extractors::{ValidatedJson, ValidatedQuery},
@@ -286,6 +288,39 @@ async fn pull_page(
     })
 }
 
+/// Names for the devices a pull's threads point at (devices.md D5). Read inside the
+/// round's transaction, so a name and its thread come from the same snapshot.
+async fn page_device_names(
+    tx: &DatabaseTransaction,
+    user_id: i32,
+    page: &PullPage,
+) -> DbResult<HashMap<String, String>> {
+    let ids: Vec<String> = page
+        .sessions
+        .iter()
+        .filter_map(|s| s.device_id.clone())
+        .collect();
+    user_device::Entity::names_for(tx, user_id, &ids).await
+}
+
+/// Adds `deviceName` to a pulled thread row: the name its device resolves to, or null
+/// for an unknown, revoked or unnamed device. A tombstone has no device, so it is left
+/// as it is.
+fn with_device_name(mut row: Value, names: &HashMap<String, String>) -> Value {
+    if row.get("state").and_then(Value::as_str) == Some("deleted") {
+        return row;
+    }
+    let name = row
+        .get("deviceId")
+        .and_then(Value::as_str)
+        .and_then(|id| names.get(id))
+        .cloned();
+    if let Some(obj) = row.as_object_mut() {
+        obj.insert("deviceName".to_string(), json!(name));
+    }
+    row
+}
+
 /// What one round decided inside its transaction.
 enum Round {
     Done(Settled),
@@ -295,6 +330,7 @@ enum Round {
 struct Settled {
     results: Vec<Value>,
     page: PullPage,
+    names: HashMap<String, String>,
     latest: i64,
     floor: i64,
     epoch: String,
@@ -360,12 +396,14 @@ pub async fn sync(
             since
         };
         let page = pull_page(&tx, user.id, after, full).await?;
+        let names = page_device_names(&tx, user.id, &page).await?;
         let latest = sync_counter::current_rev(&tx, user.id, SESSIONS_DOMAIN).await?;
         let floor = sync_counter::floor_rev(&tx, user.id, SESSIONS_DOMAIN).await?;
         let epoch = sync_counter::sync_epoch(&tx).await?;
         DbResult::Ok(Round::Done(Settled {
             results,
             page,
+            names,
             latest,
             floor,
             epoch,
@@ -392,6 +430,7 @@ pub async fn sync(
     let Settled {
         results,
         page,
+        names,
         latest,
         floor,
         epoch,
@@ -403,6 +442,11 @@ pub async fn sync(
     } else {
         latest
     };
+    let sessions: Vec<Value> = page
+        .sessions
+        .iter()
+        .map(|s| with_device_name(s.to_wire(), &names))
+        .collect();
     Ok((
         StatusCode::OK,
         Json(json!({
@@ -413,7 +457,7 @@ pub async fn sync(
             "superseded": count("superseded"),
             "rejected": count("rejected"),
             "capped": count("capped"),
-            "sessions": page.sessions.iter().map(SessionListItem::to_wire).collect::<Vec<_>>(),
+            "sessions": sessions,
             "progress": page.progress,
             "rev": rev,
             "latestRev": latest,

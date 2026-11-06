@@ -244,4 +244,56 @@ describe("thread lifecycle", () => {
     );
     expect(stored?.threads.map((t) => t.surah).sort((a, b) => a - b)).toEqual([2, 67]);
   });
+
+  it("a cursor move names the install that made it, not the one that opened the thread", () => {
+    const owner = "7";
+    const iso = new Date().toISOString();
+    window.localStorage.setItem(
+      `easyquran.sessions.${owner}`,
+      JSON.stringify({
+        v: 3,
+        threads: [
+          {
+            id: "d5d5d5d5-d5d5-7d5d-8d5d-d5d5d5d5d5b1",
+            origin: "index",
+            originRef: null,
+            scope: "surah:5",
+            boundEnd: null,
+            surah: 5,
+            ayah: 1,
+            localPage: null,
+            ratio: null,
+            sourceId: null,
+            device: "phone",
+            deviceId: "dev-other-phone",
+            deviceName: "Pixel 8",
+            startedAt: iso,
+            updatedAt: iso,
+            endedAt: null,
+            endReason: null,
+            state: "open",
+            identityStamp: null,
+            cursorStamp: null,
+            lifecycleStamp: null,
+            dirty: false,
+            rejected: false,
+            extras: {},
+          },
+        ],
+        progress: {},
+        since: 0,
+        after: -1,
+        epoch: null,
+        lastSeenAt: 0,
+      }),
+    );
+    const { store } = makeStore({ authenticated: true, user: { id: 7 } });
+    // The first call hydrates the account; this install's id exists only from then on.
+    store.enter(surah(5));
+    const here = store.deviceId;
+    expect(here).not.toBeNull();
+    store.cursor(5, 3, null);
+    const moved = store.open.find((t) => t.id === "d5d5d5d5-d5d5-7d5d-8d5d-d5d5d5d5d5b1");
+    expect(moved).toMatchObject({ surah: 5, ayah: 3, deviceId: here });
+  });
 });
