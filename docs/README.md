@@ -178,13 +178,12 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 | Item                                                             | Title                                       | Blocked by |
 | ---------------------------------------------------------------- | ------------------------------------------- | ---------- |
 | [M1](plans/mobile.md#m1-app-scaffold)                            | App scaffold                                | N1, D6     |
-| [M2](plans/mobile.md#m2-arabic-and-urdu-rendering-proof)         | Arabic and Urdu rendering proof             | M1         |
 | [M3](plans/mobile.md#m3-session-and-device-identity)             | Session and device identity                 | M1, N4     |
 | [M4](plans/mobile.md#m4-local-store-and-sync)                    | Local store and sync                        | M3, N3     |
-| [M5](plans/mobile.md#m5-reader)                                  | Reader                                      | M2, M4     |
+| [M5](plans/mobile.md#m5-reader)                                  | Reader                                      | M4         |
 | [M6](plans/mobile.md#m6-yours-bookmarks-search-settings-devices) | Yours, bookmarks, search, settings, devices | M5         |
 | [M7](plans/mobile.md#m7-push-and-reminders)                      | Push and reminders                          | M6         |
-| [M8](plans/mobile.md#m8-accessibility-and-localization)          | Accessibility and localization              | M6         |
+| [M8](plans/mobile.md#m8-localization-and-text-size)              | Localization and text size                  | M6         |
 | [M9](plans/mobile.md#m9-release)                                 | Release                                     | M7, M8, N5 |
 
 ### Desktop app
@@ -197,5 +196,5 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 | [G4](plans/desktop.md#g4-local-store-and-sync)                    | Local store and sync                        | G3, N3     |
 | [G5](plans/desktop.md#g5-reader)                                  | Reader                                      | G2, G4     |
 | [G6](plans/desktop.md#g6-yours-bookmarks-search-settings-devices) | Yours, bookmarks, search, settings, devices | G5         |
-| [G7](plans/desktop.md#g7-accessibility-and-localization)          | Accessibility and localization              | G6         |
+| [G7](plans/desktop.md#g7-localization-and-keyboard)               | Localization and keyboard                   | G6         |
 | [G8](plans/desktop.md#g8-packaging-and-updates)                   | Packaging and updates                       | G7, N5     |

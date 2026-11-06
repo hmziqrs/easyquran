@@ -15,19 +15,6 @@ Done when: a clean clone builds iOS and Android debug apps, gates run in CI, and
 Blocked by: N1, D6
 Owner: O33, O34.
 
-#### M2. Arabic and Urdu rendering proof
-
-The desktop experiment found GPUI text bugs, and nothing is proven on phones yet. Prove rendering before building a reader on it.
-
-Build: a screen rendering the same sample as `experiments/render-compare` with every launch script and the Urdu Nastaliq faces, on iOS and Android. Compare with the web references: harakat placement, ligatures, ayah marks, line height (Nastaliq needs about 2.2–2.9× leading), long-surah scrolling at 120 Hz. If platform text fails on either OS, stop and ask before choosing a native text module.
-
-Files: `apps/mobile/src/reader/`, `experiments/render-compare/COMPARE.md`, bundled fonts.
-
-Done when: screenshots from real iPhone and Android devices are recorded in `COMPARE.md`, and the owner has accepted them.
-
-Blocked by: M1
-Owner: O35 for font licences.
-
 #### M3. Session and device identity
 
 Build: the D6 `x-eq-session` transport with `credentials: 'omit'`; session value in Keychain or Keystore-wrapped storage; CSRF handling; `crypto.getRandomValues` available before any id is minted (polyfill if the runtime lacks it). A small native module for the D3 key: Secure Enclave and Android Keystore P-256, DER to raw conversion, no user-auth flags, foreground only. Android `dataExtractionRules` excluding identity from both `cloud-backup` and `device-transfer`. `AfterFirstUnlockThisDeviceOnly` on iOS. A first-run check clears nothing: reinstall keeps the Keychain identity on purpose. Sign-in screens per the D6 matrix, including TOTP and Sign in with Apple. The `verified` guard state: unverified accounts see a verify step.
@@ -50,13 +37,14 @@ Blocked by: M3, N3
 
 #### M5. Reader
 
-Build: `launch` reader scopes and scripts, translations, position restore by `surah:ayah`, read tracking with the same heuristics as web and no penalty for very fast readers, thread entry rules from `web/src/lib/sessions/entry.ts`, Start over. Large-text support, list virtualisation, phone and tablet layouts, foldables and rotation keep position.
+Build: `launch` reader scopes and scripts with the bundled fonts and per-font leading (Nastaliq needs about 2.2–2.9×), translations, position restore by `surah:ayah`, read tracking with the same heuristics as web and no penalty for very fast readers, thread entry rules from `web/src/lib/sessions/entry.ts`, Start over. Large-text support, list virtualisation, phone and tablet layouts, foldables and rotation keep position.
 
 Files: `apps/mobile/src/reader/`.
 
 Done when: a thread started on web continues on the phone at the same verse and back; a 286-ayah surah scrolls without dropped position after rotation; read events match web for the same reading (fixture).
 
-Blocked by: M2, M4
+Blocked by: M4
+Owner: O35 for font licences.
 
 #### M6. Yours, bookmarks, search, settings, devices
 
@@ -79,13 +67,13 @@ Done when: a test notification arrives on real devices, opens the right verse, a
 Blocked by: M6
 Owner: O34.
 
-#### M8. Accessibility and localization
+#### M8. Localization and text size
 
-Build: `en` and `ar`, sharing message keys with web where they match; RTL throughout; VoiceOver and TalkBack labels, with verse text exposed verbatim; Dynamic Type and Android font scale; contrast from the design tokens; reduced motion.
+Build: `en` and `ar`, sharing message keys with web where they match; RTL throughout; Dynamic Type and Android font scale; contrast from the design tokens; reduced motion. Screen-reader support is out of scope by owner decision.
 
 Files: `apps/mobile/src/i18n/`, all screens.
 
-Done when: a full reader, bookmark and sign-in pass works with VoiceOver and TalkBack (O32), at the largest text size, in Arabic.
+Done when: a full reader, bookmark and sign-in pass works in Arabic at the largest text size.
 
 Blocked by: M6
 

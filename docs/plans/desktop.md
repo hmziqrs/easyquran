@@ -16,19 +16,18 @@ Blocked by: N1, D6
 
 #### G2. Production Arabic text element
 
-The HarfRust element has no selection, caret, bidi pass or accessibility text, and the rendering has only been checked on macOS. This is the app's largest unknown.
+Owner confirmed Arabic and Urdu render correctly on all desktop systems, so no rendering proof is needed. Selecting reading text is not required (owner decision, 2026-11-06), so the reading element needs no selection or caret.
 
 Build:
 
-1. Route all Arabic and Urdu through HarfRust and `paint_glyph`. Never stock GPUI text, which misplaces marks.
+1. Route all Arabic and Urdu reading text through HarfRust and `paint_glyph`. Never stock GPUI text.
 2. Line breaking and wrapping for Arabic and Nastaliq, bidi for mixed text, per-font leading.
-3. Selection and copy that return the verbatim source text, never glyph-derived text.
-4. Screen-reader text. Check first what GPUI exposes on each system. If a platform has no route to assistive tech, stop and ask: that decides whether desktop can launch there.
-5. Verify output on Windows and Linux against the web references, on real machines.
+3. A copy-verse action, if one ships, reads verbatim text from the database, never from glyphs.
+4. Editable fields (search, notes, rename, sign-in) are separate from this element. Use the `gpui-kit` input and confirm typed Arabic and Urdu display correctly in it.
 
-Files: `apps/desktop/src/text/`, `experiments/render-compare/COMPARE.md`.
+Files: `apps/desktop/src/text/`.
 
-Done when: copied text equals database bytes (test); screenshots on all three systems are recorded and accepted by the owner; the assistive-tech result is recorded per system.
+Done when: wrapping and bidi cases pass at each launch font; copy-verse returns database bytes (test, if the action ships); typed Arabic and Urdu display correctly in a search field.
 
 Blocked by: G1
 Owner: O35 for font licences.
@@ -73,13 +72,13 @@ Done when: each row behaves as on web against the same API; ledger conflict case
 
 Blocked by: G5
 
-#### G7. Accessibility and localization
+#### G7. Localization and keyboard
 
-Build: `en` and `ar`, RTL layout, full keyboard operation, the G2 assistive-tech route, system text scale and contrast, reduced motion.
+Build: `en` and `ar`, RTL layout, full keyboard operation, system text scale and contrast, reduced motion. Screen-reader support is out of scope by owner decision.
 
 Files: `apps/desktop/src/i18n/`, all screens.
 
-Done when: reader, bookmarks and sign-in work by keyboard alone and with a screen reader where G2 found a route (O32), in Arabic.
+Done when: reader, bookmarks and sign-in work by keyboard alone, in Arabic.
 
 Blocked by: G6
 
