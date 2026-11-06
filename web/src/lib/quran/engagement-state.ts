@@ -43,8 +43,9 @@ export interface ViewBump {
  * day buckets: buckets stay derived per device-local
  * day, never computed server-side (EC-36).
  */
-export function todayLocal(): string {
-  const d = new Date();
+/** The user's zone decides the day; `nowMs` lets a caller pass a corrected clock. */
+export function todayLocal(nowMs: number = Date.now()): string {
+  const d = new Date(nowMs);
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${m}-${day}`;

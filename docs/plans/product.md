@@ -6,25 +6,12 @@ Product features, then the copy truth pass.
 
 ## Product
 
-#### F6. Personal data export and import
-
-Build: versioned JSON export of bookmarks, folders, notes, threads, cards and settings. Export drops `device_id`, and import adds only absent ids (from D5). Import validates, adds only rows whose ids are absent (with a toast), and rejects newer schema versions. Lives in Settings.
-Files: `web/src/routes/(application)/settings/`, new: `web/src/lib/storage/data-export.ts`
-Done when: export then import on a clean browser round-trips everything; malformed and future-schema files are rejected with a clear message.
-
 #### F7. Self-service account deletion
 
 Build: new self-service route (only `admin_delete` exists today), through the A38 erase path, with `FreshAuthControls` re-auth. Revokes sessions, deletes Quran-state rows, device rows and device tokens, offers export first, clears local account data. Immediate, no grace period (default until the owner says otherwise). Update the privacy and terms deletion wording to match.
 Files: `rust/backend/api/src/modules/user_v1/`, `web/src/routes/(account)/account/+page.svelte`, `web/messages/en.json`, `web/messages/ar.json`
 Done when: API test proves rows and tokens are gone and the session is dead; legal copy no longer says "ask us to delete".
 Blocked by: F6, A38
-
-#### F8. Reading goals and streaks
-
-Build: goal presets (time per day, finish in 30 days, finish in a year) plus custom range, built on `reading_daily` and `localDay`. Goals sync as a new `contracts/sync.md` domain, with its rule and vectors added first. Progress comes from server totals, so reads from all devices count. Pause and completion. Streak calendar on `/yours`. Must never penalise very fast readers: time goals count verse reads too.
-Files: `web/src/routes/(application)/yours/_components/ReadingInsights.svelte`, `web/src/lib/analytics/reading-analytics.ts`, `rust/backend/api/src/modules/user_analytics_v1/`
-Done when: goal progress and streak derive from recorded reads, respect the user's local day, and are covered by tests including a fast-reader case.
-Blocked by: S7
 
 #### F9. Goal reminders
 

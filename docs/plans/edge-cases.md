@@ -8,7 +8,6 @@ Every scenario we know of, its required behaviour, and who owns it. Finished row
 
 | Case                                         | Required behaviour                                                                     | Item   |
 | -------------------------------------------- | -------------------------------------------------------------------------------------- | ------ |
-| Time-zone change or travel                   | Local day follows the user's zone; stamps are unaffected                               | S2, F8 |
 
 ### Offline and conflicts
 

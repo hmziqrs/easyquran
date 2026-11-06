@@ -52,7 +52,14 @@ export interface ExportNote {
 /** A thread as exported: content and lifecycle only, no device id or stamps. */
 export type ExportThread = Omit<
   ReadingThread,
-  "identityStamp" | "cursorStamp" | "lifecycleStamp" | "deviceId" | "dirty" | "rejected" | "extras"
+  | "identityStamp"
+  | "cursorStamp"
+  | "lifecycleStamp"
+  | "deviceId"
+  | "deviceName"
+  | "dirty"
+  | "rejected"
+  | "extras"
 >;
 export type ExportFolder = Omit<
   BookmarkFolder,

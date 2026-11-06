@@ -98,6 +98,7 @@ function bookmark(over: Partial<Bookmark> = {}): Bookmark {
 
 function thread(over: Partial<ReadingThread> = {}): ReadingThread {
   return {
+    deviceName: null,
     id: ID.thread,
     origin: "index",
     originRef: null,

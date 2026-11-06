@@ -157,6 +157,11 @@ export class PreferencesStore {
     this.#capture.schedule();
   }
 
+  /** Device time corrected by the last known server offset (contracts/sync.md). */
+  now(): number {
+    return this.#clock?.now() ?? Date.now();
+  }
+
   get(key: string): JsonValue {
     return this.#rows.get(key)?.value ?? null;
   }

@@ -94,9 +94,7 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 
 | Item                                                               | Title                                  | Blocked by |
 | ------------------------------------------------------------------ | -------------------------------------- | ---------- |
-| [F6](plans/product.md#f6-personal-data-export-and-import)          | Personal data export and import        | -          |
 | [F7](plans/product.md#f7-self-service-account-deletion)            | Self-service account deletion          | F6, A38    |
-| [F8](plans/product.md#f8-reading-goals-and-streaks)                | Reading goals and streaks              | S7         |
 | [F9](plans/product.md#f9-goal-reminders)                           | Goal reminders                         | F8         |
 | [F15](plans/product.md#f15-voice-search)                           | Voice search                           | -          |
 | [F17](plans/product.md#f17-translation-correction-report)          | Translation correction report          | A24        |

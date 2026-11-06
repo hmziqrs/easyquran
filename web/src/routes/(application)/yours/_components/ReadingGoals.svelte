@@ -59,6 +59,7 @@
     reader_goals_unavailable,
     reader_goals_window,
   } from "#lib/i18n/m/reader.js";
+  import { preferences } from "#lib/preferences/store.svelte.js";
   import { todayLocal } from "#lib/quran/engagement-state.js";
 
   // Goals and the streak calendar. Days come from the server rollup when signed
@@ -70,7 +71,7 @@
   const HISTORY_DAYS = 400;
   const CALENDAR_WEEKS = 5;
 
-  let today = $state(todayLocal());
+  let today = $state(todayLocal(preferences.now()));
   let days = $state.raw<readonly ReadingDay[] | null>(null);
   let loaded = $state(false);
   let error = $state<GoalDraftError | null>(null);
@@ -87,15 +88,15 @@
   const cells = $derived(calendarDays(today, CALENDAR_WEEKS));
 
   async function refresh(): Promise<void> {
-    today = todayLocal();
+    today = todayLocal(preferences.now());
     const result = await readingAnalytics.fetchDays(addDays(today, -(HISTORY_DAYS - 1)), today);
     days = result;
     loaded = true;
   }
 
   onMount(() => {
-    customStart = todayLocal();
-    customEnd = addDays(todayLocal(), 29);
+    customStart = todayLocal(preferences.now());
+    customEnd = addDays(todayLocal(preferences.now()), 29);
     void refresh();
   });
 
