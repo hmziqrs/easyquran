@@ -35,6 +35,7 @@ mod m000070_mail_budget;
 mod m000100_comment_notice_hardening;
 mod m000110_device_token_hygiene;
 mod m000120_media_deletions;
+mod m000140_media_upload_indexes;
 
 pub struct Migrator;
 
@@ -143,6 +144,8 @@ impl MigratorTrait for Migrator {
             Box::new(m000110_device_token_hygiene::Migration),
             // m000120 adds media_deletions (A30): media takedown tombstones. No FK, 12-month class.
             Box::new(m000120_media_deletions::Migration),
+            // m000140 adds media indexes on uploader_id and content_hash (A31). Plain, IF NOT EXISTS.
+            Box::new(m000140_media_upload_indexes::Migration),
         ]
     }
 }

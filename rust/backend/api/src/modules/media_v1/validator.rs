@@ -1,3 +1,4 @@
+use image::ImageFormat;
 use sea_orm::prelude::DateTimeWithTimeZone;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
@@ -5,16 +6,27 @@ use validator::Validate;
 use crate::db::sea_models::media::{MediaQuery, MediaReference};
 use crate::utils::SortParam;
 
+// GIF is dropped (A31): no GIF decoder is compiled in (image feature set is jpeg/png/webp/tiff),
+// so a GIF could never be decoded, sanitized, or size-checked.
 pub const ALLOWED_MIME_TYPES: &[&str] = &[
     "image/jpeg",
     "image/jpg",
     "image/png",
     "image/webp",
-    "image/gif",
     "image/tiff",
 ];
 
-pub const ALLOWED_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "tiff"];
+pub const ALLOWED_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp", "tiff"];
+
+/// Per-uploader media quota (A31). `QUOTA_TOTAL` caps live media rows, `QUOTA_DAILY` caps new
+/// uploads in a rolling 24 h window. A duplicate that returns an existing row does not count.
+pub const QUOTA_TOTAL: u64 = 1_000;
+pub const QUOTA_DAILY: u64 = 100;
+
+/// Markup openers that have no business inside a raster image. A polyglot (valid image header
+/// plus script payload) is refused on sight. The re-encode in `image_optimizer::sanitize` is the
+/// real guarantee: the served object is freshly encoded pixels, so no trailing payload survives.
+const MARKUP_SIGNATURES: &[&[u8]] = &[b"<script", b"<html", b"<svg", b"<!doctype", b"<iframe"];
 
 pub fn is_allowed_mime(mime: &str) -> bool {
     let normalized = mime
@@ -92,7 +104,6 @@ fn mime_for_extension(ext: &str) -> &'static str {
         "jpg" | "jpeg" => "image/jpeg",
         "png" => "image/png",
         "webp" => "image/webp",
-        "gif" => "image/gif",
         "tiff" => "image/tiff",
         _ => "application/octet-stream",
     }
@@ -103,10 +114,59 @@ fn extension_for_mime(mime: &str) -> &'static str {
         "image/jpeg" | "image/jpg" => "jpg",
         "image/png" => "png",
         "image/webp" => "webp",
-        "image/gif" => "gif",
         "image/tiff" => "tiff",
         _ => "bin",
     }
+}
+
+/// Magic-byte check (A31): bytes must be JPEG, PNG, WebP or TIFF whatever the client declared.
+pub fn sniff_image_format(bytes: &[u8]) -> Result<ImageFormat, String> {
+    let format = image::guess_format(bytes).map_err(|_| not_an_image())?;
+    match format {
+        ImageFormat::Jpeg | ImageFormat::Png | ImageFormat::WebP | ImageFormat::Tiff => Ok(format),
+        _ => Err(not_an_image()),
+    }
+}
+
+fn not_an_image() -> String {
+    "Unsupported file type: content is not a recognised image".to_string()
+}
+
+/// True when the declared MIME (already normalized by `validate_upload`) names the sniffed format.
+pub fn declared_matches_sniffed(declared_mime: &str, format: ImageFormat) -> bool {
+    let declared = if declared_mime == "image/jpg" {
+        "image/jpeg"
+    } else {
+        declared_mime
+    };
+    let sniffed = match format {
+        ImageFormat::Jpeg => "image/jpeg",
+        ImageFormat::Png => "image/png",
+        ImageFormat::WebP => "image/webp",
+        ImageFormat::Tiff => "image/tiff",
+        _ => return false,
+    };
+    declared == sniffed
+}
+
+/// Case-insensitive scan for markup openers anywhere in the upload (A31 polyglot guard).
+pub fn has_markup_signature(bytes: &[u8]) -> bool {
+    MARKUP_SIGNATURES.iter().any(|signature| {
+        bytes
+            .windows(signature.len())
+            .any(|window| window.eq_ignore_ascii_case(signature))
+    })
+}
+
+/// Quota decision (A31). Pure so the boundary is testable without a database.
+pub fn quota_verdict(live_total: u64, uploads_last_day: u64) -> Result<(), &'static str> {
+    if live_total >= QUOTA_TOTAL {
+        return Err("Media storage quota reached");
+    }
+    if uploads_last_day >= QUOTA_DAILY {
+        return Err("Daily media upload limit reached");
+    }
+    Ok(())
 }
 
 pub use crate::services::media::MediaUploadMetadata;
@@ -289,6 +349,71 @@ mod tests {
         for mime in ALLOWED_MIME_TYPES {
             assert!(is_allowed_mime(mime), "{} should be allowed", mime);
         }
+    }
+
+    #[test]
+    fn gif_is_refused_until_a_decoder_exists() {
+        assert!(!is_allowed_mime("image/gif"));
+        assert_eq!(allowlisted_extension("gif"), None);
+        assert!(validate_upload(Some("image/gif"), Some("a.gif")).is_err());
+    }
+
+    #[test]
+    fn sniff_accepts_real_png_header() {
+        let png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR";
+        assert_eq!(sniff_image_format(png).unwrap(), ImageFormat::Png);
+    }
+
+    #[test]
+    fn sniff_rejects_html_even_when_declared_png() {
+        let html = b"<!doctype html><html><body>hi</body></html>";
+        assert!(sniff_image_format(html).is_err());
+        assert!(validate_upload(Some("image/png"), Some("a.png")).is_ok());
+    }
+
+    #[test]
+    fn declared_mime_must_match_sniffed_format() {
+        assert!(declared_matches_sniffed("image/png", ImageFormat::Png));
+        assert!(declared_matches_sniffed("image/jpg", ImageFormat::Jpeg));
+        assert!(!declared_matches_sniffed("image/jpeg", ImageFormat::Png));
+        assert!(!declared_matches_sniffed("image/webp", ImageFormat::Tiff));
+    }
+
+    #[test]
+    fn polyglot_png_with_script_payload_is_flagged() {
+        let mut polyglot = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+        polyglot.extend_from_slice(b"<script>alert(1)</script>");
+        assert!(sniff_image_format(&polyglot).is_ok());
+        assert!(has_markup_signature(&polyglot));
+    }
+
+    #[test]
+    fn markup_signature_match_is_case_insensitive() {
+        assert!(has_markup_signature(b"xx<ScRiPt>x"));
+        assert!(has_markup_signature(b"..<!DOCTYPE html"));
+        assert!(!has_markup_signature(b"\xff\xd8\xff\xe0plain binary"));
+    }
+
+    #[test]
+    fn quota_allows_below_both_caps() {
+        assert!(quota_verdict(0, 0).is_ok());
+        assert!(quota_verdict(QUOTA_TOTAL - 1, QUOTA_DAILY - 1).is_ok());
+    }
+
+    #[test]
+    fn quota_refuses_at_total_cap() {
+        assert_eq!(
+            quota_verdict(QUOTA_TOTAL, 0),
+            Err("Media storage quota reached")
+        );
+    }
+
+    #[test]
+    fn quota_refuses_at_daily_cap() {
+        assert_eq!(
+            quota_verdict(0, QUOTA_DAILY),
+            Err("Daily media upload limit reached")
+        );
     }
 
     #[test]

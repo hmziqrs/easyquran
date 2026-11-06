@@ -40,9 +40,10 @@ use tracing::{debug, error, info, instrument, warn};
 
 use super::validator::is_allowed_mime;
 use super::validator::{
-    allowlisted_extension, validate_upload, MediaUploadMetadata, V1MediaListQuery,
-    V1MediaUsageQuery,
+    allowlisted_extension, declared_matches_sniffed, has_markup_signature, quota_verdict,
+    sniff_image_format, validate_upload, MediaUploadMetadata, V1MediaListQuery, V1MediaUsageQuery,
 };
+use image::ImageFormat;
 
 #[derive(Debug, Serialize)]
 struct PostUsage {
@@ -242,12 +243,33 @@ pub async fn create(
             ErrorResponse::new(ErrorCode::InvalidFileType).with_message(&msg)
         })?;
 
+    // A31: magic bytes decide the format. The declared type must agree with what the bytes are.
+    let sniffed_format = sniff_image_format(&file_bytes).map_err(|msg| {
+        warn!(error = %msg, "Rejected upload: bytes are not an allowlisted image");
+        ErrorResponse::new(ErrorCode::InvalidFileType).with_message(&msg)
+    })?;
+    if !declared_matches_sniffed(&declared_mime, sniffed_format) {
+        warn!("Rejected upload: declared type does not match file bytes");
+        return Err(ErrorResponse::new(ErrorCode::InvalidFileType)
+            .with_message("Uploaded file does not match its declared image type"));
+    }
+
     let mut hasher = Sha256::new();
     hasher.update(&file_bytes);
     let content_hash = format!("{:x}", hasher.finalize());
 
     debug!(content_hash = %content_hash, "File hash calculated");
     tracing::Span::current().record("content_hash", &content_hash);
+
+    // A31: a polyglot (image header plus markup payload) is refused and audited before
+    // screening or dedup can see it.
+    if has_markup_signature(&file_bytes) {
+        warn!("Rejected upload: markup payload inside image bytes");
+        tracing::Span::current().record("result", "refused_polyglot");
+        refuse_upload_hardening(&state.sea_db, uploader.id, &content_hash, "polyglot").await?;
+        return Err(ErrorResponse::new(ErrorCode::InvalidFileType)
+            .with_message("Uploaded file contains disallowed content"));
+    }
 
     // A37: screen before dedup. A refused image never reaches the dedup lookup, so it
     // cannot return an existing row, and nothing is stored for it.
@@ -284,6 +306,31 @@ pub async fn create(
     }
 
     tracing::Span::current().record("is_duplicate", false);
+
+    // A31: per-uploader quota. Runs after dedup, so a duplicate that returns an existing row
+    // costs nothing.
+    let live_total = Media::count_by_uploader(&state.sea_db, uploader.id, None).await?;
+    let since = Utc::now().fixed_offset() - chrono::Duration::hours(24);
+    let uploads_last_day =
+        Media::count_by_uploader(&state.sea_db, uploader.id, Some(since)).await?;
+    if let Err(msg) = quota_verdict(live_total, uploads_last_day) {
+        warn!(
+            live_total,
+            uploads_last_day, "Rejected upload: quota reached"
+        );
+        tracing::Span::current().record("result", "quota_exceeded");
+        return Err(ErrorResponse::new(ErrorCode::RateLimited).with_message(msg));
+    }
+
+    // A31: sanitize before anything is stored. Everything below works on the clean bytes.
+    let file_bytes = sanitize_upload(
+        &state,
+        uploader.id,
+        &content_hash,
+        &file_bytes,
+        sniffed_format,
+    )
+    .await?;
 
     if metadata.width.is_none() || metadata.height.is_none() {
         if let Ok(dimensions) = imagesize::blob_size(&file_bytes) {
@@ -329,6 +376,9 @@ pub async fn create(
         let req_mime = mime_type.clone();
         let req_ext = extension.clone();
         let optimizer_cfg = state.storage.optimizer.clone();
+        let _decode_permit = image_optimizer::acquire_decode_permit()
+            .await
+            .map_err(|_| ErrorResponse::new(ErrorCode::InternalServerError))?;
         let optimization_outcome = match tokio::task::spawn_blocking(move || {
             let optimization_request = image_optimizer::OptimizationRequest {
                 bytes: &req_bytes,
@@ -855,6 +905,67 @@ pub async fn delete(
             "media_id": media.id,
         })),
     ))
+}
+
+/// Decode-side hardening for one upload (A31). Holds a decode slot for the blocking decode,
+/// then returns the re-encoded bytes. An over-budget header and an undecodable body are refused
+/// before any pixel is allocated or stored.
+async fn sanitize_upload(
+    state: &AppState,
+    uploader_id: i32,
+    content_hash: &str,
+    bytes: &Bytes,
+    format: ImageFormat,
+) -> Result<Bytes, ErrorResponse> {
+    let _decode_permit = image_optimizer::acquire_decode_permit()
+        .await
+        .map_err(|_| ErrorResponse::new(ErrorCode::InternalServerError))?;
+    let source = bytes.clone();
+    let max_pixels = state.storage.optimizer.max_pixels;
+    let outcome =
+        tokio::task::spawn_blocking(move || image_optimizer::sanitize(&source, format, max_pixels))
+            .await;
+
+    match outcome {
+        Ok(Ok(clean)) => Ok(clean),
+        Ok(Err(image_optimizer::SanitizeError::DimensionsExceeded { pixels, max_pixels })) => {
+            warn!(pixels, max_pixels, "Rejected upload: pixel budget exceeded");
+            tracing::Span::current().record("result", "refused_dimensions");
+            refuse_upload_hardening(&state.sea_db, uploader_id, content_hash, "dimensions").await?;
+            Err(ErrorResponse::new(ErrorCode::FileTooLarge)
+                .with_message("Image dimensions exceed the upload limit"))
+        }
+        Ok(Err(err)) => {
+            warn!(error = %err, "Rejected upload: image could not be decoded");
+            Err(ErrorResponse::new(ErrorCode::InvalidFileType)
+                .with_message("Image could not be decoded"))
+        }
+        Err(err) => {
+            error!(error = %err, "image sanitizer blocking task failed");
+            Err(ErrorResponse::new(ErrorCode::InternalServerError))
+        }
+    }
+}
+
+/// Audit row for an upload refused by the A31 hardening checks. Metadata carries the stage and
+/// the reason only: no device identity, no image bytes.
+async fn refuse_upload_hardening(
+    db: &sea_orm::DatabaseConnection,
+    user_id: i32,
+    content_hash: &str,
+    reason: &'static str,
+) -> Result<(), ErrorResponse> {
+    audit::record(
+        db,
+        AuditEvent {
+            actor_id: Some(user_id),
+            action: AuditAction::MediaUploadRefused,
+            resource_id: content_hash.to_string(),
+            metadata: json!({ "stage": "upload", "reason": reason }),
+        },
+    )
+    .await
+    .map_err(ErrorResponse::from)
 }
 
 /// Audit row for an upload refused by screening (A37). A provider fault is not an

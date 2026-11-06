@@ -108,6 +108,96 @@ pub enum OptimizationError {
     ValidationFailed(String),
 }
 
+/// Longest side any decoded upload may have (A31). The decoder enforces it before allocating.
+pub const MAX_SIDE: u32 = 16_384;
+/// Decoder allocation ceiling per upload (A31), on top of the pixel budget.
+const DECODE_MAX_ALLOC: u64 = 256 * 1024 * 1024;
+/// JPEG quality for the sanitizing re-encode. Lossy by design: the stored original is re-encoded.
+pub const SANITIZE_JPEG_QUALITY: u8 = 92;
+/// Decodes allowed to run at once, process-wide (A31). Uploads queue behind this.
+const DECODE_SLOTS: usize = 2;
+
+#[derive(Debug, Error)]
+pub enum SanitizeError {
+    #[error("failed to decode image: {0}")]
+    DecodeFailed(String),
+    #[error("image has {pixels} pixels, limit is {max_pixels}")]
+    DimensionsExceeded { pixels: u64, max_pixels: u64 },
+    #[error("format cannot be sanitized")]
+    UnsupportedFormat,
+    #[error("failed to re-encode image: {0}")]
+    EncodeFailed(String),
+}
+
+fn decode_slots() -> &'static tokio::sync::Semaphore {
+    static SLOTS: std::sync::OnceLock<tokio::sync::Semaphore> = std::sync::OnceLock::new();
+    SLOTS.get_or_init(|| tokio::sync::Semaphore::new(DECODE_SLOTS))
+}
+
+/// Wait for a decode slot (A31). Hold the permit across the blocking decode.
+pub async fn acquire_decode_permit(
+) -> Result<tokio::sync::SemaphorePermit<'static>, tokio::sync::AcquireError> {
+    decode_slots().acquire().await
+}
+
+/// Sanitize an upload before it is stored (A31).
+///
+/// Dimensions come from the header and are checked before any pixel allocation. The image is
+/// decoded, EXIF orientation is applied to the pixels, and the pixels are re-encoded in the same
+/// format. Encoders write no metadata, and trailing bytes after the image are dropped, so the
+/// stored object carries no EXIF, GPS, text chunks or polyglot payload.
+pub fn sanitize(
+    bytes: &[u8],
+    format: ImageFormat,
+    max_pixels: u64,
+) -> Result<Bytes, SanitizeError> {
+    use image::ImageDecoder;
+
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(MAX_SIDE);
+    limits.max_image_height = Some(MAX_SIDE);
+    limits.max_alloc = Some(DECODE_MAX_ALLOC);
+    let mut reader = image::ImageReader::with_format(std::io::Cursor::new(bytes), format);
+    reader.limits(limits);
+    let mut decoder = reader
+        .into_decoder()
+        .map_err(|err| SanitizeError::DecodeFailed(err.to_string()))?;
+
+    let (width, height) = decoder.dimensions();
+    let pixels = u64::from(width) * u64::from(height);
+    if pixels > max_pixels {
+        return Err(SanitizeError::DimensionsExceeded { pixels, max_pixels });
+    }
+
+    let orientation = decoder
+        .orientation()
+        .unwrap_or(image::metadata::Orientation::NoTransforms);
+    let mut decoded = DynamicImage::from_decoder(decoder)
+        .map_err(|err| SanitizeError::DecodeFailed(err.to_string()))?;
+    decoded.apply_orientation(orientation);
+
+    // Cursor, not Vec: the TIFF encoder needs Seek.
+    let mut out = std::io::Cursor::new(Vec::with_capacity(bytes.len()));
+    let encoded = match format {
+        ImageFormat::Jpeg => {
+            decoded
+                .to_rgb8()
+                .write_with_encoder(codecs::jpeg::JpegEncoder::new_with_quality(
+                    &mut out,
+                    SANITIZE_JPEG_QUALITY,
+                ))
+        }
+        ImageFormat::Png => decoded.write_with_encoder(codecs::png::PngEncoder::new(&mut out)),
+        ImageFormat::WebP => {
+            decoded.write_with_encoder(codecs::webp::WebPEncoder::new_lossless(&mut out))
+        }
+        ImageFormat::Tiff => decoded.write_with_encoder(codecs::tiff::TiffEncoder::new(&mut out)),
+        _ => return Err(SanitizeError::UnsupportedFormat),
+    };
+    encoded.map_err(|err| SanitizeError::EncodeFailed(err.to_string()))?;
+    Ok(Bytes::from(out.into_inner()))
+}
+
 const LOSSY_BPP_THRESHOLD: f32 = 1.5;
 const LOSSLESS_BPP_THRESHOLD: f32 = 3.0;
 
@@ -719,6 +809,129 @@ fn significant_reduction(original: usize, candidate: usize, threshold: f32) -> b
 
     let reduction = 1.0 - (candidate as f32 / original as f32);
     reduction >= threshold
+}
+
+#[cfg(test)]
+mod sanitize_tests {
+    use super::*;
+    use crate::config::settings::OptimizerConfig;
+
+    fn tiny_jpeg(width: u32, height: u32) -> Vec<u8> {
+        let rgb = image::RgbImage::from_fn(width, height, |x, y| {
+            image::Rgb([(x * 7) as u8, (y * 5) as u8, 128])
+        });
+        let mut out = Vec::new();
+        rgb.write_with_encoder(codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 90))
+            .unwrap();
+        out
+    }
+
+    /// Splice an APP1 Exif segment (orientation tag only) right after SOI.
+    fn with_orientation_exif(jpeg: &[u8], orientation: u16) -> Vec<u8> {
+        let mut tiff = Vec::new();
+        tiff.extend_from_slice(b"II*\0");
+        tiff.extend_from_slice(&8u32.to_le_bytes());
+        tiff.extend_from_slice(&1u16.to_le_bytes());
+        tiff.extend_from_slice(&0x0112u16.to_le_bytes());
+        tiff.extend_from_slice(&3u16.to_le_bytes());
+        tiff.extend_from_slice(&1u32.to_le_bytes());
+        tiff.extend_from_slice(&orientation.to_le_bytes());
+        tiff.extend_from_slice(&[0, 0]);
+        tiff.extend_from_slice(&0u32.to_le_bytes());
+
+        let mut payload = b"Exif\0\0".to_vec();
+        payload.extend_from_slice(&tiff);
+        let len = u16::try_from(payload.len() + 2).unwrap();
+
+        let mut out = vec![0xFF, 0xD8, 0xFF, 0xE1];
+        out.extend_from_slice(&len.to_be_bytes());
+        out.extend_from_slice(&payload);
+        out.extend_from_slice(&jpeg[2..]);
+        out
+    }
+
+    fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+        haystack.windows(needle.len()).any(|w| w == needle)
+    }
+
+    #[test]
+    fn sanitize_drops_exif_from_served_original() {
+        let input = with_orientation_exif(&tiny_jpeg(16, 16), 1);
+        assert!(contains(&input, b"Exif"), "fixture must carry EXIF");
+        let out = sanitize(&input, ImageFormat::Jpeg, 1_000_000).unwrap();
+        assert!(!contains(&out, b"Exif"));
+    }
+
+    #[test]
+    fn sanitize_applies_orientation_before_dropping_it() {
+        // Orientation 6 = rotate 90 degrees clockwise: 4x2 becomes 2x4.
+        let input = with_orientation_exif(&tiny_jpeg(4, 2), 6);
+        let out = sanitize(&input, ImageFormat::Jpeg, 1_000_000).unwrap();
+        let decoded = image::load_from_memory(&out).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (2, 4));
+    }
+
+    #[test]
+    fn sanitize_refuses_over_pixel_budget_before_decode() {
+        let input = tiny_jpeg(64, 64);
+        let err = sanitize(&input, ImageFormat::Jpeg, 100).unwrap_err();
+        assert!(matches!(
+            err,
+            SanitizeError::DimensionsExceeded {
+                pixels: 4096,
+                max_pixels: 100
+            }
+        ));
+    }
+
+    #[test]
+    fn sanitize_drops_polyglot_trailing_payload() {
+        let mut png = Vec::new();
+        let small = image::RgbImage::from_fn(8, 8, |x, y| image::Rgb([x as u8, y as u8, 0]));
+        small
+            .write_with_encoder(codecs::png::PngEncoder::new(&mut png))
+            .unwrap();
+        png.extend_from_slice(b"<script>alert(1)</script>");
+        assert!(contains(&png, b"<script"));
+
+        let out = sanitize(&png, ImageFormat::Png, 1_000_000).unwrap();
+        assert!(!contains(&out, b"<script"));
+    }
+
+    #[test]
+    fn sanitize_rejects_undecodable_bytes() {
+        let garbage = b"\xff\xd8\xff not really a jpeg at all".to_vec();
+        let err = sanitize(&garbage, ImageFormat::Jpeg, 1_000_000).unwrap_err();
+        assert!(matches!(err, SanitizeError::DecodeFailed(_)));
+    }
+
+    #[test]
+    fn optimizer_outputs_carry_no_exif_original_or_variants() {
+        let input = with_orientation_exif(&tiny_jpeg(1200, 800), 1);
+        let clean = sanitize(&input, ImageFormat::Jpeg, 12_000_000).unwrap();
+        let config = OptimizerConfig {
+            enabled: true,
+            max_pixels: 12_000_000,
+            keep_original: true,
+            default_webp_quality: 80,
+        };
+        let meta = MediaUploadMetadata::default();
+        let request = OptimizationRequest {
+            bytes: &clean,
+            metadata: &meta,
+            reference: Some(MediaReference::Post),
+            original_mime: Some("image/jpeg"),
+            original_extension: Some("jpg"),
+        };
+        let mut served: Vec<Vec<u8>> = vec![clean.to_vec()];
+        if let OptimizationOutcome::Optimized(result) = optimize(&config, request).unwrap() {
+            served.push(result.original.bytes.to_vec());
+            served.extend(result.variants.iter().map(|v| v.bytes.to_vec()));
+        }
+        for bytes in &served {
+            assert!(!contains(bytes, b"Exif"));
+        }
+    }
 }
 
 #[cfg(test)]

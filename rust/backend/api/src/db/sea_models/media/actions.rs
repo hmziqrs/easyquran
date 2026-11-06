@@ -1,6 +1,6 @@
 use crate::error::{DbResult, ErrorResponse};
 use ruxlog_types::PaginatedList;
-use sea_orm::{entity::prelude::*, Condition, Order, QueryOrder, QuerySelect, Set};
+use sea_orm::{entity::prelude::*, Condition, Order, PaginatorTrait, QueryOrder, QuerySelect, Set};
 use tracing::{error, info, instrument, warn};
 
 use super::super::media_usage;
@@ -64,6 +64,20 @@ impl Entity {
     }
 
     #[instrument(skip(conn), fields(hash, media_id))]
+    /// Live media rows owned by one uploader, optionally only those created at or after
+    /// `since` (A31 quota). Served by the `uploader_id` index.
+    pub async fn count_by_uploader(
+        conn: &DbConn,
+        uploader_id: i32,
+        since: Option<DateTimeWithTimeZone>,
+    ) -> DbResult<u64> {
+        let mut query = <Self as EntityTrait>::find().filter(Column::UploaderId.eq(uploader_id));
+        if let Some(since) = since {
+            query = query.filter(Column::CreatedAt.gte(since));
+        }
+        query.count(conn).await.map_err(ErrorResponse::from)
+    }
+
     pub async fn find_by_hash(conn: &DbConn, hash: &str) -> DbResult<Option<Model>> {
         <Self as EntityTrait>::find()
             .filter(Column::ContentHash.eq(hash))
