@@ -35,8 +35,6 @@ use crate::modules::admin_bans_v1;
 #[cfg(feature = "seed-system")]
 use crate::modules::seed_v1;
 
-use crate::modules::billing_v1;
-
 use crate::modules::passkey_v1;
 use crate::modules::{apple_auth_v1, discord_auth_v1, facebook_auth_v1, github_auth_v1};
 use crate::modules::{
@@ -158,11 +156,6 @@ pub fn router(state: AppState) -> Router<AppState> {
     {
         router = router.nest("/admin/seed/v1", seed_v1::routes());
     }
-
-    router = router.nest(
-        "/billing/v1",
-        billing_v1::routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
-    );
 
     router = router
         .nest(

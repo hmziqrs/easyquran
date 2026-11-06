@@ -2,20 +2,6 @@
 
 [Back to index](../README.md)
 
-#### A3. Billing: degrade the read path and unmount
-
-Build:
-
-1. `rust/backend/api/src/services/paywall.rs` (~115–161): `user_purchased_post_ids` only skips its query when `post_ids` is empty, then reads `post_purchase`, a table that does not exist. While billing is unmounted, return an empty set without querying. This stops the 500 on the authenticated published post list (`rust/backend/api/src/modules/post_v1/controller.rs` ~122–126 and ~330).
-2. `rust/backend/api/src/router.rs`: remove the `billing_v1` import (~line 38) and the `/billing/v1` nest (~lines 163–164). Keep the module code.
-3. Do not add the missing billing migrations. Adding them would activate an open redirect (client `success_url`/`cancel_url`), no card-testing control, and two providers with wrong signature verification (Paddle uses HMAC `h1` over `ts:body`; Revolut needs the `v1.` prefix).
-4. Revival is out of scope. If the owner revives billing, that needs: allowlisted redirect URLs, per-user checkout velocity, durable webhook dedup with unique constraints, per-provider dispute record, trimmed webhook JSON in `metadata`. Create a new item then.
-
-Files: `rust/backend/api/src/router.rs`, `rust/backend/api/src/services/paywall.rs`, `rust/backend/api/src/modules/post_v1/controller.rs`.
-
-Done when: authenticated published post list returns 200 with no billing tables present; `/billing/v1/*` returns 404; `grep -c billing rust/backend/api/src/router.rs` is 0 or one commented line; `tests/billing_providers.rs` still compiles or is updated to not mount the router.
-Owner: O9 (default: unmount).
-
 #### A4. Interim compliance truth: consent default and claims ledger
 
 Build:

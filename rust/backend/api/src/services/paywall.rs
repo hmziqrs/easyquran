@@ -98,11 +98,20 @@ pub async fn load_post_access_map(
     Ok(map)
 }
 
+/// Billing is unmounted and its tables were never migrated, so a read of
+/// `post_purchase` or `subscription` would fail the whole request. Reviving
+/// billing is a new item: redirect allowlist, checkout velocity, webhook dedup,
+/// then this flag.
+const BILLING_MOUNTED: bool = false;
+
 pub async fn user_has_post_purchase(
     db: &DatabaseConnection,
     user_id: i32,
     post_id: i32,
 ) -> DbResult<bool> {
+    if !BILLING_MOUNTED {
+        return Ok(false);
+    }
     let count = post_purchase::Entity::find()
         .filter(post_purchase::Column::UserId.eq(user_id))
         .filter(post_purchase::Column::PostId.eq(post_id))
@@ -118,7 +127,7 @@ pub async fn user_purchased_post_ids(
     post_ids: &[i32],
 ) -> DbResult<HashSet<i32>> {
     let mut owned = HashSet::new();
-    if post_ids.is_empty() {
+    if !BILLING_MOUNTED || post_ids.is_empty() {
         return Ok(owned);
     }
     let rows = post_purchase::Entity::find()
@@ -135,6 +144,9 @@ pub async fn user_purchased_post_ids(
 
 pub async fn user_has_active_subscription(db: &DatabaseConnection, user_id: i32) -> DbResult<bool> {
     use ruxlog_types::enums::SubscriptionStatus;
+    if !BILLING_MOUNTED {
+        return Ok(false);
+    }
     let subs = subscription::Entity::find()
         .filter(subscription::Column::UserId.eq(user_id))
         .filter(
