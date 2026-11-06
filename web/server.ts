@@ -13,6 +13,7 @@ import {
 } from "./src/lib/accept-parse";
 import { trustedClientIp } from "./src/lib/server/client-identity";
 import { assertInternalQuranEnv } from "./src/lib/server/internal-quran-env";
+import { OfflinePackBudget } from "./src/lib/server/offline-pack-budget";
 import {
   hasLoggedInMarker,
   isHealthPath,
@@ -752,6 +753,35 @@ function ssrLimitResponse(
   return response;
 }
 
+// Offline pack downloads per edge-verified address (A16). Only GET counts. The
+// size is read from the built file, so a byte budget is charged before the body.
+const packBudget = new OfflinePackBudget();
+
+function packBudgetResponse(
+  request: Request,
+  server: BunFetchServer,
+  pathname: string,
+): Response | null {
+  if (request.method !== "GET" || !packPattern.test(pathname)) return null;
+  if (bun === undefined || !isSafeClientCandidate(pathname)) return null;
+  const file = join(clientDir, pathname);
+  if (!existsSync(file)) return null;
+  const peer = server.requestIP(request)?.address ?? "";
+  const ip = trustedClientIp(request, peer, edgeMarker);
+  const decision = packBudget.charge(ip, bun.file(file).size, Date.now());
+  if (decision === null) return null;
+  const response = new Response("Offline pack download limit reached", {
+    status: 429,
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "no-store",
+      "retry-after": String(decision.retryAfterSecs),
+    },
+  });
+  applyHeaders(response, pathname);
+  return response;
+}
+
 // ---------------------------------------------------------------------------
 // The fetch pipeline: env module → markdown negotiation → static asset table → kit SSR.
 async function handleRequest(request: Request, server: BunFetchServer): Promise<Response> {
@@ -770,6 +800,9 @@ async function handleRequest(request: Request, server: BunFetchServer): Promise<
 
   const negotiated = await routeNegotiated(request, decodedPath);
   if (negotiated !== null) return negotiated;
+
+  const packLimited = packBudgetResponse(request, server, decodedPath);
+  if (packLimited !== null) return packLimited;
 
   const staticResult =
     staticResponse(request, url.pathname, decodedPath) ??

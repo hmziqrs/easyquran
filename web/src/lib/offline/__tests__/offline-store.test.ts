@@ -263,6 +263,39 @@ describe("OfflineStore.enable", () => {
     expect(fetchSpy).toHaveBeenCalled();
   });
 
+  it("revalidates the manifest and leaves the hashed pack on the default cache mode", async () => {
+    const manifestBody = JSON.stringify({
+      pack: "/offline/pack.new.json",
+      bytes: 999,
+      entries: 1,
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      // eslint-disable-next-line anti-slop/no-runtime-typeof -- fetch stub's first argument is RequestInfo | URL; typeof-string discriminates the string case this stub serves.
+      if (typeof url === "string" && url.includes("manifest.json")) {
+        return Promise.resolve(new Response(manifestBody, { status: 200 }));
+      }
+      return Promise.resolve(new Response("tiny", { status: 200 }));
+    });
+    vi.stubGlobal("caches", installFakeCaches());
+
+    const store = createOfflineStore();
+    store.hydrate();
+    await flushMany();
+    await store.enable();
+
+    const calls = fetchSpy.mock.calls.map(([url, init]) => ({
+      // eslint-disable-next-line anti-slop/no-runtime-typeof -- fetch's first argument is RequestInfo | URL; typeof-string is the only honest discrimination inside this spy mapper.
+      url: typeof url === "string" ? url : "",
+      init,
+    }));
+    const manifestCalls = calls.filter((call) => call.url.endsWith("/offline/manifest.json"));
+    expect(manifestCalls.length).toBeGreaterThan(0);
+    for (const call of manifestCalls) expect(call.init?.cache).toBe("no-cache");
+    const packCall = calls.find((call) => call.url.includes("pack.new.json"));
+    expect(packCall).toBeDefined();
+    expect(packCall?.init?.cache).toBeUndefined();
+  });
+
   it("reuses bootCheck's manifest when the active pack is outdated", async () => {
     const active: ActivePack = { packId: "old", entries: 1, bytes: 5, savedAt: 1 };
     metaMock.getActivePack.mockResolvedValue(active);

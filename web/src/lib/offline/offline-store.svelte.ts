@@ -6,6 +6,10 @@ import { readJSON, writeJSON } from "#lib/storage/index.js";
 
 const MIRROR_KEY = "easyquran.offline.pack";
 
+// manifest.json has a fixed name, so the default cache mode could keep serving
+// an old manifest and hide a newly published pack. `no-cache` revalidates each time.
+const MANIFEST_FETCH: RequestInit = { cache: "no-cache" };
+
 export type OfflineStatus = "idle" | "downloading" | "staging" | "active" | "error";
 
 interface PackMirror {
@@ -182,7 +186,7 @@ class OfflineStore {
 
   async #bootCheck(): Promise<void> {
     try {
-      const response = await fetch("/offline/manifest.json", { cache: "no-store" });
+      const response = await fetch("/offline/manifest.json", MANIFEST_FETCH);
       if (!response.ok) return;
       const manifest = decodeOfflineManifest(await response.json());
       if (!manifest) return;
@@ -205,7 +209,7 @@ class OfflineStore {
     try {
       let manifest = existingManifest;
       if (!manifest) {
-        const manifestResponse = await fetch("/offline/manifest.json", { cache: "no-store" });
+        const manifestResponse = await fetch("/offline/manifest.json", MANIFEST_FETCH);
         if (!manifestResponse.ok) throw new Error(`manifest ${manifestResponse.status}`);
         manifest = decodeOfflineManifest(await manifestResponse.json());
         if (!manifest) throw new Error("manifest malformed");
@@ -223,7 +227,8 @@ class OfflineStore {
 
       this.#status = "downloading";
       this.#progress = 0;
-      const packResponse = await fetch(`/offline/pack.${targetPackId}.json`, { cache: "no-store" });
+      // Hashed name: the default cache mode is safe and avoids re-downloading bytes.
+      const packResponse = await fetch(`/offline/pack.${targetPackId}.json`);
       if (!packResponse.ok || !packResponse.body)
         throw new Error(`pack fetch ${packResponse.status}`);
 
