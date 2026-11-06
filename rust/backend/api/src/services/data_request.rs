@@ -787,8 +787,10 @@ mod tests {
         .await;
         exec(
             &db,
-            "INSERT INTO user_devices (user_id, id, platform, client, form_factor, last_seen_at) \
-             VALUES (77, 'dev-77', 'web', 'web', 'desktop', '2019-01-01 00:00:00')",
+            "INSERT INTO user_devices (user_id, id, platform, client, form_factor, created_at, last_seen_at, \
+             expires_at, retention_class) \
+             VALUES (77, 'dev-77', 'web', 'web', 'desktop', '2019-01-01 00:00:00', '2019-01-01 00:00:00', \
+             253402300799, 'account_lifetime')",
         )
         .await;
 
