@@ -2,22 +2,6 @@
 
 [Back to index](../README.md)
 
-#### A37. Image moderation and CSAM path
-
-Build:
-
-1. `IMAGE_MODERATION_ENABLED` defaults false (`rust/backend/api/src/main.rs`), and `NoOpModerator` is dead. In production, refuse to boot with media upload enabled and no moderator.
-2. Dedup runs after moderation, never before.
-3. Hash-match interface for known CSAM, behind a trait, no vendor bound.
-4. Triage path in `deploy/incident-response.md`: remove, preserve (A25 hold), report to NCMEC, freeze the account. Human-confirmed violating content only; never Quran text.
-
-Files: `rust/backend/api/src/main.rs`, `rust/backend/api/src/services/image_moderation/mod.rs`, `rust/backend/api/src/modules/media_v1/controller.rs`, `deploy/incident-response.md`.
-
-Done when: prod boot refuses the unsafe combination (test); a rejected image never enters dedup (test).
-
-Blocked by: A26, A30
-Owner: O29 for the hash-match provider and NCMEC registration.
-
 #### A31. Media upload hardening and gate
 
 Build:

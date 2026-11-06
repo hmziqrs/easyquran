@@ -51,7 +51,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 
 | Item                                                                                                    | Title                                                             | Blocked by   |
 | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------ |
-| [A37](plans/abuse-2-enforcement.md#a37-image-moderation-and-csam-path)                                  | Image moderation and CSAM path                                    | A26, A30     |
 | [A31](plans/abuse-2-enforcement.md#a31-media-upload-hardening-and-gate)                                 | Media upload hardening and gate                                   | A30          |
 | [A32](plans/abuse-2-enforcement.md#a32-retention-sweeper-with-ship-gates)                               | Retention sweeper with ship gates                                 | A5, A19, A25 |
 | [A33](plans/abuse-2-enforcement.md#a33-erasure-receipts-physical-deletion-backups)                      | Erasure receipts, physical deletion, backups                      | A32          |
