@@ -2,6 +2,7 @@ pub mod auth_guard;
 pub mod client_ip;
 pub mod cors;
 pub mod http_metrics;
+pub mod native_session;
 pub mod rate_limit;
 pub mod request_id;
 pub mod route_blocker;

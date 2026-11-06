@@ -218,7 +218,13 @@ async fn full_app() -> axum::Router {
         .layer(middleware::from_fn(
             ruxlog::middlewares::static_csrf::csrf_guard,
         ))
+        .layer(middleware::from_fn(
+            ruxlog::middlewares::native_session::keep_native_alive,
+        ))
         .layer(session_layer)
+        .layer(middleware::from_fn(
+            ruxlog::middlewares::native_session::transport,
+        ))
         .layer(private_cors)
         .layer(middleware::from_fn(
             ruxlog::middlewares::cors::private_no_store,

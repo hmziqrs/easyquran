@@ -103,6 +103,13 @@ pub async fn log_out(
 
     match auth.logout().await {
         Ok(_) => {
+            // logout() deletes the store row, but the in-memory record still holds the
+            // user. The end-of-request save would write it back and the old id would
+            // stay signed in. flush() clears the data and the id, so the response
+            // carries no session (native: empty x-eq-session; web: cookie removed).
+            if let Err(e) = auth.session().flush().await {
+                warn!(error = ?e, "log_out: failed to flush session record");
+            }
             // W8e: revoke the audit row AND clear the durable binding so the session
             // does not keep listing as active; logout alone only deletes the tower
             // session record. Best-effort — the tower session is already gone, so the

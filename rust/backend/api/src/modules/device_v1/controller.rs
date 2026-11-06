@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::time::Instant;
 
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension, Json};
 use axum_macros::debug_handler;
 use chrono::Utc;
 use eq_sync_core::{compare_stamps, format_stamp, parse_stamp};
@@ -18,6 +18,7 @@ use crate::{
     },
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
+    middlewares::native_session::{mark_native_session, NativeClient},
     modules::auth_v1::controller::terminate_session,
     services::auth::AuthSession,
     AppState,
@@ -209,6 +210,7 @@ async fn verify_key_proof(
 #[instrument(skip(state, auth, payload), fields(user_id = auth.user.as_ref().map(|u| u.id)))]
 pub async fn register(
     State(state): State<AppState>,
+    native: Option<Extension<NativeClient>>,
     auth: AuthSession,
     payload: ValidatedJson<V1RegisterDevicePayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
@@ -216,6 +218,7 @@ pub async fn register(
     ensure_expected_owner(user.id, payload.expected_user_id)?;
     check_registration_shape(&payload).map_err(invalid)?;
     let proof = verify_key_proof(&auth, user.id, &payload).await?;
+    let keyed = proof.key.is_some();
 
     let db = &state.sea_db;
     let session_id = current_session_id(&state, &auth).await;
@@ -256,6 +259,14 @@ pub async fn register(
 
     if let Some(session_id) = session_id {
         user_session::Entity::bind_device(db, session_id, user.id, &canonical).await?;
+    }
+
+    // A native session registered with a verified device key gets the 180-day
+    // idle lifetime (devices.md D6). Web sessions keep the 14-day default.
+    if keyed && native.is_some() {
+        mark_native_session(auth.session())
+            .await
+            .map_err(|_| ErrorResponse::new(ErrorCode::InternalServerError))?;
     }
 
     enforce_cap(&state, &auth, user.id, &canonical).await;

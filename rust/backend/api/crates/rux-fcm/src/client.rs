@@ -24,7 +24,18 @@ pub struct FcmMessage {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub android: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub apns: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub webpush: Option<serde_json::Value>,
+}
+
+/// APNs block for an iOS alert: `alert` push type and priority 10 so the banner
+/// shows at once, with the default sound. FCM relays it to APNs unchanged.
+pub fn apns_alert() -> serde_json::Value {
+    serde_json::json!({
+        "headers": { "apns-push-type": "alert", "apns-priority": "10" },
+        "payload": { "aps": { "sound": "default" } }
+    })
 }
 
 pub struct FcmClient {

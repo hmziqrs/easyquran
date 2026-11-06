@@ -143,6 +143,7 @@ fn private_push_hint(token: &str) -> rux_fcm::FcmMessage {
         }),
         data: None,
         android: None,
+        apns: Some(rux_fcm::apns_alert()),
         webpush: None,
     }
 }
@@ -161,6 +162,10 @@ mod tests {
                 "notification": {
                     "title": "EasyQuran",
                     "body": "Open EasyQuran to view notifications."
+                },
+                "apns": {
+                    "headers": { "apns-push-type": "alert", "apns-priority": "10" },
+                    "payload": { "aps": { "sound": "default" } }
                 }
             })
         );

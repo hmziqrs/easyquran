@@ -1,4 +1,4 @@
-use axum::{extract::Request, middleware::Next, response::Response};
+use axum::{extract::Request, http::HeaderName, middleware::Next, response::Response};
 use tracing::{instrument, warn};
 
 use crate::error::CorsError;
@@ -44,4 +44,17 @@ pub async fn private_no_store(req: Request, next: Next) -> Response {
         axum::http::HeaderValue::from_static("private, no-store"),
     );
     resp
+}
+
+/// Request headers the private API allows cross-origin. `x-eq-session` is
+/// deliberately absent: browsers cannot send the native session header to any
+/// origin, and a preflight asking for it gets no allowance (devices.md D6).
+pub fn private_request_headers() -> Vec<HeaderName> {
+    vec![
+        HeaderName::from_static("csrf-token"),
+        axum::http::header::ACCEPT,
+        axum::http::header::CONTENT_TYPE,
+        axum::http::header::ACCEPT_ENCODING,
+        axum::http::header::CONTENT_ENCODING,
+    ]
 }

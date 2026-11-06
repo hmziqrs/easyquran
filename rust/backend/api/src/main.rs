@@ -1,5 +1,5 @@
 use axum::extract::State;
-use axum::{http::HeaderName, middleware};
+use axum::middleware;
 use axum_extra::extract::cookie::SameSite;
 use std::{env, net::SocketAddr, sync::Arc, time::Duration};
 use tower_http::{
@@ -851,13 +851,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             axum::http::Method::DELETE,
             axum::http::Method::OPTIONS,
         ])
-        .allow_headers(vec![
-            HeaderName::from_static("csrf-token"),
-            axum::http::header::ACCEPT,
-            axum::http::header::CONTENT_TYPE,
-            axum::http::header::ACCEPT_ENCODING,
-            axum::http::header::CONTENT_ENCODING,
-        ])
+        .allow_headers(middlewares::cors::private_request_headers())
         .expose_headers(vec![
             axum::http::header::ACCESS_CONTROL_ALLOW_CREDENTIALS,
             axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN,
@@ -900,7 +894,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(axum::Extension(state.clone()))
         // session_layer must stay outer to csrf_guard — the Session must exist when csrf_guard recomputes the per-session HMAC.
         .layer(middleware::from_fn(middlewares::static_csrf::csrf_guard))
+        // Inside the session layer: extends a native session's idle lifetime (D6).
+        .layer(middleware::from_fn(
+            middlewares::native_session::keep_native_alive,
+        ))
         .layer(session_layer)
+        // Outside the session layer: the native x-eq-session transport (D6). Never
+        // add x-eq-session to the CORS allow list.
+        .layer(middleware::from_fn(middlewares::native_session::transport))
         .layer(cors)
         .layer(middlewares::route_blocker::RouteBlockerLayer::new(
             state.clone(),

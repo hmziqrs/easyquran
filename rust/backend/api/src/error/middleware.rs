@@ -56,6 +56,10 @@ pub enum CorsError {
     OriginNotAllowed { origin: String },
     #[error("Invalid Origin header")]
     InvalidOriginHeader,
+    #[error("x-eq-session refused on a browser-shaped request")]
+    NativeSessionOnBrowser,
+    #[error("Invalid x-eq-session header")]
+    InvalidNativeSession,
 }
 
 impl IntoErrorResponse for CorsError {
@@ -67,6 +71,11 @@ impl IntoErrorResponse for CorsError {
             Self::InvalidOriginHeader => ErrorResponse::new(ErrorCode::InvalidFormat)
                 .with_message("Invalid Origin header")
                 .with_context(json!({ "header": "Origin" })),
+            Self::NativeSessionOnBrowser => ErrorResponse::new(ErrorCode::OperationNotAllowed)
+                .with_message("x-eq-session is for native clients only"),
+            Self::InvalidNativeSession => ErrorResponse::new(ErrorCode::InvalidFormat)
+                .with_message("Invalid x-eq-session header")
+                .with_context(json!({ "header": "x-eq-session" })),
         }
     }
 }

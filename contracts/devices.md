@@ -111,3 +111,85 @@ Manual only (need a device): iOS and Android reinstall (server side: `rung_three
 | Android multi-user or work profile | Separate devices |
 | Tablet, foldable, or desktop-mode iPad changes form factor | Latest register wins; label follows the last write |
 | Device removed while its threads remain | Label falls back to device kind |
+
+## Session transport (D6)
+
+Native clients (React Native, GPUI) have no cookie jar. They keep the session value in the D3 secure store and send it in `x-eq-session`. The server copies that value into the one `Cookie` it sees, so every session, CSRF, rotation and revocation rule is the same as on web.
+
+### Request and response
+
+- Base URL: the API root. In production the proxy serves the API under `/api` (prefix stripped), so the base URL ends in `/api`.
+- Request header `x-eq-session` is sent on every call. Empty means no session yet. Any `Cookie` header the client sends is replaced, never appended. Clients send `credentials: 'omit'` (React Native) or use no cookie store (GPUI).
+- Response: the session value comes back in `x-eq-session` whenever the session cookie was set or rotated. Empty means the session was cleared. No response carries `Set-Cookie`. Keep the newest value after every response that has the header; keep the old one when the header is absent.
+- A value with characters outside base64, `+ / = - _ . %`, or longer than 4096 bytes is refused with 400.
+- A request with `x-eq-session` and either `Origin` or any `Sec-Fetch-*` header is refused with 403. The header is not in the CORS allow list and is not exposed to scripts.
+- Never log the header value, or put it in traces or error reports.
+- CSRF: fetch `csrf-token` from `POST /csrf/v1/generate` with the session. The token derives from the session id, so refetch it after any `x-eq-session-rotated: 1` and after any new session.
+- Rotation: sign-in cycles the session id and sends `x-eq-session-rotated: 1`. A lost rotation response shows up as 401 on the next call. Then sign in again. Dirty sync rows wait until then.
+- Sign-out: `POST /auth/v1/log_out` flushes the session. The reply has an empty `x-eq-session`, and the old value returns 401.
+- Sign-in may answer with a `pending_login` body (TOTP required). Handle it on every sign-in path before treating the session as signed in. Unverified accounts see a verify step on `verified` routes.
+
+### Lifetimes and revocation
+
+- Web sessions: 14 days of inactivity.
+- Native session registered with a verified device key (`key_store` not `none`): 180 days of inactivity. The idle timer is pushed forward at most once a day, so the real floor is 179 days.
+- Revoke (device delete), bans and sign-out end a native session at once: the next call is 401.
+- A native session registered without a key keeps the 14-day default.
+
+### Sign-in matrix
+
+| Method | iOS | Android | GPUI desktop | Check |
+| --- | --- | --- | --- | --- |
+| Email and password | Native form on `/auth/v1/log_in` | Same | Same | Test: `native_client_full_flow_with_no_origin_and_no_cookie_jar` |
+| Google | Provider SDK, then `POST /auth/google/v1/token` | Same | System browser with PKCE and a `127.0.0.1` loopback redirect, then `/token` | Test: `native_audience_tests` (audience list). Desktop: manual per O32 |
+| Other providers | Provider SDK, then `/auth/{provider}/v1/token` (Apple, Facebook, GitHub, Discord) | Same | Only after checking the provider's current desktop rules | Existing endpoints. Manual per O32 |
+| Sign in with Apple | Required next to other social sign-ins (O31) | Optional | Optional | Manual (O31) |
+| Passkey | Associated Domains on the RP (N4) | `android:apk-key-hash:<hash>` origin from `WEBAUTHN_ANDROID_APK_KEY_HASHES` (Play App Signing key) | Not at launch | Tests: `android_origin_is_the_apk_key_hash_form`, `service_builds_with_android_origin_in_dev`. Registration on device: manual |
+
+Env: `GOOGLE_MOBILE_CLIENT_IDS` and `GOOGLE_DESKTOP_CLIENT_IDS` are comma lists next to `GOOGLE_CLIENT_ID`. Every listed id is an accepted audience.
+
+### Push matrix
+
+| Device | Push | Note |
+| --- | --- | --- |
+| iOS | FCM through APNs (APNs key, O34). Alerts carry an `apns` block: `alert` type, priority 10, default sound | Test: `push_hint_contains_no_account_or_notification_details`. Delivery: manual |
+| Android | FCM | Existing |
+| Web | FCM web push | Existing |
+| Windows, Linux | None. No FCM client | Local notifications only |
+| macOS (GPUI) | None at launch | Local notifications only |
+
+A GPUI device registers without a push token. The register call accepts no `token` (covered by the device registry tests), so the client must not show push as available.
+
+### Edge cases covered (D6)
+
+| Case | Covered by |
+| --- | --- |
+| Native app unused for weeks | `native_session_outlives_thirty_idle_days_and_web_does_not`: stored expiry more than 170 days out after a keyed register and again after a later request; web session under 15 days |
+| Session rotation on a native client | `native_client_full_flow_with_no_origin_and_no_cookie_jar`: `x-eq-session` changes on sign-in, rotated header set, CSRF refetched, no `Set-Cookie` |
+| Browser tries to use `x-eq-session` | `a_browser_cannot_use_the_native_session_header` (Origin, Sec-Fetch-*), `cors_never_allows_the_native_session_header` |
+| Stale native cookie jar | `a_stale_cookie_never_overrides_the_native_session`. Native clients have no jar, so the server replaces any Cookie header with the header value |
+| Device with no push (GPUI) | `register_*` tests in `device_registry.rs` (register without a token). Client behaviour: manual |
+| Many users behind one carrier IP | `ip_ceiling_is_at_least_ten_times_the_account_ceiling`. Device register and challenge are keyed on the account first (`authenticated_write_limits`) |
+| Sign-out, then old value | `logout_ends_a_native_session_at_once` |
+| Device removed (revoke) | Full flow test: delete self, next call 401 |
+
+### Conformance (every client)
+
+A client is ready when it passes, from `contracts/`:
+
+- `uuid-v7.json`
+- `sync-vectors.json` (and `sync.md`)
+- `device-vectors.json`
+- the O32 checklist below
+
+### Manual checks (O32, need a real device or a live provider)
+
+1. iOS and Android: the app keeps `x-eq-session` in the Keychain or Keystore, and never writes it to logs or analytics.
+2. Native session across app kill and restart, on a device, after a real idle period.
+3. Lost rotation response on a device: the next call 401s and the client signs in again without losing dirty rows.
+4. React Native: no cookie store is used and `credentials` is `omit`.
+5. GPUI: no cookie store is used. Sign-in through the system browser with PKCE and a loopback redirect, for each provider whose desktop rules were checked.
+6. Passkey on iOS (Associated Domains) and on Android (Play App Signing hash).
+7. Sign in with Apple, next to the other social sign-in options (O31).
+8. APNs delivery of the alert block with the production APNs key (O34).
+9. Device lifecycle rows from D3 (reinstall, backup restore, device-to-device transfer) and the push rows in the edge ledger that need a device.

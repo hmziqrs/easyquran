@@ -49,3 +49,18 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route("/token/delete", post(controller::delete_token))
         .route_layer(middleware::from_fn(auth_guard::verified))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A carrier NAT shares one IP across many users, so the IP ceiling sits at
+    /// least 10x the per-account one: the account governs (devices.md D6, row 52).
+    #[test]
+    fn ip_ceiling_is_at_least_ten_times_the_account_ceiling() {
+        const {
+            assert!(REGISTER_IP_MAX >= 10 * REGISTER_USER_MAX);
+            assert!(CHALLENGE_IP_MAX >= 10 * CHALLENGE_USER_MAX);
+        }
+    }
+}

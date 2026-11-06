@@ -392,6 +392,26 @@ pub async fn google_token_nonce(headers: HeaderMap) -> Result<impl IntoResponse,
     ))
 }
 
+/// Audiences a native Google id_token may carry: the web client, then the mobile
+/// SDK client ids, then the desktop (PKCE loopback) client ids. Comma lists, trimmed,
+/// empties dropped, duplicates removed. Each desktop id must be checked against
+/// Google's current desktop rules before it is added (devices.md D6 matrix).
+pub(crate) fn native_audiences(
+    web: &str,
+    mobile: Option<&str>,
+    desktop: Option<&str>,
+) -> Vec<String> {
+    let mut out: Vec<String> = vec![web.to_string()];
+    for raw in [mobile, desktop].into_iter().flatten() {
+        for id in raw.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+            if !out.iter().any(|existing| existing == id) {
+                out.push(id.to_string());
+            }
+        }
+    }
+    out
+}
+
 #[debug_handler]
 #[instrument(skip(state, auth, payload, headers), fields(user_id, result))]
 pub async fn google_token(
@@ -411,16 +431,9 @@ pub async fn google_token(
         ErrorResponse::new(ErrorCode::InternalServerError)
             .with_message("GOOGLE_CLIENT_ID not configured")
     })?;
-    let mut allowed_auds: Vec<String> = vec![client_id];
-    if let Ok(extra) = std::env::var("GOOGLE_MOBILE_CLIENT_IDS") {
-        allowed_auds.extend(
-            extra
-                .split(',')
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(str::to_string),
-        );
-    }
+    let mobile = std::env::var("GOOGLE_MOBILE_CLIENT_IDS").ok();
+    let desktop = std::env::var("GOOGLE_DESKTOP_CLIENT_IDS").ok();
+    let allowed_auds = native_audiences(&client_id, mobile.as_deref(), desktop.as_deref());
     let allowed_auds: Vec<&str> = allowed_auds.iter().map(String::as_str).collect();
 
     // Verify signature and identity claims before atomically consuming signed one-time nonce.
@@ -906,5 +919,28 @@ mod tests {
             !headers.contains_key(&SESSION_ROTATED),
             "non-rotating response must omit the header"
         );
+    }
+}
+
+#[cfg(test)]
+mod native_audience_tests {
+    use super::native_audiences;
+
+    #[test]
+    fn web_then_mobile_then_desktop_deduped_and_trimmed() {
+        let got = native_audiences(
+            "web.apps",
+            Some(" ios.apps , android.apps,,"),
+            Some("desk.apps, web.apps, desk.apps"),
+        );
+        assert_eq!(
+            got,
+            vec!["web.apps", "ios.apps", "android.apps", "desk.apps"]
+        );
+    }
+
+    #[test]
+    fn unset_native_lists_leave_only_the_web_client() {
+        assert_eq!(native_audiences("web.apps", None, None), vec!["web.apps"]);
     }
 }

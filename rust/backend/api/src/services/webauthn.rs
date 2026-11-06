@@ -13,6 +13,25 @@ pub struct WebauthnService {
     core: Arc<Webauthn>,
 }
 
+/// Passkey origin for an Android app signing key: `android:apk-key-hash:<hash>`,
+/// where `<hash>` is the base64url SHA-256 of the signing certificate (43 chars,
+/// no padding). Anything else is a configuration error.
+pub fn android_origin(hash: &str) -> Result<url::Url, ErrorResponse> {
+    let well_formed = hash.len() == 43
+        && hash
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_');
+    if !well_formed {
+        return Err(
+            ErrorResponse::new(ErrorCode::ConfigurationError).with_message(
+                "WEBAUTHN_ANDROID_APK_KEY_HASHES entries must be base64url SHA-256 (43 chars)",
+            ),
+        );
+    }
+    url::Url::parse(&format!("android:apk-key-hash:{hash}"))
+        .map_err(|e| ErrorResponse::new(ErrorCode::ConfigurationError).with_details(e.to_string()))
+}
+
 impl WebauthnService {
     pub fn from_env() -> Result<Self, ErrorResponse> {
         // One-knob defaults: the frontend URL supplies both the passkey domain
@@ -32,10 +51,29 @@ impl WebauthnService {
             .ok()
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| "EasyQuran".to_string());
-        Self::new(&rp_id, &rp_origin, &rp_name)
+        let android_hashes: Vec<String> = std::env::var("WEBAUTHN_ANDROID_APK_KEY_HASHES")
+            .unwrap_or_default()
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect();
+        Self::with_android_hashes(&rp_id, &rp_origin, &rp_name, &android_hashes)
     }
 
     pub fn new(rp_id: &str, rp_origin: &str, rp_name: &str) -> Result<Self, ErrorResponse> {
+        Self::with_android_hashes(rp_id, rp_origin, rp_name, &[])
+    }
+
+    /// Same as `new`, plus one passkey origin per Android app signing key
+    /// (`android:apk-key-hash:<hash>`, devices.md D6). Play App Signing key hashes
+    /// go in `WEBAUTHN_ANDROID_APK_KEY_HASHES`.
+    pub fn with_android_hashes(
+        rp_id: &str,
+        rp_origin: &str,
+        rp_name: &str,
+        android_hashes: &[String],
+    ) -> Result<Self, ErrorResponse> {
         // W8f: production rejects localhost/default WebAuthn RP. env_class() is read
         // directly (not from_env's own defaults) so the gate covers every
         // construction path; tests run non-production and are unaffected.
@@ -78,7 +116,10 @@ impl WebauthnService {
                 .with_details(e.to_string())
         })?;
 
-        let builder = WebauthnBuilder::new(rp_id, &origin).map_err(map_webauthn_err)?;
+        let mut builder = WebauthnBuilder::new(rp_id, &origin).map_err(map_webauthn_err)?;
+        for hash in android_hashes {
+            builder = builder.append_allowed_origin(&android_origin(hash)?);
+        }
         let builder = builder.rp_name(rp_name);
         let core = builder.build().map_err(map_webauthn_err)?;
         Ok(Self {
@@ -275,6 +316,28 @@ mod tests {
             matches!(err.code, ErrorCode::ConfigurationError),
             "localhost RP must be a ConfigurationError in production"
         );
+    }
+
+    #[test]
+    fn android_origin_is_the_apk_key_hash_form() {
+        let hash = "A".repeat(43);
+        let origin = android_origin(&hash).expect("43-char base64url hash parses");
+        assert_eq!(origin.as_str(), format!("android:apk-key-hash:{hash}"));
+        assert!(android_origin("short").is_err());
+        assert!(android_origin(&format!("{}+", "A".repeat(42))).is_err());
+        assert!(android_origin(&format!("{}=", "A".repeat(42))).is_err());
+    }
+
+    #[test]
+    fn service_builds_with_android_origin_in_dev() {
+        let hashes = vec!["B".repeat(43)];
+        WebauthnService::with_android_hashes(
+            "easyquran.test",
+            "https://easyquran.test",
+            "EasyQuran",
+            &hashes,
+        )
+        .expect("builds with an Android passkey origin");
     }
 
     #[test]
