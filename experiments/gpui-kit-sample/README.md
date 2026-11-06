@@ -2,10 +2,16 @@
 
 Experiment: render the EasyQuran surah reader (Arabic Uthmani + Urdu
 translation) in a native GPUI app via [gpui-kit](https://gpui-kit.com).
+**GPUI + HarfRust is the chosen desktop stack** — see
+[`../render-compare/COMPARE.md`](../render-compare/COMPARE.md).
 
 ![what it does]: Al-Fatihah (all 7 ayahs) + Al-Baqarah 1–10, each ayah showing
 Arabic (KFGQPC Uthmanic Hafs) above Urdu (Mehr Nastaliq Web), right-aligned
 RTL, scrollable, PageDown/PageUp bindings.
+
+Ayah text defaults to HarfRust shaping painted through `paint_glyph`
+(`src/shaped_text.rs`). **ctrl-s** toggles stock GPUI text. Env: `EQ_SHAPER=coretext`,
+`EQ_FONT=<font id>`.
 
 ## Run
 
@@ -17,11 +23,14 @@ open QuranGpui.app   # wrapper bundle; `cargo run` also works
 Rebuild the bundle binary after code changes:
 `cargo build && cp target/debug/gpui-kit-quran-sample QuranGpui.app/Contents/MacOS/`
 
-## Findings (macOS / gpui-kit 0.8.1)
+## Findings (macOS / gpui-kit 0.9.0)
 
-1. **Arabic shaping is correct.** GPUI's Apple text system shapes through
-   CoreText, so Uthmani harakat, lam-alef ligatures and the ﴿٢﴾ ayah markers
-   all render properly. RTL alignment works via `.text_align(TextAlign::Right)`.
+1. **Stock GPUI misplaces marks.** `gpui_apple` keeps CoreText's y-up glyph
+   `position.y`, and `line.rs` adds it to a y-down baseline, so harakat and Urdu
+   dots with a vertical offset land below the line. Still in Zed main on
+   2026-11-06. Negating the value fixes it; so does the HarfRust element, which
+   needs no GPUI patch. That element has no selection, caret, bidi pass or
+   accessibility text yet.
 2. **GPUI refuses fonts without a Latin 'm'.** `AppleTextSystem::load_family`
    skips any font whose cmap lacks `m` (its em-measurement guard) — and both
    Quran fonts have no Latin at all, so they silently fall back to system

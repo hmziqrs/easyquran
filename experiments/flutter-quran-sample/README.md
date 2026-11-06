@@ -1,9 +1,9 @@
 # flutter-quran-sample
 
 Flutter 3.47 macOS sample rendering the EasyQuran surah reader (Arabic +
-Urdu translation). **This is the chosen desktop approach** — see
-[`../render-compare/COMPARE.md`](../render-compare/COMPARE.md) for the
-GPUI/Flutter/browser comparison that decided it.
+Urdu translation). **Not the chosen desktop stack** — GPUI is; see
+[`../render-compare/COMPARE.md`](../render-compare/COMPARE.md). Kept as a
+rendering reference.
 
 Same font ids as the web reader, same data extract as the gpui-kit sample
 (`assets/quran-sample.json`). Dropdowns switch Arabic font (all six web
@@ -19,8 +19,7 @@ open build/macos/Build/Products/Debug/flutter_quran_sample.app
 Notes:
 
 - Urdu default is **Noto Nastaliq Urdu** (SIL OFL 1.1) — Mehr Nastaliq Web
-  (kept as a dropdown option) depends on OpenType chaining contexts that
-  CoreText only partially applies, which flattened it in the GPUI sample.
+  (kept as a dropdown option) has less clear redistribution terms than OFL.
   12 Urdu-capable faces are selectable, all cmap-verified for the full Urdu
   letter set (ے ہ ٹ ڈ ڑ ں ھ): Noto Nastaliq Urdu, Gulzar, Awami Nastaliq,
   Mehr Nastaliq Web, Katibeh, Mirza, Lateef, Scheherazade New, Amiri,

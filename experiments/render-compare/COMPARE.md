@@ -1,12 +1,25 @@
 # Quran text rendering comparison: GPUI vs Flutter vs browser
 
+> **Correction (2026-11-06).** Stock GPUI output below is broken, and the earlier
+> "Mehr flattens under CoreText" diagnosis was wrong. Root cause is a GPUI bug:
+> `gpui_apple` stores CoreText's y-up glyph `position.y` as is, then `line.rs` adds
+> it to a y-down baseline. Every glyph with a vertical offset lands mirrored
+> around the baseline: harakat and Urdu dots fall below the line. Negating that
+> one value fixes CoreText for KFGQPC Hafs and Mehr
+> ([stock](gpui/coretext-stock-yflip-bug.jpg),
+> [patched](gpui/coretext-yflip-patched.jpg)). HarfRust shaping painted through
+> `paint_glyph` gives the same result with no GPUI patch
+> ([HarfRust](gpui/harfrust-paint-glyph.jpg),
+> [Amiri, wrapped](gpui/harfrust-amiri-wrapped.jpg)). The numbered `gpui/` shots
+> predate this and show the bug. Checked on macOS only.
+
 Same faces, same data extract (`gpui-kit-sample/data/quran-sample.json`),
 same type settings (Arabic 30px / line-height 1.9, Urdu 20px with per-font
 Nastaliq leading), macOS + Retina, captured per combo.
 
-- **flutter/** — Flutter 3.47 macOS sample (`../flutter-quran-sample`), Impeller + Skia text stack with bundled HarfBuzz shaping. **The chosen approach.**
+- **flutter/** — Flutter 3.47 macOS sample (`../flutter-quran-sample`), Impeller + Skia text stack with bundled HarfBuzz shaping. Not the chosen approach; kept as a rendering reference.
 - **web/** — minimal HTML page loading the identical TTFs via `@font-face` (`reference/index.html`, regenerate with `reference/generate.py`), Safari/WebKit rendering — the same stack the real web reader uses.
-- **gpui/** — gpui-kit 0.8.1 sample (`../gpui-kit-sample`), CoreText shaping + GPUI's own Metal rasterizer. **Frozen and deprecated as an approach** (see Urdu finding below); screenshots kept for the record and predate the Urdu font switch.
+- **gpui/** — gpui-kit 0.8.1 sample (`../gpui-kit-sample`), CoreText shaping + GPUI's own Metal rasterizer. **The chosen stack**, with HarfRust shaping in place of CoreText (see correction above); numbered screenshots show the y-flip bug.
 
 ## Urdu faces (12, all selectable; Noto Nastaliq Urdu is the default)
 
@@ -30,8 +43,7 @@ before inclusion.
 | Noto Sans Arabic   | OFL 1.1        | Google Fonts       | Sans                 | 2.4            | [shot](flutter/urdu-noto-sans-arabic-in-flutter.png) | [shot](web/urdu-noto-sans-arabic-in-web.png) |
 
 All twelve shape correctly in Flutter (HarfBuzz) and the browser reference.
-**Mehr flattens under CoreText** — the GPUI killer (see harfbuzz#2516 for the
-class of CoreText/HarfBuzz Nastaliq divergence). Flutter sample: `Urdu`
+Mehr's broken look in stock GPUI is the y-flip bug, not CoreText. Flutter sample: `Urdu`
 dropdown + **F11** cycles faces. Web reference: `&urdu=<id>` param.
 
 ## Verified matrix (all vision-checked)
@@ -54,15 +66,13 @@ Urdu = Noto Nastaliq Urdu unless noted.
 
 Every cell: correct joining, correct harakat stacking, correct RTL alignment,
 correct uthmani hamzat-wasl (ٱ), correct IndoPak small-kashida marks, ayah
-markers ﴿١﴾ composed, Urdu Nastaliq legible. **No framework produced broken
-Arabic.**
+markers ﴿١﴾ composed, Urdu Nastaliq legible, **except the GPUI column**: its
+harakat and dots are mirrored below the line (see correction above).
 
 ## Findings
 
-0. **Urdu face choice is the real desktop risk.** Mehr Nastaliq Web renders
-   fine under HarfBuzz (browser, Flutter) but flattens under CoreText —
-   the GPUI "horrible Urdu". Noto Nastaliq Urdu (OFL) survives all stacks;
-   it is the default in the Flutter sample and the web reference. License
+0. **Urdu face choice.** Noto Nastaliq Urdu (OFL) is the default in the
+   Flutter sample and the web reference. License
    note: prefer OFL faces (Noto, Amiri, Scheherazade, Noto Naskh); Mehr's
    redistribution terms are less clear than OFL.
 1. **Urdu data bug (found by this comparison, now fixed).** The junagarhi
@@ -84,14 +94,21 @@ Arabic.**
    - Web: `@font-face`, zero patches.
    - GPUI (historical): refuses fonts without a Latin `m` glyph — needed
      patched TTFs; manual metrics; negative scroll offsets; focus quirks.
-5. **Cross-platform.** Flutter and web are engine-identical on every OS.
-   CoreText-based stacks diverge on Nastaliq chaining rules by design.
+5. **Cross-platform.** Flutter ships its own HarfBuzz on every OS. GPUI uses a
+   different shaper per OS unless the app pre-shapes with HarfRust.
 
 ## Verdict
 
-- Flutter + Noto Nastaliq Urdu is the desktop approach: correct Quran text in
-  all six web Arabic faces and all three datasets, Urdu Nastaliq that reads
-  like the browser, open licenses throughout.
+- **Decision (2026-11-06): GPUI + HarfRust + `paint_glyph` is the desktop stack.**
+  Flutter is dropped. It was chosen only while GPUI Arabic looked broken, and
+  that was the y-flip bug, which HarfRust shaping avoids.
+- Open work: the custom element has no selection, caret, bidi or accessibility
+  text. All text with Arabic must go through it, because stock GPUI text is
+  still wrong on Windows (reversed surah names, flipped ayah brackets).
+- Platform status: macOS verified. Windows launches and shows correct ayah text
+  in an ARM VM, but sharpness is unmeasured and Zed blur issue #65664 is open.
+  Linux: owner tested the ARM build in a VM on 2026-11-06 and it works the same
+  as Windows.
 - If pixel-fidelity to the web reader ever becomes the bar again, a webview
   shell (Tauri) is the zero-divergence option.
 

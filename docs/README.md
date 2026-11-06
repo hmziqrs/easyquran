@@ -23,6 +23,8 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 - Never claim a privacy, legal or security property the code does not enforce. Every user-facing sentence maps to code.
 - Product: reduce friction. No dialogs or review screens where a silent safe default with a toast works. shadcn-svelte for UI. Pre-launch, so no legacy shims. Reading heuristics never penalise very fast readers. Notes stay device-local. Personal reading insights are always on.
 - State the fix in code and commit messages, not attack recipes. This repo is public.
+- Client-minted entity ids are UUID v7 on every client (web, React Native, GPUI). Default folders stay deterministic UUID v5. An id's timestamp sets sort order only: it comes from the device clock, so never trust it for security or use it as `startedAt`.
+- Device identity has one purpose: showing a user their own devices and letting them sign those devices out. The device id and key never reach analytics, rate-limit keys, bans, abuse scoring or logs, and never act as an auth factor. Ids are minted per account on each install, so two accounts on one phone share nothing. Every lookup includes `user_id`. No device cookie, and nothing device-related on reader routes or for signed-out readers.
 - Enforcement ladder: L0 observe → L1 throttle → L2 challenge → L3 cooldown → L4 queue only (no restriction; hard expiry; auto-downgrade if unreviewed) → L5 interim restriction (human-approved, or auto-reversing within 72 h) → L6 ban (human before effect) → L7 legal referral.
 - A19–A22 are one release: nothing separable reaches production alone, or bans become silent lockouts.
 - Production Quran bytes, size and path come from baked id maps, never remote metadata. Bulk JSON follows the same rule.
@@ -34,7 +36,7 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 
 ## Do not build (these decisions are closed; do not re-open in code)
 
-- Browser component fingerprinting as an identifier or ban key. Canvas/WebGL/audio/fonts/plugins/battery signals.
+- Component fingerprinting as an identifier or ban key, on any client. Canvas/WebGL/audio/fonts/plugins/battery signals in browsers; IMEI, serial, MAC, `ANDROID_ID`, IDFV or hardware-derived hashes on native. Device identity is a per-install id plus a device-held key (D2, D3).
 - Device-based account bans. A device signal may challenge, never ban. Device-triggered actions cap at L2.
 - Behavioural biometrics. Entity-graph clustering. Bot-vendor purchase. JA3/JA4/TLS fingerprinting. Edge attestation headers. Logpush as enforcement.
 - IP reputation, ASN, residential-proxy, VPN, VM, devtools, or incognito penalties. Hard ASN blocking.
@@ -46,7 +48,7 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 - Per-request device evaluation. Weekly epoch rotation with mapping table. Fail-closed on missing edge header (a Worker fault would take the site down).
 - Admin web UI (repo convention: TUI + JSON API).
 - Cross-site tracking, ad-style fingerprinting, consent banner collection, global consent banner.
-- Logging, storing, or returning raw UA, screen, or plugins data in the device layer (device work is behind Gate B).
+- Logging, storing, or returning raw UA, screen, or plugins data in the device registry or any abuse device layer (abuse device work is behind Gate B).
 
 ## Already shipped, do not rebuild
 
@@ -61,6 +63,25 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 - Partial: `utils/telemetry.rs` and `capped` appears in bookmark and reading-session controllers (verify the envelope before reuse; see A7).
 
 ## Queue
+
+### Ids
+
+#### D1. UUID v7 for client-minted ids
+
+Reading sessions start offline, so their ids must sort by creation time without the server. They are random UUID v4 today.
+
+Build:
+
+1. `newEntityId()` in `web/src/lib/sync/ids.ts` returns UUID v7 (RFC 9562): 48-bit Unix ms, 12-bit `rand_a` counter that increases within the same ms, random tail. If the clock moves backwards, keep the last ms so ids from one tab never go down. Remove `crypto.randomUUID` and `fallbackUuidV4`. Keep the `getRandomValues` then `Math.random` entropy fallback for insecure origins. No new dependency. This covers threads, bookmarks, folders and insight events. `uuidV5` stays.
+2. Reading-session validator requires version 7 and variant `10xx`. Bookmark and analytics validators keep accepting any dashed UUID (default folders are v5). Do not reject an id for its timestamp: a wrong device clock must not lose reading data.
+3. One validation failure must not jam the outbox. On store load, give any local thread with a non-v7 id a new v7 id built from its `startedAt`, and drop queued mutations for the old id.
+4. Shared test vectors at `contracts/uuid-v7.json` (input ms, counter, random bytes, expected id) so React Native and GPUI prove the same output. Rust clients use the `uuid` crate `v7` feature, added when a Rust client needs it; the server mints no session ids.
+
+Files: `web/src/lib/sync/ids.ts`, `web/src/lib/sessions/store.svelte.ts`, `rust/backend/api/src/modules/reading_session_v1/validator.rs`, new `contracts/uuid-v7.json`.
+
+Done when: ids minted in one ms and across ms sort by creation (test, including backwards clock); vectors pass; server refuses a v4 session id and accepts v7 (test); a stored v4 thread is re-keyed on load and sync recovers (test).
+
+Owner: O30 before deploy.
 
 ### Abuse phase 0: truth, measurement, ingress
 
@@ -682,7 +703,7 @@ Blocked by: A33
 
 Build:
 
-1. Sentence ledger: for each sentence in `web/src/routes/(marketing)/**` privacy and terms, record the code reference that makes it true (table in `deploy/legal-debt.md`, or a comment map). Remove sentences without a reference. After A32 is green, publish the full privacy policy. Device-data paragraph only if device identity ships (not in this queue).
+1. Sentence ledger: for each sentence in `web/src/routes/(marketing)/**` privacy and terms, record the code reference that makes it true (table in `deploy/legal-debt.md`, or a comment map). Remove sentences without a reference. After A32 is green, publish the full privacy policy. Abuse device-identity paragraph only if it ships (not in this queue); D2 adds the account-device sentence.
 2. Minors: self-declared date of birth → `users.is_minor` flag (migration). For minors: no device records, no push, no analytics, no comments. India: no accounts under 18 and no device processing (default; O6 confirms). Test the minor flag path end to end.
 3. No global consent banner. Consent is jurisdiction-aware. If client collection ever ships, just-in-time consent at login, equal-weight decline, reader never gated.
 4. Art 17 statement-of-reasons template and appeal SOP text: in `deploy/moderation-sop.md` (A22 creates it).
@@ -701,6 +722,99 @@ Owner: O11, O6.
 Build: (1) Add `AuthTopBar` to the `(account)` layout exactly as `auth/+layout.svelte` does: `Brand` → `marketingHomeHref(locale)` left, one "Read Quran" exit → `marketingReaderHomeHref(locale)` right, `min-h-11` targets, logical properties only, loading gate inside the shell. (2) Replace hand-rolled session rows and the Passkeys card with `Card`; keep inner markup and the "This session" pill; no new primitives or elevation. (3) Anonymous view uses one CTA model: both actions through the auth modal; if it has no register tab, `returnTo=/account` links for both. (4) New `account` namespace: `web/messages/account/{en,ar}.json`, `account-copy.ts` following `auth-copy.ts`, layout sets `lang`/`dir`, claim `account_` in `web/i18n-namespaces.json`, regenerate the barrel. (5) Heading scale matches `(auth)` pages. No `Nav`/`Footer`, no behaviour or data changes.
 Files: `web/src/routes/(account)/+layout.svelte`, `web/src/routes/(account)/account/+page.svelte`, `web/i18n-namespaces.json`, new: `web/messages/account/{en,ar}.json`, new: `web/src/lib/i18n/account-copy.ts`
 Done when: bar + exit show on authenticated, anonymous and loading views, and the exit is in prerendered HTML without JS; no inline `border-line-2 bg-bg-2` left; `en` and `ar` fully localized with correct `lang`/`dir`.
+
+### Devices
+
+Account device management for web, React Native and GPUI desktop. Not an abuse signal; Gate B still governs that.
+
+#### D2. Device registry
+
+Build:
+
+1. New `user_devices` table, primary key `(user_id, id)`: `id` (client-minted UUID v7), `display_name`, `platform` (`web|ios|android|macos|windows|linux`), `client` (`web|react_native|gpui`), `form_factor` (`phone|tablet|desktop`, same values as `reading_sessions.device`), `browser` (closed enum, web only), `os_major`, `app_version`, `created_at`, `last_seen_at`, `revoked_at`, `expires_at` (last seen + 90 days), `retention_class`. Closed enums validated on the server. No raw UA, screen, model string or IP.
+2. The client mints the id at first sign-in for that account and keeps it across sign-out. Signed-out readers have no device id. Storage per platform is in D3.
+3. Nullable `device_id` on `devices` (existing FCM push table) and `user_sessions`. A device owns its push tokens and sessions.
+4. `POST /device/v1/register`: upsert, bind the current session and push token, refresh `last_seen_at`. Client calls it after sign-in and at most once per 24 h after that, never per request. Limit 10 per hour per user.
+5. `GET /device/v1/list`, `PATCH /device/v1/{id}` (rename, 1–40 characters, rendered as plain text), `DELETE /device/v1/{id}`. Delete revokes the device's sessions through the A19 session kill, deletes its push tokens, sets `revoked_at` and writes an audit row. Registering a revoked id returns 409; the client mints a new id. Existing token routes move to the new shape, no shim.
+6. Cap 20 live devices per user. Evict the oldest idle one, never the calling device. This replaces `MAX_DEVICES_PER_USER` eviction by token.
+7. Minors get no device row (A34). `register` answers `{registered: false}` and sign-in still works.
+8. Erasure: A38 and F7 delete these rows. A32 sweeps them on `expires_at`. Add the account-device sentence to the privacy policy and the A34 ledger.
+9. Guard: source scan fails if `device_id` appears in analytics modules, rate-limit keys or ban tables.
+
+Files: new migration, `rust/backend/api/src/modules/device_v1/*`, `rust/backend/api/src/db/sea_models/device/*`, new `rust/backend/api/src/db/sea_models/user_device/`, `rust/backend/api/src/services/auth.rs`, `web/src/lib/firebase/messaging.ts`, new `web/src/lib/device/`.
+
+Done when: API tests cover register, rename, delete, cap and 409; deleting a device kills its session on the next request and removes its push token; the same id under two accounts yields two unrelated rows; a minor gets no row; `/t/**` responses and signed-out requests carry nothing device-related (test).
+
+Blocked by: A19, A23, A34, A36
+Owner: O6.
+
+#### D3. Device key: the real device fingerprint
+
+The fingerprint is a key only that install holds, not traits read off the device. It cannot be copied by another device claiming the id, stays stable across browser and OS updates, and works the same on all three clients.
+
+Build:
+
+1. The client creates one P-256 key pair per account per install. The fingerprint is its RFC 7638 JWK thumbprint (SHA-256, base64url).
+2. Storage:
+
+   | Client                | Key and id stored in                                                     | `key_store`             | New device after                             |
+   | --------------------- | ------------------------------------------------------------------------ | ----------------------- | -------------------------------------------- |
+   | Web                   | Non-extractable WebCrypto key in IndexedDB                               | `browser`               | Site data cleared, new browser profile       |
+   | React Native, iOS     | Secure Enclave key; id in Keychain, `ThisDeviceOnly`                     | `secure_hardware`       | Restore onto a new phone; reinstall keeps it |
+   | React Native, Android | Android Keystore key (StrongBox when present); excluded from Auto Backup | `secure_hardware`       | Reinstall, restore onto a new phone          |
+   | GPUI, macOS           | Keychain                                                                 | `os_keystore`           | Keychain item removed                        |
+   | GPUI, Windows         | Credential Manager / DPAPI                                               | `os_keystore`           | Windows profile change                       |
+   | GPUI, Linux           | Secret Service; else a `0600` file under `$XDG_DATA_HOME`                | `os_keystore` or `file` | Keyring or file removed                      |
+
+3. `POST /device/v1/challenge` returns a 32-byte nonce bound to the session, single use, 5-minute TTL (process-local, A13's no-eviction pattern).
+4. `register` sends the public key and a signature over `easyquran-device-v1`, nonce, device id and user id. Server verifies and stores `public_key`, `key_thumbprint`, `key_store`. Reuse the P-256 code `passkey_v1` already pulls in if it fits. A known id with a different key gets 409 and the client mints a new id. Signing again after session expiry updates the same row, so re-sign-in makes no duplicate.
+5. `key_store` is a self-reported label for display. App Attest and Play Integrity are out of scope, and the key never unlocks anything (standing rule).
+
+Files: `rust/backend/api/src/modules/device_v1/*`, new migration, `web/src/lib/device/`, new `contracts/devices.md`.
+
+Done when: wrong signature, reused nonce, expired nonce and wrong key all fail (tests); re-sign-in reuses the row; thumbprint vectors in `contracts/devices.md` pass in web and Rust.
+
+Blocked by: D2
+
+#### D4. Devices on the account page
+
+Build: replace the Sessions card on `/account` with Devices: name, platform icon, browser or OS, last seen, "This device". Rename inline. "Sign out" on another device acts at once with a toast, no dialog. On this device it runs normal sign-out and keeps the id. Sessions with no device show as "Unknown device" using the existing fixed-table label. Strings go in the `account` namespace (`en`, `ar`).
+
+Files: `web/src/routes/(account)/account/+page.svelte`, `web/src/routes/(account)/account/account-view.ts`, `web/src/lib/auth/account-client.ts`, `web/messages/account/{en,ar}.json`.
+
+Done when: list, rename and remote sign-out work in both locales; labels never echo unvalidated input (test); `bun run check` stays warning-free.
+
+Blocked by: D2, U1
+
+#### D5. Handoff by device, and two-device sync test
+
+Build:
+
+1. Nullable `device_id` on `reading_sessions`. Sync accepts it. An unknown or revoked id is stored as NULL, never a 422, so threads started offline still land. Signed-out threads get the id when they fold in at sign-in.
+2. Snapshot and archive return `deviceId` and `deviceName` from the user's own live row.
+3. `ContinueThreads` compares device ids instead of device kinds, so two phones are no longer "the same". Label: "on Pixel · 5 min ago". Falls back to the kind label when the id or row is gone.
+4. F6 export leaves out `device_id`.
+5. Automated two-device test: device A mints a thread offline, device B writes a newer one, both sync, both see the same order; tombstones and progress MAX converge; a revoked device stops syncing and keeps its outbox until sign-in.
+
+Files: new migration, `rust/backend/api/src/modules/reading_session_v1/*`, `rust/backend/api/src/db/sea_models/reading_session.rs`, `web/src/lib/sessions/{schema.ts,store.svelte.ts}`, `web/src/routes/(application)/yours/_components/ContinueThreads.svelte`, new `rust/backend/api/tests/reading_two_devices.rs`.
+
+Done when: the two-device test passes; a thread from another phone is labelled with that phone's name; removing that device falls back to "on your phone".
+
+Blocked by: D1, D2
+
+#### D6. Native client contract
+
+Build:
+
+1. `contracts/devices.md`: sign-in, cookie storage in the OS secure store, `csrf-token` from `/csrf/v1/generate`, no `Origin` header, register flow, offline id and outbox rules, 401 and 409 handling. Native provider sign-in already exists (`/auth/{provider}/v1/token`, `ensure_native_token_request`).
+2. Integration test acting as a native client, no `Origin` header: sign in, fetch CSRF, register with key proof, sync a v7 thread, list devices, delete self, get 401.
+3. Check every synced route works without browser-only behaviour. Fix what doesn't.
+
+Files: new `contracts/devices.md`, new `rust/backend/api/tests/native_client.rs`, `rust/backend/api/src/middlewares/*` only if the test exposes a gap.
+
+Done when: the test passes on `cargo test`; a React Native or GPUI developer can implement sign-in, device registration and sync from the contract alone.
+
+Blocked by: D3, D5
 
 ### Product
 
@@ -742,7 +856,7 @@ Done when: export then import on a clean browser round-trips everything; malform
 
 #### F7. Self-service account deletion
 
-Build: authenticated deletion using `FreshAuthControls` re-auth. Revokes sessions, deletes Quran-state rows and device tokens, offers export first, clears local account data. Immediate, no grace period (default until the owner says otherwise). Update the privacy and terms deletion wording to match.
+Build: authenticated deletion using `FreshAuthControls` re-auth. Revokes sessions, deletes Quran-state rows, device rows and device tokens, offers export first, clears local account data. Immediate, no grace period (default until the owner says otherwise). Update the privacy and terms deletion wording to match.
 Files: `rust/backend/api/src/modules/user_v1/`, `web/src/routes/(account)/account/+page.svelte`, `web/messages/en.json`, `web/messages/ar.json`
 Done when: API test proves rows and tokens are gone and the session is dead; legal copy no longer says "ask us to delete".
 Blocked by: F6, A38
@@ -859,7 +973,7 @@ Human steps an agent cannot do. Delete a step when done.
 - **O3. Mailboxes (MX verified).** Provision `privacy@`, `abuse@`, `legal@`, `support@` on `easyquran.fyi`, plus four intake aliases for reports. Verify MX records. Unblocks: A4 contact copy; A24 intake; A21 real delivery check.
 - **O4. Gate −1: publish the base rate.** Run `just abuse-report` (A5) on a production DB copy. Write the sentence with the date: "Measured abuse base rate as of <date>: <n> active account bans, <n> escalation bans, <n> comment flags, <n> mail suppressions, <n> audit rows; production per-IP/ASN request distribution flat (from Cloudflare; include it in the quarterly report). Device identity is deferred; it reopens if any of these counters moves, or if the Gate B condition is observed." Write `deploy/abuse/2026-Q4.md` (quarterly report, within 10 days of quarter end). Until counters exist, write "not measurable". Unblocks: A15 and A16 ceiling values; A9 numeric caps.
 - **O5. Reader-path ship window.** Ship A15–A18 (reader ceilings) outside the six weeks before Ramadan. Owner sets the date. Unblocks: A15–A18 release.
-- **O6. Decision O1 (India).** Confirm: no device processing for India (default). Confirm no accounts under 18 in India (default). Unblocks: A34 minors path.
+- **O6. Decision O1 (India).** Confirm: no abuse device processing for India (default). Confirm no accounts under 18 in India (default). Decide whether that rule also covers the account device list (D2); default no, since it is user-visible account function with no abuse use. Unblocks: A34 minors path.
 - **O7. Decision O3 (permanent bans).** Confirm: no permanent bans; longest ban auto-expires; renewal requires recorded self-review (default). Unblocks: A19 validation rule.
 - **O8. Decision O10 (moderator role).** Confirm: moderator role not granted until A28 lands (default). Unblocks: A28 release.
 - **O9. Decision O11 (billing intent).** Confirm: billing unmounted until payments are intended (default). Unblocks: A3 final.
@@ -878,10 +992,11 @@ Human steps an agent cannot do. Delete a step when done.
 - **O22. Recitation licence and source.** Unblocks: F19, F20, then reciter catalogue and radio.
 - **O23. Licensed word/token source.** Unblocks: F21.
 - **O24. Licensed tafsir sources.** Unblocks: F22.
-- **O25. QA.** ⌘K go-to-verse; reading threads, folder bookmarks and reading insights end to end.
+- **O25. QA.** ⌘K go-to-verse; reading threads, folder bookmarks and reading insights end to end; offline handoff and remote sign-out across a real phone and desktop.
 - **O26. Editorial content, decide first.** Study panels, surah info, learning plans, Quran-in-a-Year, Ramadan hubs, topics, full duas catalogue and review. No item until you approve one.
 - **O27. Product calls.** Standalone ayah/range routes (`?ayah=` grammar is settled); discovery home beyond cards; Mushaf layouts; production IndoPak review; public newsletter signup; more UI locales; fluent Arabic review of `about`/`faq`/`contact`/`privacy`/`terms`.
-- **O28. Strategy, no item unless approved.** Native apps, partner directory, cross-product identity, public developer platform, feedback portal, donations.
+- **O28. Strategy, no item unless approved.** Partner directory, cross-product identity, public developer platform, feedback portal, donations.
 - **O29. Image safety.** Hash-match provider and NCMEC registration. Unblocks: A37 rollout.
-- **GATED: Gate B (device identity).** Do not start any device work (W18 device token, W19 component fingerprinting) unless: ≥90 days or ≥1,000 signups of A5 data; and the operator has a recorded ban-evasion case where the returning account shares no credential, no verification identity, no content signature, and no actionable IP/ASN, and the operator can name the case. Corroborator recorded as enum `credential_reuse | content_match | ip | none`, never derived from the device token. If it fires, the design of record is `docs/research/abuse-prevention/DESIGN-v1.md` and `B4-rules.md` (keep those two files until then). Device cookie scope if it ever ships: `ruxlog.device`, `Path=/api`, HttpOnly, 30 days, 1-year cap, HMAC'd token, link table per (device, account) with no FK to users. Otherwise: record "not measurable", re-run quarterly, do not build.
+- **O30. Reading-session ids.** Confirm production has no `reading_sessions` rows with v4 ids before deploying D1 (`m000013` was undeployed as of 2026-10-14). If any exist, tell the agent; D1's validator would refuse their updates.
+- **GATED: Gate B (abuse device identity).** Account device management (D2–D6) is not gated and never feeds this. Do not start any abuse device work (W18 device token, W19 component fingerprinting) unless: ≥90 days or ≥1,000 signups of A5 data; and the operator has a recorded ban-evasion case where the returning account shares no credential, no verification identity, no content signature, and no actionable IP/ASN, and the operator can name the case. Corroborator recorded as enum `credential_reuse | content_match | ip | none`, never derived from the device token. If it fires, the design of record is `docs/research/abuse-prevention/DESIGN-v1.md` and `B4-rules.md` (keep those two files until then). Device cookie scope if it ever ships: `ruxlog.device`, `Path=/api`, HttpOnly, 30 days, 1-year cap, HMAC'd token, link table per (device, account) with no FK to users. Otherwise: record "not measurable", re-run quarterly, do not build.
 - **GATED: Gate −1** is item O4 above. A9 numeric caps and A15–A16 ceilings wait on it.

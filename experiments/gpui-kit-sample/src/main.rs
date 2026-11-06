@@ -1,4 +1,7 @@
+mod shaped_text;
+
 use std::borrow::Cow;
+use std::rc::Rc;
 
 use gpui_kit::base::h_flex;
 use gpui_kit::component::button::Button;
@@ -8,11 +11,12 @@ use gpui_kit::component::{IndexPath, Sizable as _};
 use gpui_kit::{
     AppContext as _, Context, Entity, FocusHandle, IntoElement, InteractiveElement as _,
     KeyBinding, ParentElement as _, Render, ScrollHandle, SharedString, StatefulInteractiveElement as _,
-    Styled, Subscription, TextAlign, Window, div, px, relative,
+    Styled, Subscription, TextAlign, Window, div, font as gpui_font, px, relative,
 };
 use serde::Deserialize;
+use shaped_text::{ShapedParagraph, ShapingFont};
 
-gpui_kit::actions!(reader, [ScrollDown, ScrollUp, NextFont, NextDataset]);
+gpui_kit::actions!(reader, [ScrollDown, ScrollUp, NextFont, NextDataset, ToggleShaper]);
 
 /// GPUI's Apple text system refuses any font whose cmap lacks a Latin 'm'
 /// (em-measurement guard) and the Quran faces have no Latin at all — every
@@ -102,7 +106,26 @@ struct Surah {
     ayahs: Vec<Ayah>,
 }
 
+/// Which engine lays out ayah text. CoreText is GPUI's own path on macOS.
+#[derive(Clone, Copy, PartialEq)]
+enum Shaper {
+    Platform,
+    HarfRust,
+}
+
+impl Shaper {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Platform => "CoreText",
+            Self::HarfRust => "HarfRust",
+        }
+    }
+}
+
 struct ReaderView {
+    shaper: Shaper,
+    arabic_shaping: Vec<Rc<ShapingFont>>,
+    urdu_shaping: Rc<ShapingFont>,
     font_ix: usize,
     dataset_ix: usize,
     surahs: Vec<Surah>,
@@ -116,6 +139,26 @@ struct ReaderView {
 impl ReaderView {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let focus = cx.focus_handle();
+        let start_font = std::env::var("EQ_FONT")
+            .ok()
+            .and_then(|id| ARABIC_FONTS.iter().position(|f| f.id == id))
+            .unwrap_or(DEFAULT_FONT_IX);
+        let shaper = if std::env::var("EQ_SHAPER").as_deref() == Ok("coretext") {
+            Shaper::Platform
+        } else {
+            Shaper::HarfRust
+        };
+        let arabic_shaping = ARABIC_FONTS
+            .iter()
+            .map(|f| {
+                let mut font = gpui_font(f.family);
+                if let Some(weight) = f.weight {
+                    font.weight = weight;
+                }
+                ShapingFont::new(f.file, font)
+            })
+            .collect();
+        let urdu_shaping = ShapingFont::new(URDU_FONT, gpui_font(URDU_FAMILY));
 
         let sample: SampleFile =
             serde_json::from_str(include_str!("../data/quran-sample.json"))
@@ -124,7 +167,7 @@ impl ReaderView {
         let font_select = cx.new(|cx| {
             SelectState::new(
                 ARABIC_FONTS.iter().map(|f| f.id.to_string()).collect(),
-                Some(IndexPath::new(DEFAULT_FONT_IX)),
+                Some(IndexPath::new(start_font)),
                 window,
                 cx,
             )
@@ -176,7 +219,10 @@ impl ReaderView {
         ));
 
         let view = Self {
-            font_ix: DEFAULT_FONT_IX,
+            shaper,
+            arabic_shaping,
+            urdu_shaping,
+            font_ix: start_font,
             dataset_ix: DEFAULT_DATASET,
             surahs,
             scroll: ScrollHandle::new(),
@@ -259,17 +305,47 @@ impl ReaderView {
     }
 
     fn render_ayah(&self, ayah: &Ayah, font: &ArabicFont, cx: &Context<Self>) -> impl IntoElement {
-        let mut arabic = div()
-            .font_family(font.family)
-            .w_full()
-            .text_align(TextAlign::Right)
-            .text_size(px(30.))
-            .line_height(relative(1.9))
-            .text_color(cx.theme().foreground)
-            .child(ayah.ar.clone());
-        if let Some(weight) = font.weight {
-            arabic = arabic.font_weight(weight);
-        }
+        let (arabic, urdu) = if self.shaper == Shaper::HarfRust {
+            (
+                ShapedParagraph {
+                    text: ayah.ar.clone(),
+                    font: Rc::clone(&self.arabic_shaping[self.font_ix]),
+                    font_size: 30.,
+                    line_height: 30. * 1.9,
+                    color: cx.theme().foreground,
+                }
+                .into_any_element(),
+                ShapedParagraph {
+                    text: ayah.ur.clone(),
+                    font: Rc::clone(&self.urdu_shaping),
+                    font_size: 20.,
+                    line_height: 20. * 2.9,
+                    color: cx.theme().muted_foreground,
+                }
+                .into_any_element(),
+            )
+        } else {
+            let mut arabic = div()
+                .font_family(font.family)
+                .w_full()
+                .text_align(TextAlign::Right)
+                .text_size(px(30.))
+                .line_height(relative(1.9))
+                .text_color(cx.theme().foreground)
+                .child(ayah.ar.clone());
+            if let Some(weight) = font.weight {
+                arabic = arabic.font_weight(weight);
+            }
+            let urdu = div()
+                .font_family(URDU_FAMILY)
+                .w_full()
+                .text_align(TextAlign::Right)
+                .text_size(px(20.))
+                .line_height(relative(2.9))
+                .text_color(cx.theme().muted_foreground)
+                .child(ayah.ur.clone());
+            (arabic.into_any_element(), urdu.into_any_element())
+        };
 
         div()
             .flex()
@@ -282,16 +358,7 @@ impl ReaderView {
             .border_b_1()
             .border_color(cx.theme().border)
             .child(arabic)
-            .child(
-                div()
-                    .font_family(URDU_FAMILY)
-                    .w_full()
-                    .text_align(TextAlign::Right)
-                    .text_size(px(20.))
-                    .line_height(relative(2.9))
-                    .text_color(cx.theme().muted_foreground)
-                    .child(ayah.ur.clone()),
-            )
+            .child(urdu)
             .child(
                 div()
                     .font_family(ARABIC_FONTS[DEFAULT_FONT_IX].family)
@@ -351,7 +418,7 @@ impl ReaderView {
                 div()
                     .text_size(px(12.))
                     .text_color(cx.theme().muted_foreground)
-                    .child(format!("{} / {}", font.id, font.family)),
+                    .child(format!("{} / {} / {}", self.shaper.label(), font.id, font.family)),
             )
             .child(
                 Button::new("scroll-top")
@@ -424,6 +491,14 @@ impl Render for ReaderView {
                     .on_action(cx.listener(|this, _: &NextDataset, window, cx| {
                         this.cycle_dataset(window, cx);
                     }))
+                    .on_action(cx.listener(|this, _: &ToggleShaper, _, cx| {
+                        this.shaper = if this.shaper == Shaper::HarfRust {
+                            Shaper::Platform
+                        } else {
+                            Shaper::HarfRust
+                        };
+                        cx.notify();
+                    }))
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
@@ -458,6 +533,7 @@ fn main() {
                 KeyBinding::new("pageup", ScrollUp, Some("reader")),
                 KeyBinding::new("ctrl-f", NextFont, Some("reader")),
                 KeyBinding::new("ctrl-d", NextDataset, Some("reader")),
+                KeyBinding::new("ctrl-s", ToggleShaper, Some("reader")),
             ]);
 
             gpui_kit::open_window(
