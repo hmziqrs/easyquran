@@ -110,13 +110,8 @@
   "landing_index_yours": "Yours",
   "landing_surah_ayahs": [
     {
-      "declarations": [
-        "input count",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
       "match": {
         "countPlural=zero": "0 ayahs",
         "countPlural=one": "1 ayah",
@@ -296,14 +291,8 @@
   "settings_storage_pack_heading": "Offline pack",
   "settings_storage_pack_routes": [
     {
-      "declarations": [
-        "input entries",
-        "input size",
-        "local entriesPlural = entries: plural"
-      ],
-      "selectors": [
-        "entriesPlural"
-      ],
+      "declarations": ["input entries", "input size", "local entriesPlural = entries: plural"],
+      "selectors": ["entriesPlural"],
       "match": {
         "entriesPlural=zero": "0 routes · {size}",
         "entriesPlural=one": "1 route · {size}",
@@ -322,13 +311,8 @@
   "settings_storage_pack_retry": "Retry",
   "settings_storage_pack_status_active": [
     {
-      "declarations": [
-        "input entries",
-        "local entriesPlural = entries: plural"
-      ],
-      "selectors": [
-        "entriesPlural"
-      ],
+      "declarations": ["input entries", "local entriesPlural = entries: plural"],
+      "selectors": ["entriesPlural"],
       "match": {
         "entriesPlural=zero": "On — 0 routes stored.",
         "entriesPlural=one": "On — 1 route stored.",
@@ -486,5 +470,30 @@
   "daily_ayah_intro": "The same verse for everyone on this UTC date. It changes at 00:00 UTC.",
   "daily_ayah_date": "{date} (UTC)",
   "daily_ayah_open": "Read in context",
-  "daily_ayah_unavailable": "Today's ayah could not be loaded. Reload the page to try again."
+  "daily_ayah_unavailable": "Today's ayah could not be loaded. Reload the page to try again.",
+  "report_seo_title": "Report a problem",
+  "report_seo_description": "Send a report about content or a problem to the EasyQuran team.",
+  "report_heading": "Report",
+  "report_intro": "Tell us what is wrong. You do not need an account.",
+  "report_target_kind_label": "What is it",
+  "report_target_post": "Post",
+  "report_target_comment": "Comment",
+  "report_target_id_label": "Item ID",
+  "report_target_id_help": "The number shown with the item.",
+  "report_reason_label": "Reason",
+  "report_reason_spam": "Spam",
+  "report_reason_harassment": "Harassment",
+  "report_reason_hate": "Hate",
+  "report_reason_sexual": "Sexual content",
+  "report_reason_violence": "Violence",
+  "report_reason_copyright": "Copyright",
+  "report_reason_csam": "Child sexual abuse material",
+  "report_reason_threat": "Threat of harm",
+  "report_reason_other": "Something else",
+  "report_details_label": "Details (optional)",
+  "report_contact_label": "Email for a reply (optional)",
+  "report_submit": "Send report",
+  "report_success": "Thanks. Your report was received.",
+  "report_error": "Your report could not be sent. Try again later.",
+  "report_invalid_target": "Enter a valid item ID."
 }

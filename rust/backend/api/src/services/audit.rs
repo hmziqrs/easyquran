@@ -37,10 +37,11 @@ pub enum AuditAction {
     SuppressionDelete,
     SeedRun,
     DeviceRemove,
+    ReportSubmit,
 }
 
 impl AuditAction {
-    pub const ALL: [AuditAction; 18] = [
+    pub const ALL: &[AuditAction] = &[
         Self::RouteBlock,
         Self::RouteUnblock,
         Self::RouteDelete,
@@ -59,6 +60,7 @@ impl AuditAction {
         Self::SuppressionDelete,
         Self::SeedRun,
         Self::DeviceRemove,
+        Self::ReportSubmit,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -81,6 +83,7 @@ impl AuditAction {
             Self::SuppressionDelete => "suppression.delete",
             Self::SeedRun => "seed.run",
             Self::DeviceRemove => "device.remove",
+            Self::ReportSubmit => "report.submit",
         }
     }
 
@@ -100,6 +103,7 @@ impl AuditAction {
             Self::SuppressionAdd | Self::SuppressionDelete => "mail_suppression",
             Self::SeedRun => "seed_run",
             Self::DeviceRemove => "device",
+            Self::ReportSubmit => "report",
         }
     }
 }

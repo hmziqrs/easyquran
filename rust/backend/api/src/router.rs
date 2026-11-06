@@ -26,6 +26,8 @@ use crate::modules::post_comment_v1;
 
 use crate::modules::newsletter_v1;
 
+use crate::modules::report_v1;
+
 use crate::modules::analytics_v1;
 
 use crate::modules::admin_acl_v1;
@@ -164,6 +166,9 @@ pub fn router(state: AppState) -> Router<AppState> {
         "/newsletter/v1",
         newsletter_v1::routes().layer(rate_limit::rate_limit_layer(&state, 100, 60)),
     );
+
+    // Incident intake (A24): public, CSRF from the global stack, rate limited in the controller.
+    router = router.nest("/report/v1", report_v1::routes());
 
     router = router.nest("/analytics/v1", analytics_v1::routes());
 

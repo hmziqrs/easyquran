@@ -110,13 +110,8 @@
   "landing_index_yours": "لك",
   "landing_surah_ayahs": [
     {
-      "declarations": [
-        "input count",
-        "local countPlural = count: plural"
-      ],
-      "selectors": [
-        "countPlural"
-      ],
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
       "match": {
         "countPlural=zero": "لا آيات",
         "countPlural=one": "آية واحدة",
@@ -296,14 +291,8 @@
   "settings_storage_pack_heading": "الحزمة دون اتصال",
   "settings_storage_pack_routes": [
     {
-      "declarations": [
-        "input entries",
-        "input size",
-        "local entriesPlural = entries: plural"
-      ],
-      "selectors": [
-        "entriesPlural"
-      ],
+      "declarations": ["input entries", "input size", "local entriesPlural = entries: plural"],
+      "selectors": ["entriesPlural"],
       "match": {
         "entriesPlural=zero": "لا توجد مسارات · {size}",
         "entriesPlural=one": "مسار واحد · {size}",
@@ -322,13 +311,8 @@
   "settings_storage_pack_retry": "إعادة المحاولة",
   "settings_storage_pack_status_active": [
     {
-      "declarations": [
-        "input entries",
-        "local entriesPlural = entries: plural"
-      ],
-      "selectors": [
-        "entriesPlural"
-      ],
+      "declarations": ["input entries", "local entriesPlural = entries: plural"],
+      "selectors": ["entriesPlural"],
       "match": {
         "entriesPlural=zero": "مفعّلة — لا توجد مسارات مخزّنة.",
         "entriesPlural=one": "مفعّلة — مسار واحد مخزّن.",
@@ -486,5 +470,30 @@
   "daily_ayah_intro": "الآية نفسها للجميع في هذا التاريخ بالتوقيت العالمي، وتتغير عند 00:00 UTC.",
   "daily_ayah_date": "{date} (بالتوقيت العالمي)",
   "daily_ayah_open": "اقرأ في السياق",
-  "daily_ayah_unavailable": "تعذّر تحميل آية اليوم. أعد تحميل الصفحة للمحاولة مرة أخرى."
+  "daily_ayah_unavailable": "تعذّر تحميل آية اليوم. أعد تحميل الصفحة للمحاولة مرة أخرى.",
+  "report_seo_title": "الإبلاغ عن مشكلة",
+  "report_seo_description": "أرسل بلاغاً عن محتوى أو مشكلة إلى فريق إيزي قرآن.",
+  "report_heading": "بلاغ",
+  "report_intro": "أخبرنا بما هو خطأ. لا تحتاج إلى حساب.",
+  "report_target_kind_label": "ما هو",
+  "report_target_post": "منشور",
+  "report_target_comment": "تعليق",
+  "report_target_id_label": "رقم العنصر",
+  "report_target_id_help": "الرقم الظاهر مع العنصر.",
+  "report_reason_label": "السبب",
+  "report_reason_spam": "رسائل مزعجة",
+  "report_reason_harassment": "مضايقة",
+  "report_reason_hate": "كراهية",
+  "report_reason_sexual": "محتوى جنسي",
+  "report_reason_violence": "عنف",
+  "report_reason_copyright": "حقوق النشر",
+  "report_reason_csam": "مواد استغلال جنسي للأطفال",
+  "report_reason_threat": "تهديد بالأذى",
+  "report_reason_other": "سبب آخر",
+  "report_details_label": "التفاصيل (اختياري)",
+  "report_contact_label": "بريد للرد (اختياري)",
+  "report_submit": "أرسل البلاغ",
+  "report_success": "شكراً. تم استلام بلاغك.",
+  "report_error": "تعذّر إرسال بلاغك. حاول لاحقاً.",
+  "report_invalid_target": "أدخل رقم عنصر صحيحاً."
 }

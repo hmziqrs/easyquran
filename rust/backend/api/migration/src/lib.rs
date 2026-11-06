@@ -29,6 +29,7 @@ mod m000033_notice_channel;
 mod m000034_appeals;
 mod m000035_shared_device_check;
 mod m000050_audit_logs_evidence;
+mod m000060_reports;
 
 pub struct Migrator;
 
@@ -123,6 +124,8 @@ impl MigratorTrait for Migrator {
             Box::new(m000034_appeals::Migration),
             // m000035 adds enforcement_notices.shared_device_checked (A22). Constant default 0.
             Box::new(m000035_shared_device_check::Migration),
+            // m000060 ships incident intake reports (A24): no FK to users, expiry columns, 12-month class.
+            Box::new(m000060_reports::Migration),
         ]
     }
 }

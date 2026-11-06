@@ -29,6 +29,7 @@ pub mod post_revision;
 pub mod post_series;
 pub mod post_series_post;
 pub mod post_view;
+pub mod report;
 pub mod route_status;
 pub mod scheduled_post;
 pub mod seed_run;

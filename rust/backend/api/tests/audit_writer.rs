@@ -123,7 +123,7 @@ async fn every_action_writes_one_row_with_twelve_month_evidence_columns() {
     let actor = seed_user(&st, "auditor").await;
     let before = Utc::now().timestamp();
 
-    for action in AuditAction::ALL {
+    for &action in AuditAction::ALL {
         audit::record(
             &st.sea_db,
             AuditEvent {

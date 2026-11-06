@@ -55,6 +55,11 @@
       "prefixes": ["contact"]
     },
     {
+      "id": "report",
+      "description": "Incident report page (/report). Renders without an account.",
+      "prefixes": ["report"]
+    },
+    {
       "id": "legal",
       "description": "Legal chrome shared by the privacy and terms pages.",
       "prefixes": ["legal"]

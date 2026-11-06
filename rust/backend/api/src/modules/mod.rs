@@ -20,6 +20,7 @@ pub mod forgot_password_v1;
 pub mod google_auth_v1;
 pub mod newsletter_v1;
 pub mod post_comment_v1;
+pub mod report_v1;
 
 #[cfg(feature = "seed-system")]
 pub mod seed_v1;
