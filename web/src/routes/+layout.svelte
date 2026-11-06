@@ -18,6 +18,7 @@
   import { siteJsonLdGraph } from "#lib/seo/site-schema.js";
   import { startAnalytics } from "#lib/boot/analytics.js";
   import { startMinorGate } from "#lib/boot/minor-gate.svelte.js";
+  import { startNotesOwnerSync } from "#lib/boot/notes-owner.svelte.js";
   import { startPreferenceSync } from "#lib/preferences/sources.svelte.js";
   import { isAppealPath } from "#lib/appeal/route.js";
   import { startCrashReporting } from "#lib/boot/crash-reporting.js";
@@ -112,6 +113,7 @@
     const cleanups = [
       ...thirdParty,
       startPreferenceSync(),
+      startNotesOwnerSync(),
       installEntryTagging(),
       // Sign-in folds the device's bookmarks into the account silently; say so once.
       bookmarks.onMerged((count) => toast(getBookmarksCopy().merged(count))),

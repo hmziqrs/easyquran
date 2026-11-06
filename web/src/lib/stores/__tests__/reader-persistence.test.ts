@@ -505,7 +505,31 @@ describe("createReaderPersistence per-owner notes (v5, EC-17)", () => {
     expect(annotations.getNote("3:3")).toBe("local");
     source.status = "authenticated";
     source.user = { id: 7 };
+    // Owner sync is the auth-transition effect's job (reader.syncNotes), not the read's.
+    persistence.syncNotesOwner();
     expect(annotations.getNote("3:3")).toBe("account");
+    persistence.dispose();
+  });
+
+  it("getNote() is a pure read: an auth change alone writes no notes state or storage (bug A)", () => {
+    window.localStorage.setItem(
+      "easyquran.notes.7",
+      JSON.stringify({ v: 1, notes: { "3:3": "account" } }),
+    );
+    const { source, stub } = fakeAuth();
+    const core = createReaderCore();
+    const persistence = createReaderPersistence(core, stub);
+    const annotations = createAnnotations(core, persistence);
+    persistence.hydrate();
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    const before = core.s.notes;
+    source.status = "authenticated";
+    source.user = { id: 7 };
+    expect(annotations.getNote("3:3")).toBe("");
+    expect(annotations.getNoteMeta("3:3")).toBeNull();
+    expect(core.s.notes).toBe(before);
+    expect(setItem).not.toHaveBeenCalled();
+    setItem.mockRestore();
     persistence.dispose();
   });
 

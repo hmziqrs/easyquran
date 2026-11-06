@@ -43,10 +43,9 @@ export function createAnnotations(core: ReaderCore, persistence: ReaderPersisten
   }
 
   return {
+    // Pure read: owner sync runs on auth transitions (`syncNotes`), never inside a read,
+    // since reads run in deriveds and sync writes state (state_unsafe_mutation).
     getNote(key: VerseKey): string {
-      // Owner sync first (post-auth account vs `local`): reads must never surface
-      // a previous owner's notes after a login/logout transition (EC-17).
-      persistence.syncNotesOwner();
       return core.s.notes[key] ?? "";
     },
     /** Saves the note text. `sourceId` is the translation being read (null = Arabic). */
@@ -55,7 +54,6 @@ export function createAnnotations(core: ReaderCore, persistence: ReaderPersisten
       commit(key, v, v.length === 0 ? null : { updatedAt: Date.now(), sourceId });
     },
     getNoteMeta(key: VerseKey): NoteMeta | null {
-      persistence.syncNotesOwner();
       return core.s.noteMeta[key] ?? null;
     },
     /** Every note with text, in mushaf order. Reactive; the caller syncs the owner (`syncNotes`). */
@@ -92,7 +90,7 @@ export function createAnnotations(core: ReaderCore, persistence: ReaderPersisten
       persistence.syncNotesOwner();
       commit(key, snapshot.text, snapshot.meta);
     },
-    /** Re-resolves the notes owner after an auth change (EC-17). Call from an effect, not a derived. */
+    /** Re-resolves the notes owner after an auth change (EC-17). Call from an effect, never a derived or read. */
     syncNotes(): void {
       persistence.syncNotesOwner();
     },
