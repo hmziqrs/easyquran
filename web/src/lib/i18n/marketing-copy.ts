@@ -97,12 +97,8 @@ export interface TweaksResolvedCopy {
   copied: string;
   copyCss: string;
   reset: string;
-  dataPrivacy: string;
-  analytics: string;
-  performance: string;
   on: string;
   off: string;
-  performanceReload: string;
   themeNames: Record<ThemeMode, string>;
   surfaces: Record<SurfaceId, SurfaceResolvedCopy>;
   accents: Record<AccentId, string>;

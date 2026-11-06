@@ -36,11 +36,6 @@
     consent.setAnalytics(!consent.analytics);
   }
 
-  function togglePerformance(): void {
-    consent.setPerformance(!consent.performance);
-    location.reload();
-  }
-
   async function onSignOut(): Promise<void> {
     if (logout.pending) return;
     await logout.run();
@@ -71,21 +66,6 @@
         class={cn(toggle, "shrink-0", consent.analytics ? on : off)}
       >
         {consent.analytics ? copy.on : copy.off}
-      </button>
-    </div>
-
-    <div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
-      <div class="min-w-0">
-        <span class="text-[14.5px] font-medium text-foreground">{copy.performance}</span>
-        <p class="mt-0.5 text-caption leading-snug text-muted">{copy.performanceReload}</p>
-      </div>
-      <button
-        type="button"
-        aria-pressed={consent.performance}
-        onclick={togglePerformance}
-        class={cn(toggle, "shrink-0", consent.performance ? on : off)}
-      >
-        {consent.performance ? copy.on : copy.off}
       </button>
     </div>
 

@@ -20,8 +20,6 @@ import {
   reader_notifications_unavailable,
   reader_off,
   reader_on,
-  reader_performance,
-  reader_performance_reload,
 } from "#lib/i18n/m/reader-settings.js";
 import {
   reader_arabic_text_size,
@@ -325,8 +323,6 @@ export interface SettingsCopy {
   readonly privacy: {
     readonly intro: string;
     readonly analytics: string;
-    readonly performance: string;
-    readonly performanceReload: string;
     readonly on: string;
     readonly off: string;
     readonly notifications: string;
@@ -554,8 +550,6 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
     privacy: {
       intro: noArgs(settings_privacy_intro),
       analytics: noArgs(reader_analytics),
-      performance: noArgs(reader_performance),
-      performanceReload: noArgs(reader_performance_reload),
       on: noArgs(reader_on),
       off: noArgs(reader_off),
       notifications: noArgs(reader_notifications),

@@ -2,7 +2,6 @@
   import { onMount } from "svelte";
   import { browser } from "$app/env";
   import { prefs } from "#lib/stores/prefs.svelte.js";
-  import { consent } from "#lib/stores/consent.svelte.js";
   import { APPEARANCE_MODES, PALETTES, type PaletteId } from "#lib/config/site.js";
   import type { CustomSeeds } from "#lib/theme/derive.js";
   import { Notifications } from "#lib/components/notifications/index.js";
@@ -340,38 +339,6 @@
             <OfflinePack copy={copy.offlinePack} />
           {/if}
         {/if}
-
-        <div>
-          <div class="mb-1.5 text-caption text-muted">{copy.dataPrivacy}</div>
-          <div class="flex flex-col gap-1.5">
-            <button
-              type="button"
-              aria-pressed={consent.analytics}
-              onclick={() => consent.setAnalytics(!consent.analytics)}
-              class={pillClass(consent.analytics)}
-            >
-              {copy.toggleStatusLabel(
-                copy.analytics,
-                consent.analytics ? copy.on : copy.off,
-              )}
-            </button>
-            <button
-              type="button"
-              aria-pressed={consent.performance}
-              title={copy.performanceReload}
-              onclick={() => {
-                consent.setPerformance(!consent.performance);
-                location.reload();
-              }}
-              class={pillClass(consent.performance)}
-            >
-              {copy.toggleStatusLabel(
-                copy.performance,
-                consent.performance ? copy.on : copy.off,
-              )}
-            </button>
-          </div>
-        </div>
       </div>
       </div>
     </div>

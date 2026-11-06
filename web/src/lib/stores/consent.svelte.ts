@@ -8,15 +8,17 @@ export { STORAGE_KEY as CONSENT_STORAGE_KEY };
 
 export interface ConsentFlags {
   analytics: boolean;
-  performance: boolean;
   advertising: boolean;
 }
 
 type ConsentPatch = Partial<ConsentFlags>;
 
+/**
+ * Off until the visitor turns it on in Settings. Personal reading insights are
+ * product data, not consent data, and are not gated here.
+ */
 const DEFAULT_FLAGS: ConsentFlags = {
-  analytics: true,
-  performance: true,
+  analytics: false,
   advertising: false,
 };
 
@@ -25,8 +27,7 @@ export function decodeConsent(raw: unknown): ConsentFlags {
   const stored = asObject(raw);
   if (!stored) return { ...DEFAULT_FLAGS };
   return {
-    analytics: stored.analytics === false ? false : DEFAULT_FLAGS.analytics,
-    performance: stored.performance === false ? false : DEFAULT_FLAGS.performance,
+    analytics: stored.analytics === true ? true : DEFAULT_FLAGS.analytics,
     advertising: stored.advertising === true ? true : DEFAULT_FLAGS.advertising,
   };
 }
@@ -34,12 +35,10 @@ export function decodeConsent(raw: unknown): ConsentFlags {
 export interface Consent {
   readonly current: Readonly<ConsentFlags>;
   readonly analytics: boolean;
-  readonly performance: boolean;
   readonly advertising: boolean;
   readonly consentSettings: ConsentSettings;
   set(patch: ConsentPatch): void;
   setAnalytics(on: boolean): void;
-  setPerformance(on: boolean): void;
   allowAll(): void;
   denyAll(): void;
   hydrate(): void;
@@ -51,7 +50,6 @@ export function createConsent(): Consent {
 
   const set = (patch: ConsentPatch): void => {
     if (patch.analytics !== undefined) flags.analytics = patch.analytics;
-    if (patch.performance !== undefined) flags.performance = patch.performance;
     if (patch.advertising !== undefined) flags.advertising = patch.advertising;
     if (browser) {
       writeJSON(STORAGE_KEY, flags);
@@ -65,9 +63,6 @@ export function createConsent(): Consent {
     },
     get analytics(): boolean {
       return flags.analytics;
-    },
-    get performance(): boolean {
-      return flags.performance;
     },
     get advertising(): boolean {
       return flags.advertising;
@@ -85,9 +80,8 @@ export function createConsent(): Consent {
     },
     set,
     setAnalytics: (on: boolean) => set({ analytics: on }),
-    setPerformance: (on: boolean) => set({ performance: on }),
-    allowAll: () => set({ analytics: true, performance: true, advertising: true }),
-    denyAll: () => set({ analytics: false, performance: false, advertising: false }),
+    allowAll: () => set({ analytics: true, advertising: true }),
+    denyAll: () => set({ analytics: false, advertising: false }),
     hydrate(): void {
       if (hydrated || !browser) return;
       hydrated = true;

@@ -2,7 +2,7 @@
 //
 // Marketing appearance panel. Lazy: only downloaded once the panel is opened.
 //
-// 44 messages. Import this barrel, never
+// 40 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { accent_azure_label } from "#lib/paraglide/messages/accent_azure_label.js";
@@ -20,7 +20,6 @@ export { surface_paper_note } from "#lib/paraglide/messages/surface_paper_note.j
 export { surface_slate_label } from "#lib/paraglide/messages/surface_slate_label.js";
 export { surface_slate_note } from "#lib/paraglide/messages/surface_slate_note.js";
 export { tweaks_accent } from "#lib/paraglide/messages/tweaks_accent.js";
-export { tweaks_analytics } from "#lib/paraglide/messages/tweaks_analytics.js";
 export { tweaks_appearance } from "#lib/paraglide/messages/tweaks_appearance.js";
 export { tweaks_background } from "#lib/paraglide/messages/tweaks_background.js";
 export { tweaks_clear } from "#lib/paraglide/messages/tweaks_clear.js";
@@ -28,7 +27,6 @@ export { tweaks_close_panel } from "#lib/paraglide/messages/tweaks_close_panel.j
 export { tweaks_copied } from "#lib/paraglide/messages/tweaks_copied.js";
 export { tweaks_copy_css } from "#lib/paraglide/messages/tweaks_copy_css.js";
 export { tweaks_custom_colours } from "#lib/paraglide/messages/tweaks_custom_colours.js";
-export { tweaks_data_privacy } from "#lib/paraglide/messages/tweaks_data_privacy.js";
 export { tweaks_derived_colours } from "#lib/paraglide/messages/tweaks_derived_colours.js";
 export { tweaks_mode } from "#lib/paraglide/messages/tweaks_mode.js";
 export { tweaks_off } from "#lib/paraglide/messages/tweaks_off.js";
@@ -42,8 +40,6 @@ export { tweaks_palette_sapphire } from "#lib/paraglide/messages/tweaks_palette_
 export { tweaks_palette_sapphire_note } from "#lib/paraglide/messages/tweaks_palette_sapphire_note.js";
 export { tweaks_palette_sepia } from "#lib/paraglide/messages/tweaks_palette_sepia.js";
 export { tweaks_palette_sepia_note } from "#lib/paraglide/messages/tweaks_palette_sepia_note.js";
-export { tweaks_performance } from "#lib/paraglide/messages/tweaks_performance.js";
-export { tweaks_performance_reload } from "#lib/paraglide/messages/tweaks_performance_reload.js";
 export { tweaks_pop } from "#lib/paraglide/messages/tweaks_pop.js";
 export { tweaks_reset } from "#lib/paraglide/messages/tweaks_reset.js";
 export { tweaks_settings } from "#lib/paraglide/messages/tweaks_settings.js";

@@ -147,7 +147,7 @@ describe("decodeSettingsDoc", () => {
         translationSize: 15,
         translationFamily: "serif",
       },
-      privacy: { analytics: false, performance: true, advertising: true },
+      privacy: { analytics: false, advertising: true },
     };
     expect(decodeSettingsDoc(doc)).toEqual(doc);
   });
@@ -165,7 +165,7 @@ describe("decodeSettingsDoc", () => {
         translationSize: 17,
         translationFamily: "sans",
       },
-      privacy: { analytics: true, performance: true, advertising: false },
+      privacy: { analytics: false, advertising: false },
     });
     const out = decodeSettingsDoc({
       v: 1,
@@ -183,7 +183,7 @@ describe("decodeSettingsDoc", () => {
         translationSize: 2,
         translationFamily: "mono",
       },
-      privacy: { analytics: "yes", performance: null, advertising: "no" },
+      privacy: { analytics: "yes", advertising: "no" },
     });
     expect(out?.appearance).toEqual({ ...DEFAULTS, instantResume: false, custom: {} });
     expect(out?.reading).toEqual({
@@ -195,8 +195,7 @@ describe("decodeSettingsDoc", () => {
       translationFamily: "sans",
     });
     expect(out?.privacy).toEqual({
-      analytics: true,
-      performance: true,
+      analytics: false,
       advertising: false,
     });
   });
@@ -226,7 +225,7 @@ describe("toSettingsDoc / applySettingsDoc", () => {
       instantResume: true,
     });
     const sourceConsent = createConsent();
-    sourceConsent.set({ analytics: false, advertising: true });
+    sourceConsent.set({ analytics: true, advertising: true });
     const sourceReader = createReader();
     sourceReader.bigger();
     sourceReader.setMode("reading");
@@ -257,7 +256,7 @@ describe("toSettingsDoc / applySettingsDoc", () => {
         translationSize: 15,
         translationFamily: "serif",
       },
-      privacy: { analytics: false, performance: true, advertising: true },
+      privacy: { analytics: true, advertising: true },
     });
 
     const targetPrefs = fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} });
@@ -271,7 +270,24 @@ describe("toSettingsDoc / applySettingsDoc", () => {
     expect(targetPrefs.applied()).toBe(1);
     expect(
       toSettingsDoc({ prefs: targetPrefs, consent: targetConsent, reader: targetReader }),
-    ).toEqual(doc);
+    ).toEqual({ ...doc, privacy: { analytics: false, advertising: false } });
+  });
+
+  it("never turns consent on from an imported file", () => {
+    const target = createConsent();
+    target.set({ analytics: true });
+    const doc = decodeSettingsDoc({
+      v: SETTINGS_DOC_VERSION,
+      privacy: { analytics: true, advertising: true },
+    });
+    expect(doc).not.toBeNull();
+    if (doc === null) return;
+    applySettingsDoc(doc, {
+      prefs: fakePrefs({ ...DEFAULTS, instantResume: false, custom: {} }),
+      consent: target,
+      reader: createReader(),
+    });
+    expect(target.current).toEqual({ analytics: false, advertising: false });
   });
 
   it("fans reading fields out through the reader setters", () => {
@@ -290,7 +306,6 @@ describe("toSettingsDoc / applySettingsDoc", () => {
         },
         privacy: {
           analytics: true,
-          performance: true,
           advertising: false,
         },
       },
@@ -325,7 +340,6 @@ describe("toSettingsDoc / applySettingsDoc", () => {
         },
         privacy: {
           analytics: true,
-          performance: true,
           advertising: false,
         },
       },
@@ -361,7 +375,6 @@ describe("toSettingsDoc / applySettingsDoc", () => {
         },
         privacy: {
           analytics: true,
-          performance: true,
           advertising: false,
         },
       },
@@ -400,7 +413,6 @@ describe("toSettingsDoc / applySettingsDoc", () => {
         },
         privacy: {
           analytics: true,
-          performance: true,
           advertising: false,
         },
       },

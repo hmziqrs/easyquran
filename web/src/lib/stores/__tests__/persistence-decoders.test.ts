@@ -11,37 +11,13 @@ import { decodeConsent } from "../consent.svelte";
 import { decodeFcm } from "../notifications.svelte";
 
 describe("decodeConsent", () => {
-  it("analytics/performance default ON unless explicitly false; advertising OFF unless true", () => {
-    expect(decodeConsent({})).toEqual({
-      analytics: true,
-      performance: true,
-      advertising: false,
-    });
-    expect(decodeConsent({ analytics: false })).toEqual({
+  it("is off for a new visitor and on only for an explicit true", () => {
+    expect(decodeConsent(null)).toEqual({ analytics: false, advertising: false });
+    expect(decodeConsent({})).toEqual({ analytics: false, advertising: false });
+    expect(decodeConsent({ analytics: true })).toEqual({ analytics: true, advertising: false });
+    expect(decodeConsent({ advertising: true })).toEqual({ analytics: false, advertising: true });
+    expect(decodeConsent({ analytics: "true", advertising: 1 })).toEqual({
       analytics: false,
-      performance: true,
-      advertising: false,
-    });
-    expect(decodeConsent({ advertising: true })).toEqual({
-      analytics: true,
-      performance: true,
-      advertising: true,
-    });
-    expect(decodeConsent({ analytics: "false", advertising: 1 })).toEqual({
-      analytics: true,
-      performance: true,
-      advertising: false,
-    });
-  });
-  it("falls back to defaults for non-objects", () => {
-    expect(decodeConsent(null)).toEqual({
-      analytics: true,
-      performance: true,
-      advertising: false,
-    });
-    expect(decodeConsent("x")).toEqual({
-      analytics: true,
-      performance: true,
       advertising: false,
     });
   });

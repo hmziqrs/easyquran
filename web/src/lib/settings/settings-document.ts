@@ -231,7 +231,8 @@ export function applySettingsDoc(
   stores: SettingsDocStores = { prefs, consent, reader },
 ): void {
   stores.prefs.set({ ...doc.appearance, custom: { ...doc.appearance.custom } });
-  stores.consent.set({ ...doc.privacy });
+  // An imported file can never turn consent on, whatever it claims.
+  stores.consent.set({ analytics: false, advertising: false });
   stores.reader.setMode(doc.reading.mode);
   stores.reader.setArabicFont(doc.reading.arabicFont);
   applyArabicScript(stores.reader, doc.reading.arabicScript);

@@ -2,24 +2,12 @@
 
 [Back to index](../README.md)
 
-#### A4. Interim compliance truth: consent default and claims ledger
+#### A4b. Contact addresses
 
-Build:
+Needs MX proof first, so it waits for O3. Replace `corrections@easyquran.app` (`faq_script_answer`) and `salam@easyquran.app` (`legal_terms_contact_body`) in `web/messages/{en,ar}.json` with `privacy@`, `abuse@`, `legal@`, `support@` on `easyquran.fyi`. Add the `privacy@` address to the privacy page. Point `/contact` and `SITE.contactEmail` at `abuse@`/`support@`.
 
-1. `web/src/lib/stores/consent.svelte.ts`: `DEFAULT_FLAGS.analytics` is `true` (line ~18). Change to `false`. Also `stored.analytics === false ? false : DEFAULT_FLAGS.analytics` (line ~28) must default to off for new visitors.
-2. Gate boot on consent: `web/src/lib/boot/analytics.ts` (~20–31), `web/src/lib/boot/crash-reporting.ts` (~2–6), `web/src/routes/+layout.svelte` (~98). Analytics and crash reporting load only after consent is true.
-3. Owner decision (2026-10-14): personal reading insights are always on. Do not gate them behind consent. The policy must say so.
-4. `web/src/lib/settings/settings-document.ts` (`applySettingsDoc`, ~226): a settings import must never turn consent on, so force consent flags to false on import. Remove the second consent surface on the public site. Drop the dead `performance` toggle.
-5. Contact addresses. Current code uses `.app` addresses in `web/messages/en.json` (line ~156 `corrections@easyquran.app`; line ~217 `salam@easyquran.app`). `web/src/lib/config/site.ts` already uses `easyquran.fyi`. Change message copy only after owner confirms MX (O3). Targets: `privacy@`, `abuse@`, `legal@`, `support@` on `easyquran.fyi`. Add a contact address to the privacy page.
-6. Claims ledger: rewrite privacy and terms copy (`legal_privacy_*`, `legal_terms_*`) so each sentence is true today or removed. Check in particular: "anonymous" analytics alongside a device identifier, retention periods, administrative access, backups. Deletion stays "by request" until F7 ships.
-7. Add DSA Art 14 moderation ground and an entity line to terms.
-8. i18n: new keys go in `web/messages/{en,ar}.json` and `web/i18n-namespaces.json`, then run `bun run i18n:namespaces`.
-9. `/contact` mails the owner's personal address (`contactEmail` in `web/src/lib/config/site.ts`). Switch to `abuse@`/`support@` once O3 is done.
-
-Files: `web/src/lib/stores/consent.svelte.ts`, `web/src/lib/boot/analytics.ts`, `web/src/lib/boot/crash-reporting.ts`, `web/src/routes/+layout.svelte`, `web/src/lib/settings/settings-document.ts`, marketing privacy/terms route files under `web/src/routes/(marketing)/**` and their `m/` namespaces, `web/messages/{en,ar}.json`, `web/i18n-namespaces.json`.
-
-Done when: every sentence in published privacy/terms maps to code that makes it true, or is gone (reviewer check); default consent test asserts analytics false for a new visitor; import test asserts consent forced false; `bun run check`, `bun run lint`, `bun run test` green.
-Owner: O3 for the new contact addresses only.
+Done when: no `easyquran.app` address remains in messages; `/contact` no longer shows the owner's personal address.
+Blocked by: O3
 
 #### A5. Measurement: promote 429 logs, durable block ledger, job log, abuse report
 
