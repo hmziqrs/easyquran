@@ -2,9 +2,13 @@
 //
 // Auth modal + /login /register routes. Lazy: ships only inside the lazy auth chunk + auth routes.
 //
-// 69 messages. Import this barrel, never
+// 73 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
+export { auth_banned_appeal_link } from "#lib/paraglide/messages/auth_banned_appeal_link.js";
+export { auth_banned_body } from "#lib/paraglide/messages/auth_banned_body.js";
+export { auth_banned_heading } from "#lib/paraglide/messages/auth_banned_heading.js";
+export { auth_banned_reason_code } from "#lib/paraglide/messages/auth_banned_reason_code.js";
 export { auth_captcha_error } from "#lib/paraglide/messages/auth_captcha_error.js";
 export { auth_captcha_label } from "#lib/paraglide/messages/auth_captcha_label.js";
 export { auth_captcha_required } from "#lib/paraglide/messages/auth_captcha_required.js";

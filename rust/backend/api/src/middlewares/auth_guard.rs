@@ -50,7 +50,14 @@ pub async fn unverified(
     next: Next,
 ) -> Result<Response, AuthError> {
     let mut auth = make_auth_session(&state, session).await;
-    check_requirements(&mut auth, &auth_requirements().authenticated().unverified()).await?;
+    check_requirements(
+        &mut auth,
+        &auth_requirements()
+            .authenticated()
+            .unverified()
+            .not_banned(),
+    )
+    .await?;
     Ok(next.run(request).await)
 }
 

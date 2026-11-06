@@ -10,11 +10,15 @@ use axum::Router;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
-use reading_common::{harness, router_with_state, seed_user, Harness};
+use reading_common::{harness, login_cookie, router_with_state, seed_user, Harness};
+use rux_request_gate::{AbuseLimiterConfig, GateDecision, RateLimitStore};
 use ruxlog::db::sea_models::enforcement_notice;
 use ruxlog::db::sea_models::user::{self, UserRole};
+use ruxlog::db::sea_models::user_ban;
 use ruxlog::middlewares::auth_guard;
 use ruxlog::modules::admin_user_bans_v1;
+use ruxlog::services::abuse_limiter::{self, Attempt, FailureMode};
+use ruxlog::AppState;
 use sea_orm::{ActiveModelTrait, ConnectionTrait, DbBackend, EntityTrait, Set, Statement};
 
 fn req(method: &str, path: &str, cookie: &str, body: Option<Value>) -> Request<Body> {
@@ -449,3 +453,179 @@ fn user_bans_has_no_user_cascade() {
     );
 }
 
+/// Insert an active ban row directly. Unlike the admin route this leaves the
+/// session secret alone, so only the ban check can reject a live session.
+async fn ban_directly(h: &Harness, user_id: i32) {
+    user_ban::ActiveModel {
+        user_id: Set(user_id),
+        reason: Set(Some("spam".to_string())),
+        banned_by: Set(None),
+        expires_at: Set(None),
+        created_at: Set(chrono::Utc::now().fixed_offset()),
+        revoked_at: Set(None),
+        revoked_by: Set(None),
+        ..Default::default()
+    }
+    .insert(&h.state.sea_db)
+    .await
+    .expect("ban inserted");
+}
+
+async fn unverify(h: &Harness, user_id: i32) {
+    let current = user::Entity::find_by_id(user_id)
+        .one(&h.state.sea_db)
+        .await
+        .unwrap()
+        .unwrap();
+    user::ActiveModel {
+        id: Set(user_id),
+        is_verified: Set(false),
+        session_auth_secret: Set(current.session_auth_secret),
+        ..Default::default()
+    }
+    .update(&h.state.sea_db)
+    .await
+    .expect("unverify");
+}
+
+/// One probe router per guard class. The flag marks the guard that only admits
+/// unverified accounts, so its probe needs an unverified session.
+fn guard_probes() -> Vec<(&'static str, Router<AppState>, bool)> {
+    fn ok_route() -> Router<AppState> {
+        Router::new().route("/me", get(|| async { "ok" }))
+    }
+    vec![
+        (
+            "authenticated",
+            ok_route().route_layer(middleware::from_fn(auth_guard::authenticated)),
+            false,
+        ),
+        (
+            "unverified",
+            ok_route().route_layer(middleware::from_fn(auth_guard::unverified)),
+            true,
+        ),
+        (
+            "verified",
+            ok_route().route_layer(middleware::from_fn(auth_guard::verified)),
+            false,
+        ),
+        (
+            "verified_with_role",
+            ok_route().route_layer(middleware::from_fn(
+                auth_guard::verified_with_role::<{ auth_guard::ROLE_USER }>,
+            )),
+            false,
+        ),
+    ]
+}
+
+// A20: every guard class rejects a banned session. Each probe gets a fresh
+// session that has not been checked for bans yet (the guard caches a clean
+// ban check for 5 minutes), and the ban is inserted without rotating the
+// secret, so the ban check itself must reject.
+#[tokio::test]
+async fn banned_session_is_rejected_by_every_guard() {
+    let h = admin_harness().await;
+    let unverified = seed_user(&h.state, "unverifiedguard").await;
+    unverify(&h, unverified.id).await;
+    let verified_b = user::Entity::find_by_id(h.uid_b)
+        .one(&h.state.sea_db)
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Baseline: every probe admits a healthy session.
+    for (name, probe, needs_unverified) in guard_probes() {
+        let app = router_with_state(h.state.clone(), probe);
+        let cookie = if needs_unverified {
+            login_cookie(&h.state, &unverified).await
+        } else {
+            login_cookie(&h.state, &verified_b).await
+        };
+        let (status, body) = send(&app, req("GET", "/me", &cookie, None)).await;
+        assert_eq!(status, StatusCode::OK, "{name}: valid before ban: {body}");
+    }
+
+    ban_directly(&h, h.uid_b).await;
+    ban_directly(&h, unverified.id).await;
+
+    for (name, probe, needs_unverified) in guard_probes() {
+        let app = router_with_state(h.state.clone(), probe);
+        let cookie = if needs_unverified {
+            login_cookie(&h.state, &unverified).await
+        } else {
+            login_cookie(&h.state, &verified_b).await
+        };
+        let (status, body) = send(&app, req("GET", "/me", &cookie, None)).await;
+        assert_eq!(
+            status,
+            StatusCode::FORBIDDEN,
+            "{name} must reject a banned session: {body}"
+        );
+    }
+}
+
+// Same thresholds as the auth controller's ABUSE_LIMITER_CONFIG.
+const LOGIN_CFG: AbuseLimiterConfig = AbuseLimiterConfig {
+    temp_block_attempts: 3,
+    temp_block_range: 360,
+    temp_block_duration: 3600,
+    block_retry_limit: 5,
+    block_range: 900,
+    block_duration: 86400,
+};
+
+// The limiter is a no-op outside production (dev_bypass), so this test turns
+// enforcement on the same way login_limiter.rs does.
+fn enforce_limiter() {
+    std::env::set_var("APP_ENV", "production");
+    std::env::set_var(
+        "VERIFICATION_IDENTITY_KEY",
+        "0123456789abcdef0123456789abcdef",
+    );
+}
+
+// A20: a new ban lifts the account's login throttle, so the next attempt gets
+// the banned response rather than a stale delay.
+#[tokio::test]
+async fn creating_a_ban_lifts_the_login_throttle() {
+    enforce_limiter();
+    let h = admin_harness().await;
+    let key = "login:readerb@example.com";
+    let store = &h.state.gate_store;
+    for _ in 0..3 {
+        abuse_limiter::settle(
+            store,
+            key,
+            LOGIN_CFG,
+            FailureMode::Credential,
+            Attempt::Rejected,
+        )
+        .await;
+    }
+    assert!(
+        matches!(
+            store
+                .abuse_peek(key, LOGIN_CFG, FailureMode::Credential)
+                .await
+                .unwrap(),
+            GateDecision::Delay { .. }
+        ),
+        "three failures must delay the login key"
+    );
+    let (status, body) = send(
+        &h.app,
+        req("POST", "/", &h.cookie_a, Some(create_body(h.uid_b, 1))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "ban: {body}");
+    assert_eq!(
+        store
+            .abuse_peek(key, LOGIN_CFG, FailureMode::Credential)
+            .await
+            .unwrap(),
+        GateDecision::Pass,
+        "ban must clear the login throttle"
+    );
+}

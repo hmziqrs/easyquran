@@ -67,5 +67,9 @@
   "auth_connected_loading": "Loading connected accounts…",
   "auth_connected_session_expired_error": "Your session has expired. Sign in again.",
   "auth_session_expired_banner": "Session expired — sign in to resume sync",
-  "auth_sign_out_unsynced_note": "Your unsynced changes are kept on this device for your next sign-in."
+  "auth_sign_out_unsynced_note": "Your unsynced changes are kept on this device for your next sign-in.",
+  "auth_banned_heading": "This account can't sign in",
+  "auth_banned_body": "This account has been banned. Sign in with a different account.",
+  "auth_banned_reason_code": "Reason code: {code}",
+  "auth_banned_appeal_link": "Appeal this decision"
 }

@@ -20,16 +20,55 @@ export const PASSKEY_UNAVAILABLE = "Passkeys aren't available or are blocked in 
 export type ErrorKind =
   | "field"
   | "credential"
+  | "banned"
   | "verified-only"
   | "rate-limit"
   | "transport"
   | "server";
 
+/** Wire type of the banned response (AccountLocked, A20). Checked before any credential bucket. */
+export const BANNED_TYPE = "AUTH_006";
+
+/** What the banned screen may show: the reason code, and an appeal path once the server sends one. */
+export interface BanNotice {
+  readonly reasonCode: string | null;
+  readonly appealPath: string | null;
+}
+
 export interface ClassifiedError {
   readonly kind: ErrorKind;
   readonly fieldErrors: Readonly<Record<string, string>>;
   readonly message: string;
+  readonly banNotice?: BanNotice;
 }
+
+const REASON_CODE_PATTERN = /^[a-z][a-z0-9_-]{0,39}$/;
+const APPEAL_PATH_MAX = 200;
+
+function isSafeAppealPath(path: string): boolean {
+  return path.length <= APPEAL_PATH_MAX && path.startsWith("/") && !path.startsWith("//");
+}
+
+/* eslint-disable anti-slop/no-runtime-typeof -- readBanNotice is the JSON I/O-boundary parser for the banned payload; typeof is the only way to narrow untrusted wire values before any of them is rendered */
+interface BanContextWire {
+  readonly reasonCode?: unknown;
+  readonly appealPath?: unknown;
+}
+
+/** Reads the banned payload. Unknown or malformed values are dropped, never rendered. */
+export function readBanNotice(error: AuthErrorEnvelope | null): BanNotice {
+  const context = error?.context;
+  if (!context || typeof context !== "object") return { reasonCode: null, appealPath: null };
+  // SAFETY: the guard above proved context is a non-null object; every field is typed unknown and re-checked by typeof before use
+  const wire = context as BanContextWire;
+  const code = wire.reasonCode;
+  const appeal = wire.appealPath;
+  return {
+    reasonCode: typeof code === "string" && REASON_CODE_PATTERN.test(code) ? code : null,
+    appealPath: typeof appeal === "string" && isSafeAppealPath(appeal) ? appeal : null,
+  };
+}
+/* eslint-enable anti-slop/no-runtime-typeof */
 
 // Wire shape of an auth-error `context` payload. A field's value may be a plain
 // message string, a list of `{ message }` entries (validator-style), or one such
@@ -79,14 +118,7 @@ export function extractFieldErrors(error: AuthErrorEnvelope | null, fields: Read
 }
 
 const CREDENTIAL_STATUSES = new Set([401, 403, 404]);
-const CREDENTIAL_TYPES = new Set([
-  "AUTH_001",
-  "AUTH_002",
-  "AUTH_003",
-  "AUTH_004",
-  "AUTH_006",
-  "AUTH_009",
-]);
+const CREDENTIAL_TYPES = new Set(["AUTH_001", "AUTH_002", "AUTH_003", "AUTH_004", "AUTH_009"]);
 const RATE_LIMIT_TYPES = new Set(["AUTH_007", "SRV_004"]);
 export const VERIFIED_ONLY_TYPES = new Set(["AUTH_008"]);
 
@@ -124,6 +156,9 @@ export function classifyAuthError(
   }
   if (status >= 500) {
     return { kind: "server", fieldErrors: {}, message: GENERIC_TRY_AGAIN };
+  }
+  if (error?.type === BANNED_TYPE) {
+    return { kind: "banned", fieldErrors: {}, message: "", banNotice: readBanNotice(error) };
   }
   const fieldErrors = extractFieldErrors(error, fields);
   const isValidationError = status === 400 && Object.keys(fieldErrors).length > 0;

@@ -558,6 +558,119 @@ async fn login_emits_session_rotated_header() {
     );
 }
 
+// A20: banned login. The ban check runs after the password check, so the
+// banned response is only ever shown to someone who knows the password.
+
+async fn ban_account(state: &AppState, email: &str, reason: &str) -> i32 {
+    let uid = user::Entity::find_by_email(&state.sea_db, email.to_string())
+        .await
+        .unwrap()
+        .unwrap()
+        .id;
+    user_ban::ActiveModel {
+        user_id: sea_orm::Set(uid),
+        reason: sea_orm::Set(Some(reason.to_string())),
+        banned_by: sea_orm::Set(None),
+        expires_at: sea_orm::Set(None),
+        created_at: sea_orm::Set(chrono::Utc::now().fixed_offset()),
+        revoked_at: sea_orm::Set(None),
+        revoked_by: sea_orm::Set(None),
+        ..Default::default()
+    }
+    .insert(&state.sea_db)
+    .await
+    .expect("ban inserted");
+    uid
+}
+
+async fn post_login(
+    app: &Router,
+    cookie: &str,
+    token: &str,
+    email: &str,
+    password: &str,
+) -> (StatusCode, serde_json::Value) {
+    let body = serde_json::json!({ "email": email, "password": password }).to_string();
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/v1/log_in")
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::CONTENT_LENGTH, body.len())
+                .header(header::COOKIE, cookie)
+                .header("csrf-token", token)
+                .header("cf-connecting-ip", "203.0.113.50")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = res.status();
+    let bytes = to_bytes(res.into_body(), 8192).await.unwrap_or_default();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
+    )
+}
+
+#[tokio::test]
+async fn banned_login_with_correct_password_gets_the_banned_response() {
+    let state = state().await;
+    let email = "banned-login@test.local";
+    let password = "super-secret-password";
+    seed_user(&state, email, password).await;
+    ban_account(&state, email, "spam").await;
+
+    let app = login_router(state);
+    let (cookie, token) = csrf_bootstrap(&app).await;
+    let (status, body) = post_login(&app, &cookie, &token, email, password).await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "banned login: {body}");
+    assert_eq!(body["type"], "AUTH_006", "banned login: {body}");
+    assert_eq!(body["context"]["reasonCode"], "spam", "reason code: {body}");
+}
+
+#[tokio::test]
+async fn banned_login_with_wrong_password_looks_like_any_wrong_password() {
+    let state = state().await;
+    let email = "banned-oracle@test.local";
+    seed_user(&state, email, "super-secret-password").await;
+    ban_account(&state, email, "spam").await;
+
+    let app = login_router(state);
+    let (cookie, token) = csrf_bootstrap(&app).await;
+    let (status, body) = post_login(&app, &cookie, &token, email, "wrong-password").await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "wrong password: {body}");
+    assert_ne!(
+        body["type"], "AUTH_006",
+        "ban must not show before the password: {body}"
+    );
+}
+
+#[tokio::test]
+async fn banned_login_after_failures_is_banned_not_throttled() {
+    let state = state().await;
+    let email = "banned-throttle@test.local";
+    let password = "super-secret-password";
+    seed_user(&state, email, password).await;
+    ban_account(&state, email, "spam").await;
+
+    let app = login_router(state);
+    let (cookie, token) = csrf_bootstrap(&app).await;
+    for _ in 0..2 {
+        let (status, _) = post_login(&app, &cookie, &token, email, "wrong-password").await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+    let (status, body) = post_login(&app, &cookie, &token, email, password).await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "banned after failures: {body}"
+    );
+    assert_eq!(body["type"], "AUTH_006", "banned after failures: {body}");
+}
+
 // ============================================================================
 // W8D-001: OAuth ban-guard tests
 // ============================================================================

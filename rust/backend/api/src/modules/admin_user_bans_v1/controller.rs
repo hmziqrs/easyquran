@@ -7,13 +7,14 @@ use axum::{
 use chrono::{Duration, FixedOffset};
 use sea_orm::{ActiveModelTrait, ConnectionTrait, EntityTrait, Set, TransactionTrait};
 use serde_json::json;
-use tracing::{info, instrument};
+use tracing::{info, instrument, warn};
 
 use crate::db::sea_models::audit_log;
 use crate::db::sea_models::enforcement_notice::{self, NewNotice};
 use crate::db::sea_models::user::{self, new_session_auth_secret};
 use crate::db::sea_models::user_ban::{self, NewUserBan, UserBanQuery};
 use crate::error::{ErrorCode, ErrorResponse};
+use crate::modules::admin_bans_v1;
 use crate::services::auth::AuthSession;
 use crate::AppState;
 
@@ -185,6 +186,19 @@ pub async fn create_ban(
     )
     .await?;
     txn.commit().await?;
+
+    // Lift the account's login/TOTP/reauth throttle after the ban commits, so the
+    // banned response (not a 429) is what the account sees next. Runs after commit:
+    // the pool has one connection and the transaction holds it until here.
+    if let Err(err) = admin_bans_v1::controller::clear_identity_limits_for(
+        &state.sea_db,
+        &state.gate_store,
+        target.id,
+    )
+    .await
+    {
+        warn!(user_id = target.id, error = ?err, "ban created; identity limiter clear failed");
+    }
 
     info!(ban_id = ban.id, user_id = target.id, "account ban created");
     Ok((

@@ -5,6 +5,7 @@ import {
   CREDENTIAL_FAILURE,
   classifyAuthError,
   extractFieldErrors,
+  readBanNotice,
   isRateLimited,
   isTransportFailure,
   RESET_CODE_SENT,
@@ -87,9 +88,9 @@ describe("classifyAuthError", () => {
     expect(c.kind).toBe("credential");
   });
 
-  it("AUTH_006 account-locked -> credential (no separate locked kind)", () => {
+  it("AUTH_006 account-locked -> banned, not the credential copy (A20)", () => {
     const c = classifyAuthError(403, env({ type: "AUTH_006" }), []);
-    expect(c.kind).toBe("credential");
+    expect(c.kind).toBe("banned");
   });
 
   it("verified-only AUTH_008/403 -> next-step copy, not credential loop", () => {
@@ -124,5 +125,37 @@ describe("classifyAuthError", () => {
   it("forgot-password copy: one neutral answer for every address (no existence claim)", () => {
     expect(RESET_CODE_SENT).toMatch(/if an account exists/i);
     expect(RESET_CODE_SENT).not.toMatch(/no account exists/i);
+  });
+});
+
+describe("banned classification (AUTH_006)", () => {
+  it("is its own kind, never the credential copy", () => {
+    const c = classifyAuthError(403, env({ type: "AUTH_006" }), []);
+    expect(c.kind).toBe("banned");
+    expect(c.kind).not.toBe("credential");
+  });
+
+  it("carries the reason code from context", () => {
+    const c = classifyAuthError(
+      403,
+      env({ type: "AUTH_006", context: { reasonCode: "content_spam" } }),
+      [],
+    );
+    expect(c.banNotice).toEqual({ reasonCode: "content_spam", appealPath: null });
+  });
+
+  it("accepts only same-origin appeal paths", () => {
+    expect(readBanNotice(env({ context: { appealPath: "/appeal/42" } })).appealPath).toBe(
+      "/appeal/42",
+    );
+    expect(readBanNotice(env({ context: { appealPath: "//evil.test/x" } })).appealPath).toBeNull();
+    expect(
+      readBanNotice(env({ context: { appealPath: "https://evil.test" } })).appealPath,
+    ).toBeNull();
+  });
+
+  it("rejects reason codes outside the code shape", () => {
+    expect(readBanNotice(env({ context: { reasonCode: "Spam Words!" } })).reasonCode).toBeNull();
+    expect(readBanNotice(null)).toEqual({ reasonCode: null, appealPath: null });
   });
 });

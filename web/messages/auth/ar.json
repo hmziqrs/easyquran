@@ -67,5 +67,9 @@
   "auth_connected_loading": "جارٍ تحميل الحسابات المرتبطة…",
   "auth_connected_session_expired_error": "انتهت جلستك. سجّل الدخول مرة أخرى.",
   "auth_session_expired_banner": "انتهت الجلسة — سجّل الدخول لاستئناف المزامنة",
-  "auth_sign_out_unsynced_note": "تُحفظ تغييراتك غير المتزامنة على هذا الجهاز إلى أن تسجّل الدخول مرة أخرى."
+  "auth_sign_out_unsynced_note": "تُحفظ تغييراتك غير المتزامنة على هذا الجهاز إلى أن تسجّل الدخول مرة أخرى.",
+  "auth_banned_heading": "لا يمكن تسجيل الدخول إلى هذا الحساب",
+  "auth_banned_body": "تم حظر هذا الحساب. سجّل الدخول بحساب آخر.",
+  "auth_banned_reason_code": "رمز السبب: {code}",
+  "auth_banned_appeal_link": "استئناف هذا القرار"
 }

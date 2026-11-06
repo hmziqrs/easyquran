@@ -2,6 +2,7 @@
   import { createForm, revalidateLogic } from "@tanstack/svelte-form";
   import AuthForm from "./AuthForm.svelte";
   import AuthField from "./AuthField.svelte";
+  import BannedNotice from "./BannedNotice.svelte";
   import PasswordInput from "./PasswordInput.svelte";
   import { Icon } from "#lib/components/icon/index.js";
   import type { LoginFlow } from "#lib/auth/flows.svelte.js";
@@ -68,7 +69,9 @@
   }
 </script>
 
-{#if flow.step === "totp"}
+{#if flow.banned}
+  <BannedNotice notice={flow.banned} ondismiss={() => flow.dismissBanned()} />
+{:else if flow.step === "totp"}
   <AuthForm
     heading={copy.totpHeading}
     subheading={copy.totpSubheading}

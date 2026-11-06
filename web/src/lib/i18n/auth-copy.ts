@@ -54,6 +54,10 @@ import {
   auth_connected_retry,
   auth_connected_loading,
   auth_connected_session_expired_error,
+  auth_banned_heading,
+  auth_banned_body,
+  auth_banned_reason_code,
+  auth_banned_appeal_link,
 } from "#lib/i18n/m/auth.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
 
@@ -114,6 +118,10 @@ export interface AuthCopy {
   connectedRetry: string;
   connectedLoading: string;
   connectedSessionExpiredError: string;
+  bannedHeading: string;
+  bannedBody: string;
+  bannedReasonCode: (code: string) => string;
+  bannedAppealLink: string;
 }
 
 // SAFETY: paraglide is compiled for exactly the UI locales (en/ar in messages/), so getLocale() only ever returns a UiLocale at runtime.
@@ -179,5 +187,9 @@ export function getAuthCopy(locale: UiLocale = getLocale() as UiLocale): AuthCop
     connectedRetry: auth_connected_retry(undefined, { locale }),
     connectedLoading: auth_connected_loading(undefined, { locale }),
     connectedSessionExpiredError: auth_connected_session_expired_error(undefined, { locale }),
+    bannedHeading: auth_banned_heading(undefined, { locale }),
+    bannedBody: auth_banned_body(undefined, { locale }),
+    bannedReasonCode: (code: string) => auth_banned_reason_code({ code }, { locale }),
+    bannedAppealLink: auth_banned_appeal_link(undefined, { locale }),
   };
 }

@@ -13,6 +13,7 @@ import {
   ALREADY_SIGNED_IN_RESET,
   CREDENTIAL_FAILURE,
   classifyAuthError,
+  type BanNotice,
   GENERIC_TRY_AGAIN,
   isVerifiedOnlyError,
   NETWORK_ERROR,
@@ -97,6 +98,7 @@ function isTotpRequired(data: unknown): { totpToken: string } | null {
 interface CredentialFailure {
   readonly genericError: string | null;
   readonly fieldErrors: Readonly<Record<string, string>>;
+  readonly banned: BanNotice | null;
 }
 
 // The unauthenticated-guarded endpoints (/auth/v1/log_in, /register, …) answer
@@ -124,15 +126,17 @@ function credentialFailure(
   fields: ReadonlyArray<string>,
 ): CredentialFailure {
   if (status === 0) {
-    return { genericError: NETWORK_ERROR, fieldErrors: {} };
+    return { genericError: NETWORK_ERROR, fieldErrors: {}, banned: null };
   }
   const c = classifyAuthError(status, error, fields);
-  if (c.kind === "credential") {
-    return { genericError: CREDENTIAL_FAILURE, fieldErrors: {} };
+  if (c.kind === "banned") {
+    return { genericError: null, fieldErrors: {}, banned: c.banNotice ?? null };
+  } else if (c.kind === "credential") {
+    return { genericError: CREDENTIAL_FAILURE, fieldErrors: {}, banned: null };
   } else if (c.kind === "field") {
-    return { genericError: null, fieldErrors: c.fieldErrors };
+    return { genericError: null, fieldErrors: c.fieldErrors, banned: null };
   }
-  return { genericError: c.message, fieldErrors: {} };
+  return { genericError: c.message, fieldErrors: {}, banned: null };
 }
 
 export class LoginFlow {
@@ -144,6 +148,8 @@ export class LoginFlow {
   pending = $state(false);
   genericError = $state<string | null>(null);
   fieldErrors = $state<Readonly<Record<string, string>>>({});
+  /** Set when the server refuses the account as banned; the form shows the banned screen instead. */
+  banned = $state<BanNotice | null>(null);
   step = $state<"credentials" | "totp" | "done">("credentials");
   #totpToken: string | null = null;
 
@@ -161,6 +167,7 @@ export class LoginFlow {
     this.code = "";
     this.genericError = null;
     this.fieldErrors = {};
+    this.banned = null;
     this.step = "credentials";
     this.#totpToken = null;
     this.pending = false;
@@ -184,6 +191,12 @@ export class LoginFlow {
     const f = credentialFailure(status, error, LOGIN_FIELDS);
     this.genericError = f.genericError;
     this.fieldErrors = f.fieldErrors;
+    this.banned = f.banned;
+  }
+
+  /** Leaves the banned screen so another account can sign in. */
+  dismissBanned(): void {
+    this.banned = null;
   }
 
   async submitCredentials(): Promise<boolean> {
@@ -191,6 +204,7 @@ export class LoginFlow {
     this.pending = true;
     this.genericError = null;
     this.fieldErrors = {};
+    this.banned = null;
     try {
       const res = await this.client.unsafeRequest<unknown>("/auth/v1/log_in", {
         method: "POST",
@@ -319,7 +333,8 @@ export class RegisterFlow {
 
   private fail(status: number, error: AuthErrorEnvelope | null): void {
     const f = credentialFailure(status, error, REGISTER_FIELDS);
-    this.genericError = f.genericError;
+    // Registration never reaches the banned branch; keep a visible error if it ever does.
+    this.genericError = f.banned ? GENERIC_TRY_AGAIN : f.genericError;
     this.fieldErrors = f.fieldErrors;
   }
 

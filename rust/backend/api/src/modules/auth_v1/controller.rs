@@ -143,6 +143,18 @@ pub async fn log_out(
     }
 }
 
+/// Banned response (AUTH_006). Carries the reason code only: expiry, reason text
+/// and evidence stay server-side. Web shows the code and, once A35 exists, appeal.
+fn banned_error(status: &rux_auth::BanStatus) -> ErrorResponse {
+    let reason_code = match status {
+        rux_auth::BanStatus::Banned { reason, .. } => reason.clone(),
+        rux_auth::BanStatus::NotBanned => None,
+    };
+    ErrorResponse::new(ErrorCode::AccountLocked)
+        .with_message("This account has been banned")
+        .with_context(json!({ "reasonCode": reason_code }))
+}
+
 #[debug_handler]
 #[instrument(skip(state, auth, payload), fields(client_ip = %secure_ip, user_id, user_role, result))]
 pub async fn log_in(
@@ -187,8 +199,9 @@ pub async fn log_in(
                 Ok(ban_status) if ban_status.is_banned() => {
                     warn!(user_id = user.id, "Banned user attempted login");
                     tracing::Span::current().record("result", "banned");
-                    return Err(ErrorResponse::new(ErrorCode::AccountLocked)
-                        .with_message("This account has been banned"));
+                    // Password was correct, so the failure bucket was already cleared
+                    // by the success settle above: a banned login is never a 429 after it.
+                    return Err(banned_error(&ban_status));
                 }
                 Ok(_) => {}
                 Err(_) => {
@@ -318,8 +331,7 @@ pub async fn complete_pending_totp_login(
     match auth.backend().check_ban(&user.id).await {
         Ok(ban_status) if ban_status.is_banned() => {
             warn!(user_id = user.id, "login/totp: banned user");
-            return Err(ErrorResponse::new(ErrorCode::AccountLocked)
-                .with_message("This account has been banned"));
+            return Err(banned_error(&ban_status));
         }
         Ok(_) => {}
         Err(_) => {

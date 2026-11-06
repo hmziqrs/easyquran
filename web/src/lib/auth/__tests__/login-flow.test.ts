@@ -118,6 +118,56 @@ describe("LoginFlow credentials", () => {
     expect(flow.genericError).toContain("30s");
   });
 
+  it("AUTH_006 -> banned screen state with reason code, not the credential copy", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest.mockResolvedValueOnce(
+      err(403, { type: "AUTH_006", context: { reasonCode: "spam" } }),
+    );
+    const flow = createLoginFlow({ client, state });
+    flow.email = "spam@eq.test";
+    flow.password = "whatever-12345";
+    const res = await flow.submitCredentials();
+    expect(res).toBe(false);
+    expect(flow.banned).toEqual({ reasonCode: "spam", appealPath: null });
+    expect(flow.genericError).toBeNull();
+    expect(state.setUser).not.toHaveBeenCalled();
+  });
+
+  it("banned state drops bad reason codes and non-path appeal links", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest.mockResolvedValueOnce(
+      err(403, {
+        type: "AUTH_006",
+        context: { reasonCode: "<script>", appealPath: "https://evil.test/appeal" },
+      }),
+    );
+    const flow = createLoginFlow({ client, state });
+    await flow.submitCredentials();
+    expect(flow.banned).toEqual({ reasonCode: null, appealPath: null });
+  });
+
+  it("dismissBanned returns to the form; a new attempt clears the banned state", async () => {
+    const client = mockClient();
+    const state = mockState();
+    client.unsafeRequest.mockResolvedValueOnce(
+      err(403, { type: "AUTH_006", context: { reasonCode: "spam" } }),
+    );
+    const flow = createLoginFlow({ client, state });
+    flow.email = "spam@eq.test";
+    flow.password = "whatever-12345";
+    await flow.submitCredentials();
+    expect(flow.banned).not.toBeNull();
+    flow.dismissBanned();
+    expect(flow.banned).toBeNull();
+
+    client.unsafeRequest.mockResolvedValueOnce(err(401, { type: "AUTH_001" }));
+    await flow.submitCredentials();
+    expect(flow.banned).toBeNull();
+    expect(flow.genericError).toBe("Email or password is incorrect.");
+  });
+
   it("transport failure -> network message, no throw", async () => {
     const client = mockClient();
     const state = mockState();
