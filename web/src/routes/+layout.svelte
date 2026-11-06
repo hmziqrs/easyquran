@@ -17,6 +17,7 @@
   import { SITE } from "#lib/config/site.js";
   import { siteJsonLdGraph } from "#lib/seo/site-schema.js";
   import { startAnalytics } from "#lib/boot/analytics.js";
+  import { startMinorGate } from "#lib/boot/minor-gate.svelte.js";
   import { startPreferenceSync } from "#lib/preferences/sources.svelte.js";
   import { isAppealPath } from "#lib/appeal/route.js";
   import { startCrashReporting } from "#lib/boot/crash-reporting.js";
@@ -107,7 +108,7 @@
     // Appeal pages (A35) load no third-party script: analytics and crash reporting stay off.
     const thirdParty = isAppealPath(location.pathname)
       ? []
-      : [startAnalytics(), startCrashReporting()];
+      : [startMinorGate(), startAnalytics(), startCrashReporting()];
     const cleanups = [
       ...thirdParty,
       startPreferenceSync(),

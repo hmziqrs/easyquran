@@ -42,11 +42,14 @@ export interface Consent {
   allowAll(): void;
   denyAll(): void;
   hydrate(): void;
+  /** Signed-in account is a declared minor (A34): analytics and ads stay off, whatever is stored. */
+  setMinorAccount(on: boolean): void;
 }
 
 export function createConsent(): Consent {
   let flags = $state<ConsentFlags>({ ...DEFAULT_FLAGS });
   let hydrated = false;
+  let minorAccount = $state(false);
 
   const set = (patch: ConsentPatch): void => {
     if (patch.analytics !== undefined) flags.analytics = patch.analytics;
@@ -62,18 +65,18 @@ export function createConsent(): Consent {
       return flags;
     },
     get analytics(): boolean {
-      return flags.analytics;
+      return flags.analytics && !minorAccount;
     },
     get advertising(): boolean {
-      return flags.advertising;
+      return flags.advertising && !minorAccount;
     },
     get consentSettings(): ConsentSettings {
       const g = (on: boolean) => (on ? "granted" : "denied");
       return {
-        ad_storage: g(flags.advertising),
-        ad_user_data: g(flags.advertising),
-        ad_personalization: g(flags.advertising),
-        analytics_storage: g(flags.analytics),
+        ad_storage: g(flags.advertising && !minorAccount),
+        ad_user_data: g(flags.advertising && !minorAccount),
+        ad_personalization: g(flags.advertising && !minorAccount),
+        analytics_storage: g(flags.analytics && !minorAccount),
         functionality_storage: "granted",
         security_storage: "granted",
       };
@@ -86,6 +89,11 @@ export function createConsent(): Consent {
       if (hydrated || !browser) return;
       hydrated = true;
       flags = { ...decodeConsent(readJSON(STORAGE_KEY)) };
+    },
+    setMinorAccount(on: boolean): void {
+      if (minorAccount === on) return;
+      minorAccount = on;
+      if (browser) window.dispatchEvent(new CustomEvent("easyquran:consent", { detail: {} }));
     },
   };
 }
