@@ -1,6 +1,8 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+/// Evidence table (A23). No FK to users: an account delete keeps its audit rows.
+/// `expires_at` (epoch seconds) and `retention_class` drive the sweeper.
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "audit_logs")]
 pub struct Model {
@@ -14,24 +16,11 @@ pub struct Model {
     pub ip_address: Option<String>,
     pub user_agent: Option<String>,
     pub created_at: DateTimeWithTimeZone,
+    pub expires_at: i64,
+    pub retention_class: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::super::user::Entity",
-        from = "Column::UserId",
-        to = "super::super::user::Column::Id",
-        on_update = "Cascade",
-        on_delete = "SetNull"
-    )]
-    User,
-}
-
-impl Related<super::super::user::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::User.def()
-    }
-}
+pub enum Relation {}
 
 impl ActiveModelBehavior for ActiveModel {}

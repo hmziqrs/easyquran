@@ -32,6 +32,7 @@ use crate::{
 };
 
 use crate::db::sea_models::media_variant::{Entity as MediaVariant, NewMediaVariant};
+use crate::services::audit::{self, AuditAction, AuditEvent};
 use crate::services::image_optimizer;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -849,6 +850,16 @@ pub async fn delete(
         })?;
 
     Media::delete_by_id(&state.sea_db, media_id).await?;
+    audit::record(
+        &state.sea_db,
+        AuditEvent {
+            actor_id: Some(uploader.id),
+            action: AuditAction::MediaDelete,
+            resource_id: media.id.to_string(),
+            metadata: json!({ "uploaderId": media.uploader_id }),
+        },
+    )
+    .await?;
 
     Ok((
         StatusCode::OK,

@@ -11,6 +11,10 @@ use crate::{
         Entity as SuppressionEntity, NewSuppression, SuppressionQuery,
     },
     error::{ErrorCode, ErrorResponse},
+    services::{
+        audit::{self, AuditAction, AuditEvent},
+        auth::AuthSession,
+    },
     AppState,
 };
 
@@ -42,8 +46,10 @@ pub async fn list_suppressions(
 
 pub async fn create_suppression(
     State(state): State<AppState>,
+    auth: AuthSession,
     Json(payload): Json<V1CreateSuppression>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ErrorResponse> {
+    let actor_id = auth.user_required()?.id;
     let reason = payload.reason_or_default();
     let model = SuppressionEntity::create(
         &state.sea_db,
@@ -56,6 +62,16 @@ pub async fn create_suppression(
         },
     )
     .await?;
+    audit::record(
+        &state.sea_db,
+        AuditEvent {
+            actor_id: Some(actor_id),
+            action: AuditAction::SuppressionAdd,
+            resource_id: model.recipient.clone(),
+            metadata: json!({ "source": "admin", "permanent": model.permanent }),
+        },
+    )
+    .await?;
 
     Ok((
         StatusCode::CREATED,
@@ -65,14 +81,28 @@ pub async fn create_suppression(
 
 pub async fn delete_suppression(
     State(state): State<AppState>,
+    auth: AuthSession,
     Query(q): Query<V1DeleteSuppression>,
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
+    let actor_id = auth.user_required()?.id;
     let recipient = q.recipient.trim().to_lowercase();
     if recipient.is_empty() {
         return Err(ErrorResponse::new(ErrorCode::InvalidEmailFormat)
             .with_message("recipient query param is required"));
     }
     let removed = SuppressionEntity::delete_by_recipient(&state.sea_db, &recipient).await?;
+    if removed {
+        audit::record(
+            &state.sea_db,
+            AuditEvent {
+                actor_id: Some(actor_id),
+                action: AuditAction::SuppressionDelete,
+                resource_id: recipient.clone(),
+                metadata: json!({}),
+            },
+        )
+        .await?;
+    }
     Ok(Json(json!({ "removed": removed, "recipient": recipient })))
 }
 
@@ -139,6 +169,16 @@ async fn apply_mail_event(
                 },
             )
             .await?;
+            audit::record(
+                &state.sea_db,
+                AuditEvent {
+                    actor_id: None,
+                    action: AuditAction::SuppressionAdd,
+                    resource_id: ev.recipient.trim().to_lowercase(),
+                    metadata: json!({ "source": "mail-webhook", "reason": "bounce" }),
+                },
+            )
+            .await?;
         }
         canonical::COMPLAINED => {
             tracing::info!(%recipient_domain, "mail complaint event -> suppressing (permanent)");
@@ -150,6 +190,16 @@ async fn apply_mail_event(
                     source: Some("mail-webhook".to_string()),
                     diagnostic: ev.diagnostic.clone(),
                     permanent: true,
+                },
+            )
+            .await?;
+            audit::record(
+                &state.sea_db,
+                AuditEvent {
+                    actor_id: None,
+                    action: AuditAction::SuppressionAdd,
+                    resource_id: ev.recipient.trim().to_lowercase(),
+                    metadata: json!({ "source": "mail-webhook", "reason": "complaint" }),
                 },
             )
             .await?;

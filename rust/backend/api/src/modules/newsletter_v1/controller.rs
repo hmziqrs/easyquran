@@ -14,6 +14,7 @@ use crate::{
     extractors::ValidatedJson,
     services::{
         abuse_limiter::{limiter, AbuseLimiterConfig},
+        audit::{self, AuditAction, AuditEvent},
         auth::AuthSession,
     },
     AppState,
@@ -150,16 +151,28 @@ pub async fn unsubscribe(
 }
 
 #[debug_handler]
-#[instrument(skip(state, _auth, payload), fields(subject = %payload.subject))]
+#[instrument(skip(state, auth, payload), fields(subject = %payload.subject))]
 pub async fn send(
     State(state): State<AppState>,
-    _auth: AuthSession,
+    auth: AuthSession,
     payload: ValidatedJson<V1SendNewsletterPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let subject = payload.subject.clone();
     let text = payload.text.clone();
     let html = payload.html.clone();
     let state_cloned = state.clone();
+    // Audit before the 202: the send runs in the background and its row must
+    // exist even if the task later fails.
+    audit::record(
+        &state.sea_db,
+        AuditEvent {
+            actor_id: Some(auth.user_required()?.id),
+            action: AuditAction::NewsletterSend,
+            resource_id: Uuid::new_v4().to_string(),
+            metadata: json!({ "subject": subject.clone() }),
+        },
+    )
+    .await?;
 
     tokio::spawn(
         tracing::info_span!("newsletter_send_background", subject = %subject).in_scope(

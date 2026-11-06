@@ -20,7 +20,10 @@ use crate::{
     extractors::ValidatedJson,
     middlewares::native_session::{mark_native_session, NativeClient},
     modules::auth_v1::controller::terminate_session,
-    services::auth::AuthSession,
+    services::{
+        audit::{self, AuditAction, AuditEvent},
+        auth::AuthSession,
+    },
     AppState,
 };
 
@@ -376,7 +379,24 @@ pub async fn delete(
         .ok_or_else(|| ErrorResponse::new(ErrorCode::RecordNotFound))?;
     if row.revoked_at.is_none() {
         drop_device_access(&state, &auth, user.id, &row.id).await?;
+        // Audit carries the account and the device class only. The device id,
+        // key and hint never enter an audit row.
+        let class = json!({
+            "platform": row.platform,
+            "client": row.client,
+            "formFactor": row.form_factor,
+        });
         user_device::Entity::revoke(&state.sea_db, row).await?;
+        audit::record(
+            &state.sea_db,
+            AuditEvent {
+                actor_id: Some(user.id),
+                action: AuditAction::DeviceRemove,
+                resource_id: user.id.to_string(),
+                metadata: class,
+            },
+        )
+        .await?;
     }
     Ok((StatusCode::OK, Json(json!({ "revoked": true }))))
 }

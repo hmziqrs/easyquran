@@ -82,7 +82,11 @@ impl Entity {
     }
 
     #[instrument(skip(conn), fields(comment_id, user_id))]
-    pub async fn delete(conn: &DbConn, comment_id: i32, user_id: i32) -> DbResult<u64> {
+    pub async fn delete<C: ConnectionTrait>(
+        conn: &C,
+        comment_id: i32,
+        user_id: i32,
+    ) -> DbResult<u64> {
         match Self::delete_by_id(comment_id)
             .filter(Column::UserId.eq(user_id))
             .exec(conn)
@@ -355,7 +359,10 @@ impl Entity {
         Ok(count as i64)
     }
 
-    pub async fn admin_hide(conn: &DbConn, comment_id: i32) -> DbResult<Option<Model>> {
+    pub async fn admin_hide<C: ConnectionTrait>(
+        conn: &C,
+        comment_id: i32,
+    ) -> DbResult<Option<Model>> {
         let existing = Self::find_by_id(comment_id).one(conn).await?;
         if let Some(model) = existing {
             let mut active: ActiveModel = model.into();
@@ -368,7 +375,10 @@ impl Entity {
         }
     }
 
-    pub async fn admin_unhide(conn: &DbConn, comment_id: i32) -> DbResult<Option<Model>> {
+    pub async fn admin_unhide<C: ConnectionTrait>(
+        conn: &C,
+        comment_id: i32,
+    ) -> DbResult<Option<Model>> {
         let existing = Self::find_by_id(comment_id).one(conn).await?;
         if let Some(model) = existing {
             let mut active: ActiveModel = model.into();
@@ -381,12 +391,15 @@ impl Entity {
         }
     }
 
-    pub async fn admin_delete(conn: &DbConn, comment_id: i32) -> DbResult<u64> {
+    pub async fn admin_delete<C: ConnectionTrait>(conn: &C, comment_id: i32) -> DbResult<u64> {
         let res = Self::delete_by_id(comment_id).exec(conn).await?;
         Ok(res.rows_affected)
     }
 
-    pub async fn admin_flags_clear(conn: &DbConn, comment_id: i32) -> DbResult<Option<Model>> {
+    pub async fn admin_flags_clear<C: ConnectionTrait>(
+        conn: &C,
+        comment_id: i32,
+    ) -> DbResult<Option<Model>> {
         let existing = Self::find_by_id(comment_id).one(conn).await?;
         if let Some(model) = existing {
             let mut active: ActiveModel = model.into();

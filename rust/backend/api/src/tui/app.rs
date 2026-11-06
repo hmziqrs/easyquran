@@ -687,6 +687,31 @@ impl App {
             let res = seed::seed_all_with_progress(&core.db, Some(progress_callback), seed_mode)
                 .await
                 .map_err(|e| SeedFlowError::Failed(e.to_string()));
+            // Operator-side seed run: no account actor. The row is written before the
+            // completion event, so a failed audit write is reported as a failed run.
+            let res = match res {
+                Ok(outcome) => {
+                    let run_ref = outcome
+                        .seed_run_id
+                        .map(|id| id.to_string())
+                        .unwrap_or_else(|| "unrecorded".to_string());
+                    let audited = crate::services::audit::record(
+                        &core.db,
+                        crate::services::audit::AuditEvent {
+                            actor_id: None,
+                            action: crate::services::audit::AuditAction::SeedRun,
+                            resource_id: run_ref,
+                            metadata: serde_json::json!({ "errors": outcome.errors.len() }),
+                        },
+                    )
+                    .await;
+                    match audited {
+                        Ok(()) => Ok(outcome),
+                        Err(e) => Err(SeedFlowError::Failed(e.to_string())),
+                    }
+                }
+                Err(e) => Err(e),
+            };
             let _ = tx_clone.send(AppEvent::SeedCompleted(res));
         });
     }

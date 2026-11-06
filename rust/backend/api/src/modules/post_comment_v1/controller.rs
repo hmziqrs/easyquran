@@ -13,7 +13,12 @@ use crate::{
     db::sea_models::{comment_flag, post, post_comment, user},
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
-    services::{abuse_limiter, auth::AuthSession, registration_admission},
+    services::{
+        abuse_limiter,
+        audit::{self, AuditAction, AuditEvent},
+        auth::AuthSession,
+        registration_admission,
+    },
     AppState,
 };
 
@@ -151,7 +156,26 @@ pub async fn delete(
     Path(comment_id): Path<i32>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let user = auth.user.unwrap();
-    match post_comment::Entity::delete(&state.sea_db, comment_id, user.id).await {
+    let deleted = async {
+        let txn = state.sea_db.begin().await?;
+        let affected = post_comment::Entity::delete(&txn, comment_id, user.id).await?;
+        if affected > 0 {
+            audit::record(
+                &txn,
+                AuditEvent {
+                    actor_id: Some(user.id),
+                    action: AuditAction::CommentDelete,
+                    resource_id: comment_id.to_string(),
+                    metadata: json!({ "by": "author" }),
+                },
+            )
+            .await?;
+        }
+        txn.commit().await?;
+        Ok::<u64, ErrorResponse>(affected)
+    }
+    .await;
+    match deleted {
         Ok(1) => {
             info!(user_id = user.id, comment_id, "Comment deleted");
             Ok((
@@ -254,9 +278,28 @@ pub async fn admin_hide(
     auth: AuthSession,
     Path(comment_id): Path<i32>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let _user = auth.user.unwrap();
+    let user = auth.user.unwrap();
+    let result = async {
+        let txn = state.sea_db.begin().await?;
+        let updated = post_comment::Entity::admin_hide(&txn, comment_id).await?;
+        if updated.is_some() {
+            audit::record(
+                &txn,
+                AuditEvent {
+                    actor_id: Some(user.id),
+                    action: AuditAction::CommentHide,
+                    resource_id: comment_id.to_string(),
+                    metadata: json!({}),
+                },
+            )
+            .await?;
+        }
+        txn.commit().await?;
+        Ok::<_, ErrorResponse>(updated)
+    }
+    .await;
 
-    match post_comment::Entity::admin_hide(&state.sea_db, comment_id).await {
+    match result {
         Ok(Some(_)) => {
             info!(comment_id, "Admin hid comment");
             Ok((
@@ -282,9 +325,28 @@ pub async fn admin_unhide(
     auth: AuthSession,
     Path(comment_id): Path<i32>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let _user = auth.user.unwrap();
+    let user = auth.user.unwrap();
+    let result = async {
+        let txn = state.sea_db.begin().await?;
+        let updated = post_comment::Entity::admin_unhide(&txn, comment_id).await?;
+        if updated.is_some() {
+            audit::record(
+                &txn,
+                AuditEvent {
+                    actor_id: Some(user.id),
+                    action: AuditAction::CommentUnhide,
+                    resource_id: comment_id.to_string(),
+                    metadata: json!({}),
+                },
+            )
+            .await?;
+        }
+        txn.commit().await?;
+        Ok::<_, ErrorResponse>(updated)
+    }
+    .await;
 
-    match post_comment::Entity::admin_unhide(&state.sea_db, comment_id).await {
+    match result {
         Ok(Some(_)) => {
             info!(comment_id, "Admin unhid comment");
             Ok((
@@ -310,9 +372,28 @@ pub async fn admin_delete(
     auth: AuthSession,
     Path(comment_id): Path<i32>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let _user = auth.user.unwrap();
+    let user = auth.user.unwrap();
+    let result = async {
+        let txn = state.sea_db.begin().await?;
+        let affected = post_comment::Entity::admin_delete(&txn, comment_id).await?;
+        if affected > 0 {
+            audit::record(
+                &txn,
+                AuditEvent {
+                    actor_id: Some(user.id),
+                    action: AuditAction::CommentDelete,
+                    resource_id: comment_id.to_string(),
+                    metadata: json!({ "by": "admin" }),
+                },
+            )
+            .await?;
+        }
+        txn.commit().await?;
+        Ok::<u64, ErrorResponse>(affected)
+    }
+    .await;
 
-    match post_comment::Entity::admin_delete(&state.sea_db, comment_id).await {
+    match result {
         Ok(affected) if affected > 0 => {
             info!(comment_id, "Admin deleted comment");
             Ok((
@@ -338,9 +419,28 @@ pub async fn admin_flags_clear(
     auth: AuthSession,
     Path(comment_id): Path<i32>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
-    let _user = auth.user.unwrap();
+    let user = auth.user.unwrap();
+    let result = async {
+        let txn = state.sea_db.begin().await?;
+        let updated = post_comment::Entity::admin_flags_clear(&txn, comment_id).await?;
+        if updated.is_some() {
+            audit::record(
+                &txn,
+                AuditEvent {
+                    actor_id: Some(user.id),
+                    action: AuditAction::CommentFlagsClear,
+                    resource_id: comment_id.to_string(),
+                    metadata: json!({}),
+                },
+            )
+            .await?;
+        }
+        txn.commit().await?;
+        Ok::<_, ErrorResponse>(updated)
+    }
+    .await;
 
-    match post_comment::Entity::admin_flags_clear(&state.sea_db, comment_id).await {
+    match result {
         Ok(Some(_)) | Ok(None) => {
             info!(comment_id, "Admin cleared comment flags");
             Ok((

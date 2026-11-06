@@ -9,12 +9,12 @@ use sea_orm::{ActiveModelTrait, ConnectionTrait, EntityTrait, Set, TransactionTr
 use serde_json::json;
 use tracing::{info, instrument, warn};
 
-use crate::db::sea_models::audit_log;
 use crate::db::sea_models::enforcement_notice::{self, NewNotice};
 use crate::db::sea_models::user::{self, new_session_auth_secret};
 use crate::db::sea_models::user_ban::{self, NewUserBan, UserBanQuery};
 use crate::error::{ErrorCode, ErrorResponse};
 use crate::modules::admin_bans_v1;
+use crate::services::audit::{self, AuditAction, AuditEvent};
 use crate::services::auth::AuthSession;
 use crate::AppState;
 
@@ -73,28 +73,6 @@ async fn rotate_session_secret<C: ConnectionTrait>(
         ..Default::default()
     }
     .update(conn)
-    .await?;
-    Ok(())
-}
-
-/// Audit row for an enforcement action. A23 moves this into services/audit.rs.
-async fn write_audit<C: ConnectionTrait>(
-    conn: &C,
-    actor_id: i32,
-    action: &str,
-    ban_id: i32,
-    metadata: serde_json::Value,
-) -> Result<(), ErrorResponse> {
-    audit_log::model::ActiveModel {
-        user_id: Set(Some(actor_id)),
-        action: Set(action.to_string()),
-        resource_type: Set("user_ban".to_string()),
-        resource_id: Set(ban_id.to_string()),
-        metadata: Set(Some(metadata)),
-        created_at: Set(chrono::Utc::now().fixed_offset()),
-        ..Default::default()
-    }
-    .insert(conn)
     .await?;
     Ok(())
 }
@@ -172,17 +150,19 @@ pub async fn create_ban(
         },
     )
     .await?;
-    write_audit(
+    audit::record(
         &txn,
-        admin.id,
-        "ban.create",
-        ban.id,
-        json!({
-            "userId": target.id,
-            "reasonCode": reason_code,
-            "corroborator": corroborator,
-            "expiresAt": payload.expires_at.to_rfc3339(),
-        }),
+        AuditEvent {
+            actor_id: Some(admin.id),
+            action: AuditAction::BanCreate,
+            resource_id: ban.id.to_string(),
+            metadata: json!({
+                "userId": target.id,
+                "reasonCode": reason_code,
+                "corroborator": corroborator,
+                "expiresAt": payload.expires_at.to_rfc3339(),
+            }),
+        },
     )
     .await?;
     txn.commit().await?;
@@ -229,12 +209,14 @@ pub async fn revoke_ban(
             .with_message("ban is already revoked"));
     }
     user_ban::Entity::revoke(&txn, ban_id, Some(admin.id)).await?;
-    write_audit(
+    audit::record(
         &txn,
-        admin.id,
-        "ban.revoke",
-        ban_id,
-        json!({ "userId": ban.user_id }),
+        AuditEvent {
+            actor_id: Some(admin.id),
+            action: AuditAction::BanRevoke,
+            resource_id: ban_id.to_string(),
+            metadata: json!({ "userId": ban.user_id }),
+        },
     )
     .await?;
     txn.commit().await?;
@@ -281,18 +263,20 @@ pub async fn renew_ban(
     check_expiry(payload.expires_at, now)?;
     let user_id = ban.user_id;
     user_ban::Entity::set_expiry(&txn, ban, payload.expires_at).await?;
-    write_audit(
+    audit::record(
         &txn,
-        admin.id,
-        "ban.renew",
-        ban_id,
-        json!({
-            "userId": user_id,
-            "previousExpiresAt": previous.map(|p| p.to_rfc3339()),
-            "expiresAt": payload.expires_at.to_rfc3339(),
-            "singleOperatorControl": true,
-            "selfReviewNote": payload.self_review_note.trim(),
-        }),
+        AuditEvent {
+            actor_id: Some(admin.id),
+            action: AuditAction::BanRenew,
+            resource_id: ban_id.to_string(),
+            metadata: json!({
+                "userId": user_id,
+                "previousExpiresAt": previous.map(|p| p.to_rfc3339()),
+                "expiresAt": payload.expires_at.to_rfc3339(),
+                "singleOperatorControl": true,
+                "selfReviewNote": payload.self_review_note.trim(),
+            }),
+        },
     )
     .await?;
     txn.commit().await?;

@@ -2,6 +2,7 @@ pub mod abuse_limiter;
 pub mod abuse_report;
 pub mod account_methods;
 pub mod acl_service;
+pub mod audit;
 pub mod auth;
 pub mod billing;
 pub mod fresh_auth;

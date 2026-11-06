@@ -23,6 +23,7 @@ use crate::{
     services::{
         abuse_limiter,
         account_methods::{can_unlink, total_sign_in_methods},
+        audit::{self, AuditAction, AuditEvent},
         auth::AuthSession,
     },
     AppState,
@@ -426,30 +427,35 @@ pub async fn admin_delete(
                 .with_message("You cannot delete a user at or above your own role"));
         }
     }
-    match User::admin_delete(&state.sea_db, user_id).await {
-        Ok(1) => {
-            info!(user_id, "Admin deleted user");
-            Ok((
-                StatusCode::OK,
-                Json(json!({ "message": "User deleted successfully" })),
-            ))
-        }
-        Ok(0) => {
-            warn!(user_id, "Admin tried to delete non-existent user");
-            Err(ErrorResponse::new(ErrorCode::RecordNotFound).with_message("User does not exist"))
-        }
-        Ok(_) => {
-            info!(user_id, "Admin deleted user");
-            Ok((
-                StatusCode::OK,
-                Json(json!({ "message": "User deleted successfully" })),
-            ))
-        }
+    // User::admin_delete opens its own transaction, so the audit row follows it.
+    let deleted = match User::admin_delete(&state.sea_db, user_id).await {
+        Ok(affected) => affected,
         Err(err) => {
             error!(user_id, "Failed to delete user: {}", err);
-            Err(err)
+            return Err(err);
         }
+    };
+    if deleted == 0 {
+        warn!(user_id, "Admin tried to delete non-existent user");
+        return Err(
+            ErrorResponse::new(ErrorCode::RecordNotFound).with_message("User does not exist")
+        );
     }
+    audit::record(
+        &state.sea_db,
+        AuditEvent {
+            actor_id: Some(caller.id),
+            action: AuditAction::UserDelete,
+            resource_id: user_id.to_string(),
+            metadata: json!({}),
+        },
+    )
+    .await?;
+    info!(user_id, "Admin deleted user");
+    Ok((
+        StatusCode::OK,
+        Json(json!({ "message": "User deleted successfully" })),
+    ))
 }
 
 #[debug_handler]

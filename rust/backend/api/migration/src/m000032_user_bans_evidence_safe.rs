@@ -141,8 +141,13 @@ mod tests {
     async fn rebuild_on_populated_table_keeps_rows_and_drops_user_fk() {
         let db = connect().await;
         // Everything up to m000031, then the old CASCADE shape with data.
-        let all = Migrator::migrations().len() as u32;
-        Migrator::up(&db, Some(all - 1)).await.unwrap();
+        // Counted by name: later migrations are appended after this one.
+        let upto = Migrator::migrations()
+            .iter()
+            .position(|m| m.name() == "m000031_reminder_schedules")
+            .unwrap() as u32
+            + 1;
+        Migrator::up(&db, Some(upto)).await.unwrap();
         assert_eq!(
             count(
                 &db,

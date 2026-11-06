@@ -1,5 +1,6 @@
 use crate::db::sea_models::route_status::Entity as RouteStatus;
 use crate::error::ErrorResponse;
+use crate::services::audit::{self, AuditAction, AuditEvent};
 use crate::state::AppState;
 use axum::extract::State;
 use sea_orm::{DatabaseConnection, EntityTrait};
@@ -127,6 +128,7 @@ impl RouteBlockerService {
 
     pub async fn block_route(
         State(state): State<AppState>,
+        actor_id: i32,
         pattern: String,
         reason: Option<String>,
     ) -> Result<serde_json::Value, ErrorResponse> {
@@ -136,6 +138,16 @@ impl RouteBlockerService {
                 ErrorResponse::new(crate::error::ErrorCode::InternalServerError)
                     .with_message(e.to_string())
             })?;
+        audit::record(
+            &state.sea_db,
+            AuditEvent {
+                actor_id: Some(actor_id),
+                action: AuditAction::RouteBlock,
+                resource_id: pattern.clone(),
+                metadata: json!({}),
+            },
+        )
+        .await?;
 
         Self::sync_all_routes_to_cache(State(state.clone())).await?;
         Self::refresh_snapshot_best_effort(&state).await;
@@ -146,6 +158,7 @@ impl RouteBlockerService {
 
     pub async fn unblock_route(
         State(state): State<AppState>,
+        actor_id: i32,
         pattern: String,
     ) -> Result<serde_json::Value, ErrorResponse> {
         let route = RouteStatus::create_or_update(&state.sea_db, pattern.clone(), false, None)
@@ -154,6 +167,16 @@ impl RouteBlockerService {
                 ErrorResponse::new(crate::error::ErrorCode::InternalServerError)
                     .with_message(e.to_string())
             })?;
+        audit::record(
+            &state.sea_db,
+            AuditEvent {
+                actor_id: Some(actor_id),
+                action: AuditAction::RouteUnblock,
+                resource_id: pattern.clone(),
+                metadata: json!({}),
+            },
+        )
+        .await?;
 
         Self::sync_all_routes_to_cache(State(state.clone())).await?;
         Self::refresh_snapshot_best_effort(&state).await;
@@ -164,6 +187,7 @@ impl RouteBlockerService {
 
     pub async fn delete_route(
         State(state): State<AppState>,
+        actor_id: i32,
         pattern: String,
     ) -> Result<serde_json::Value, ErrorResponse> {
         RouteStatus::delete_by_pattern(&state.sea_db, &pattern)
@@ -172,6 +196,16 @@ impl RouteBlockerService {
                 ErrorResponse::new(crate::error::ErrorCode::InternalServerError)
                     .with_message(e.to_string())
             })?;
+        audit::record(
+            &state.sea_db,
+            AuditEvent {
+                actor_id: Some(actor_id),
+                action: AuditAction::RouteDelete,
+                resource_id: pattern.clone(),
+                metadata: json!({}),
+            },
+        )
+        .await?;
 
         Self::sync_all_routes_to_cache(State(state.clone())).await?;
         Self::refresh_snapshot_best_effort(&state).await;

@@ -1286,7 +1286,7 @@ pub async fn seed_route_status(
 #[debug_handler(state = AppState)]
 pub async fn seed(
     State(state): State<AppState>,
-    _auth: AuthSession,
+    auth: AuthSession,
     payload: Option<Json<super::validator::V1SeedPayload>>,
 ) -> impl IntoResponse {
     let seed_mode = if let Some(Json(p)) = payload {
@@ -1308,6 +1308,27 @@ pub async fn seed(
 
     match crate::services::seed::seed_all_with_progress(&state.sea_db, None, seed_mode).await {
         Ok(outcome) => {
+            let run_ref = outcome
+                .seed_run_id
+                .map(|id| id.to_string())
+                .unwrap_or_else(|| "unrecorded".to_string());
+            if let Err(err) = crate::services::audit::record(
+                &state.sea_db,
+                crate::services::audit::AuditEvent {
+                    actor_id: auth.user.as_ref().map(|u| u.id),
+                    action: crate::services::audit::AuditAction::SeedRun,
+                    resource_id: run_ref,
+                    metadata: serde_json::json!({ "errors": outcome.errors.len() }),
+                },
+            )
+            .await
+            {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "message": format!("Seed ran but audit write failed: {err}") })),
+                )
+                    .into_response();
+            }
             let counts = outcome.counts();
             (
                 StatusCode::OK,

@@ -18,17 +18,19 @@ use super::validator::{
 };
 
 #[debug_handler]
-#[instrument(skip(state, _auth, payload), fields(pattern))]
+#[instrument(skip(state, auth, payload), fields(pattern))]
 pub async fn block_route(
     State(state): State<AppState>,
-    _auth: AuthSession,
+    auth: AuthSession,
     payload: ValidatedJson<V1BlockRoutePayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let pattern = &payload.pattern;
     tracing::Span::current().record("pattern", pattern.as_str());
+    let actor_id = auth.user_required()?.id;
 
     let result = RouteBlockerService::block_route(
         State(state),
+        actor_id,
         payload.pattern.clone(),
         payload.reason.clone(),
     )
@@ -47,16 +49,17 @@ pub async fn block_route(
 }
 
 #[debug_handler]
-#[instrument(skip(state, _auth, payload), fields(pattern))]
+#[instrument(skip(state, auth, payload), fields(pattern))]
 pub async fn unblock_route(
     State(state): State<AppState>,
-    _auth: AuthSession,
+    auth: AuthSession,
     payload: ValidatedJson<V1UnblockRoutePayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let pattern = &payload.pattern;
     tracing::Span::current().record("pattern", pattern.as_str());
+    let actor_id = auth.user_required()?.id;
 
-    let result = RouteBlockerService::unblock_route(State(state), pattern.clone()).await;
+    let result = RouteBlockerService::unblock_route(State(state), actor_id, pattern.clone()).await;
 
     match result {
         Ok(route) => {
@@ -71,20 +74,26 @@ pub async fn unblock_route(
 }
 
 #[debug_handler]
-#[instrument(skip(state, _auth, payload), fields(pattern, is_blocked = payload.is_blocked))]
+#[instrument(skip(state, auth, payload), fields(pattern, is_blocked = payload.is_blocked))]
 pub async fn update_route_status(
     State(state): State<AppState>,
-    _auth: AuthSession,
+    auth: AuthSession,
     payload: ValidatedJson<V1UpdateRoutePayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let pattern = &payload.pattern;
     tracing::Span::current().record("pattern", pattern.as_str());
+    let actor_id = auth.user_required()?.id;
 
     let result = if payload.is_blocked {
-        RouteBlockerService::block_route(State(state), pattern.clone(), payload.reason.clone())
-            .await
+        RouteBlockerService::block_route(
+            State(state),
+            actor_id,
+            pattern.clone(),
+            payload.reason.clone(),
+        )
+        .await
     } else {
-        RouteBlockerService::unblock_route(State(state), pattern.clone()).await
+        RouteBlockerService::unblock_route(State(state), actor_id, pattern.clone()).await
     };
 
     match result {
@@ -109,16 +118,17 @@ pub async fn update_route_status(
 }
 
 #[debug_handler]
-#[instrument(skip(state, _auth, payload), fields(pattern))]
+#[instrument(skip(state, auth, payload), fields(pattern))]
 pub async fn delete_route(
     State(state): State<AppState>,
-    _auth: AuthSession,
+    auth: AuthSession,
     payload: ValidatedJson<V1DeleteRoutePayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let pattern = &payload.pattern;
     tracing::Span::current().record("pattern", pattern.as_str());
+    let actor_id = auth.user_required()?.id;
 
-    let result = RouteBlockerService::delete_route(State(state), pattern.clone()).await;
+    let result = RouteBlockerService::delete_route(State(state), actor_id, pattern.clone()).await;
 
     match result {
         Ok(response) => {
