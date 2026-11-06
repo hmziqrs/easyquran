@@ -226,6 +226,7 @@ pub async fn sync(
     Ok((
         StatusCode::OK,
         Json(json!({
+            "serverTime": Utc::now().timestamp_millis(),
             "applied": applied,
             "skipped": skipped,
             "sessions": sessions,

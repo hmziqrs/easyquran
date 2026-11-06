@@ -22,8 +22,8 @@ import {
 interface Vector {
   readonly name: string;
   readonly op: string;
-  readonly a: JsonObject;
-  readonly b: JsonObject;
+  readonly a: JsonObject & readonly JsonObject[];
+  readonly b: JsonObject & readonly JsonObject[];
   readonly rows: readonly JsonObject[];
   readonly folders: readonly JsonObject[];
   readonly defaultFolderId: string;
@@ -32,32 +32,27 @@ interface Vector {
   readonly expected: never;
 }
 
-// SAFETY: test fixture — the shared vector file, each op reads only its own fields.
-const vectors = rawVectors.vectors as unknown as readonly Vector[];
+// The shared vector file; each op reads only its own fields.
+const vectors: readonly Vector[] = JSON.parse(JSON.stringify(rawVectors.vectors));
 
-const ROW_MERGES: Record<string, (a: JsonObject, b: JsonObject) => JsonObject> = {
-  thread: mergeThread,
-  progress: mergeProgress,
-  bookmark: mergeBookmark,
-  folder: mergeFolder,
-  settings: mergeSettings,
-  layout: mergeLayout,
-  event: mergeEvent,
-};
-
-function asRows(value: JsonObject): readonly JsonObject[] {
-  // SAFETY: test fixture — set vectors hold arrays under `a` and `b`.
-  return value as unknown as readonly JsonObject[];
-}
+const ROW_MERGES = new Map([
+  ["thread", mergeThread],
+  ["progress", mergeProgress],
+  ["bookmark", mergeBookmark],
+  ["folder", mergeFolder],
+  ["settings", mergeSettings],
+  ["layout", mergeLayout],
+  ["event", mergeEvent],
+]);
 
 describe("shared vectors", () => {
   it.each(vectors.map((v) => [v.name, v] as const))("%s", (_name, v) => {
-    const merge = ROW_MERGES[v.op];
+    const merge = ROW_MERGES.get(v.op);
     if (merge !== undefined) {
       expect(canonicalJson(merge(v.a, v.b))).toBe(canonicalJson(v.expected));
     } else if (v.op === "threadSet" || v.op === "folderSet") {
       const domain = v.op === "threadSet" ? "thread" : "folder";
-      expect(canonicalJson(mergeRows(domain, asRows(v.a), asRows(v.b)))).toBe(
+      expect(canonicalJson(mergeRows(domain, v.a, v.b))).toBe(
         canonicalJson(v.expected),
       );
     } else if (v.op === "converge") {
@@ -98,23 +93,19 @@ class Rng {
 }
 
 function genThread(r: Rng): JsonObject {
-  const row: Record<string, JsonObject | string> = { id: "t" };
-  for (const key of ["identity", "cursor", "lifecycle", "future"]) {
-    if (r.next(3) > 0) row[key] = r.register(3);
-  }
-  return row;
+  const keys = ["identity", "cursor", "lifecycle", "future"].filter(() => r.next(3) > 0);
+  return { id: "t", ...Object.fromEntries(keys.map((key) => [key, r.register(3)])) };
 }
 
 function genFolder(r: Rng): JsonObject {
-  const row: Record<string, JsonObject | string | boolean> = {
+  const isDefault = r.next(4) === 0;
+  const keys = ["name", "position"].filter(() => r.next(3) > 0);
+  const row: JsonObject = {
     id: "f",
-    isDefault: r.next(4) === 0,
+    isDefault,
+    ...Object.fromEntries(keys.map((key) => [key, r.register(3)])),
   };
-  for (const key of ["name", "position"]) {
-    if (r.next(3) > 0) row[key] = r.register(3);
-  }
-  if (r.next(2) === 0) row.deleted = { stamp: r.stamp(), value: r.next(2) === 0 };
-  return row;
+  return r.next(2) === 0 ? { ...row, deleted: { stamp: r.stamp(), value: r.next(2) === 0 } } : row;
 }
 
 function genBookmark(r: Rng): JsonObject {
@@ -132,11 +123,8 @@ function genProgress(r: Rng): JsonObject {
 }
 
 function genSettings(r: Rng): JsonObject {
-  const row: Record<string, JsonObject> = {};
-  for (const key of ["theme", "font"]) {
-    if (r.next(2) === 0) row[key] = r.register(3);
-  }
-  return row;
+  const keys = ["theme", "font"].filter(() => r.next(2) === 0);
+  return Object.fromEntries(keys.map((key) => [key, r.register(3)]));
 }
 
 describe("merge laws", () => {

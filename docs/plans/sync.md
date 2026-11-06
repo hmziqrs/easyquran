@@ -8,22 +8,6 @@ The multi-device conflict protocol for web, React Native and GPUI.
 
 Today, conflicts are decided by device wall clocks on whole rows, and clients infer deletes from a row being absent. These items replace that for three clients. Pre-launch, so replace in place with no shims.
 
-#### S2. Clock and local device id
-
-Build:
-
-1. Mint the per-account device id locally at first sign-in (storage table in D3). No server row is needed yet. Signed-out edits carry no stamp; they get stamps when they fold in at sign-in, using their `updatedAt` as `ms`.
-2. Every sync response returns `server_time`. The client saves `offset = server_time - local time`.
-3. `stamp()` must be synchronous because reader writes are, so on web the id and `last` live in `localStorage`; only the key (D3) lives in IndexedDB. `ms = max(local time + offset, last stamp ms)`; same ms bumps the counter. Merging any received stamp advances `last`, so an edit made after seeing a row always beats that row, whatever the device clock says. Counter overflow bumps `ms`. Persist `last` per account before using it. Tabs share it and read it before each stamp. After any sync, if `last` is more than 60 s ahead of `server_time`, reset it to `server_time + 60 s`, so a clock once set a year ahead cannot poison later stamps.
-4. Offline with a wrong clock and no offset yet: writes still work and still reconcile. They may lose to newer writes; they cannot dominate after the first sync.
-5. `correctedNow()` (local time + offset) replaces `Date.now()` for staleness, labels and `localDay`. The user's time zone still decides the local day.
-
-Files: new `web/src/lib/sync/clock.ts`, new `web/src/lib/device/identity.ts`, `rust/backend/api/src/modules/reading_session_v1/controller.rs`, `rust/backend/api/src/modules/bookmark_v1/controller.rs`.
-
-Done when: unit tests against the merge core cover a device 1 h slow editing after a pull (its edit wins), a device 1 h fast after its first offset, clock moved backwards mid-session, and two tabs stamping at once.
-
-Blocked by: S1
-
 #### S3. Reading sessions on the protocol
 
 Build: new migration adds `identity_stamp`, `cursor_stamp`, `lifecycle_stamp` to `reading_sessions`, with NULL ranking lowest. Replace `upsert_lww` and `delete_lww` with S1 merge: read, merge, write inside the sync transaction. A stamp more than 60 s ahead of `server_time` is rewritten to `server_time + 60 s`, keeping its device id; the client adopts it from the returned row. `updated_at` stays for display only. Local thread schema matches, and the client merges with S1. `reopen`, `dismiss`, `remove`, `startOver` and F4 undo write the lifecycle register; `cursor`, `anchor`, `noteRead` write the cursor register. Lists, staleness and the `/archive` keyset all use `cursor_stamp`, with an index, never `updated_at` or a raw device clock. `#openInScope` and Continue pick the newest per scope. `/archive` stays. `surah:ayah` is the position on every client; `local_page` and `ratio` are hints valid only when the writing device has the same `client` and `form_factor`, and otherwise ignored. An unknown `source_id` or `snippet:` scope falls back to display defaults and is preserved in the row.

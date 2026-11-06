@@ -5,6 +5,8 @@
  * register this build does not know about survives a merge untouched.
  */
 
+import { asNumber, asObject, asString } from "#lib/storage/decoders.js";
+
 export type Json = null | boolean | number | string | readonly Json[] | JsonObject;
 export interface JsonObject {
   readonly [key: string]: Json;
@@ -56,12 +58,11 @@ function compareUtf16(a: string, b: string): number {
 /** RFC 8785 canonical JSON, used only to break ties between identical stamps. */
 export function canonicalJson(value: Json | undefined): string {
   if (value === null || value === undefined) return "null";
-  if (typeof value === "number" || typeof value === "boolean" || typeof value === "string") {
-    return JSON.stringify(value);
-  }
   if (isJsonArray(value)) return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
-  const keys = Object.keys(value).sort((a, b) => compareUtf16(a, b));
-  const fields = keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`);
+  const record = asRecord(value);
+  if (record === null) return JSON.stringify(value);
+  const keys = Object.keys(record).sort((a, b) => compareUtf16(a, b));
+  const fields = keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`);
   return `{${fields.join(",")}}`;
 }
 
@@ -83,15 +84,11 @@ function compareBytes(a: string, b: string): number {
 }
 
 function asRecord(value: Json | undefined): JsonObject | null {
-  if (value === null || value === undefined || typeof value !== "object" || isJsonArray(value)) {
-    return null;
-  }
-  return value;
+  return asObject(value) ?? null;
 }
 
 function stampOf(register: Json | undefined): string | null {
-  const stamp = asRecord(register)?.stamp;
-  return typeof stamp === "string" ? stamp : null;
+  return asString(asRecord(register)?.stamp) ?? null;
 }
 
 function tieBreak<T extends Json>(a: T, b: T): T {
@@ -132,10 +129,14 @@ export function mergeThread(a: JsonObject, b: JsonObject): JsonObject {
   return mergeFields(a, b, (key) => (key === "identity" ? "lowest" : "highest"));
 }
 
+function ayahOf(row: JsonObject): number {
+  return asNumber(row.furthestAyah, 0, Number.MAX_SAFE_INTEGER) ?? 0;
+}
+
 /** MAX of `furthestAyah`: progress never regresses. */
 export function mergeProgress(a: JsonObject, b: JsonObject): JsonObject {
-  const left = typeof a.furthestAyah === "number" ? a.furthestAyah : 0;
-  const right = typeof b.furthestAyah === "number" ? b.furthestAyah : 0;
+  const left = ayahOf(a);
+  const right = ayahOf(b);
   if (left !== right) return left > right ? a : b;
   return tieBreak(a, b);
 }
@@ -176,18 +177,18 @@ export function mergeEvent(a: JsonObject, b: JsonObject): JsonObject {
   return tieBreak(a, b);
 }
 
-const DOMAIN_MERGE: Record<MergeDomain, (a: JsonObject, b: JsonObject) => JsonObject> = {
+const DOMAIN_MERGE = {
   thread: mergeThread,
   progress: mergeProgress,
   bookmark: mergeBookmark,
   folder: mergeFolder,
   event: mergeEvent,
-};
+} satisfies Record<MergeDomain, (a: JsonObject, b: JsonObject) => JsonObject>;
 
 function rowId(domain: MergeDomain, row: JsonObject): string {
-  const value = domain === "progress" ? row.surah : row.id;
-  if (typeof value === "string") return value;
-  return value === undefined || value === null ? "" : String(value).padStart(8, "0");
+  if (domain !== "progress") return asString(row.id) ?? "";
+  const surah = asNumber(row.surah, 0, Number.MAX_SAFE_INTEGER);
+  return surah === undefined ? "" : String(surah).padStart(8, "0");
 }
 
 /**
@@ -264,7 +265,7 @@ export function convergeBookmarks(
   out.forEach((row, index) => {
     if (!isLive(row)) return;
     const value = bookmarkValue(row);
-    const slot = `${String(value?.folderId ?? "")}|${String(value?.key ?? "")}`;
+    const slot = `${asString(value?.folderId) ?? ""}|${asString(value?.key) ?? ""}`;
     const current = winners.get(slot);
     const holder = current === undefined ? undefined : out[current];
     if (current === undefined || holder === undefined) {

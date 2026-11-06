@@ -219,6 +219,7 @@ pub async fn sync(
     Ok((
         StatusCode::OK,
         Json(json!({
+            "serverTime": chrono::Utc::now().timestamp_millis(),
             "applied": applied,
             "skipped": skipped,
             "folders": folders,

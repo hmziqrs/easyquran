@@ -54,7 +54,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 
 | Item                                                         | Title                                 | Blocked by |
 | ------------------------------------------------------------ | ------------------------------------- | ---------- |
-| [S2](plans/sync.md#s2-clock-and-local-device-id)             | Clock and local device id             | S1         |
 | [S3](plans/sync.md#s3-reading-sessions-on-the-protocol)      | Reading sessions on the protocol      | S2         |
 | [S4](plans/sync.md#s4-bookmarks-and-folders-on-the-protocol) | Bookmarks and folders on the protocol | S2         |
 | [S5](plans/sync.md#s5-per-row-sync-results)                  | Per-row sync results                  | S3, S4     |

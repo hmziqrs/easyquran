@@ -35,8 +35,25 @@ A register is `{ "stamp": string | null, "value": any }`. Each row carries one p
 
 Rival-key and folder-delete rules run on the set of rows after merging (`convergeBookmarks`). They keep the row's stamp. At equal stamps `deleted: true` has the higher canonical bytes, so a tombstone made on one replica beats the live copy everywhere.
 
+## Clock
+
+Each account on each install keeps a hybrid logical clock.
+
+- Every sync response returns `serverTime` in epoch ms. The client saves `offset = serverTime - local time`.
+- `ms = max(local time + offset, last stamp ms)`. The same ms bumps the counter. Counter overflow bumps `ms`.
+- Merging any received stamp advances `last`, so an edit made after seeing a row always beats that row.
+- Persist `last` per account before using a stamp. Tabs share it and read it before each stamp.
+- After any sync, if `last` is more than 60 s ahead of `serverTime`, reset it to `serverTime + 60 s`.
+- Signed-out edits carry no stamp. They get one when they fold in at sign-in, using their `updatedAt` as `ms`.
+- `now()` (local time + offset) replaces the raw device clock for staleness, labels and `localDay`. The user's time zone still decides the local day.
+
+The device id is minted locally per account at first sign-in. No server row is needed.
+
 ## Edge cases
 
 | Case | Required behaviour |
 | --- | --- |
 | Identical stamps from racing tabs or a clone | RFC 8785 byte tie-break, same result everywhere |
+| Clock changed backwards mid-session | Stamps keep rising |
+| Same-millisecond writes, counter overflow | Counter orders them; overflow bumps ms |
+| Sleep, wake, or suspended device | Offset refreshes on next sync |

@@ -285,3 +285,12 @@ async fn thread_ids_must_be_uuid_v7() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(ids(&body["sessions"]), vec![odd_clock.to_string()]);
 }
+
+#[tokio::test]
+async fn sync_response_carries_server_time() {
+    let h = setup().await;
+    let before = Utc::now().timestamp_millis();
+    let (_, body) = sync(&h, &h.cookie_a, h.uid_a, vec![]).await;
+    let server = body["serverTime"].as_i64().expect("serverTime");
+    assert!(server >= before && server <= Utc::now().timestamp_millis());
+}
