@@ -137,11 +137,9 @@ impl IntoResponse for QuranApiError {
         if let Some(class) = class {
             resp.extensions_mut().insert(class);
         }
-        // 5xx gets no-store so a CDN can't pin a transient failure.
-        if self.status.is_server_error() {
-            resp.headers_mut()
-                .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-        }
+        // Every error is no-store so a CDN can't pin a transient failure or a per-request 4xx.
+        resp.headers_mut()
+            .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
         resp
     }
 }

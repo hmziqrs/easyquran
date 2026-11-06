@@ -4,7 +4,7 @@ pub mod cors;
 pub mod dto;
 pub mod error;
 
-use axum::{routing::get, Router};
+use axum::{middleware, routing::get, Router};
 
 use crate::AppState;
 
@@ -50,7 +50,7 @@ pub fn routes() -> Router<AppState> {
         .route("/health/ready", get(controller::health_ready));
     #[cfg(feature = "openapi")]
     let r = r.route("/openapi.json", get(controller::openapi_json));
-    r
+    r.layer(middleware::from_fn(controller::canonical_query))
 }
 
 /// Kept separate so search gets a tighter rate limit than `routes()`; inlining lets the CPU-heavy substring scan inherit the coarse limit.

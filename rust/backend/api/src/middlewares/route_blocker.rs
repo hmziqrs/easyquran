@@ -272,6 +272,7 @@ mod tests {
             quran_scripts: Arc::new(tokio::sync::Mutex::new(None)),
             translation_pool: Arc::new(dummy_pool().await),
             quran_sources: Arc::new(tokio::sync::Mutex::new(None)),
+            verified_artifacts: Default::default(),
         }
     }
 

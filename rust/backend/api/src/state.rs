@@ -57,6 +57,9 @@ pub struct AppState {
     pub quran_scripts:
         std::sync::Arc<tokio::sync::Mutex<Option<Vec<crate::modules::quran_v1::dto::Artifact>>>>,
     pub translation_pool: std::sync::Arc<crate::quran::TranslationPool>,
+    /// Artifact (url, size) pairs a HEAD has confirmed. Immutable bytes: never asked again.
+    pub verified_artifacts:
+        std::sync::Arc<std::sync::Mutex<std::collections::HashSet<(String, u64)>>>,
     pub quran_sources:
         std::sync::Arc<tokio::sync::Mutex<Option<Vec<crate::modules::quran_v1::dto::SourceDto>>>>,
 }

@@ -703,6 +703,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         quran_scripts: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
         translation_pool,
         quran_sources: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+        verified_artifacts: Default::default(),
     };
 
     {

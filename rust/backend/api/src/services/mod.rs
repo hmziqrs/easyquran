@@ -17,6 +17,7 @@ pub mod password_work;
 pub mod paywall;
 pub mod pending_login;
 pub mod rate_limit_store;
+pub mod readiness;
 pub mod registration_admission;
 pub mod reminders;
 pub mod route_blocker_config;

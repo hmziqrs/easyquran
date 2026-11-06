@@ -164,6 +164,7 @@ async fn state_with_public_url(public_url: &str) -> AppState {
         quran_scripts: Arc::new(tokio::sync::Mutex::new(None)),
         translation_pool,
         quran_sources: Arc::new(tokio::sync::Mutex::new(None)),
+        verified_artifacts: Default::default(),
     }
 }
 

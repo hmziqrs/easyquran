@@ -164,6 +164,7 @@ async fn state_with_public_url(public_url: &str) -> AppState {
         quran_scripts: Arc::new(tokio::sync::Mutex::new(None)),
         translation_pool,
         quran_sources: Arc::new(tokio::sync::Mutex::new(None)),
+        verified_artifacts: Default::default(),
     }
 }
 
@@ -372,12 +373,12 @@ async fn single_ayah_redirect_alias_and_400() {
 
 #[tokio::test]
 async fn ayahs_keys_and_global_range() {
-    let (st, body, _) = get("/quran/ayahs?keys=2:255,1:1").await;
+    let (st, body, _) = get("/quran/ayahs?keys=1:1,2:255").await;
     assert_eq!(st, StatusCode::OK);
     let ayahs = data(&body)["ayahs"].as_array().unwrap();
     assert_eq!(ayahs.len(), 2);
-    assert_eq!(ayahs[0]["key"], "2:255");
-    assert_eq!(ayahs[1]["key"], "1:1");
+    assert_eq!(ayahs[0]["key"], "1:1");
+    assert_eq!(ayahs[1]["key"], "2:255");
 
     let (_, body, _) = get("/quran/ayahs?fromGlobal=1&toGlobal=7").await;
     assert_eq!(data(&body)["ayahs"].as_array().unwrap().len(), 7);
@@ -1798,4 +1799,100 @@ async fn w3a_invalid_range_bounds_are_classified() {
         Some(&QuranErrorClass::InvalidRange),
         "impossible from/to bounds must carry the typed InvalidRange class for W3a escalation"
     );
+}
+
+// A17: readiness reflects the database. A closed pool must report not ready, not a
+// hard-coded `true`, so uptime monitoring sees a dead database.
+#[tokio::test]
+async fn health_ready_reports_closed_database_as_not_ready() {
+    use tower::ServiceExt;
+    let st = state().await;
+    let _ = st.sea_db.clone().close().await;
+    let res = app_over(st)
+        .oneshot(
+            axum::http::Request::builder()
+                .uri("/quran/health/ready")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        res.headers()
+            .get(axum::http::header::CACHE_CONTROL)
+            .and_then(|v| v.to_str().ok()),
+        Some("no-store")
+    );
+    let bytes = axum::body::to_bytes(res.into_body(), 64 * 1024)
+        .await
+        .unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(body["ready"], false);
+}
+
+// A17: one URL per answer. Other spellings of the same query get a 308.
+#[tokio::test]
+async fn query_permutations_redirect_to_the_canonical_url() {
+    for (raw, want) in [
+        ("/quran/ayahs?keys=2:255,1:1", "?keys=1:1,2:255"),
+        ("/quran/ayahs?keys=2%3A255%2C1%3A1", "?keys=1:1,2:255"),
+        ("/quran/ayahs?keys=10:1,2:1", "?keys=2:1,10:1"),
+        (
+            "/quran/ayahs?toGlobal=7&fromGlobal=1",
+            "?fromGlobal=1&toGlobal=7",
+        ),
+        ("/quran/surahs/2/ayahs?to=3&from=1", "?from=1&to=3"),
+        ("/quran/sources/uthmani/range?to=7&from=1", "?from=1&to=7"),
+    ] {
+        let (st, _, headers) = req(Method::GET, raw).await;
+        assert_eq!(st, StatusCode::PERMANENT_REDIRECT, "{raw}");
+        assert_eq!(headers.get("location").unwrap(), want, "{raw}");
+    }
+    let (st, _, _) = get("/quran/surahs/2/ayahs?from=1&to=3").await;
+    assert_eq!(st, StatusCode::OK, "canonical spelling answers directly");
+    let (st, _, _) = get("/quran/ayahs?keys=nope,1:1").await;
+    assert_eq!(
+        st,
+        StatusCode::BAD_REQUEST,
+        "a malformed list is refused, not redirected"
+    );
+}
+
+// A17: a verified artifact is asked once, even when the list as a whole never verifies.
+#[tokio::test]
+async fn second_scripts_request_only_rechecks_what_failed() {
+    use wiremock::matchers::{method, path_regex};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    let state = state_with_public_url(&server.uri()).await;
+    let good = state.quran.artifacts.uthmani.size_bytes.to_string();
+    let bad = (state.quran.artifacts.simple_clean.size_bytes + 1).to_string();
+    Mock::given(method("HEAD"))
+        .and(path_regex(r".*/tanzil/arabic/quran-uthmani\.sqlite"))
+        .respond_with(ResponseTemplate::new(200).insert_header("content-length", good.as_str()))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("HEAD"))
+        .and(path_regex(r".*/tanzil/arabic/quran-simple-clean\.sqlite"))
+        .respond_with(ResponseTemplate::new(200).insert_header("content-length", bad.as_str()))
+        .expect(2)
+        .mount(&server)
+        .await;
+    let app = app_over(state);
+    for _ in 0..2 {
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/quran/scripts")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
 }

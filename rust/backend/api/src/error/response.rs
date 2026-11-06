@@ -106,6 +106,11 @@ impl IntoResponse for ErrorResponse {
         body.status = status_u16;
 
         let mut response = (status, Json(body)).into_response();
+        // Error bodies vary by request and must never be pinned by a shared cache.
+        response.headers_mut().insert(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("no-store"),
+        );
 
         if let Some(secs) = retry_after {
             if let Ok(value) = axum::http::HeaderValue::from_str(&secs.to_string()) {
@@ -133,6 +138,19 @@ pub trait IntoErrorResponse {
 mod tests {
     use super::*;
     use crate::error::codes::ErrorCode;
+
+    #[test]
+    fn error_responses_are_no_store() {
+        use axum::response::IntoResponse;
+        let resp = ErrorResponse::new(ErrorCode::RecordNotFound).into_response();
+        assert_eq!(resp.status(), axum::http::StatusCode::NOT_FOUND);
+        assert_eq!(
+            resp.headers()
+                .get(axum::http::header::CACHE_CONTROL)
+                .and_then(|v| v.to_str().ok()),
+            Some("no-store")
+        );
+    }
 
     #[test]
     fn new_has_code_and_status() {

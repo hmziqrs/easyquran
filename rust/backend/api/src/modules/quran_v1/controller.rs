@@ -856,20 +856,44 @@ async fn resolve_scripts(state: &AppState, public_url: &str, class: EnvClass) ->
         let filename = QuranStore::artifact_filename(script);
         let id = file.id.as_str().to_string();
         let url = format!("{public_url}/tanzil/arabic/{filename}");
-        match verify_head(&state.http_client, &url, file.size_bytes).await {
-            Ok(true) => out.push(Artifact {
+        let verified = artifact_verified(state, &url, file.size_bytes)
+            || matches!(
+                verify_head(&state.http_client, &url, file.size_bytes).await,
+                Ok(true)
+            );
+        if verified {
+            mark_artifact_verified(state, &url, file.size_bytes);
+            out.push(Artifact {
                 id,
                 size_bytes: file.size_bytes,
                 download_url: url,
-            }),
-            _ => tracing::warn!(
+            });
+        } else {
+            tracing::warn!(
                 script = %id,
                 url = %url,
                 "/scripts artifact HEAD check failed; omitting (§5.1)"
-            ),
+            );
         }
     }
     out
+}
+
+/// Per-artifact HEAD verdicts live on `AppState` for the process lifetime. Quran
+/// artifacts are immutable, so a verified artifact never needs another HEAD, and a partly
+/// verified list re-checks only its unverified entries per request.
+fn artifact_verified(state: &AppState, url: &str, size: u64) -> bool {
+    state
+        .verified_artifacts
+        .lock()
+        .map(|set| set.contains(&(url.to_string(), size)))
+        .unwrap_or(false)
+}
+
+fn mark_artifact_verified(state: &AppState, url: &str, size: u64) {
+    if let Ok(mut set) = state.verified_artifacts.lock() {
+        set.insert((url.to_string(), size));
+    }
 }
 
 async fn verify_head(client: &reqwest::Client, url: &str, expected_size: u64) -> Result<bool, ()> {
@@ -996,8 +1020,15 @@ async fn resolve_sources(state: &AppState, public_url: &str, class: EnvClass) ->
     // Bound concurrent HEADs so a cold /sources resolve cannot consume the shared http_client's
     // whole connection pool (also used by mail/billing/FCM). 32 keeps 117 HEADs snappy on R2.
     let sem = std::sync::Arc::new(tokio::sync::Semaphore::new(32));
+    let mut ok: Vec<bool> = candidates
+        .iter()
+        .map(|(dto, size)| artifact_verified(state, &dto.download_url, *size))
+        .collect();
     let mut set = tokio::task::JoinSet::new();
     for (idx, (dto, size)) in candidates.iter().enumerate() {
+        if ok[idx] {
+            continue;
+        }
         let client = client.clone();
         let url = dto.download_url.clone();
         let size = *size;
@@ -1007,10 +1038,13 @@ async fn resolve_sources(state: &AppState, public_url: &str, class: EnvClass) ->
             (idx, verify_head(&client, &url, size).await.unwrap_or(false))
         });
     }
-    let mut ok = vec![false; candidates.len()];
     while let Some(res) = set.join_next().await {
         let (idx, verified) = res.expect("HEAD task must not panic");
         ok[idx] = verified;
+        if verified {
+            let (dto, size) = &candidates[idx];
+            mark_artifact_verified(state, &dto.download_url, *size);
+        }
     }
     candidates
         .into_iter()
@@ -1035,10 +1069,13 @@ pub async fn openapi_json() -> axum::Json<utoipa::openapi::OpenApi> {
     )
 )]
 pub async fn health_ready(
+    State(state): State<AppState>,
     QQuery(_unused): QQuery<NoQuery>,
 ) -> Result<Response<Body>, QuranApiError> {
+    // Uptime monitoring must see a dead database, not a hard-coded `true`.
+    let db_ok = crate::services::readiness::database_ok(&state).await;
     let body = HealthReady {
-        ready: true,
+        ready: db_ok,
         verse_count: VERSE_COUNT,
         surah_count: quran::SURA_COUNT as u16,
         auth: AuthHealth {
@@ -1051,8 +1088,13 @@ pub async fn health_ready(
         },
     };
     let bytes = serde_json::to_vec(&body).expect("health serializes");
+    let status = if db_ok {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
     Ok(Response::builder()
-        .status(StatusCode::OK)
+        .status(status)
         .header(header::CONTENT_TYPE, "application/json; charset=utf-8")
         .header(header::CACHE_CONTROL, cache::NO_STORE)
         .body(Body::from(bytes))
@@ -1348,6 +1390,78 @@ pub async fn source_range(
         ),
         body,
     ))
+}
+
+/// `s:a` as numbers, for ordering a `keys` list.
+fn verse_order(key: &str) -> Option<(u32, u32)> {
+    let (surah, ayah) = key.split_once(':')?;
+    Some((surah.parse().ok()?, ayah.parse().ok()?))
+}
+
+/// The one spelling of a query that means the same thing: `from` before `to`,
+/// `fromGlobal` before `toGlobal`, `keys` in verse order. None when it already is, or
+/// when a value is malformed, which the handler then refuses as usual.
+fn canonical_query_string(query: &str) -> Option<String> {
+    let mut pairs: Vec<String> = query.split('&').map(str::to_string).collect();
+    let name_of = |pair: &str| pair.split('=').next().unwrap_or_default().to_string();
+    let mut changed = false;
+    for (first, second) in [("from", "to"), ("fromGlobal", "toGlobal")] {
+        let at = |name: &str| pairs.iter().position(|pair| name_of(pair) == name);
+        if let (Some(a), Some(b)) = (at(first), at(second)) {
+            if b < a {
+                pairs.swap(a, b);
+                changed = true;
+            }
+        }
+    }
+    if let Some(index) = pairs.iter().position(|pair| name_of(pair) == "keys") {
+        let raw = pairs[index].split_once('=').map_or("", |(_, value)| value);
+        let decoded = raw
+            .replace("%3A", ":")
+            .replace("%3a", ":")
+            .replace("%2C", ",")
+            .replace("%2c", ",");
+        let ordered: Option<Vec<((u32, u32), &str)>> = decoded
+            .split(',')
+            .map(|key| verse_order(key).map(|order| (order, key)))
+            .collect();
+        if let Some(mut keys) = ordered {
+            let sorted = keys.windows(2).all(|pair| pair[0].0 <= pair[1].0);
+            if !sorted {
+                keys.sort_by_key(|(order, _)| *order);
+                let joined: Vec<&str> = keys.iter().map(|(_, key)| *key).collect();
+                pairs[index] = format!("keys={}", joined.join(","));
+                changed = true;
+            }
+        }
+    }
+    changed.then(|| pairs.join("&"))
+}
+
+/// One URL per answer, so caches hold one copy: other spellings get a 308.
+pub async fn canonical_query(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let canonical = req.uri().query().and_then(canonical_query_string);
+    let Some(query) = canonical else {
+        return next.run(req).await;
+    };
+    // Relative, so it holds behind the prefixes the proxy and router strip.
+    let mut response = permanent_redirect(&format!("?{query}"));
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        header::HeaderValue::from_static("public, max-age=86400"),
+    );
+    response
+}
+
+fn permanent_redirect(location: &str) -> axum::response::Response {
+    axum::response::Response::builder()
+        .status(StatusCode::PERMANENT_REDIRECT)
+        .header(header::LOCATION, location)
+        .body(axum::body::Body::empty())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

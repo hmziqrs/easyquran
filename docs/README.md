@@ -47,13 +47,6 @@ If reality differs from an item, trust the code, adjust, and note it in the comm
 | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------- |
 | [A4b](plans/abuse-0-foundations.md#a4b-contact-addresses) | Contact addresses | O3 |
 
-### Abuse phase 1
-
-| Item                                                                                                        | Title                                                                 | Blocked by |
-| ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------- |
-| [A14](plans/abuse-1-reader-login.md#a14-reader-path-cookie-and-cache-predicate)                             | Reader-path cookie and cache predicate                                | -          |
-| [A17](plans/abuse-1-reader-login.md#a17-canonical-redirects-no-store-errors-per-artifact-verified-set)      | Canonical redirects, no-store errors, per-artifact verified set       | -          |
-
 ### Abuse phase 2
 
 | Item                                                                                                    | Title                                                             | Blocked by   |
