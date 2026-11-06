@@ -20,12 +20,6 @@ Files: `rust/backend/api/src/modules/notification_v1/`, `web/src/lib/firebase/`,
 Done when: a scheduled reminder fires at the user's local time, respects quiet hours, and stops on unsubscribe.
 Blocked by: F8
 
-#### F15. Voice search
-
-Build: voice input in the palette and `/search` with unsupported, permission and error states. Preserve the Arabic normalization/parity contract. The microphone is blocked today by `Permissions-Policy: microphone=()` in `web/src/hooks.server.ts`, `web/server.ts` and `security_headers.rs`; allow `self` on the web tier only and update `web/scripts/assert-headers.sh`. Browser speech recognition can send audio to the browser vendor, so add a privacy sentence and the A34 ledger reference.
-Files: `web/src/lib/components/search/GlobalSearchPalette.svelte`, `web/src/routes/(application)/search/+page.svelte`, `web/src/hooks.server.ts`, `web/server.ts`, `web/scripts/assert-headers.sh`
-Done when: control is hidden where unsupported; denied and failed states are handled and tested.
-
 #### F17. Translation correction report
 
 Build: "Report an issue" on a verse, prefilled with immutable source id and verse key. `/contact` is only a `mailto:` link, so use the A24 report intake with a new `translation` kind, sharing its limits. Never edits a Quran DB.
