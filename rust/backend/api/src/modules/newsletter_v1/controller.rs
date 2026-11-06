@@ -1,8 +1,14 @@
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
 use axum_client_ip::ClientIp;
 use axum_macros::debug_handler;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
+use subtle::ConstantTimeEq;
 use tracing::{error, info, instrument, warn};
 use uuid::Uuid;
 
@@ -32,12 +38,25 @@ fn email_domain(email: &str) -> &str {
     email.split('@').nth(1).unwrap_or("unknown")
 }
 
+/// Stored form of a confirm/unsubscribe token: an HMAC under the server key, so a
+/// database read never yields a token that works (A29).
+fn token_hash(secret: &[u8], token: &str) -> String {
+    crate::utils::code_hash::hash_code(secret, &format!("newsletter-token:{token}"))
+}
+
+/// One-click unsubscribe token for a subscriber row (A29). It derives from the row
+/// id and the server key, so List-Unsubscribe links need no stored plaintext.
+fn one_click_token(secret: &[u8], subscriber_id: i32) -> String {
+    crate::utils::code_hash::hash_code(secret, &format!("newsletter-unsubscribe:{subscriber_id}"))
+}
+
 async fn send_mail(
     mailer: &crate::services::mail::MailRouter,
     to_email: &str,
     subject: &str,
     html: Option<&str>,
     text: Option<&str>,
+    list_unsubscribe: Option<String>,
 ) -> Result<(), crate::services::mail::MailError> {
     use crate::services::mail::{provider::TEMPLATE_NEWSLETTER, MailProvider, OutboundEmail};
 
@@ -47,6 +66,7 @@ async fn send_mail(
         html: html.map(|s| s.to_string()),
         text: text.map(|s| s.to_string()),
         template: Some(TEMPLATE_NEWSLETTER),
+        list_unsubscribe,
     };
     mailer.send(msg).await.map(|_| ())
 }
@@ -90,7 +110,7 @@ pub async fn subscribe(
     let new_sub = NewSubscriber {
         email: email.clone(),
         status: SubscriberStatus::Pending,
-        token: token.clone(),
+        token: token_hash(&state.secret_key, &token),
     };
 
     match SubscriberEntity::create(&state.sea_db, new_sub).await {
@@ -111,7 +131,7 @@ pub async fn subscribe(
                 "<p>Thanks for subscribing!</p><p>Please confirm your subscription by clicking the link below:</p><p><a href=\"{0}\">{0}</a></p>",
                 confirm_url
             );
-            let _ = send_mail(&state.mailer, &email, subject, Some(&html), None).await;
+            let _ = send_mail(&state.mailer, &email, subject, Some(&html), None, None).await;
 
             // Never echo token/confirm_url here, even in debug — leaks to client logs.
             let body = json!({ "message": "Please check your email to confirm your subscription" });
@@ -133,7 +153,8 @@ pub async fn unsubscribe(
     let email = payload.email.trim().to_lowercase();
     let token = payload.token.trim().to_string();
 
-    match SubscriberEntity::unsubscribe(&state.sea_db, &email, Some(&token)).await {
+    let stored = token_hash(&state.secret_key, &token);
+    match SubscriberEntity::unsubscribe(&state.sea_db, &email, Some(&stored)).await {
         Ok(Some(_)) => {
             info!(email_domain = %email_domain(&email), "Newsletter unsubscribed");
             Ok(Json(json!({ "message": "Unsubscribed successfully" })))
@@ -161,6 +182,12 @@ pub async fn send(
     let text = payload.text.clone();
     let html = payload.html.clone();
     let state_cloned = state.clone();
+    // Public API origin for List-Unsubscribe (RFC 8058). Unset: no unsubscribe header.
+    let api_base = std::env::var("API_PUBLIC_URL")
+        .ok()
+        .map(|v| v.trim().trim_end_matches('/').to_string())
+        .filter(|v| !v.is_empty());
+    let secret = state.secret_key.clone();
     // Audit before the 202: the send runs in the background and its row must
     // exist even if the task later fails.
     audit::record(
@@ -195,6 +222,13 @@ pub async fn send(
                 let mut throttled = 0u64;
 
                 for sub in subscribers {
+                    let unsubscribe = api_base.as_ref().map(|base| {
+                        format!(
+                            "{base}/newsletter/v1/unsubscribe/{}/{}",
+                            sub.id,
+                            one_click_token(&secret, sub.id)
+                        )
+                    });
                     let mut attempts = 0u8;
                     loop {
                         match send_mail(
@@ -203,6 +237,7 @@ pub async fn send(
                             &subject,
                             html.as_deref(),
                             Some(&text),
+                            unsubscribe.clone(),
                         )
                         .await
                         {
@@ -288,7 +323,7 @@ pub async fn confirm(
     payload: ValidatedJson<V1UnsubscribePayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let email = payload.email.trim().to_lowercase();
-    let token = payload.token.trim().to_string();
+    let token = token_hash(&state.secret_key, payload.token.trim());
 
     match SubscriberEntity::confirm(&state.sea_db, &email, &token).await {
         Ok(Some(_)) => {
@@ -305,6 +340,30 @@ pub async fn confirm(
             Err(err)
         }
     }
+}
+
+/// RFC 8058 one-click unsubscribe. Public, no session, and always 200: a caller
+/// cannot tell a live id from a dead one or a right token from a wrong one (A29).
+#[debug_handler]
+#[instrument(skip(state, token))]
+pub async fn one_click_unsubscribe(
+    State(state): State<AppState>,
+    Path((id, token)): Path<(String, String)>,
+) -> impl IntoResponse {
+    if let Ok(subscriber_id) = id.parse::<i32>() {
+        let expected = one_click_token(&state.secret_key, subscriber_id);
+        if bool::from(expected.as_bytes().ct_eq(token.as_bytes())) {
+            if let Err(err) =
+                SubscriberEntity::unsubscribe_by_id(&state.sea_db, subscriber_id).await
+            {
+                error!("One-click unsubscribe failed: {}", err);
+            }
+        }
+    }
+    (
+        StatusCode::OK,
+        Json(json!({ "message": "If this address was subscribed, it is now unsubscribed." })),
+    )
 }
 
 #[cfg(test)]

@@ -8,12 +8,25 @@ use super::{
     SubscriberStatus, UpdateSubscriber,
 };
 
+const DAY_SECS: i64 = 24 * 60 * 60;
+
+/// Retention for a subscriber row in each status (A29): confirmed 12 months,
+/// pending and unsubscribed 30 days. Returns (expires_at epoch secs, class).
+pub fn retention_for(status: SubscriberStatus, now: i64) -> (i64, &'static str) {
+    match status {
+        SubscriberStatus::Confirmed => (now + 365 * DAY_SECS, "newsletter_confirmed"),
+        SubscriberStatus::Unsubscribed => (now + 30 * DAY_SECS, "newsletter_unsubscribed"),
+        SubscriberStatus::Pending => (now + 30 * DAY_SECS, "newsletter_pending"),
+    }
+}
+
 impl Entity {
     pub const PER_PAGE: u64 = 20;
 
     #[instrument(skip(conn, new_subscriber), fields(subscriber_id, email = %new_subscriber.email))]
     pub async fn create(conn: &DbConn, new_subscriber: NewSubscriber) -> DbResult<Model> {
         let now = chrono::Utc::now().fixed_offset();
+        let (expires_at, retention_class) = retention_for(new_subscriber.status, now.timestamp());
 
         match Self::find()
             .filter(Column::Email.eq(new_subscriber.email.clone()))
@@ -24,6 +37,8 @@ impl Entity {
                 let mut am: ActiveModel = existing.into();
                 am.token = Set(new_subscriber.token);
                 am.status = Set(new_subscriber.status);
+                am.expires_at = Set(expires_at);
+                am.retention_class = Set(retention_class.to_string());
                 am.updated_at = Set(now);
                 match am.update(conn).await {
                     Ok(updated) => {
@@ -42,6 +57,8 @@ impl Entity {
                     email: Set(new_subscriber.email),
                     status: Set(new_subscriber.status),
                     token: Set(new_subscriber.token),
+                    expires_at: Set(expires_at),
+                    retention_class: Set(retention_class.to_string()),
                     created_at: Set(now),
                     updated_at: Set(now),
                     ..Default::default()
@@ -79,7 +96,11 @@ impl Entity {
             let token_ok = model.token.as_bytes().ct_eq(token.as_bytes()).unwrap_u8() == 1;
             if token_ok && model.status != SubscriberStatus::Unsubscribed {
                 let mut am: ActiveModel = model.into();
+                let (expires_at, class) =
+                    retention_for(SubscriberStatus::Confirmed, now.timestamp());
                 am.status = Set(SubscriberStatus::Confirmed);
+                am.expires_at = Set(expires_at);
+                am.retention_class = Set(class.to_string());
                 am.updated_at = Set(now);
                 let updated = am.update(conn).await?;
                 Ok(Some(updated))
@@ -113,13 +134,34 @@ impl Entity {
                 }
             }
             let mut am: ActiveModel = model.into();
+            let (expires_at, class) =
+                retention_for(SubscriberStatus::Unsubscribed, now.timestamp());
             am.status = Set(SubscriberStatus::Unsubscribed);
+            am.expires_at = Set(expires_at);
+            am.retention_class = Set(class.to_string());
             am.updated_at = Set(now);
             let updated = am.update(conn).await?;
             Ok(Some(updated))
         } else {
             Ok(None)
         }
+    }
+
+    /// One-click unsubscribe by row id (RFC 8058, A29). The caller has already
+    /// verified the unsubscribe token for this id. Returns whether a row changed.
+    pub async fn unsubscribe_by_id(conn: &DbConn, subscriber_id: i32) -> DbResult<bool> {
+        let now = chrono::Utc::now().fixed_offset();
+        let Some(model) = Self::find_by_id(subscriber_id).one(conn).await? else {
+            return Ok(false);
+        };
+        let (expires_at, class) = retention_for(SubscriberStatus::Unsubscribed, now.timestamp());
+        let mut am: ActiveModel = model.into();
+        am.status = Set(SubscriberStatus::Unsubscribed);
+        am.expires_at = Set(expires_at);
+        am.retention_class = Set(class.to_string());
+        am.updated_at = Set(now);
+        am.update(conn).await?;
+        Ok(true)
     }
 
     pub async fn find_with_query(
@@ -208,7 +250,10 @@ impl Entity {
             let mut am: ActiveModel = model.into();
 
             if let Some(status) = update.status {
+                let (expires_at, class) = retention_for(status, update.updated_at.timestamp());
                 am.status = Set(status);
+                am.expires_at = Set(expires_at);
+                am.retention_class = Set(class.to_string());
             }
             if let Some(token) = update.token {
                 am.token = Set(token);
@@ -245,7 +290,10 @@ impl Entity {
             let mut am: ActiveModel = model.into();
 
             if let Some(status) = update.status {
+                let (expires_at, class) = retention_for(status, update.updated_at.timestamp());
                 am.status = Set(status);
+                am.expires_at = Set(expires_at);
+                am.retention_class = Set(class.to_string());
             }
             if let Some(token) = update.token {
                 am.token = Set(token);

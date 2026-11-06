@@ -1,16 +1,52 @@
 use std::env;
 
 use async_trait::async_trait;
-use lettre::message::header::ContentType;
+use lettre::message::header::{ContentType, Header, HeaderName, HeaderValue};
 use lettre::{
     transport::smtp::authentication::Credentials, AsyncSmtpTransport, AsyncTransport, Message,
     Tokio1Executor,
 };
 use tracing::instrument;
 
-use super::provider::{MailError, MailProvider, OutboundEmail, SendReceipt};
+use super::provider::{MailError, MailProvider, OutboundEmail, SendReceipt, LIST_UNSUBSCRIBE_POST};
 
 const TLS_MODE_IMPLICIT: &str = "tls";
+
+/// `List-Unsubscribe` (RFC 2369) with the angle-bracketed URL form.
+#[derive(Debug, Clone)]
+struct ListUnsubscribe(String);
+
+impl Header for ListUnsubscribe {
+    fn name() -> HeaderName {
+        HeaderName::new_from_ascii_str("List-Unsubscribe")
+    }
+
+    fn parse(s: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Self(s.to_string()))
+    }
+
+    fn display(&self) -> HeaderValue {
+        HeaderValue::new(Self::name(), format!("<{}>", self.0))
+    }
+}
+
+/// `List-Unsubscribe-Post` (RFC 8058) one-click marker.
+#[derive(Debug, Clone)]
+struct ListUnsubscribePost;
+
+impl Header for ListUnsubscribePost {
+    fn name() -> HeaderName {
+        HeaderName::new_from_ascii_str("List-Unsubscribe-Post")
+    }
+
+    fn parse(_s: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Self)
+    }
+
+    fn display(&self) -> HeaderValue {
+        HeaderValue::new(Self::name(), LIST_UNSUBSCRIBE_POST.to_string())
+    }
+}
 
 fn use_implicit_tls() -> bool {
     if let Ok(mode) = env::var("SMTP_TLS_MODE") {
@@ -103,10 +139,16 @@ impl MailProvider for SmtpMailProvider {
             (None, None) => (ContentType::TEXT_PLAIN, String::new()),
         };
 
-        let email = Message::builder()
+        let mut builder = Message::builder()
             .from(from)
             .to(to)
-            .subject(msg.subject.as_str())
+            .subject(msg.subject.as_str());
+        if let Some(url) = &msg.list_unsubscribe {
+            builder = builder
+                .header(ListUnsubscribe(url.clone()))
+                .header(ListUnsubscribePost);
+        }
+        let email = builder
             .header(content_type)
             .body(body)
             .map_err(|e| MailError::ProviderApi(format!("failed to build message: {e}")))?;

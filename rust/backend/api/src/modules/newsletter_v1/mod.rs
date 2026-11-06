@@ -9,6 +9,10 @@ pub fn routes() -> Router<AppState> {
     let public = Router::<AppState>::new()
         .route("/subscribe", post(controller::subscribe))
         .route("/unsubscribe", post(controller::unsubscribe))
+        .route(
+            "/unsubscribe/{id}/{token}",
+            post(controller::one_click_unsubscribe),
+        )
         .route("/confirm", post(controller::confirm));
 
     let admin = Router::<AppState>::new()

@@ -627,6 +627,7 @@ async fn tracing_capture_asserts_no_pii_in_mail_drop_path() {
         html: None,
         text: None,
         template: None,
+        list_unsubscribe: None,
     };
     let provider = NoOpMailProvider;
     let _ = MailProvider::send(&provider, msg).await;
@@ -711,6 +712,9 @@ async fn noop_mail_router() -> ruxlog::services::mail::MailRouter {
     let db = sea_orm::Database::connect("sqlite::memory:")
         .await
         .expect("in-memory sqlite connects");
+    // Production always has the suppression table; an unmigrated DB fails closed (A29).
+    use migration::{Migrator, MigratorTrait};
+    Migrator::up(&db, None).await.expect("migrations run");
     let providers: HashMap<String, Arc<dyn MailProvider>> = [(
         "none".to_string(),
         Arc::new(NoOpMailProvider) as Arc<dyn MailProvider>,

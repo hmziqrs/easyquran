@@ -13,6 +13,8 @@ pub struct Model {
     pub source: Option<String>,
     pub diagnostic: Option<String>,
     pub permanent: bool,
+    /// false: row does not block transactional mail (webhook source, until admin review). A29.
+    pub blocks_transactional: bool,
     pub last_seen: DateTimeWithTimeZone,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,

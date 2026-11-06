@@ -6,6 +6,7 @@ use crate::services::webhook_util;
 
 use super::provider::{
     canonical, MailError, MailProvider, OutboundEmail, ParsedMailEvent, SendReceipt, WebhookEvent,
+    LIST_UNSUBSCRIBE_POST,
 };
 use super::router::canonicalize_recipient;
 
@@ -105,7 +106,14 @@ impl MailProvider for CloudflareMailProvider {
         }
 
         let from = self.sender_field();
+        let headers = msg.list_unsubscribe.as_deref().map(|url| {
+            std::collections::BTreeMap::from([
+                ("List-Unsubscribe", url),
+                ("List-Unsubscribe-Post", LIST_UNSUBSCRIBE_POST),
+            ])
+        });
         let body = CfSendRequest {
+            headers,
             to: msg.to.as_str(),
             from: from.as_str(),
             reply_to: self.reply_to.as_deref(),
@@ -237,6 +245,8 @@ struct CfSendRequest<'a> {
     text: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     html: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    headers: Option<std::collections::BTreeMap<&'static str, &'a str>>,
 }
 
 #[derive(Deserialize)]
@@ -486,6 +496,7 @@ mod tests {
                 html: Some("<p>hi</p>".to_string()),
                 text: None,
                 template: None,
+                list_unsubscribe: None,
             })
             .await
             .expect("send should succeed");
@@ -534,6 +545,7 @@ mod tests {
                 html: None,
                 text: Some("hi".to_string()),
                 template: None,
+                list_unsubscribe: None,
             })
             .await;
         assert!(matches!(res, Err(MailError::ProviderApi(_))), "got {res:?}");
@@ -561,6 +573,7 @@ mod tests {
                 html: None,
                 text: Some("hi".to_string()),
                 template: None,
+                list_unsubscribe: None,
             })
             .await;
         assert!(

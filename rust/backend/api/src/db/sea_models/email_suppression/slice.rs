@@ -19,6 +19,8 @@ pub struct SuppressionUpsert {
     pub source: Option<String>,
     pub diagnostic: Option<String>,
     pub permanent: bool,
+    /// Webhook-sourced rows pass false (A29): they block marketing only until reviewed.
+    pub blocks_transactional: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -36,6 +38,7 @@ pub struct SuppressionListItem {
     pub recipient: String,
     pub reason: SuppressionReason,
     pub permanent: bool,
+    pub blocks_transactional: bool,
     pub source: Option<String>,
     pub last_seen: DateTimeWithTimeZone,
     pub created_at: DateTimeWithTimeZone,

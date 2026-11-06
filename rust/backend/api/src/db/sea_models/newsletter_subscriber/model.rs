@@ -10,7 +10,11 @@ pub struct Model {
     pub id: i32,
     pub email: String,
     pub status: SubscriberStatus,
+    /// HMAC of the confirm/unsubscribe token. Never the plaintext (A29).
     pub token: String,
+    /// Epoch seconds: the sweeper (A32) may delete the row after this (A29).
+    pub expires_at: i64,
+    pub retention_class: String,
 
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,

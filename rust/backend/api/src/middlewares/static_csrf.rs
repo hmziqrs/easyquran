@@ -69,6 +69,16 @@ fn is_csrf_exempt(path: &str) -> bool {
     ) {
         return true;
     }
+    // RFC 8058 one-click unsubscribe: mail clients POST here with no session and no
+    // CSRF token. The token in the path is an HMAC, so a forged cross-site POST cannot
+    // act on any row (A29).
+    if let Some(rest) = path.strip_prefix("/newsletter/v1/unsubscribe/") {
+        let mut parts = rest.split('/');
+        return matches!(
+            (parts.next(), parts.next(), parts.next()),
+            (Some(id), Some(token), None) if !id.is_empty() && !token.is_empty()
+        );
+    }
     let mut segs = path.split('/');
     let _leading = segs.next();
     matches!(
@@ -361,5 +371,13 @@ mod middleware_tests {
             .await
             .unwrap();
         assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn one_click_unsubscribe_is_csrf_exempt_only_for_exact_shape() {
+        assert!(is_csrf_exempt("/newsletter/v1/unsubscribe/7/abc"));
+        assert!(!is_csrf_exempt("/newsletter/v1/unsubscribe/7"));
+        assert!(!is_csrf_exempt("/newsletter/v1/unsubscribe//abc"));
+        assert!(!is_csrf_exempt("/newsletter/v1/unsubscribe/7/abc/extra"));
     }
 }

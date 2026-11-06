@@ -65,6 +65,7 @@ pub async fn send_enforcement_notice(
             html: Some(html),
             text: None,
             template: Some(provider::TEMPLATE_ENFORCEMENT_NOTICE),
+            list_unsubscribe: None,
         })
         .await
 }
@@ -82,6 +83,7 @@ pub async fn send_email_verification_code(
             html: Some(body),
             text: None,
             template: Some(TEMPLATE_VERIFICATION),
+            list_unsubscribe: None,
         })
         .await?;
     Ok(())
@@ -100,6 +102,7 @@ pub async fn send_forgot_password_email(
             html: Some(body),
             text: None,
             template: Some(TEMPLATE_PASSWORD_RESET),
+            list_unsubscribe: None,
         })
         .await?;
     Ok(())

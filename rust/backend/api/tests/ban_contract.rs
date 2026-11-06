@@ -593,6 +593,7 @@ async fn bounced_address_records_suppressed_and_sends_nothing() {
             source: Some("test".to_string()),
             diagnostic: None,
             permanent: true,
+            blocks_transactional: true,
         },
     )
     .await
@@ -685,6 +686,7 @@ async fn complaint_suppression_sends_enforcement_but_drops_verification() {
             source: Some("test".to_string()),
             diagnostic: None,
             permanent: true,
+            blocks_transactional: true,
         },
     )
     .await
@@ -696,6 +698,7 @@ async fn complaint_suppression_sends_enforcement_but_drops_verification() {
         html: None,
         text: None,
         template: Some(TEMPLATE_VERIFICATION),
+        list_unsubscribe: None,
     };
     let receipt = router.send(verification).await.expect("verification is Ok");
     assert!(receipt.suppressed, "verification dropped by the router");
@@ -711,6 +714,7 @@ async fn complaint_suppression_sends_enforcement_but_drops_verification() {
         html: None,
         text: None,
         template: Some(TEMPLATE_ENFORCEMENT_NOTICE),
+        list_unsubscribe: None,
     };
     let receipt = router.send(notice).await.expect("enforcement is Ok");
     assert!(
@@ -736,6 +740,7 @@ async fn lookup_error_fails_closed_for_enforcement_only() {
         html: None,
         text: None,
         template: Some(TEMPLATE_ENFORCEMENT_NOTICE),
+        list_unsubscribe: None,
     };
     let receipt = router.send(enforcement).await.expect("Ok, not sent");
     assert!(receipt.suppressed, "enforcement fails closed");

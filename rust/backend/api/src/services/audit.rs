@@ -35,6 +35,8 @@ pub enum AuditAction {
     NewsletterSend,
     SuppressionAdd,
     SuppressionDelete,
+    SuppressionReview,
+    MailGuardPause,
     SeedRun,
     DeviceRemove,
     ReportSubmit,
@@ -61,6 +63,8 @@ impl AuditAction {
         Self::NewsletterSend,
         Self::SuppressionAdd,
         Self::SuppressionDelete,
+        Self::SuppressionReview,
+        Self::MailGuardPause,
         Self::SeedRun,
         Self::DeviceRemove,
         Self::ReportSubmit,
@@ -87,6 +91,8 @@ impl AuditAction {
             Self::NewsletterSend => "newsletter.send",
             Self::SuppressionAdd => "suppression.add",
             Self::SuppressionDelete => "suppression.delete",
+            Self::SuppressionReview => "suppression.review",
+            Self::MailGuardPause => "mail.guard_pause",
             Self::SeedRun => "seed.run",
             Self::DeviceRemove => "device.remove",
             Self::ReportSubmit => "report.submit",
@@ -109,7 +115,10 @@ impl AuditAction {
             Self::UserDelete => "user",
             Self::MediaDelete => "media",
             Self::NewsletterSend => "newsletter",
-            Self::SuppressionAdd | Self::SuppressionDelete => "mail_suppression",
+            Self::SuppressionAdd | Self::SuppressionDelete | Self::SuppressionReview => {
+                "mail_suppression"
+            }
+            Self::MailGuardPause => "mail_guard",
             Self::SeedRun => "seed_run",
             Self::DeviceRemove => "device",
             Self::ReportSubmit => "report",

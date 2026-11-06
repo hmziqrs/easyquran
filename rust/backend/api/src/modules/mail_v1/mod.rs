@@ -18,6 +18,7 @@ pub fn routes() -> Router<AppState> {
                 .post(controller::create_suppression)
                 .delete(controller::delete_suppression),
         )
+        .route("/suppression/review", post(controller::review_suppression))
         .route_layer(middleware::from_fn(
             auth_guard::verified_with_role::<{ auth_guard::ROLE_ADMIN }>,
         ));

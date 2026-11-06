@@ -296,7 +296,7 @@ async fn suppression_add_and_delete_each_write_one_row() {
         "POST",
         "/suppression",
         Some(cookie.as_str()),
-        Some(&json!({ "recipient": recipient, "permanent": true })),
+        Some(&json!({ "recipient": recipient, "reason": "manual", "permanent": true })),
     )
     .await;
     assert_eq!(status, StatusCode::CREATED, "{body}");

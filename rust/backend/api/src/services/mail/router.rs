@@ -1,20 +1,27 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::Utc;
 use rux_provider_core::ProviderRegistry;
+use rux_request_gate::{BlockScope, RateLimitStore};
 use sea_orm::DatabaseConnection;
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use tracing::{debug, instrument, warn};
 
-use crate::db::sea_models::email_suppression::{Entity as SuppressionEntity, SuppressionUpsert};
+use crate::db::sea_models::email_suppression::{
+    Entity as SuppressionEntity, Model as SuppressionRow, SuppressionUpsert,
+};
 use crate::services::abuse_limiter::{self, AbuseLimiterConfig, LimiterDecision};
+use crate::services::audit::{self, AuditAction, AuditEvent};
 use crate::utils::telemetry;
 use ruxlog_types::enums::SuppressionReason;
 
 use super::provider::{
     is_transactional, MailError, MailProvider, OutboundEmail, ParsedMailEvent, SendReceipt,
-    WebhookEvent, TEMPLATE_ENFORCEMENT_NOTICE, TEMPLATE_NEWSLETTER,
+    WebhookEvent, TEMPLATE_ENFORCEMENT_NOTICE, TEMPLATE_NEWSLETTER, TEMPLATE_PASSWORD_RESET,
+    TEMPLATE_VERIFICATION,
 };
 
 pub const MAIL_RCPT_CFG: AbuseLimiterConfig = AbuseLimiterConfig {
@@ -48,11 +55,51 @@ pub const MAIL_PROVIDER_CFG: AbuseLimiterConfig = AbuseLimiterConfig {
     block_duration: 60 * 60,
 };
 
+/// Hourly cap that admits exactly `allowed` sends per hour. The limiter blocks the
+/// attempt that reaches `temp_block_attempts`, so the threshold is `allowed + 1`.
+/// A tripped cap blocks for the rest of the hour. The long tier never fires.
+const fn hourly_cap(allowed: usize) -> AbuseLimiterConfig {
+    AbuseLimiterConfig {
+        temp_block_attempts: allowed + 1,
+        temp_block_range: 60 * 60,
+        temp_block_duration: 60 * 60,
+        block_retry_limit: usize::MAX,
+        block_range: 60 * 60,
+        block_duration: 60 * 60,
+    }
+}
+
+/// Global cap on password-reset mail, separate from verification so one cannot
+/// starve the other (A29).
+pub const GLOBAL_RESET_CAP: usize = 500;
+/// Global cap on verification mail (A29).
+pub const GLOBAL_VERIFY_CAP: usize = 500;
+/// Per recipient domain, every template class (A29).
+pub const DOMAIN_CAP: usize = 100;
+/// Per recipient and template: a repeat inside this many seconds is throttled (A29).
+pub const SEND_COOLDOWN_SECS: usize = 60;
+
+/// Bounce guard (A29): pause all sends when more than `GUARD_MAX_BOUNCE_PCT` percent
+/// of the hour's sends bounced. Needs `GUARD_MIN_SAMPLE` sends first, so one early
+/// bounce cannot pause the site.
+pub const GUARD_MIN_SAMPLE: u64 = 20;
+pub const GUARD_MAX_BOUNCE_PCT: u64 = 5;
+pub const GUARD_PAUSE_SECS: usize = 15 * 60;
+/// Store key for the pause. Read with `ban_status`, set with `set_block`.
+pub const GUARD_PAUSE_KEY: &str = "mail:guard:paused";
+
+/// Recipient suppression applies to bounces for this long after the last bounce.
+const BOUNCE_SUPPRESSION_COOLDOWN_SECS: i64 = 24 * 60 * 60;
+
 #[derive(Clone)]
 pub struct MailRouterLimits {
     pub rcpt: AbuseLimiterConfig,
     pub rcpt_transactional: AbuseLimiterConfig,
     pub provider: AbuseLimiterConfig,
+    pub global_reset: AbuseLimiterConfig,
+    pub global_verify: AbuseLimiterConfig,
+    pub domain: AbuseLimiterConfig,
+    pub cooldown_secs: usize,
     pub dedup_ttl_secs: usize,
     pub soft_cooldown_secs: i64,
 }
@@ -63,10 +110,37 @@ impl Default for MailRouterLimits {
             rcpt: MAIL_RCPT_CFG,
             rcpt_transactional: MAIL_RCPT_TRANSACTIONAL_CFG,
             provider: MAIL_PROVIDER_CFG,
+            global_reset: hourly_cap(GLOBAL_RESET_CAP),
+            global_verify: hourly_cap(GLOBAL_VERIFY_CAP),
+            domain: hourly_cap(DOMAIN_CAP),
+            cooldown_secs: SEND_COOLDOWN_SECS,
             dedup_ttl_secs: 300,
-            soft_cooldown_secs: 24 * 60 * 60,
+            soft_cooldown_secs: BOUNCE_SUPPRESSION_COOLDOWN_SECS,
         }
     }
+}
+
+/// Sends and bounces seen in the current UTC hour, for the bounce guard.
+#[derive(Default)]
+struct GuardWindow {
+    hour: i64,
+    sent: u64,
+    bounced: u64,
+}
+
+impl GuardWindow {
+    fn roll(&mut self, hour: i64) {
+        if self.hour != hour {
+            *self = Self {
+                hour,
+                ..Self::default()
+            };
+        }
+    }
+}
+
+fn current_hour() -> i64 {
+    Utc::now().timestamp() / 3600
 }
 
 pub struct MailRouter {
@@ -75,6 +149,7 @@ pub struct MailRouter {
     db: DatabaseConnection,
     limits: MailRouterLimits,
     rate_limit_enabled: bool,
+    guard: Mutex<GuardWindow>,
 }
 
 impl MailRouter {
@@ -92,6 +167,7 @@ impl MailRouter {
             db,
             limits,
             rate_limit_enabled,
+            guard: Mutex::new(GuardWindow::default()),
         }
     }
 
@@ -116,30 +192,77 @@ impl MailRouter {
         }
     }
 
-    /// `Some(reason)` when the recipient is suppressed for sending. The caller
-    /// decides what the reason means for the template being sent.
-    async fn lookup_suppressed(&self, recipient: &str) -> Result<Option<SuppressionReason>, ()> {
-        let row = match SuppressionEntity::find_by_recipient(&self.db, recipient).await {
-            Ok(m) => m,
+    /// The suppression row for a recipient, if any. A lookup error is `Err(())`.
+    async fn lookup_suppression(&self, recipient: &str) -> Result<Option<SuppressionRow>, ()> {
+        match SuppressionEntity::find_by_recipient(&self.db, recipient).await {
+            Ok(row) => Ok(row),
             Err(e) => {
                 // PII: log only the recipient domain, never the full address.
                 let domain = recipient.split('@').nth(1).unwrap_or("unknown");
                 warn!(error = %e, %domain, "suppression lookup failed");
-                return Err(());
+                Err(())
             }
-        };
-        let Some(row) = row else {
-            return Ok(None);
-        };
-        let now = Utc::now().timestamp();
-        let within_cooldown = now - row.last_seen.timestamp() <= self.limits.soft_cooldown_secs;
-        if row.permanent || (row.reason == SuppressionReason::Bounce && within_cooldown) {
-            return Ok(Some(row.reason));
         }
-        Ok(None)
     }
 
-    async fn check_rate(&self, recipient: &str, transactional: bool) -> Result<(), MailError> {
+    /// Whether a row blocks this template. Complaint rows never stop enforcement
+    /// notices (A21). Rows with `blocks_transactional = false` (webhook source, not
+    /// yet reviewed) never stop transactional mail (A29). Marketing mail stops on
+    /// any active row.
+    fn suppression_blocks(&self, row: &SuppressionRow, template: Option<&str>, now: i64) -> bool {
+        let within_cooldown = now - row.last_seen.timestamp() <= self.limits.soft_cooldown_secs;
+        let active = row.permanent || (row.reason == SuppressionReason::Bounce && within_cooldown);
+        if !active {
+            return false;
+        }
+        if template == Some(TEMPLATE_ENFORCEMENT_NOTICE)
+            && row.reason == SuppressionReason::Complaint
+        {
+            return false;
+        }
+        if is_transactional(template) && !row.blocks_transactional {
+            return false;
+        }
+        true
+    }
+
+    fn global_cap(&self, template: Option<&str>) -> Option<(&'static str, AbuseLimiterConfig)> {
+        match template {
+            Some(TEMPLATE_PASSWORD_RESET) => {
+                Some(("mail:send:global:reset", self.limits.global_reset))
+            }
+            Some(TEMPLATE_VERIFICATION) => {
+                Some(("mail:send:global:verify", self.limits.global_verify))
+            }
+            _ => None,
+        }
+    }
+
+    /// Refuses every send while the bounce guard holds the pause (A29).
+    async fn check_paused(&self) -> Result<(), MailError> {
+        let Ok(Some(ban)) = self.gate_store.ban_status(GUARD_PAUSE_KEY).await else {
+            return Ok(());
+        };
+        let retry = (ban.block_until_at - Utc::now().timestamp()).max(1) as u64;
+        telemetry::mail_router_metrics().throttled.add(1, &[]);
+        Err(MailError::Throttled {
+            retry_after_secs: retry,
+        })
+    }
+
+    async fn check_rate(
+        &self,
+        recipient: &str,
+        template: Option<&str>,
+        transactional: bool,
+    ) -> Result<(), MailError> {
+        self.check_paused().await?;
+        if let Some((key, cfg)) = self.global_cap(template) {
+            self.enforce(key, cfg).await?;
+        }
+        let domain = recipient.split('@').nth(1).unwrap_or("unknown");
+        self.enforce(&format!("mail:send:domain:{domain}"), self.limits.domain)
+            .await?;
         // Transactional mail gets its own (looser) bucket: a shared key would
         // mix two configs into one attempt deque and let a reset-mail burst
         // burn the marketing budget (or vice versa).
@@ -208,6 +331,75 @@ impl MailRouter {
         format!("mail:dedup:{}:{digest}", msg.template.unwrap_or("default"))
     }
 
+    /// Per-recipient, per-template send cooldown key (A29). It uses the dedup
+    /// primitive, not the abuse limiter, so it never becomes a lockout lever.
+    fn cooldown_key(msg: &OutboundEmail) -> String {
+        format!(
+            "mail:send:cooldown:{}:{}",
+            msg.template.unwrap_or("default"),
+            msg.to
+        )
+    }
+
+    fn record_sent(&self) {
+        let mut w = self.guard.lock().unwrap_or_else(|e| e.into_inner());
+        w.roll(current_hour());
+        w.sent += 1;
+    }
+
+    /// Counts one bounce toward the hour's rate and pauses sends when it crosses
+    /// the threshold. Called for send-time bounces and for webhook bounces (A29).
+    pub async fn note_bounce(&self) {
+        let (sent, bounced, tripped) = {
+            let mut w = self.guard.lock().unwrap_or_else(|e| e.into_inner());
+            w.roll(current_hour());
+            w.bounced += 1;
+            let tripped =
+                w.sent >= GUARD_MIN_SAMPLE && w.bounced * 100 > w.sent * GUARD_MAX_BOUNCE_PCT;
+            (w.sent, w.bounced, tripped)
+        };
+        if !tripped {
+            return;
+        }
+        let already = matches!(
+            self.gate_store.ban_status(GUARD_PAUSE_KEY).await,
+            Ok(Some(_))
+        );
+        if let Err(e) = self
+            .gate_store
+            .set_block(
+                GUARD_PAUSE_KEY,
+                BlockScope::Temp,
+                Duration::from_secs(GUARD_PAUSE_SECS as u64),
+            )
+            .await
+        {
+            warn!(error = %e, "bounce guard could not set pause");
+            return;
+        }
+        if already {
+            return;
+        }
+        warn!(sent, bounced, "mail bounce guard paused sends");
+        if let Err(e) = audit::record(
+            &self.db,
+            AuditEvent {
+                actor_id: None,
+                action: AuditAction::MailGuardPause,
+                resource_id: "mail:send".to_string(),
+                metadata: json!({
+                    "sent": sent,
+                    "bounced": bounced,
+                    "pause_secs": GUARD_PAUSE_SECS,
+                }),
+            },
+        )
+        .await
+        {
+            warn!(error = %e, "audit write failed for bounce guard pause");
+        }
+    }
+
     async fn record_sync_bounces(&self, provider_name: &str, bounces: &[String]) {
         let router_metrics = telemetry::mail_router_metrics();
         for rcpt in bounces {
@@ -217,11 +409,13 @@ impl MailRouter {
                 source: Some(format!("{provider_name}-send-sync")),
                 diagnostic: None,
                 permanent: true,
+                blocks_transactional: true,
             };
             match SuppressionEntity::upsert(&self.db, &canonical, upsert).await {
                 Ok(_) => router_metrics.bounced_sync.add(1, &[]),
                 Err(e) => warn!(error = %e, "failed to upsert sync-bounce suppression"),
             }
+            self.note_bounce().await;
         }
     }
 }
@@ -245,15 +439,14 @@ impl MailProvider for MailRouter {
 
         let transactional = is_transactional(msg.template);
 
-        // Enforcement notices (A21) go out despite a complaint suppression, and
-        // fail closed on a lookup error. Every other template keeps the old rules.
-        let enforcement = msg.template == Some(TEMPLATE_ENFORCEMENT_NOTICE);
-        let suppressed = match self.lookup_suppressed(&msg.to).await {
-            Ok(Some(reason)) => !(enforcement && reason == SuppressionReason::Complaint),
+        // Fail closed on a lookup error for every template (A29). Enforcement
+        // notices keep their complaint exemption (A21).
+        let suppressed = match self.lookup_suppression(&msg.to).await {
+            Ok(Some(row)) => self.suppression_blocks(&row, msg.template, Utc::now().timestamp()),
             Ok(None) => false,
             Err(()) => {
                 router_metrics.suppression_check_failed.add(1, &[]);
-                enforcement
+                true
             }
         };
         if suppressed {
@@ -285,10 +478,25 @@ impl MailProvider for MailRouter {
             None
         };
 
+        // Enforcement notices skip the cooldown: each one is an admin action on a
+        // case, and an admin resend must go out at once (A21).
+        let cooldown_key =
+            (msg.template != Some(TEMPLATE_ENFORCEMENT_NOTICE)).then(|| Self::cooldown_key(&msg));
+        if let Some(key) = &cooldown_key {
+            if !rux_request_gate::dedup_nx(&self.gate_store, key, self.limits.cooldown_secs).await {
+                self.release_dedup(dedup_claim.as_deref()).await;
+                router_metrics.throttled.add(1, &[]);
+                return Err(MailError::Throttled {
+                    retry_after_secs: self.limits.cooldown_secs as u64,
+                });
+            }
+        }
+
         // Transactional sends are also per-user limited at the controller; here they pass under the looser transactional bucket (30/hour) instead of no cap at all.
         if self.rate_limit_enabled {
-            if let Err(e) = self.check_rate(&msg.to, transactional).await {
+            if let Err(e) = self.check_rate(&msg.to, msg.template, transactional).await {
                 self.release_dedup(dedup_claim.as_deref()).await;
+                self.release_dedup(cooldown_key.as_deref()).await;
                 return Err(e);
             }
         }
@@ -301,6 +509,7 @@ impl MailProvider for MailRouter {
                 metrics.emails_failed.add(1, &[]);
                 tracing::Span::current().record("result", "failure");
                 self.release_dedup(dedup_claim.as_deref()).await;
+                self.release_dedup(cooldown_key.as_deref()).await;
                 return Err(e);
             }
         };
@@ -310,6 +519,7 @@ impl MailProvider for MailRouter {
             .send_duration
             .record(start.elapsed().as_millis() as f64, &[]);
         tracing::Span::current().record("result", "success");
+        self.record_sent();
 
         if !receipt.permanent_bounces.is_empty() {
             self.record_sync_bounces(provider_name, &receipt.permanent_bounces)
@@ -365,15 +575,15 @@ pub fn canonicalize_recipient(input: &str) -> Result<String, MailError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::mail::provider::TEMPLATE_PASSWORD_RESET;
+    use crate::db::sea_models::email_suppression::Entity as Suppression;
+    use crate::services::mail::provider::{TEMPLATE_PASSWORD_RESET, TEMPLATE_VERIFICATION};
+    use migration::{Migrator, MigratorTrait};
+    use sea_orm::ConnectionTrait;
 
-    async fn capped_router() -> MailRouter {
+    async fn router_with(db: DatabaseConnection, limits: MailRouterLimits) -> MailRouter {
         use crate::services::mail::none::NoOpMailProvider;
         use std::collections::HashMap;
 
-        let db = sea_orm::Database::connect("sqlite::memory:")
-            .await
-            .expect("in-memory sqlite connects");
         let providers: HashMap<String, Arc<dyn MailProvider>> = [(
             "none".to_string(),
             Arc::new(NoOpMailProvider) as Arc<dyn MailProvider>,
@@ -385,9 +595,26 @@ mod tests {
             "none".to_string(),
             Arc::new(rux_request_gate::InMemoryStore::default()),
             db,
-            MailRouterLimits::default(),
+            limits,
             true,
         )
+    }
+
+    async fn migrated_db() -> DatabaseConnection {
+        let db = sea_orm::Database::connect("sqlite::memory:")
+            .await
+            .expect("in-memory sqlite connects");
+        Migrator::up(&db, None).await.expect("migrations run");
+        db
+    }
+
+    /// Cooldown off, so repeat sends to one address exercise the hourly caps.
+    async fn capped_router() -> MailRouter {
+        let limits = MailRouterLimits {
+            cooldown_secs: 0,
+            ..MailRouterLimits::default()
+        };
+        router_with(migrated_db().await, limits).await
     }
 
     fn txn_msg(to: &str) -> OutboundEmail {
@@ -397,6 +624,15 @@ mod tests {
             html: None,
             text: None,
             template: Some(TEMPLATE_PASSWORD_RESET),
+            list_unsubscribe: None,
+        }
+    }
+
+    fn verify_msg(to: &str) -> OutboundEmail {
+        OutboundEmail {
+            subject: "Email verification code".to_string(),
+            template: Some(TEMPLATE_VERIFICATION),
+            ..txn_msg(to)
         }
     }
 
@@ -431,6 +667,157 @@ mod tests {
             router.send(m).await.is_ok(),
             "marketing bucket must stay separate — a shared key would temp-block at 5 attempts"
         );
+    }
+
+    #[tokio::test]
+    async fn registration_burst_cannot_exceed_global_verify_cap() {
+        let router = capped_router().await;
+        let mut sent = 0usize;
+        let mut throttled = 0usize;
+        // 10,000 distinct addresses across 500 domains: per-domain and per-recipient
+        // caps stay out of the way, so only the global verification cap can refuse.
+        for i in 0..10_000usize {
+            let to = format!("user{i}@d{}.test", i % 500);
+            match router.send(verify_msg(&to)).await {
+                Ok(_) => sent += 1,
+                Err(MailError::Throttled { .. }) => throttled += 1,
+                Err(other) => panic!("unexpected error: {other:?}"),
+            }
+        }
+        assert_eq!(sent, GLOBAL_VERIFY_CAP);
+        assert_eq!(throttled, 10_000 - GLOBAL_VERIFY_CAP);
+    }
+
+    #[tokio::test]
+    async fn domain_cap_applies_to_every_template() {
+        let router = capped_router().await;
+        let mut sent = 0usize;
+        for i in 0..(DOMAIN_CAP + 5) {
+            if router
+                .send(verify_msg(&format!("a{i}@shared.test")))
+                .await
+                .is_ok()
+            {
+                sent += 1;
+            }
+        }
+        assert_eq!(sent, DOMAIN_CAP);
+    }
+
+    #[tokio::test]
+    async fn repeat_send_inside_cooldown_is_throttled() {
+        let router = router_with(migrated_db().await, MailRouterLimits::default()).await;
+        assert!(router.send(verify_msg("once@x.test")).await.is_ok());
+        match router.send(verify_msg("once@x.test")).await {
+            Err(MailError::Throttled { retry_after_secs }) => {
+                assert_eq!(retry_after_secs, SEND_COOLDOWN_SECS as u64);
+            }
+            other => panic!("expected cooldown Throttled, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn bounce_guard_pauses_above_five_percent_and_audits_once() {
+        let router = capped_router().await;
+        for i in 0..40usize {
+            assert!(router
+                .send(verify_msg(&format!("ok{i}@guard.test")))
+                .await
+                .is_ok());
+        }
+        // 2 of 40 is exactly 5 percent: not above the threshold.
+        router.note_bounce().await;
+        router.note_bounce().await;
+        assert!(router
+            .gate_store
+            .ban_status(GUARD_PAUSE_KEY)
+            .await
+            .unwrap()
+            .is_none());
+        // The third and fourth bounces cross it.
+        router.note_bounce().await;
+        router.note_bounce().await;
+        assert!(router
+            .gate_store
+            .ban_status(GUARD_PAUSE_KEY)
+            .await
+            .unwrap()
+            .is_some());
+        match router.send(verify_msg("paused@guard.test")).await {
+            Err(MailError::Throttled { .. }) => {}
+            other => panic!("expected paused Throttled, got {other:?}"),
+        }
+        let row = router
+            .db
+            .query_one(sea_orm::Statement::from_string(
+                sea_orm::DatabaseBackend::Sqlite,
+                "SELECT COUNT(*) FROM audit_logs WHERE action = 'mail.guard_pause'".to_string(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+        let n: i64 = row.try_get_by_index(0).unwrap();
+        assert_eq!(n, 1, "pause writes one audit row, not one per extra bounce");
+    }
+
+    #[tokio::test]
+    async fn webhook_suppression_blocks_marketing_not_transactional_until_reviewed() {
+        let router = capped_router().await;
+        Suppression::upsert(
+            &router.db,
+            "victim@webhook.test",
+            SuppressionUpsert {
+                reason: SuppressionReason::Complaint,
+                source: Some("mail-webhook".to_string()),
+                diagnostic: None,
+                permanent: true,
+                blocks_transactional: false,
+            },
+        )
+        .await
+        .unwrap();
+
+        let receipt = router
+            .send(verify_msg("victim@webhook.test"))
+            .await
+            .expect("transactional mail passes an unreviewed webhook suppression");
+        assert!(!receipt.suppressed);
+
+        let mut news = txn_msg("victim@webhook.test");
+        news.template = Some(TEMPLATE_NEWSLETTER);
+        assert!(matches!(
+            router.send(news).await,
+            Err(MailError::Suppressed)
+        ));
+
+        Suppression::review(&router.db, "victim@webhook.test")
+            .await
+            .unwrap();
+        let receipt = router
+            .send(verify_msg("victim@webhook.test"))
+            .await
+            .unwrap();
+        assert!(receipt.suppressed, "reviewed row blocks transactional mail");
+    }
+
+    #[tokio::test]
+    async fn lookup_failure_fails_closed_for_every_template() {
+        // No migrations: the suppression table is missing, so the lookup errors.
+        let db = sea_orm::Database::connect("sqlite::memory:").await.unwrap();
+        let router = router_with(db, MailRouterLimits::default()).await;
+        assert!(matches!(
+            router.send(txn_msg("closed@x.test")).await,
+            Ok(SendReceipt {
+                suppressed: true,
+                ..
+            })
+        ));
+        let mut news = txn_msg("closed@x.test");
+        news.template = Some(TEMPLATE_NEWSLETTER);
+        assert!(matches!(
+            router.send(news).await,
+            Err(MailError::Suppressed)
+        ));
     }
 
     #[test]

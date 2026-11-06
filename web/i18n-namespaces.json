@@ -60,6 +60,11 @@
       "prefixes": ["report"]
     },
     {
+      "id": "newsletter",
+      "description": "Newsletter subscription confirm page (/newsletter/confirm). Renders without an account.",
+      "prefixes": ["newsletter_confirm"]
+    },
+    {
       "id": "legal",
       "description": "Legal chrome shared by the privacy and terms pages.",
       "prefixes": ["legal"]

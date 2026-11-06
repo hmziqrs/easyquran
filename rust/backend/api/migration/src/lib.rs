@@ -31,6 +31,7 @@ mod m000035_shared_device_check;
 mod m000050_audit_logs_evidence;
 mod m000060_reports;
 mod m000061_case_evidence;
+mod m000070_mail_budget;
 
 pub struct Migrator;
 
@@ -129,6 +130,9 @@ impl MigratorTrait for Migrator {
             Box::new(m000060_reports::Migration),
             // m000061 adds case_evidence, legal_holds and legal_hold_subjects (A25). No FK to users.
             Box::new(m000061_case_evidence::Migration),
+            // m000070 adds mail budget columns (A29): email_suppression.blocks_transactional
+            // (webhook rows default 0 until reviewed) and newsletter retention columns.
+            Box::new(m000070_mail_budget::Migration),
         ]
     }
 }

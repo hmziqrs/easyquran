@@ -18,15 +18,31 @@ use crate::{
     AppState,
 };
 
-use super::validator::{V1CreateSuppression, V1DeleteSuppression, V1ListSuppressionsQuery};
+use super::validator::{
+    V1CreateSuppression, V1DeleteSuppression, V1ListSuppressionsQuery, V1ReviewSuppression,
+};
 
 use {
     crate::{
         db::sea_models::email_suppression::{SuppressionReason, SuppressionUpsert},
-        services::mail::provider::WebhookEvent,
+        services::{abuse_limiter::limiter, mail::provider::WebhookEvent},
     },
     sha2::{Digest, Sha256},
 };
+
+/// Webhook intake budget (A29). Keyed by provider name, not IP: the caller is the
+/// mail provider's delivery service, so one IP bucket would throttle every event.
+/// Sized far above real volume; it stops a flood of forged or replayed posts.
+fn webhook_limit_config() -> crate::services::abuse_limiter::AbuseLimiterConfig {
+    crate::services::abuse_limiter::AbuseLimiterConfig {
+        temp_block_attempts: 600,
+        temp_block_range: 60,
+        temp_block_duration: 60,
+        block_retry_limit: 10_000,
+        block_range: 60 * 60,
+        block_duration: 60 * 60,
+    }
+}
 
 pub async fn list_suppressions(
     State(state): State<AppState>,
@@ -50,12 +66,11 @@ pub async fn create_suppression(
     Json(payload): Json<V1CreateSuppression>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ErrorResponse> {
     let actor_id = auth.user_required()?.id;
-    let reason = payload.reason_or_default();
     let model = SuppressionEntity::create(
         &state.sea_db,
         NewSuppression {
             recipient: payload.recipient,
-            reason,
+            reason: payload.reason,
             source: Some("admin".to_string()),
             diagnostic: payload.diagnostic,
             permanent: payload.permanent,
@@ -76,6 +91,33 @@ pub async fn create_suppression(
     Ok((
         StatusCode::CREATED,
         Json(json!({ "id": model.id, "recipient": model.recipient, "permanent": model.permanent })),
+    ))
+}
+
+pub async fn review_suppression(
+    State(state): State<AppState>,
+    auth: AuthSession,
+    Json(payload): Json<V1ReviewSuppression>,
+) -> Result<Json<serde_json::Value>, ErrorResponse> {
+    let actor_id = auth.user_required()?.id;
+    let recipient = payload.recipient.trim().to_lowercase();
+    let reviewed = SuppressionEntity::review(&state.sea_db, &recipient)
+        .await?
+        .is_some();
+    if reviewed {
+        audit::record(
+            &state.sea_db,
+            AuditEvent {
+                actor_id: Some(actor_id),
+                action: AuditAction::SuppressionReview,
+                resource_id: recipient.clone(),
+                metadata: json!({ "blocks_transactional": true }),
+            },
+        )
+        .await?;
+    }
+    Ok(Json(
+        json!({ "reviewed": reviewed, "recipient": recipient }),
     ))
 }
 
@@ -115,6 +157,8 @@ pub async fn mail_webhook_receiver(
 ) -> Result<Json<serde_json::Value>, ErrorResponse> {
     {
         use crate::services::mail::MailProvider;
+
+        limiter(&state.gate_store, "mail:webhook", webhook_limit_config()).await?;
 
         let event = WebhookEvent {
             provider: provider.clone(),
@@ -166,9 +210,11 @@ async fn apply_mail_event(
                     source: Some("mail-webhook".to_string()),
                     diagnostic: ev.diagnostic.clone(),
                     permanent: ev.permanent,
+                    blocks_transactional: false,
                 },
             )
             .await?;
+            state.mailer.note_bounce().await;
             audit::record(
                 &state.sea_db,
                 AuditEvent {
@@ -190,6 +236,7 @@ async fn apply_mail_event(
                     source: Some("mail-webhook".to_string()),
                     diagnostic: ev.diagnostic.clone(),
                     permanent: true,
+                    blocks_transactional: false,
                 },
             )
             .await?;

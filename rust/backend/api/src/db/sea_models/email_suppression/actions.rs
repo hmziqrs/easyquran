@@ -1,7 +1,9 @@
 use crate::error::{DbResult, ErrorCode, ErrorResponse};
 use ruxlog_types::PaginatedList;
 use sea_orm::entity::prelude::*;
-use sea_orm::{ConnectionTrait, DatabaseBackend, Order, QueryOrder, QuerySelect, Statement};
+use sea_orm::{
+    ConnectionTrait, DatabaseBackend, IntoActiveModel, Order, QueryOrder, QuerySelect, Statement,
+};
 use tracing::{instrument, warn};
 
 use super::{
@@ -35,11 +37,14 @@ impl Entity {
         let now = chrono::Utc::now().fixed_offset();
         let perm = up.permanent || up.reason != SuppressionReason::Bounce;
 
+        // blocks_transactional only ratchets up: a webhook repeat (false) never clears a
+        // row an admin or a send-time bounce already made blocking.
         const SQL: &str = r#"INSERT INTO email_suppression
-            (recipient, reason, source, diagnostic, permanent, last_seen, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (recipient, reason, source, diagnostic, permanent, blocks_transactional, last_seen, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (recipient) DO UPDATE SET
                 permanent = email_suppression.permanent OR EXCLUDED.permanent,
+                blocks_transactional = email_suppression.blocks_transactional OR EXCLUDED.blocks_transactional,
                 reason = CASE WHEN email_suppression.permanent
                               THEN email_suppression.reason ELSE EXCLUDED.reason END,
                 source = EXCLUDED.source,
@@ -55,6 +60,7 @@ impl Entity {
                 up.source.into(),
                 up.diagnostic.into(),
                 perm.into(),
+                up.blocks_transactional.into(),
                 now.into(),
                 now.into(),
                 now.into(),
@@ -84,9 +90,21 @@ impl Entity {
                 source: new.source.or_else(|| Some("admin".to_string())),
                 diagnostic: new.diagnostic,
                 permanent: new.permanent,
+                blocks_transactional: true,
             },
         )
         .await
+    }
+
+    /// Admin review of a webhook-sourced row (A29): the row starts blocking transactional mail.
+    pub async fn review(conn: &DbConn, recipient: &str) -> DbResult<Option<Model>> {
+        let Some(row) = Self::find_by_recipient(conn, recipient).await? else {
+            return Ok(None);
+        };
+        let mut am = row.into_active_model();
+        am.blocks_transactional = sea_orm::Set(true);
+        am.updated_at = sea_orm::Set(chrono::Utc::now().fixed_offset());
+        Ok(Some(am.update(conn).await?))
     }
 
     pub async fn delete_by_recipient(conn: &DbConn, recipient: &str) -> DbResult<bool> {
@@ -106,6 +124,7 @@ impl Entity {
             Column::Recipient,
             Column::Reason,
             Column::Permanent,
+            Column::BlocksTransactional,
             Column::Source,
             Column::LastSeen,
             Column::CreatedAt,

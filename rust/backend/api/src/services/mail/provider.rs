@@ -8,11 +8,15 @@ pub struct OutboundEmail {
     pub html: Option<String>,
     pub text: Option<String>,
     pub template: Option<&'static str>,
+    /// `List-Unsubscribe` target (RFC 2369 / RFC 8058). Set on newsletter mail only.
+    pub list_unsubscribe: Option<String>,
 }
 
 pub const TEMPLATE_VERIFICATION: &str = "verification";
 pub const TEMPLATE_PASSWORD_RESET: &str = "password_reset";
 pub const TEMPLATE_NEWSLETTER: &str = "newsletter";
+/// RFC 8058 one-click body marker, sent with every `List-Unsubscribe` URL.
+pub const LIST_UNSUBSCRIBE_POST: &str = "List-Unsubscribe=One-Click";
 /// Account-enforcement notice (A21). Enforcement-scoped: it is sent even to an
 /// address with a complaint suppression, and it is dropped (with a `suppressed`
 /// result) for bounce or manual suppression.

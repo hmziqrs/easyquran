@@ -16,18 +16,18 @@ pub struct V1DeleteSuppression {
     pub recipient: String,
 }
 
+/// Manual suppression (A29): the reason is required, so every row says why it exists.
 #[derive(Debug, Deserialize)]
 pub struct V1CreateSuppression {
     pub recipient: String,
-    #[serde(default)]
-    pub reason: Option<SuppressionReason>,
+    pub reason: SuppressionReason,
     #[serde(default)]
     pub permanent: bool,
     pub diagnostic: Option<String>,
 }
 
-impl V1CreateSuppression {
-    pub fn reason_or_default(&self) -> SuppressionReason {
-        self.reason.unwrap_or(SuppressionReason::Manual)
-    }
+/// Admin review of a webhook-sourced suppression (A29).
+#[derive(Debug, Deserialize)]
+pub struct V1ReviewSuppression {
+    pub recipient: String,
 }
