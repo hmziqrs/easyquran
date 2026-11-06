@@ -686,8 +686,10 @@ pub async fn prepare_twofa_setup(
     })?;
     let backup_hashes = {
         let codes_for_hash = backup_codes.clone();
-        crate::services::password_work::run(move || twofa::hash_backup_codes(&codes_for_hash))
-            .await?
+        crate::services::password_work::run_authenticated(move || {
+            twofa::hash_backup_codes(&codes_for_hash)
+        })
+        .await?
     };
     let backup_hashes_json = serde_json::json!(backup_hashes);
 
@@ -800,7 +802,7 @@ async fn verify_current_second_factor(
         let updated_hashes = {
             let stored_clone = stored_vec;
             let code_clone = code.to_string();
-            crate::services::password_work::run(move || {
+            crate::services::password_work::run_authenticated(move || {
                 twofa::consume_backup_code(&stored_clone, &code_clone)
             })
             .await?

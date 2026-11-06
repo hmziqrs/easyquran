@@ -368,6 +368,7 @@ pub struct AuthMetrics {
     pub login_success: Counter<u64>,
     pub login_failure: Counter<u64>,
     pub session_created: Counter<u64>,
+    pub password_work_saturated: Counter<u64>,
     pub password_verification_duration: Histogram<f64>,
 }
 
@@ -389,6 +390,12 @@ impl AuthMetrics {
             session_created: meter
                 .u64_counter("auth.session.created")
                 .with_description("Total sessions created")
+                .build(),
+            password_work_saturated: meter
+                .u64_counter("auth.password_work.saturated")
+                .with_description(
+                    "Password work refused: lane full past the queue wait or waiter cap",
+                )
                 .build(),
             password_verification_duration: meter
                 .f64_histogram("auth.password.verification.duration")

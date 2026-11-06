@@ -84,7 +84,8 @@ impl AuthBackend {
     }
 
     async fn run_blocking_dummy_verify(password: String) -> Result<(), AuthError> {
-        super::password_work::run(move || Self::run_dummy_password_verify(password)).await??;
+        super::password_work::run_dummy(move || Self::run_dummy_password_verify(password))
+            .await??;
         Ok(())
     }
 
@@ -561,7 +562,8 @@ impl RuxAuthBackend for AuthBackend {
         };
 
         let password = password.to_string();
-        super::password_work::run(move || Self::check_password(password, &pwd_hash)).await?
+        super::password_work::run_authenticated(move || Self::check_password(password, &pwd_hash))
+            .await?
     }
 
     async fn on_login(&self, user: &Self::User) -> Result<(), AuthError> {
