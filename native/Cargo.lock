@@ -1054,6 +1054,7 @@ dependencies = [
  "nsh-platform-windows",
  "nsh-query",
  "nsh-testing",
+ "nsh-updater",
  "objc2",
  "objc2-core-foundation",
  "objc2-ui-kit",

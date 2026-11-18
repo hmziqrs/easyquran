@@ -5,9 +5,11 @@
 
 pub mod appearance;
 pub mod auth;
+pub mod consent;
 pub mod locale;
 pub mod notes;
 pub mod pins;
 pub mod quran;
 pub mod reader;
+pub mod settings;
 pub mod sync;
