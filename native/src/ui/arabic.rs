@@ -19,6 +19,14 @@
 //! Scheherazade New and Noto Naskh Arabic are selectable on the web from
 //! npm packages this app does not ship; choosing one here names the
 //! family and the platform falls back to its own Arabic face.
+//!
+//! The shipped `uthmanic-hafs-v22.ttf` carries one cmap entry the upstream
+//! file lacks: U+06DF SMALL HIGH ROUNDED ZERO maps to `afii57458`, the
+//! face's rounded-zero mark (the glyph KFGQPC's own text reaches through
+//! U+0652). Upstream maps U+06DF (and U+06E3, U+06EB) to `uni06DF`, a
+//! spacing dotted-circle placeholder (GDEF class 1, advance 1442), so the
+//! Tanzil text's 3988 silent-letter marks drew as dotted circles in every
+//! engine (CoreText and HarfBuzz alike). Glyphs, GSUB, GPOS untouched.
 
 use nsh_core::LineHeight;
 use nsh_core::element::WritingDirection;
@@ -325,7 +333,7 @@ pub fn ayah_text(
         .text_size(move || px(style().drawn_size()))
         .line_height(move || LineHeight::Multiple(style().line_height))
         .text_color(tokens::quran_foreground);
-    for segment in segments {
+    for segment in cluster_runs(segments) {
         paragraph = paragraph.child(run(segment));
     }
     if let Some(number) = number {
@@ -341,6 +349,75 @@ pub fn plain_ayah(
     style: impl Fn() -> ArabicStyle + Copy + 'static,
 ) -> Text {
     ayah_text(vec![ArabicSegment::plain(verse)], number, style)
+}
+
+/// Whether `c` is a combining mark that shapes onto the letter before it
+/// (Unicode Mn in the Arabic blocks, and the generic combining blocks).
+fn is_combining_mark(c: char) -> bool {
+    matches!(
+        c,
+        '\u{0300}'..='\u{036F}'
+            | '\u{0610}'..='\u{061A}'
+            | '\u{064B}'..='\u{065F}'
+            | '\u{0670}'
+            | '\u{06D6}'..='\u{06DC}'
+            | '\u{06DF}'..='\u{06E4}'
+            | '\u{06E7}'..='\u{06E8}'
+            | '\u{06EA}'..='\u{06ED}'
+            | '\u{08D3}'..='\u{08E1}'
+            | '\u{08E3}'..='\u{08FF}'
+            | '\u{FE20}'..='\u{FE2F}'
+    )
+}
+
+/// Moves span boundaries off grapheme clusters, so no span starts with a
+/// combining mark: a mark split from its letter shapes alone, and the
+/// platform draws it on a dotted circle (U+25CC). The bytes, and their
+/// order, are unchanged; only where one run ends and the next begins
+/// moves. A run's leading marks join the run before it (they belong to its
+/// last letter's cluster); a colored run made of marks only instead takes
+/// that letter's whole cluster, so its rule stays visible.
+pub fn cluster_runs(segments: Vec<ArabicSegment>) -> Vec<ArabicSegment> {
+    let mut out: Vec<(String, Option<TajweedClass>)> = Vec::with_capacity(segments.len());
+    for segment in segments {
+        let mut text = segment.text.to_string();
+        let lead = text
+            .find(|c: char| !is_combining_mark(c))
+            .unwrap_or(text.len());
+        if lead > 0 && !out.is_empty() {
+            if lead == text.len() && segment.class.is_some() {
+                pull_cluster(&mut out, &mut text);
+            } else if let Some((last, _)) = out.last_mut() {
+                last.extend(text.drain(..lead));
+            }
+        }
+        if !text.is_empty() {
+            out.push((text, segment.class));
+        }
+    }
+    out.into_iter()
+        .map(|(text, class)| ArabicSegment {
+            text: text.into(),
+            class,
+        })
+        .collect()
+}
+
+/// Moves the last cluster (base letter and its marks) of the runs in `out`
+/// to the front of `text`, dropping runs left empty.
+fn pull_cluster(out: &mut Vec<(String, Option<TajweedClass>)>, text: &mut String) {
+    while let Some((last, _)) = out.last_mut() {
+        let base = last.rfind(|c: char| !is_combining_mark(c));
+        let from = base.unwrap_or(0);
+        text.insert_str(0, &last[from..]);
+        last.truncate(from);
+        if last.is_empty() {
+            out.pop();
+        }
+        if base.is_some() {
+            return;
+        }
+    }
 }
 
 /// A run as a span: plain runs inherit the paragraph's color, tajweed
@@ -373,4 +450,87 @@ pub fn ayah_ornament(
         .font_weight(FontWeight::NORMAL)
         .text_size(move || px(style().size * ORNAMENT_SCALE))
         .text_color(move || nsh_base::theme().primary)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use eq_core::quran::db::QuranDb;
+    use eq_core::quran::view::tajweed::parse_tajweed_segments;
+
+    fn segments_of(text: &str) -> Vec<ArabicSegment> {
+        parse_tajweed_segments(text)
+            .into_iter()
+            .map(|s| ArabicSegment {
+                text: s.text.into(),
+                class: s.rule.and_then(|r| TajweedClass::from_letter(r.letter())),
+            })
+            .collect()
+    }
+
+    fn joined(segments: &[ArabicSegment]) -> String {
+        segments.iter().map(|s| s.text.as_str()).collect()
+    }
+
+    #[test]
+    fn leading_marks_join_the_letter_before() {
+        let runs = cluster_runs(vec![
+            ArabicSegment::plain("صِر"),
+            ArabicSegment::rule("\u{064E}\u{0672}", TajweedClass::MaddaNormal),
+            ArabicSegment::plain("\u{0651}طَ"),
+        ]);
+        assert_eq!(
+            runs,
+            vec![
+                ArabicSegment::plain("صِر\u{064E}"),
+                ArabicSegment::rule("\u{0672}\u{0651}", TajweedClass::MaddaNormal),
+                ArabicSegment::plain("طَ"),
+            ]
+        );
+        // A colored run of marks only takes the whole cluster.
+        let runs = cluster_runs(vec![
+            ArabicSegment::plain("بِسْ"),
+            ArabicSegment::rule("\u{0650}", TajweedClass::MaddaNormal),
+        ]);
+        assert_eq!(
+            runs,
+            vec![
+                ArabicSegment::plain("بِ"),
+                ArabicSegment::rule("سْ\u{0650}", TajweedClass::MaddaNormal),
+            ]
+        );
+    }
+
+    /// Quran-text guard: re-cutting the runs of every tajweed verse keeps
+    /// the text byte for byte, and no run but the first starts with a mark.
+    #[test]
+    fn tajweed_corpus_runs_keep_text_verbatim() {
+        let root = std::env::var_os("EQ_QURAN_DB")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::PathBuf::from("/Users/hmziq/os/easyquran/db/quran"));
+        let path = root.join("arabic/quran-tajweed.sqlite");
+        if !path.is_file() {
+            eprintln!(
+                "NOTICE: {} absent; tajweed run guard skipped",
+                path.display()
+            );
+            return;
+        }
+        let rows = QuranDb::open(&path).unwrap().all().unwrap();
+        assert_eq!(rows.len(), 6236);
+        for row in &rows {
+            let parsed = segments_of(&row.text);
+            let runs = cluster_runs(parsed.clone());
+            assert_eq!(joined(&runs), joined(&parsed), "{}", row.key);
+            for run in runs.iter().skip(1) {
+                assert!(!run.text.is_empty(), "{} empty run", row.key);
+                let first = run.text.chars().next().unwrap_or(' ');
+                assert!(
+                    !is_combining_mark(first),
+                    "{} run starts with a mark",
+                    row.key
+                );
+            }
+        }
+    }
 }
