@@ -77,6 +77,14 @@ export default defineConfig({
       "valibot",
     ],
   },
+  build: {
+    // CSP: no `font-src`, so fonts fall back to `default-src 'self'`. A sub-4 KB font subset
+    // (JetBrains Mono's) inlined as `data:font/woff2` is blocked by that. Keep fonts as
+    // same-origin files instead of widening the CSP with `font-src data:`. Other assets keep
+    // Vite's default limit (`undefined` = default behaviour).
+    assetsInlineLimit: (filePath) =>
+      /\.(?:woff2?|ttf|otf|eot)$/iu.test(filePath) ? false : undefined,
+  },
   optimizeDeps: {
     // `@sqlite.org/sqlite-wasm` is imported only by the OPFS worker, which is loaded through
     // `new Worker(new URL(...))` — a graph Vite's cold dependency scan never crawls. Left out,
