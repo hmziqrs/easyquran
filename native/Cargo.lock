@@ -1055,7 +1055,6 @@ dependencies = [
  "objc2",
  "objc2-core-foundation",
  "objc2-ui-kit",
- "rust-i18n",
  "serde",
  "serde_json",
 ]

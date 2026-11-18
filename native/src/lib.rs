@@ -1,14 +1,12 @@
 //! The app's Rust UI: its root component, which `nsh run`, `nsh package`
-//! and `cargo run` mount. Owned by the shell area; keep the `i18n!` block,
-//! which every `t!` call in the crate depends on.
-
-#[macro_use]
-extern crate rust_i18n;
+//! and `cargo run` mount. Owned by the shell area.
 
 use nsh_base::theme;
 use nsh_core::prelude::*;
 
-i18n!("i18n", fallback = "en");
+/// The product name (`SITE.name` in `web/src/lib/config/site.ts`): a
+/// brand, never translated.
+pub const APP_NAME: &str = "EasyQuran";
 
 pub mod app;
 pub mod features;

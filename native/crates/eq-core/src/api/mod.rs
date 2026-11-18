@@ -24,13 +24,9 @@ pub use session::{ApiClient, ApiReply};
 /// not `Send`).
 pub type ApiFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ApiError>> + 'a>>;
 
-/// A JSON POST through the session transport (CSRF, `x-eq-session`, 401
-/// handling included). The sync slice depends on this, not on
-/// [`ApiClient`], so it can be tested with a fake.
-pub trait ApiPost {
-    /// `POST path` with `body`; the reply body (`Null` when empty).
-    fn post_json(&self, path: &str, body: serde_json::Value) -> ApiFuture<'_, serde_json::Value>;
-}
+// Sync goes through `ApiClient` too: it implements
+// `sync::transport::{SyncPost, SyncGet}` (session.rs), so every sync call
+// carries `x-eq-session` and CSRF and obeys the D6 rules.
 
 #[cfg(test)]
 mod tests;

@@ -65,6 +65,17 @@ impl QuranStore {
             .unwrap_or_else(|| std::env::temp_dir().join("easyquran").join("quran"));
         let base =
             files::dev_quran_dir().map_or_else(ArtifactBase::default, ArtifactBase::Directory);
+        Self::with_root(transport, api, root, base)
+    }
+
+    /// The store over artifact directory `root` and artifact `base` (the
+    /// root's injected data directory; tests use a temp directory).
+    pub fn with_root(
+        transport: Rc<dyn Transport>,
+        api: QuranApi,
+        root: std::path::PathBuf,
+        base: ArtifactBase,
+    ) -> Self {
         let store = Self {
             installed: signal(Vec::new()),
             downloads: signal(BTreeMap::new()),

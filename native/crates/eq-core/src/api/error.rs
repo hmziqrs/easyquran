@@ -84,7 +84,9 @@ impl HttpError {
             .map(str::to_owned);
         out.message = o.get("message").and_then(Value::as_str).map(str::to_owned);
         out.context = o.get("context").filter(|v| !v.is_null()).cloned();
-        if let Some(secs) = o.get("retry_after").and_then(Value::as_u64) {
+        // `retryAfter`: the sync routes' throttle body.
+        let body_retry = o.get("retry_after").or_else(|| o.get("retryAfter"));
+        if let Some(secs) = body_retry.and_then(Value::as_u64) {
             out.retry_after = Some(secs);
         }
         out.request_id = o

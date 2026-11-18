@@ -176,7 +176,12 @@ impl SyncStore {
     /// Opens the database under `<data_dir>/sync` (in memory where the host
     /// keeps no files), off the engine thread. `ready` turns true once open.
     pub fn open(self) {
-        let dir: Option<PathBuf> = data_dir().map(|d| d.join(DB_FOLDER));
+        self.open_at(data_dir().map(|d| d.join(DB_FOLDER)));
+    }
+
+    /// Opens the database in `dir` (in memory for `None`): the root's
+    /// injected data directory, a temp directory in tests.
+    pub fn open_at(self, dir: Option<PathBuf>) {
         let this = self;
         spawn(async move {
             match open_db(dir).await {

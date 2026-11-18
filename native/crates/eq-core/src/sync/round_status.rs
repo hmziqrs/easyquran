@@ -3,7 +3,6 @@
 
 use serde_json::{Value, json};
 
-use super::transport::SyncHttpError;
 use crate::net::NetError;
 
 /// The wire protocol this build speaks.
@@ -71,7 +70,7 @@ impl RoundFailure {
 
 /// Maps a failed `SyncPost` call through the status table.
 pub fn classify(label: &str, mismatch_message: &str, error: &NetError) -> RoundFailure {
-    let Some(http) = SyncHttpError::from_net_error(error) else {
+    let Some(http) = error.as_http() else {
         return match error {
             NetError::Offline(_) => RoundFailure::Failed {
                 message: "offline".into(),
@@ -90,7 +89,7 @@ pub fn classify(label: &str, mismatch_message: &str, error: &NetError) -> RoundF
         },
         403 => RoundFailure::Paused {
             status: 403,
-            account_mismatch: http.message() == Some(mismatch_message),
+            account_mismatch: http.message.as_deref() == Some(mismatch_message),
         },
         426 => RoundFailure::UpgradeRequired,
         429 => RoundFailure::RetryAfter {
@@ -140,7 +139,11 @@ mod tests {
     use super::*;
 
     fn failure(status: u16, body: Value) -> RoundFailure {
-        let err = SyncHttpError::new(status, None, body).into_net_error();
+        let message = body
+            .get("message")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let err = NetError::http(status, None, message);
         classify("bookmarks sync", "Bookmark sync account changed", &err)
     }
 

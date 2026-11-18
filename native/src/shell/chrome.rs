@@ -13,7 +13,6 @@ use nsh_core::{
 };
 
 // nsh_core 0.5.0's prelude has a `t!` of its own; the app translates with rust-i18n.
-use rust_i18n::t;
 
 use crate::shell::{nav, palette, routes::Route, undo};
 use crate::ui::desktop::set_title_bar;
@@ -76,7 +75,7 @@ fn menus(is_dark: bool) -> Vec<MenuItem> {
         |route: Route| MenuItem::new(route.label()).on_select(move || nav::open(route.clone()));
     vec![
         MenuItem::submenu(
-            t!("app.name"),
+            crate::APP_NAME,
             [
                 MenuItem::role(MenuRole::About),
                 MenuItem::separator(),

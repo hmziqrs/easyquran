@@ -115,6 +115,43 @@ pub enum NetError {
     /// The bytes could not be encoded or decoded.
     #[error("decode: {0}")]
     Decode(String),
+    /// A non-2xx reply, already decoded by the API client. A [`Transport`]
+    /// never returns this (a non-2xx status is a [`Response`]); the session
+    /// transport's JSON seams (`sync::transport::{SyncPost, SyncGet}`) do,
+    /// so callers can act on the status table.
+    #[error("http {}", .0.status)]
+    Http(HttpFailure),
+}
+
+impl NetError {
+    /// A non-2xx failure with `status`, `Retry-After` seconds and the
+    /// server's `message` (debug builds; sync account-mismatch messages).
+    pub fn http(status: u16, retry_after: Option<u64>, message: Option<String>) -> Self {
+        NetError::Http(HttpFailure {
+            status,
+            retry_after,
+            message,
+        })
+    }
+
+    /// The HTTP failure, if this is one.
+    pub fn as_http(&self) -> Option<&HttpFailure> {
+        match self {
+            NetError::Http(h) => Some(h),
+            _ => None,
+        }
+    }
+}
+
+/// A non-2xx reply as the JSON seams report it. Never holds a session value
+/// or CSRF token: the backend never echoes either.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HttpFailure {
+    pub status: u16,
+    /// `Retry-After` (header or body), in seconds.
+    pub retry_after: Option<u64>,
+    /// The body's `message`, when sent.
+    pub message: Option<String>,
 }
 
 /// A boxed, non-`Send` future of a transport call.

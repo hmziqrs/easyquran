@@ -105,12 +105,9 @@ pub fn follow_system() {
 }
 
 /// Tells NSH (its `locale()` / `locale_settings()`, which `nsh_base`'s
-/// date and time controls read) and the interim `rust-i18n` table (the
-/// shell's `t!("app.name")`) about the choice.
+/// date and time controls read) about the choice.
 fn apply(pref: Option<Locale>) {
     nsh_core::i18n::set_locale(pref.and_then(|l| nsh_core::platform::Locale::parse(l.code())));
-    let shown = pref.unwrap_or_else(|| untracked(system_locale).unwrap_or_default());
-    rust_i18n::set_locale(shown.code());
 }
 
 /// Whether the UI lays out right to left. Reading it subscribes.

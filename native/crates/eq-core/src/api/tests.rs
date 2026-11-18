@@ -13,15 +13,15 @@ use std::{
 use serde_json::{Value, json};
 
 use super::{
-    ApiClient, ApiConfig, ApiError, ApiPost, AuthMachine, AuthPhase, Secret, SignInStep,
-    TransitionKind,
+    ApiClient, ApiConfig, ApiError, AuthMachine, AuthPhase, Secret, SignInStep, TransitionKind,
     session::{CSRF_HEADER, SESSION_HEADER, SESSION_KEY},
 };
 use crate::{
     clock::ManualClock,
     device::{DeviceEnv, FormFactor, Platform, RegisterOutcome, ensure_device_registered},
     kv::{KeyStoreKind, KeyValue, KvError, MemoryKv, SecretStore},
-    net::{NetFuture, Request, Response, Transport},
+    net::{NetError, NetFuture, Request, Response, Transport},
+    sync::transport::SyncPost,
 };
 
 /// Runs a future whose awaits all complete at once (the fake transport's).
@@ -327,6 +327,23 @@ fn a_csrf_refusal_refetches_the_token_and_retries_once() {
         Some("s"),
         "not a lost session"
     );
+}
+
+#[test]
+fn sync_posts_report_http_failures_with_retry_after() {
+    let (script, secrets, client) = setup(KeyStoreKind::File);
+    secrets.set(SESSION_KEY, "s").unwrap();
+    script.reply("/csrf/v1/generate", 200, &[], json!({"token": "c"}));
+    script.reply(
+        "/bookmark/v1/sync",
+        429,
+        &[("retry-after", "120")],
+        json!({"type": "SRV_004", "status": 429}),
+    );
+    let err = block_on(client.post_json("/bookmark/v1/sync", json!({}))).unwrap_err();
+    assert_eq!(err, NetError::http(429, Some(120), None));
+    assert_eq!(header(&script.sent()[1], SESSION_HEADER), Some("s"));
+    assert_eq!(header(&script.sent()[1], CSRF_HEADER), Some("c"));
 }
 
 #[test]

@@ -5,7 +5,6 @@ use nsh_base::theme;
 use nsh_core::prelude::*;
 
 // nsh_core 0.5.0's prelude has a `t!` of its own; the app translates with rust-i18n.
-use rust_i18n::t;
 
 use crate::shell::{lifecycle, nav};
 
@@ -29,7 +28,7 @@ pub fn status_bar() -> impl IntoElement {
         .border_color(move || theme().border)
         .when(!native, |bar| bar.bg(move || theme().card))
         .child(
-            text(t!("app.name").to_string())
+            text(crate::APP_NAME)
                 .text_xs()
                 .text_color(move || theme().muted_foreground),
         )

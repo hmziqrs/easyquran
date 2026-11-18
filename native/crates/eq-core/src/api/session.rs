@@ -23,10 +23,11 @@ use std::{cell::RefCell, rc::Rc};
 
 use serde_json::Value;
 
-use super::{ApiError, ApiFuture, ApiPost, HttpError, Secret, config::ApiConfig};
+use super::{ApiError, ApiFuture, HttpError, Secret, config::ApiConfig};
 use crate::{
     kv::SecretStore,
-    net::{Method, Request, Transport},
+    net::{Method, NetError, NetFuture, Request, Transport},
+    sync::transport::{SyncGet, SyncPost},
 };
 
 /// Request and response header carrying the session value.
@@ -315,15 +316,49 @@ impl ApiClient {
     }
 }
 
-impl ApiPost for ApiClient {
-    fn post_json(&self, path: &str, body: Value) -> ApiFuture<'_, Value> {
-        let path = path.to_owned();
-        Box::pin(async move { self.post(&path, body).await.map(|reply| reply.body) })
+/// The sync seams' error: transport failures pass through, a non-2xx reply
+/// becomes [`NetError::Http`] (status, `Retry-After`, server `message`). The
+/// D6 rules (CSRF retry, rotation, 401 → session lost) already ran.
+fn to_net_error(error: ApiError) -> NetError {
+    match error {
+        ApiError::Net(net) => net,
+        ApiError::Http(http) => NetError::http(http.status, http.retry_after, http.message),
+        ApiError::Decode(message) => NetError::Decode(message),
     }
 }
 
-impl ApiPost for Rc<ApiClient> {
-    fn post_json(&self, path: &str, body: Value) -> ApiFuture<'_, Value> {
+impl SyncPost for ApiClient {
+    fn post_json(&self, path: &str, body: Value) -> NetFuture<'_, Value> {
+        let path = path.to_owned();
+        Box::pin(async move {
+            self.post(&path, body)
+                .await
+                .map(|reply| reply.body)
+                .map_err(to_net_error)
+        })
+    }
+}
+
+impl SyncGet for ApiClient {
+    fn get_json(&self, path: &str) -> NetFuture<'_, Value> {
+        let path = path.to_owned();
+        Box::pin(async move {
+            self.get(&path)
+                .await
+                .map(|reply| reply.body)
+                .map_err(to_net_error)
+        })
+    }
+}
+
+impl SyncPost for Rc<ApiClient> {
+    fn post_json(&self, path: &str, body: Value) -> NetFuture<'_, Value> {
         self.as_ref().post_json(path, body)
+    }
+}
+
+impl SyncGet for Rc<ApiClient> {
+    fn get_json(&self, path: &str) -> NetFuture<'_, Value> {
+        self.as_ref().get_json(path)
     }
 }

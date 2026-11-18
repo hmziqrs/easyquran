@@ -11,44 +11,103 @@ use std::rc::Rc;
 
 use eq_core::{
     api::{
-        ApiClient, ApiError, AuthMachine, AuthPhase, Secret, SessionProbe, SignInStep,
+        ApiClient, ApiConfig, ApiError, AuthMachine, AuthPhase, Secret, SessionProbe, SignInStep,
         TransitionKind,
         auth_state::Transition,
         types::{SignInOutcome, UserProfile},
     },
     clock::SystemClock,
-    device::{RegisterOutcome, ensure_device_registered},
+    device::{DeviceEnv, RegisterOutcome, ensure_device_registered},
+    kv::{KeyValue, SecretStore},
+    net::Transport,
 };
 use nsh_core::prelude::*;
 
-use crate::services::{auth as service, storage::NshKv};
+use crate::services::{
+    auth as service,
+    storage::{NshKv, SharedSecrets},
+    transport::NshTransport,
+};
+
+/// What the auth store is built from. The app passes
+/// [`AuthDeps::platform`]; tests inject a scripted transport and memory
+/// stores (`app::provide`).
+pub struct AuthDeps {
+    pub config: ApiConfig,
+    pub transport: Rc<dyn Transport>,
+    pub kv: Rc<dyn KeyValue>,
+    /// `None`: the platform secret store, opened off the engine thread.
+    pub secrets: Option<Rc<dyn SecretStore>>,
+    pub device: DeviceEnv,
+}
+
+impl AuthDeps {
+    /// The real services: NSH fetch, NSH storage, Keychain/file secrets.
+    pub fn platform() -> Self {
+        Self {
+            config: service::api_config(),
+            transport: Rc::new(NshTransport),
+            kv: Rc::new(NshKv),
+            secrets: None,
+            device: service::device_env(),
+        }
+    }
+}
 
 /// Auth state for screens.
 #[derive(Clone, Copy)]
 pub struct AuthStore {
     phase: Signal<AuthPhase>,
     ready: Signal<bool>,
+    deleted: Signal<Option<i32>>,
     machine: Stored<Option<Rc<AuthMachine>>>,
     registering: Stored<bool>,
+    kv: Stored<Rc<dyn KeyValue>>,
+    device: Stored<DeviceEnv>,
 }
 
 impl AuthStore {
-    /// Makes the store and starts it: secrets load in `blocking`, then the
-    /// session is restored. Call once, in the root.
+    /// Makes the store over the platform services and starts it. Call
+    /// once, in the root (`app::provide` does).
     pub fn new() -> Self {
+        Self::with(AuthDeps::platform())
+    }
+
+    /// Makes the store over `deps` and starts it: secrets load (in
+    /// `blocking` for the platform store), then the session is restored.
+    pub fn with(deps: AuthDeps) -> Self {
+        let AuthDeps {
+            config,
+            transport,
+            kv,
+            secrets,
+            device,
+        } = deps;
         let store = Self {
             phase: signal(AuthPhase::Unknown),
             ready: signal(false),
+            deleted: signal(None),
             machine: stored(None),
             registering: stored(false),
+            kv: stored(kv),
+            device: stored(device),
         };
-        spawn(async move { store.start().await });
+        spawn(async move { store.start(config, transport, secrets).await });
         store
     }
 
-    async fn start(self) {
-        let secrets = open_secrets().await;
-        let (_client, machine) = service::build(secrets);
+    async fn start(
+        self,
+        config: ApiConfig,
+        transport: Rc<dyn Transport>,
+        secrets: Option<Rc<dyn SecretStore>>,
+    ) {
+        let secrets: Rc<dyn SecretStore> = match secrets {
+            Some(secrets) => secrets,
+            None => Rc::new(SharedSecrets(open_secrets().await)),
+        };
+        let client = Rc::new(ApiClient::new(config, transport, secrets));
+        let machine = AuthMachine::new(client, self.kv.get());
         let phase = self.phase;
         machine.subscribe(move |p| {
             let _ = phase.try_set(p.clone());
@@ -87,7 +146,7 @@ impl AuthStore {
     }
 
     /// The API client, once started (other stores call endpoints and
-    /// `ApiPost::post_json` through it).
+    /// sync through its `SyncPost`/`SyncGet` impls).
     pub fn client(&self) -> Option<Rc<ApiClient>> {
         self.machine().map(|m| m.client().clone())
     }
@@ -144,11 +203,23 @@ impl AuthStore {
         }
     }
 
-    /// After `user/v1/delete`: wipes this install's records of the account.
+    /// After `user/v1/delete`: wipes this install's records of the account
+    /// (the app root then purges its sync file).
     pub fn account_deleted(self, user_id: i32) {
         if let Some(m) = self.machine() {
             m.account_deleted(user_id);
         }
+        self.deleted.set(Some(user_id));
+    }
+
+    /// The account last deleted on this install (tracked).
+    pub fn deleted_account(&self) -> Option<i32> {
+        self.deleted.get()
+    }
+
+    /// The key-value store account records live in.
+    pub fn kv(&self) -> Rc<dyn KeyValue> {
+        self.kv.get()
     }
 
     /// Registers this device when due (sign-in, push token change). One at a
@@ -161,13 +232,14 @@ impl AuthStore {
             return;
         };
         self.registering.with(|r| *r = true);
+        let kv = self.kv.get();
+        let env = self.device.get();
         spawn(async move {
             // Runs after the transition publishes the new user.
             if let Some(user) = machine.user() {
-                let env = service::device_env();
                 let outcome = ensure_device_registered(
                     machine.client(),
-                    &NshKv,
+                    kv.as_ref(),
                     &SystemClock,
                     &env,
                     &user,

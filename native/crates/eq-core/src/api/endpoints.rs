@@ -1,6 +1,7 @@
 //! Typed calls for every endpoint `web/` uses, as methods on [`ApiClient`].
 //! Bookmark, preference and reading-session sync are not here: the sync
-//! slice builds them on [`super::ApiPost`].
+//! engine calls them through `ApiClient`'s
+//! [`crate::sync::transport::SyncPost`] impl.
 //!
 //! Admin-only modules (`analytics/v1/*` dashboards, moderation, users
 //! admin) are not called by `web/` and are not here either.

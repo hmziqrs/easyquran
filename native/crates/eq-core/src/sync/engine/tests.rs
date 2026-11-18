@@ -21,10 +21,7 @@ use crate::{
         sessions::{self, ReaderTarget},
         test_support::{T0, TestClock},
     },
-    sync::{
-        ids::SeededRandom,
-        transport::{SyncHttpError, SyncPost},
-    },
+    sync::{ids::SeededRandom, transport::SyncPost},
 };
 
 fn block_on<F: Future>(future: F) -> F::Output {
@@ -118,9 +115,7 @@ impl Server {
                 "/reading-session/v1/sync" => sessions::MISMATCH_MESSAGE,
                 _ => preferences::MISMATCH_MESSAGE,
             };
-            return Err(
-                SyncHttpError::new(403, None, json!({ "message": message })).into_net_error()
-            );
+            return Err(NetError::http(403, None, Some(message.to_owned())));
         }
         let scripted = self.script.borrow_mut().pop_front();
         if let Some(Script::Fail(err)) = scripted {
@@ -130,7 +125,7 @@ impl Server {
         // Daily ceiling: nothing fits → 429; some fit → the rest `capped`.
         let mut room = self.ceiling.get();
         if room == Some(0) && !mutations.is_empty() {
-            return Err(SyncHttpError::new(429, Some(3600), json!({})).into_net_error());
+            return Err(NetError::http(429, Some(3600), None));
         }
         let mut users = self.users.borrow_mut();
         let data = users.entry(user).or_default();
@@ -837,9 +832,7 @@ fn a_401_keeps_rows_dirty_and_pauses_without_error() {
     let a = Device::signed_in(8, 7, "dev");
     bookmarks::toggle(&mut a.store.borrow_mut(), 1, 1, None).unwrap();
     for _ in 0..3 {
-        server.push_script(Script::Fail(
-            SyncHttpError::new(401, None, Value::Null).into_net_error(),
-        ));
+        server.push_script(Script::Fail(NetError::http(401, None, None)));
     }
     a.sync(&server);
     let status = a.status();
@@ -865,9 +858,7 @@ fn server_errors_back_off_and_rows_stay_dirty() {
     let server = Server::new();
     let a = Device::signed_in(10, 7, "dev");
     bookmarks::toggle(&mut a.store.borrow_mut(), 1, 1, None).unwrap();
-    server.push_script(Script::Fail(
-        SyncHttpError::new(503, None, Value::Null).into_net_error(),
-    ));
+    server.push_script(Script::Fail(NetError::http(503, None, None)));
     a.sync_with(&server, true, Some(SyncDomain::Bookmarks));
     let status = a.status();
     assert_eq!(status.phase, Phase::Error);

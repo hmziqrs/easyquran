@@ -9,7 +9,6 @@ use nsh_core::element::ImageSrc;
 use nsh_core::prelude::*;
 
 // nsh_core's prelude has a `t!` of its own; the app translates with rust-i18n.
-use rust_i18n::t;
 
 /// The open-pages mark (64×64).
 pub const BRAND_MARK_SVG: &str = include_str!("../../assets/brand/open-pages.svg");
@@ -29,7 +28,7 @@ pub fn brand_mark(side: f32) -> Svg {
 /// half in the primary color. `on_accent` inverts it for a primary
 /// surface. Named for screen readers by the app's name.
 pub fn brand(on_accent: bool) -> View {
-    let name = t!("app.name").to_lowercase();
+    let name = crate::APP_NAME.to_lowercase();
     let split = name.char_indices().nth(4).map_or(name.len(), |(at, _)| at);
     let (head, tail) = name.split_at(split);
     let (head, tail) = (head.to_owned(), tail.to_owned());

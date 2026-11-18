@@ -11,7 +11,7 @@
 
 use nsh_core::{element::AnyElement, prelude::*};
 
-pub use eq_core::routes::{ReaderScope, ReaderTarget, TranslationRef};
+pub use eq_core::routes::{ReaderLink, ReaderMode, ReaderScope, ReaderTarget, TranslationRef};
 
 use crate::features;
 
@@ -65,7 +65,8 @@ pub enum Route {
     SurahIndex,
     JuzIndex,
     PagesIndex,
-    Reader(ReaderTarget),
+    /// A reader target with the link's `?mode=` and `?more=`.
+    Reader(ReaderLink),
     Search,
     Bookmarks,
     Yours,
@@ -86,7 +87,11 @@ pub enum Route {
     Totp,
     Appeal(Option<String>),
     Report,
-    NewsletterConfirm(String),
+    /// `/newsletter/confirm#email=…&token=…`.
+    NewsletterConfirm {
+        email: String,
+        token: String,
+    },
     About,
     Faq,
     Contact,
@@ -147,12 +152,12 @@ impl Route {
     /// keep their state. Unique per route value.
     pub fn key(&self) -> String {
         match self {
-            Route::Reader(target) => format!("reader:{target:?}"),
+            Route::Reader(link) => format!("reader:{link:?}"),
             Route::YoursCard(id) => format!("yours-card:{id}"),
             Route::Zikr { slug, translation } => format!("zikr:{slug}:{translation:?}"),
             Route::Settings(section) => format!("settings:{}", section.slug()),
             Route::Appeal(token) => format!("appeal:{token:?}"),
-            Route::NewsletterConfirm(token) => format!("newsletter:{token}"),
+            Route::NewsletterConfirm { email, token } => format!("newsletter:{email}:{token}"),
             route => route.key_str().into(),
         }
     }
@@ -183,7 +188,7 @@ impl Route {
             Route::Totp => "totp",
             Route::Appeal(_) => "appeal",
             Route::Report => "report",
-            Route::NewsletterConfirm(_) => "newsletter-confirm",
+            Route::NewsletterConfirm { .. } => "newsletter-confirm",
             Route::About => "about",
             Route::Faq => "faq",
             Route::Contact => "contact",
@@ -224,7 +229,7 @@ impl Route {
             Route::Totp => "Two-factor code",
             Route::Appeal(_) => "Appeal",
             Route::Report => "Report",
-            Route::NewsletterConfirm(_) => "Newsletter",
+            Route::NewsletterConfirm { .. } => "Newsletter",
             Route::About => "About",
             Route::Faq => "FAQ",
             Route::Contact => "Contact",
@@ -375,7 +380,7 @@ impl Route {
             Route::SurahIndex => features::index::surah_index_page().into_element(),
             Route::JuzIndex => features::index::juz_index_page().into_element(),
             Route::PagesIndex => features::index::pages_index_page().into_element(),
-            Route::Reader(target) => features::reader::page(target).into_element(),
+            Route::Reader(link) => features::reader::page(link).into_element(),
             Route::Search => features::search::page().into_element(),
             Route::Bookmarks => features::bookmarks::page().into_element(),
             Route::Yours => features::yours::page().into_element(),
@@ -395,8 +400,8 @@ impl Route {
             Route::Totp => features::auth::totp_page().into_element(),
             Route::Appeal(token) => features::appeal::page(token).into_element(),
             Route::Report => features::report::page().into_element(),
-            Route::NewsletterConfirm(token) => {
-                features::newsletter::confirm_page(token).into_element()
+            Route::NewsletterConfirm { email, token } => {
+                features::newsletter::confirm_page(email, token).into_element()
             }
             Route::About => features::marketing::about_page().into_element(),
             Route::Faq => features::marketing::faq_page().into_element(),
@@ -437,12 +442,50 @@ pub fn route_from_url(url: &str) -> Option<Route> {
     )
 }
 
-/// The `Route` of a parsed web link. `?mode=`/`?more=` are not carried
-/// (the reader takes them from its own state).
+/// The web link a route names, for share links and the deep-link round
+/// trip (`eq_core::routes::link_path`). `None` for native-only pages
+/// (diagnostics, a settings section other than the first).
+pub fn link_for_route(route: &Route) -> Option<eq_core::routes::Link> {
+    use eq_core::routes::{Link, StaticPage};
+    let page = match route.clone() {
+        Route::Reader(link) => return Some(Link::Reader(link)),
+        Route::Zikr { slug, translation } => return Some(Link::Zikr { slug, translation }),
+        Route::Home => StaticPage::Home,
+        Route::SurahIndex => StaticPage::SurahIndex,
+        Route::JuzIndex => StaticPage::JuzIndex,
+        Route::PagesIndex => StaticPage::PagesIndex,
+        Route::Azkar => StaticPage::Azkar,
+        Route::Search => StaticPage::Search,
+        Route::Bookmarks => StaticPage::Bookmarks,
+        Route::Yours => StaticPage::Yours,
+        Route::YoursCard(id) => StaticPage::YoursCard(id),
+        Route::DailyAyah => StaticPage::DailyAyah,
+        Route::Downloads => StaticPage::Downloads,
+        Route::Settings(SettingsSection::Storage) => StaticPage::Settings,
+        Route::Account => StaticPage::Account,
+        Route::Login => StaticPage::Login,
+        Route::Register => StaticPage::Register,
+        Route::VerifyEmail => StaticPage::VerifyEmail,
+        Route::ForgotPassword => StaticPage::ForgotPassword,
+        Route::Appeal(token) => StaticPage::Appeal(token),
+        Route::Report => StaticPage::Report,
+        Route::NewsletterConfirm { email, token } => StaticPage::NewsletterConfirm { email, token },
+        Route::About => StaticPage::About,
+        Route::Faq => StaticPage::Faq,
+        Route::Contact => StaticPage::Contact,
+        Route::Privacy => StaticPage::Privacy,
+        Route::Terms => StaticPage::Terms,
+        Route::Settings(_) | Route::Totp | Route::Diagnostics => return None,
+    };
+    Some(Link::Page(page))
+}
+
+/// The `Route` of a parsed web link; nothing in the link is dropped
+/// (`?mode=`, `?more=`, the newsletter email and token ride along).
 pub fn route_from_link(link: eq_core::routes::Link) -> Route {
     use eq_core::routes::{Link, StaticPage};
     match link {
-        Link::Reader(reader) => Route::Reader(reader.target),
+        Link::Reader(reader) => Route::Reader(reader),
         Link::Zikr { slug, translation } => Route::Zikr { slug, translation },
         Link::Page(page) => match page {
             StaticPage::Home => Route::Home,
@@ -464,7 +507,9 @@ pub fn route_from_link(link: eq_core::routes::Link) -> Route {
             StaticPage::ForgotPassword => Route::ForgotPassword,
             StaticPage::Appeal(token) => Route::Appeal(token),
             StaticPage::Report => Route::Report,
-            StaticPage::NewsletterConfirm { token, .. } => Route::NewsletterConfirm(token),
+            StaticPage::NewsletterConfirm { email, token } => {
+                Route::NewsletterConfirm { email, token }
+            }
             StaticPage::About => Route::About,
             StaticPage::Faq => Route::Faq,
             StaticPage::Contact => Route::Contact,
@@ -493,9 +538,32 @@ mod tests {
         let b = Route::YoursCard("b".into());
         assert_ne!(a.key(), b.key());
         assert_eq!(a.key_str(), b.key_str());
-        let r1 = Route::Reader(ReaderTarget::arabic(ReaderScope::Surah(1)));
-        let r2 = Route::Reader(ReaderTarget::arabic(ReaderScope::Page(1)));
+        let r1 = Route::Reader(ReaderLink::new(ReaderTarget::arabic(ReaderScope::Surah(1))));
+        let r2 = Route::Reader(ReaderLink::new(ReaderTarget::arabic(ReaderScope::Page(1))));
         assert_ne!(r1.key(), r2.key());
+    }
+
+    #[test]
+    fn links_round_trip_without_loss() {
+        let reader =
+            route_from_url("https://easyquran.fyi/page/3?mode=reading").expect("reader link");
+        let Route::Reader(link) = &reader else {
+            panic!("reader route");
+        };
+        assert_eq!(link.mode, Some(ReaderMode::Reading));
+        let news = route_from_url("https://easyquran.fyi/newsletter/confirm#email=a%40b.c&token=x")
+            .expect("newsletter link");
+        assert_eq!(
+            news,
+            Route::NewsletterConfirm {
+                email: "a@b.c".into(),
+                token: "x".into()
+            }
+        );
+        for route in [reader, news] {
+            let link = link_for_route(&route).expect("web link");
+            assert_eq!(route_from_link(link), route);
+        }
     }
 
     #[test]
