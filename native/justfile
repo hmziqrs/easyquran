@@ -38,3 +38,20 @@ package:
     nsh package --target macos
     nsh package --target ios-simulator
     nsh package --target android
+
+# Bundles the default Arabic script (the reader's default source,
+# uthmani-annotated) into assets/quran/ so a first launch reads offline.
+# Copies from the monorepo's provisioned db/quran (read-only, never edited);
+# assets/quran/ is gitignored. The size must match the baked map.
+quran-bundle:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # EQ_QURAN_DIR overrides the source tree (a worktree has no db/).
+    src="${EQ_QURAN_DIR:-../db/quran}/arabic/quran-uthmani-annotated.sqlite"
+    expected=1605632
+    if [ ! -f "$src" ]; then echo "missing $src (provision db/quran from R2 first)" >&2; exit 1; fi
+    size=$(wc -c < "$src" | tr -d ' ')
+    if [ "$size" != "$expected" ]; then echo "$src is $size bytes, expected $expected" >&2; exit 1; fi
+    mkdir -p assets/quran
+    cp "$src" assets/quran/quran-uthmani-annotated.sqlite
+    echo "bundled assets/quran/quran-uthmani-annotated.sqlite ($size bytes)"

@@ -1,5 +1,5 @@
-//! Deep links: [`route_from_deep_link`](crate::shell::routes) parses the
-//! path. NSH 0.4.0 had no deep-link delivery of its own; 0.5.0's URL
+//! Deep links: [`route_from_url`](crate::shell::routes) parses the URL
+//! (path, query, fragment) through `eq_core::routes`. NSH 0.4.0 had no deep-link delivery of its own; 0.5.0's URL
 //! schemes are not adopted yet (a follow-up), so the entries are a
 //! desktop launch argument (set before the engine runs) and this seam for
 //! an embedding host, which calls [`open`] from its `host.on` wiring.
@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 
 use crate::shell::{
     nav,
-    routes::{Route, route_from_deep_link},
+    routes::{Route, route_from_url},
 };
 
 /// The scheme the app answers to.
@@ -26,8 +26,8 @@ pub fn from_launch(url: impl Into<String>) {
 /// or `None` when it is not one of the app's. The seam an embedding host's
 /// delivery wires into.
 pub fn open(url: &str) -> Option<Route> {
-    let path = url.strip_prefix(SCHEME)?;
-    let route = route_from_deep_link(&path.split('/').collect::<Vec<_>>())?;
+    url.strip_prefix(SCHEME)?;
+    let route = route_from_url(url)?;
     nav::open(route.clone());
     Some(route)
 }

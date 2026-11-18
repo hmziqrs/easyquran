@@ -411,42 +411,73 @@ impl Route {
 /// The route a deep-link path names: the segments after `easyquran://`,
 /// in order. `None` when the path is not the app's.
 ///
-/// TODO(A2): the reader URL grammar (`/{surah}`, `/page/n`, `/juz/n`,
-/// `/hizb/n`, `/t/{lang}/{translator}/…`, `?ayah=`, `newsletter/confirm?token=`)
-/// is parsed by `eq_core::routes` once it lands; this fn then delegates to it
-/// and keeps only the mapping to `Route`. Static paths only for now.
+/// The web URL grammar (reader, azkar, static pages) is parsed by
+/// `eq_core::routes`; this keeps only the mapping to `Route` and the
+/// native-only paths (`settings/<section>`, `diagnostics`).
 pub fn route_from_deep_link(seg: &[&str]) -> Option<Route> {
+    let path = format!("/{}", seg.join("/"));
+    eq_core::routes::parse_path(&path)
+        .map(route_from_link)
+        .or_else(|| native_only_route(seg))
+}
+
+/// The route an `easyquran://` deep link or `https://easyquran.fyi` share
+/// link names, query and fragment included (`?v=`, `#ayah-s-n`).
+pub fn route_from_url(url: &str) -> Option<Route> {
+    if let Some(link) = eq_core::routes::parse_url(url) {
+        return Some(route_from_link(link));
+    }
+    let path = url.strip_prefix(eq_core::routes::SCHEME)?;
+    let path = path.split(['?', '#']).next().unwrap_or("");
+    native_only_route(
+        &path
+            .split('/')
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>(),
+    )
+}
+
+/// The `Route` of a parsed web link. `?mode=`/`?more=` are not carried
+/// (the reader takes them from its own state).
+pub fn route_from_link(link: eq_core::routes::Link) -> Route {
+    use eq_core::routes::{Link, StaticPage};
+    match link {
+        Link::Reader(reader) => Route::Reader(reader.target),
+        Link::Zikr { slug, translation } => Route::Zikr { slug, translation },
+        Link::Page(page) => match page {
+            StaticPage::Home => Route::Home,
+            StaticPage::SurahIndex => Route::SurahIndex,
+            StaticPage::JuzIndex => Route::JuzIndex,
+            StaticPage::PagesIndex => Route::PagesIndex,
+            StaticPage::Azkar => Route::Azkar,
+            StaticPage::Search => Route::Search,
+            StaticPage::Bookmarks => Route::Bookmarks,
+            StaticPage::Yours => Route::Yours,
+            StaticPage::YoursCard(id) => Route::YoursCard(id),
+            StaticPage::DailyAyah => Route::DailyAyah,
+            StaticPage::Downloads => Route::Downloads,
+            StaticPage::Settings => Route::Settings(SettingsSection::Storage),
+            StaticPage::Account => Route::Account,
+            StaticPage::Login => Route::Login,
+            StaticPage::Register => Route::Register,
+            StaticPage::VerifyEmail => Route::VerifyEmail,
+            StaticPage::ForgotPassword => Route::ForgotPassword,
+            StaticPage::Appeal(token) => Route::Appeal(token),
+            StaticPage::Report => Route::Report,
+            StaticPage::NewsletterConfirm { token, .. } => Route::NewsletterConfirm(token),
+            StaticPage::About => Route::About,
+            StaticPage::Faq => Route::Faq,
+            StaticPage::Contact => Route::Contact,
+            StaticPage::Privacy => Route::Privacy,
+            StaticPage::Terms => Route::Terms,
+        },
+    }
+}
+
+/// Paths the native app has and the web does not.
+fn native_only_route(seg: &[&str]) -> Option<Route> {
     match seg {
-        [] | [""] => Some(Route::Home),
-        ["surah"] => Some(Route::SurahIndex),
-        ["juz"] => Some(Route::JuzIndex),
-        ["pages"] => Some(Route::PagesIndex),
-        ["search"] => Some(Route::Search),
-        ["bookmarks"] => Some(Route::Bookmarks),
-        ["yours"] => Some(Route::Yours),
-        ["yours", "cards", id] => Some(Route::YoursCard((*id).to_owned())),
-        ["azkar"] => Some(Route::Azkar),
-        ["azkar", slug] => Some(Route::Zikr {
-            slug: (*slug).to_owned(),
-            translation: None,
-        }),
-        ["daily-ayah"] => Some(Route::DailyAyah),
-        ["downloads"] => Some(Route::Downloads),
-        ["settings"] => Some(Route::Settings(SettingsSection::Storage)),
         ["settings", slug] => SettingsSection::from_slug(slug).map(Route::Settings),
-        ["account"] => Some(Route::Account),
-        ["login"] => Some(Route::Login),
-        ["register"] => Some(Route::Register),
-        ["verify-email"] => Some(Route::VerifyEmail),
-        ["forgot-password"] => Some(Route::ForgotPassword),
-        ["appeal"] => Some(Route::Appeal(None)),
-        ["appeal", token] => Some(Route::Appeal(Some((*token).to_owned()))),
-        ["report"] => Some(Route::Report),
-        ["about"] => Some(Route::About),
-        ["faq"] => Some(Route::Faq),
-        ["contact"] => Some(Route::Contact),
-        ["privacy"] => Some(Route::Privacy),
-        ["terms"] => Some(Route::Terms),
         ["diagnostics"] => Some(Route::Diagnostics),
         _ => None,
     }
