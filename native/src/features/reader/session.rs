@@ -243,13 +243,15 @@ impl Tracking {
 /// (`readingAnalytics.emit`), which another slice owns; until it lands,
 /// the events are logged at debug level.
 pub fn emit_reads(events: &[ReadEvent]) {
+    // Thread and source ids are not threaded through the tracker yet; the
+    // queue accepts their absence (web sends both when it has them).
     for e in events {
-        log::debug!(
-            "reader: read {}:{} letters={} ms={:.0}",
-            e.surah,
-            e.ayah,
-            e.letters,
-            e.ms
-        );
+        crate::stores::insights::emit(crate::stores::insights::ReadInput {
+            session_id: None,
+            surah: e.surah,
+            ayah: e.ayah,
+            source_id: None,
+            ms: e.ms,
+        });
     }
 }

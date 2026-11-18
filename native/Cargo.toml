@@ -16,7 +16,7 @@ nsh-base = "0.5.1"
 nsh-updater = "0.5.1"
 nsh-query = { git = "https://github.com/SuperNSH/query.git", rev = "16d439a3be7f9ff9555f061934fa932bb3c2831b" }
 nsh-form = { git = "https://github.com/SuperNSH/form.git", rev = "31dc0e16a648045598e0d96c4dafe3fc172a561a" }
-chrono = { version = "0.4.45", default-features = false, features = ["std"] }
+chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
 log = "0.4"
 env_logger = "0.11"
 serde = { version = "1", features = ["derive"] }

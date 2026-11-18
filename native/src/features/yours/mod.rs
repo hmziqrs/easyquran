@@ -9,10 +9,13 @@
 //! full library. The web's widget layout editing (`homeLayout`) and the
 //! first-run reading choice are not here (see the slice report).
 
-mod continue_threads;
-mod history;
-mod notes;
-mod reading_bookmark;
+pub(crate) mod cards;
+pub(crate) mod continue_threads;
+pub(crate) mod goals;
+pub(crate) mod history;
+pub(crate) mod insights;
+pub(crate) mod notes;
+pub(crate) mod reading_bookmark;
 
 use eq_core::i18n::keys;
 use nsh_base::theme;
@@ -39,17 +42,22 @@ const HISTORY_LIMIT: usize = 5;
 
 /// Reading goals (G4): filled by the goals slice.
 pub fn goals_section() -> impl IntoElement {
-    view()
+    goals::reading_goals()
 }
 
 /// Reading insights (G5): filled by the insights slice.
 pub fn insights_section() -> impl IntoElement {
     view()
+        .w_full()
+        .flex_col()
+        .gap_2()
+        .child(section_head(t(keys::READER_WIDGET_MOST_READ_TITLE), None))
+        .child(insights::reading_insights())
 }
 
 /// Home cards (G6): filled by the cards slice.
 pub fn cards_section() -> impl IntoElement {
-    view()
+    cards::cards_section(None)
 }
 
 fn section_head(
@@ -75,7 +83,7 @@ fn move_none(_: String, _: String) {}
 
 /// The Bookmarks preview: the count, the empty state, the first five rows
 /// (folder pill, no move), "View all".
-fn bookmarks_preview(shelf: Signal<Shelf>) -> impl IntoElement {
+pub(crate) fn bookmarks_preview(shelf: Signal<Shelf>) -> impl IntoElement {
     let count = move || shelf.with(|s| s.bookmarks.len());
     let actions = RowActions {
         shelf,
@@ -269,5 +277,5 @@ pub fn page() -> impl IntoElement {
 }
 
 pub fn card_page(id: String) -> impl IntoElement {
-    super::placeholder("Card", Some(id))
+    cards::card_page(id)
 }

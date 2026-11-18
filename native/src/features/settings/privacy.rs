@@ -23,7 +23,7 @@ use crate::{
 /// Goal reminders (web `GoalReminders.svelte`, between notifications and
 /// sign out): a later slice builds it and adds it to [`section`]'s card.
 pub fn goal_reminders() -> AnyElement {
-    view().into_element()
+    crate::features::reminders::goal_reminders()
 }
 
 fn analytics_row() -> AnyElement {
@@ -123,6 +123,7 @@ pub fn section() -> AnyElement {
             .child(list_card(vec![
                 analytics_row(),
                 notifications_row(),
+                super::goal_reminders(),
                 sign_out_row(),
             ]))
             .child(caption(t(keys::SETTINGS_PRIVACY_SYNC_NOTE))),

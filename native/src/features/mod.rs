@@ -20,6 +20,7 @@ pub mod index;
 pub mod marketing;
 pub mod newsletter;
 pub mod reader;
+pub mod reminders;
 pub mod report;
 pub mod search;
 pub mod settings;

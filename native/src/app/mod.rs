@@ -122,6 +122,7 @@ pub fn provide(services: Services) -> Stores {
 
     wiring::connect(auth, sync, kv);
     crate::stores::settings::install();
+    crate::features::reminders::start();
     Stores { auth, quran, sync }
 }
 
