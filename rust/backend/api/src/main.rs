@@ -900,7 +900,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ])
         .allow_origin(AllowOrigin::list(allowed_origins.header_values().to_vec()))
         .allow_credentials(true)
-        .max_age(Duration::from_secs(360));
+        // 7200 = Chrome's preflight-cache cap (Firefox caps at 86400); higher gains nothing.
+        .max_age(Duration::from_secs(7200));
 
     let ip_source = settings.http.ip_source.clone();
     let trusted_proxy_cidrs = middlewares::client_ip::TrustedProxyCidrs(std::sync::Arc::new(
