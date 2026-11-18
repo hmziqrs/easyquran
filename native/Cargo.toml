@@ -15,8 +15,8 @@ nsh-core = { version = "0.6.0", features = ["svg"] }
 nsh-base = "0.6.0"
 # Update check (PARITY K4): `Config::check` over the manifest the app fetches.
 nsh-updater = "0.6.0"
-nsh-query = { git = "https://github.com/SuperNSH/query.git", rev = "16d439a3be7f9ff9555f061934fa932bb3c2831b" }
-nsh-form = { git = "https://github.com/SuperNSH/form.git", rev = "31dc0e16a648045598e0d96c4dafe3fc172a561a" }
+nsh-query = { git = "https://github.com/SuperNSH/query.git", rev = "4a2e2b01ba986be3c961d42606ef2895d5472dd5" }
+nsh-form = { git = "https://github.com/SuperNSH/form.git", rev = "06053c367618e0feeec8cd3765636d552f987b9d" }
 chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
 log = "0.4"
 env_logger = "0.11"
@@ -61,15 +61,3 @@ features = ["windows-native"]
 [dev-dependencies]
 nsh-engine = "0.6.0"
 nsh-testing = { version = "0.6.0", default-features = false }
-
-# TEMPORARY (U6): the NSH 0.6.0 commits of nsh-query (4a2e2b0) and nsh-form
-# (06053c3) are not pushed to GitHub yet, and cargo fetches a patched git
-# source anyway, so the revs above stay at the last pushed (0.5.1) commits and
-# this block builds from the owner's local 0.6 checkouts. Once pushed: set the
-# revs to 4a2e2b01ba986be3c961d42606ef2895d5472dd5 / 06053c367618e0feeec8cd3765636d552f987b9d,
-# delete this block, run `cargo update -p nsh-query -p nsh-form`.
-[patch."https://github.com/SuperNSH/query.git"]
-nsh-query = { path = "/Users/hmziq/fo/nsh-query/crates/nsh-query" }
-
-[patch."https://github.com/SuperNSH/form.git"]
-nsh-form = { path = "/Users/hmziq/fo/nsh-form/crates/nsh-form" }

@@ -2890,6 +2890,7 @@ dependencies = [
 [[package]]
 name = "nsh-form"
 version = "0.1.0"
+source = "git+https://github.com/SuperNSH/form.git?rev=06053c367618e0feeec8cd3765636d552f987b9d#06053c367618e0feeec8cd3765636d552f987b9d"
 dependencies = [
  "freeoxide-gpui-form-core",
  "nsh-base",
@@ -3082,6 +3083,7 @@ dependencies = [
 [[package]]
 name = "nsh-query"
 version = "0.1.0"
+source = "git+https://github.com/SuperNSH/query.git?rev=4a2e2b01ba986be3c961d42606ef2895d5472dd5#4a2e2b01ba986be3c961d42606ef2895d5472dd5"
 dependencies = [
  "gpui-query",
  "nsh-core",
