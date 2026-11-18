@@ -3,15 +3,10 @@ target/
 node_modules/
 .DS_Store
 *.secret
-.firebase/
-*-debug.log
-firebase-debug.log*
-ui-debug.log*
-database-debug.log*
+
+# Bundled Quran DBs are provisioned out of band (R2), never committed.
+assets/quran/
+
+# Firebase client configs are provisioned, never committed.
 google-services.json
 GoogleService-Info.plist
-!**/fixtures/google-services.json
-!**/fixtures/GoogleService-Info.plist
-
-# workflow drafts are machine-owned run artifacts
-.zcode/workflow-drafts/

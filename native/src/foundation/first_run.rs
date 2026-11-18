@@ -66,7 +66,7 @@ pub fn first_run_page(on_complete: impl Fn() + 'static) -> Screen {
                         view()
                             .gap_2()
                             .child(
-                                text("Welcome to nsh-starter")
+                                text("Welcome to EasyQuran")
                                     .text_xl()
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(move || theme().foreground),

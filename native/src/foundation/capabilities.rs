@@ -97,8 +97,21 @@ mod tests {
     fn the_manifest_is_read_as_declared() {
         // Pin the current nsh.json: what the platform area declared is
         // declared, and what it has not is not.
-        assert!(declared("clipboard"));
-        assert!(declared("webview"));
-        assert!(!declared("network"));
+        assert!(declared("network"));
+        assert!(declared("audio"));
+        assert!(!declared("webview"));
+    }
+
+    // NSH drops an unknown key with only a build warning: a typo here
+    // would silently withhold the grant.
+    #[test]
+    fn every_declared_key_is_known() {
+        for capability in registry() {
+            assert!(
+                !capability.declared || KNOWN_CAPABILITIES.contains(&capability.name.as_ref()),
+                "unknown capability key {}",
+                capability.name
+            );
+        }
     }
 }

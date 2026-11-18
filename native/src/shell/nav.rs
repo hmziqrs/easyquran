@@ -23,7 +23,7 @@ pub fn depth() -> usize {
 /// The page on top, or Home. Tracked: read it in bindings.
 pub fn current() -> Route {
     stack()
-        .with(|routes| routes.0.last().copied())
+        .with(|routes| routes.0.last().cloned())
         .unwrap_or(Route::Home)
 }
 
@@ -38,9 +38,9 @@ fn record() {
 pub fn open(route: Route) {
     record();
     let pages = match (route.parent(), route) {
-        (Some(parent), _) => vec![parent, route],
-        (_, Route::Home) => Vec::new(),
-        (_, _) => vec![route],
+        (Some(parent), route) => vec![parent, route],
+        (None, Route::Home) => Vec::new(),
+        (None, route) => vec![route],
     };
     stack().set(Routes(pages));
 }

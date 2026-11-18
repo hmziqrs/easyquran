@@ -12,7 +12,7 @@
 use nsh_core::prelude::*;
 
 /// The registered name of the native view.
-pub const NAME: &str = "starter.soft-edges";
+pub const NAME: &str = "eq.soft-edges";
 
 /// The invisible element that softens its window's scroll edges (iOS only;
 /// elsewhere nothing).
@@ -78,7 +78,7 @@ pub fn soft_bottom_edge(height: impl Fn() -> f32 + 'static) -> impl IntoElement 
 }
 
 /// Both soft edges for a page that is not the shell's own (a feature's
-/// stack, such as Forms): the header's and the floating tab bar's, the
+/// stack): the header's and the floating tab bar's, the
 /// same as `shell::page` gives every other page. Its last child, over the
 /// page's scroll. iOS phones only; elsewhere nothing.
 pub fn page_edges() -> impl IntoElement {

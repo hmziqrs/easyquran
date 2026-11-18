@@ -17,11 +17,11 @@ use nsh_core::{JsonValue, color::Rgba, element::NativeEvent, prelude::*};
 use crate::ui::button::{ButtonSize, ButtonVariant, button_with, choice_button};
 
 /// The system button's name among the native components.
-pub const BUTTON: &str = "starter.native-button";
+pub const BUTTON: &str = "eq.native-button";
 /// The system switch's name.
-pub const SWITCH: &str = "starter.native-switch";
+pub const SWITCH: &str = "eq.native-switch";
 /// The system segmented control's name.
-pub const SEGMENTED: &str = "starter.native-segmented";
+pub const SEGMENTED: &str = "eq.native-segmented";
 
 /// A system button's look. iOS draws each as its `UIButton.Configuration`;
 /// macOS maps them to its bezels (glass is the default push button there).

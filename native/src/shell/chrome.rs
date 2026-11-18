@@ -72,7 +72,8 @@ pub fn close() {
 
 /// The application menu: the shell's commands, every route, the window.
 fn menus(is_dark: bool) -> Vec<MenuItem> {
-    let go = |route: Route| MenuItem::new(route.label()).on_select(move || nav::open(route));
+    let go =
+        |route: Route| MenuItem::new(route.label()).on_select(move || nav::open(route.clone()));
     vec![
         MenuItem::submenu(
             t!("app.name"),
@@ -98,7 +99,14 @@ fn menus(is_dark: bool) -> Vec<MenuItem> {
                     .on_select(toggle_sidebar),
             ],
         ),
-        MenuItem::submenu("Go", Route::ALL.iter().copied().map(go).collect::<Vec<_>>()),
+        MenuItem::submenu(
+            "Go",
+            Route::DESTINATIONS
+                .iter()
+                .cloned()
+                .map(go)
+                .collect::<Vec<_>>(),
+        ),
         MenuItem::submenu(
             "Window",
             [

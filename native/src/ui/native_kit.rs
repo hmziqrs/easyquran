@@ -17,21 +17,21 @@ use crate::ui::button::{ButtonSize, ButtonVariant, button_with};
 use crate::ui::{controls, field, pickers, select, tabs, text};
 
 /// The components' names among the native components.
-pub const SLIDER: &str = "starter.kit-slider";
-pub const CHECKBOX: &str = "starter.kit-checkbox";
-pub const RADIO: &str = "starter.kit-radio";
-pub const POPUP: &str = "starter.kit-popup";
-pub const STEPPER: &str = "starter.kit-stepper";
-pub const PROGRESS: &str = "starter.kit-progress";
-pub const SPINNER: &str = "starter.kit-spinner";
-pub const DATE: &str = "starter.kit-date";
-pub const COLOR: &str = "starter.kit-color";
-pub const TEXT: &str = "starter.kit-text";
-pub const SEARCH: &str = "starter.kit-search";
-pub const TABS: &str = "starter.kit-tabs";
-pub const GLASS_BUTTON: &str = "starter.kit-glass-button";
-pub const GLASS_BAR: &str = "starter.kit-glass-bar";
-pub const MATERIAL: &str = "starter.kit-material";
+pub const SLIDER: &str = "eq.kit-slider";
+pub const CHECKBOX: &str = "eq.kit-checkbox";
+pub const RADIO: &str = "eq.kit-radio";
+pub const POPUP: &str = "eq.kit-popup";
+pub const STEPPER: &str = "eq.kit-stepper";
+pub const PROGRESS: &str = "eq.kit-progress";
+pub const SPINNER: &str = "eq.kit-spinner";
+pub const DATE: &str = "eq.kit-date";
+pub const COLOR: &str = "eq.kit-color";
+pub const TEXT: &str = "eq.kit-text";
+pub const SEARCH: &str = "eq.kit-search";
+pub const TABS: &str = "eq.kit-tabs";
+pub const GLASS_BUTTON: &str = "eq.kit-glass-button";
+pub const GLASS_BAR: &str = "eq.kit-glass-bar";
+pub const MATERIAL: &str = "eq.kit-material";
 
 /// AppKit draws these controls here.
 pub fn on_macos() -> bool {

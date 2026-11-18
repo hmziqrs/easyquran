@@ -17,7 +17,7 @@ use nsh_core::{JsonValue, element::NativeEvent, prelude::*};
 use crate::shell::{palette, routes::Route};
 
 /// The bridge's name among the native components.
-pub const BRIDGE: &str = "starter.command-bar";
+pub const BRIDGE: &str = "eq.command-bar";
 
 /// The global shortcut, as the menu bar item shows it.
 pub const HOTKEY_LABEL: &str = "⌥Space";
@@ -48,33 +48,14 @@ struct Command {
     front: bool,
 }
 
-fn route_symbol(route: Route) -> &'static str {
-    match route {
-        Route::Home => "house",
-        Route::UiGallery => "square.grid.2x2",
-        Route::NativeVsApp => "rectangle.split.2x1",
-        Route::Forms => "square.and.pencil",
-        Route::Data | Route::DataDetail(_) => "tray.full",
-        Route::QueryDevtools => "cylinder.split.1x2",
-        Route::Lists => "list.bullet",
-        Route::Canvas => "paintpalette",
-        Route::Motion => "wind",
-        Route::Overlays => "square.stack.3d.up",
-        Route::Platform => "desktopcomputer",
-        Route::Device => "iphone",
-        Route::RemoteScreen => "shippingbox",
-        Route::Diagnostics => "waveform.path.ecg",
-    }
-}
-
 fn commands() -> Vec<Command> {
-    let mut list: Vec<Command> = Route::ALL
+    let mut list: Vec<Command> = Route::DESTINATIONS
         .iter()
         .map(|route| Command {
             id: route.key_str(),
             title: route.label_str(),
             group: "Go to",
-            symbol: route_symbol(*route),
+            symbol: route.symbol(),
             shortcut: "",
             front: true,
         })
@@ -532,11 +513,11 @@ mod macos {
                 if let (Some(button), Some(image)) = (button, symbol("command.square")) {
                     let _: () = msg_send![&*image, setTemplate: true];
                     let _: () = msg_send![&*button, setImage: &*image];
-                    let _: () = msg_send![&*button, setToolTip: &*ns_string("nsh-starter")];
+                    let _: () = msg_send![&*button, setToolTip: &*ns_string("easyquran")];
                 }
                 let menu: Retained<AnyObject> = msg_send![
                     msg_send![class(c"NSMenu"), alloc],
-                    initWithTitle: &*ns_string("nsh-starter")
+                    initWithTitle: &*ns_string("easyquran")
                 ];
                 let add = |title: &str, action: Sel, key: &str| -> Retained<AnyObject> {
                     let entry: Retained<AnyObject> = msg_send![
@@ -551,13 +532,13 @@ mod macos {
                 let open = add("Open Command Bar", sel!(openBar:), " ");
                 // NSEventModifierFlagOption: shown beside the entry.
                 let _: () = msg_send![&*open, setKeyEquivalentModifierMask: 1_usize << 19];
-                add("Show nsh-starter", sel!(showMain:), "");
+                add("Show easyquran", sel!(showMain:), "");
                 let separator: Retained<AnyObject> = msg_send![class(c"NSMenuItem"), separatorItem];
                 let _: () = msg_send![&*menu, addItem: &*separator];
                 // No target: `terminate:` goes up the responder chain to NSApp.
                 let _: Retained<AnyObject> = msg_send![
                     &*menu,
-                    addItemWithTitle: &*ns_string("Quit nsh-starter"),
+                    addItemWithTitle: &*ns_string("Quit easyquran"),
                     action: sel!(terminate:),
                     keyEquivalent: &*ns_string("q")
                 ];
@@ -993,7 +974,7 @@ mod macos {
         /// The main window's close button and Cmd+W hide it instead: the
         /// runner quits when its window closes (`keep_alive_on_close` is
         /// not reachable from an app), and the menu bar item must outlive
-        /// it. The Dock icon and "Show nsh-starter" bring it back.
+        /// it. The Dock icon and "Show easyquran" bring it back.
         fn patch_main(&self) {
             if self.ivars().borrow().main_patched {
                 return;
@@ -1158,7 +1139,7 @@ mod tests {
     #[test]
     fn every_route_and_action_is_a_command() {
         let ids: Vec<&str> = commands().iter().map(|c| c.id).collect();
-        for route in Route::ALL {
+        for route in Route::DESTINATIONS.iter() {
             assert!(ids.contains(&route.key_str()), "{route:?} missing");
         }
         assert!(ids.contains(&"action:appearance"));

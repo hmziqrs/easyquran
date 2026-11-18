@@ -130,7 +130,7 @@ pub fn divider() -> impl IntoElement {
     view().w_full().h(px(1.0)).bg(move || theme().border)
 }
 
-/// A page's content column, the gallery's frame shared by every page: 16pt
+/// A page's content column, the frame shared by every page: 16pt
 /// around, 24pt between sections, room under the last one. Put it inside the
 /// page's scroll and give it `text::page_intro` first.
 pub fn page_body() -> nsh_core::element::View {

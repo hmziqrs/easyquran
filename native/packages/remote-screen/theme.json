@@ -1,7 +1,0 @@
-{
-  "cssVars": {
-    "theme": { "radius": "0.5rem", "destructive-foreground": "#ffffff" },
-    "light": {},
-    "dark": {}
-  }
-}

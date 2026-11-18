@@ -1,13 +1,13 @@
 //! The app's UI locale: `rust-i18n`'s global locale mirrored into a signal,
 //! because a component runs once and only bindings that read a changed signal
-//! run again. Strings render through `widgets::localized`, which reads this
-//! signal and looks `t!` up on each run.
+//! run again. Interim: the i18n foundation (PARITY O1, O2) replaces
+//! `rust-i18n` with `eq_core::i18n` catalogues baked from `web/messages/**`.
 
 use nsh_core::prelude::*;
 
-/// The locale code the pages show (`en`, `zh-CN`), empty until first set
+/// The locale code the pages show (`en`, `ar`), empty until first set
 /// (`t!` then answers in the `i18n!` default, `en`).
-pub(crate) fn app_locale() -> Signal<String> {
+pub fn app_locale() -> Signal<String> {
     global::<String>()
 }
 
@@ -19,6 +19,5 @@ pub fn set_app_locale(code: impl Into<String>) {
     global::<String>().set(code);
 }
 
-/// The locales the language card offers, with their names as read in that
-/// language (a language's own name does not translate).
-pub(crate) const CHOICES: [(&str, &str); 2] = [("en", "English"), ("zh-CN", "中文")];
+/// The locales the app ships, with their names as read in that language.
+pub const CHOICES: [(&str, &str); 2] = [("en", "English"), ("ar", "العربية")];

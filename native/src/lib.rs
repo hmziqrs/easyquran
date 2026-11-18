@@ -17,15 +17,17 @@ pub mod platform;
 pub mod services;
 pub mod shell;
 pub mod state;
+pub mod stores;
 pub mod ui;
 
 /// The app's UI set (`nsh.json` `"rust"`): what a TSX entry imports from
-/// `nsh-starter/native`. The shell area keeps this block current.
-#[native_module("nsh-starter/native")]
+/// `easyquran/native`. The shell area keeps this block current.
+#[native_module("easyquran/native")]
 fn native(registry: &mut Registry) {
     registry.register::<App>();
-    // The crate's shipped files under assets/: the canvas media's images
-    // and clip, so nsh run serves them and nsh package copies them.
+    // The crate's shipped files under assets/ (fonts; provisioned Quran
+    // DBs under assets/quran/), so nsh run serves them and nsh package
+    // copies them.
     registry.assets(nsh_core::element::assets!());
 }
 

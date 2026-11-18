@@ -2,7 +2,7 @@
 //! migrations, the capability registry, the first-run flow, file logging,
 //! the diagnostics page and the central error surface. Owned by the
 //! foundation area, which also owns `src/state` and the service seams in
-//! `src/services` (except `fake_api.rs`, owned by the data area).
+//! `src/services`.
 //!
 //! Everything public here is a cross-area contract: other areas consume
 //! these APIs by their doc comments.

@@ -37,8 +37,8 @@ fn close() {
 /// Runs the command `id` names and closes the palette. A destination's id
 /// is its route key; an action's is `action:<name>`.
 pub(crate) fn dispatch(id: &str) {
-    if let Some(route) = Route::ALL.iter().copied().find(|r| r.key_str() == id) {
-        nav::open(route);
+    if let Some(route) = Route::DESTINATIONS.iter().find(|r| r.key_str() == id) {
+        nav::open(route.clone());
     } else {
         match id {
             "action:undo" => undo::undo(),
@@ -52,7 +52,7 @@ pub(crate) fn dispatch(id: &str) {
 
 /// Every command the palette lists.
 pub fn items() -> Vec<nsh_base::CommandItem> {
-    let mut items: Vec<nsh_base::CommandItem> = Route::ALL
+    let mut items: Vec<nsh_base::CommandItem> = Route::DESTINATIONS
         .iter()
         .filter(|route| **route != Route::Home)
         .map(|route| command_entry(route.key_str(), route.label_str()).group("Go to"))

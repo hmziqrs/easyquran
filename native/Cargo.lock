@@ -997,6 +997,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "easyquran"
+version = "0.1.0"
+dependencies = [
+ "block2",
+ "chrono",
+ "env_logger",
+ "eq-core",
+ "log",
+ "nsh-base",
+ "nsh-core",
+ "nsh-engine",
+ "nsh-form",
+ "nsh-platform-ios",
+ "nsh-platform-linux",
+ "nsh-platform-macos",
+ "nsh-platform-windows",
+ "nsh-query",
+ "nsh-testing",
+ "objc2",
+ "objc2-core-foundation",
+ "objc2-ui-kit",
+ "rust-i18n",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ecdsa"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1132,6 +1159,23 @@ dependencies = [
  "env_filter",
  "jiff",
  "log",
+]
+
+[[package]]
+name = "eq-core"
+version = "0.1.0"
+dependencies = [
+ "eq-sync-core",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "eq-sync-core"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]
@@ -3035,32 +3079,6 @@ source = "git+https://github.com/SuperNSH/query.git?rev=16d439a3be7f9ff9555f0619
 dependencies = [
  "gpui-query",
  "nsh-core",
-]
-
-[[package]]
-name = "nsh-starter"
-version = "0.1.0"
-dependencies = [
- "block2",
- "chrono",
- "env_logger",
- "log",
- "nsh-base",
- "nsh-core",
- "nsh-engine",
- "nsh-form",
- "nsh-platform-ios",
- "nsh-platform-linux",
- "nsh-platform-macos",
- "nsh-platform-windows",
- "nsh-query",
- "nsh-testing",
- "objc2",
- "objc2-core-foundation",
- "objc2-ui-kit",
- "rust-i18n",
- "serde",
- "serde_json",
 ]
 
 [[package]]

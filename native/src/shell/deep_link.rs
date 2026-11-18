@@ -12,7 +12,7 @@ use crate::shell::{
 };
 
 /// The scheme the app answers to.
-pub const SCHEME: &str = "nsh-starter://";
+pub const SCHEME: &str = "easyquran://";
 
 /// A deep link from the desktop launch arguments, read once at startup.
 static PENDING: OnceLock<String> = OnceLock::new();
@@ -22,13 +22,13 @@ pub fn from_launch(url: impl Into<String>) {
     let _ = PENDING.set(url.into());
 }
 
-/// Opens `url` (`nsh-starter://<segment>/<segment>…`): the route it names,
+/// Opens `url` (`easyquran://<segment>/<segment>…`): the route it names,
 /// or `None` when it is not one of the app's. The seam an embedding host's
 /// delivery wires into.
 pub fn open(url: &str) -> Option<Route> {
     let path = url.strip_prefix(SCHEME)?;
     let route = route_from_deep_link(&path.split('/').collect::<Vec<_>>())?;
-    nav::open(route);
+    nav::open(route.clone());
     Some(route)
 }
 

@@ -7,7 +7,6 @@ pub mod back;
 pub mod chrome;
 pub mod command_bar;
 pub mod deep_link;
-pub mod home;
 pub mod lifecycle;
 pub mod nav;
 pub mod page;
@@ -76,35 +75,24 @@ pub fn shell() -> impl IntoElement {
 /// Phones: the stack of Home and the pushed pages, and the system tab bar
 /// for the primary pages (the status bar is the desktop shell's).
 fn phone_shell() -> AnyElement {
-    let tabs = Route::TABS;
     // One past the tabs selects none (a route the bar does not show).
-    let selected = signal(tabs.len() as u32);
+    let selected = signal(Route::TABS.len() as u32);
     // The stack drives the tabs...
     effect(move || {
-        let at = tabs
+        let current = nav::current();
+        let at = Route::TABS
             .iter()
-            .position(|tab| *tab == nav::current())
-            .map_or(tabs.len() as u32, |at| at as u32);
+            .position(|tab| *tab == current)
+            .map_or(Route::TABS.len() as u32, |at| at as u32);
         selected.set(at);
-    });
-    // A feed post opened on a phone is pushed as the detail route: the
-    // system header brings its own back button and the tab bar steps aside.
-    // Only while this shell is up: a desktop shell after it overlays.
-    crate::features::data::pushes_detail().set(true);
-    cleanup(|| crate::features::data::pushes_detail().set(false));
-    effect(move || {
-        if let Some(id) = crate::features::data::detail_request().get() {
-            crate::features::data::close_post();
-            nav::push(Route::DataDetail(id));
-        }
     });
     // ...and the tabs drive the stack (a no-op when this effect itself
     // moved the selection, so the two never loop).
     effect(move || {
-        if let Some(route) = tabs.get(selected.get() as usize)
+        if let Some(route) = Route::TABS.get(selected.get() as usize)
             && nav::current() != *route
         {
-            nav::open(*route);
+            nav::open(route.clone());
         }
     });
     view()
@@ -135,7 +123,8 @@ fn phone_shell() -> AnyElement {
                         || os() == nsh_core::platform::Os::Android,
                         move || {
                             themed_tab_bar(
-                                tabs.iter()
+                                Route::TABS
+                                    .iter()
                                     .map(|route| ThemedTab {
                                         label: route.label_str(),
                                         svg: route.tab_svg(),
@@ -149,7 +138,8 @@ fn phone_shell() -> AnyElement {
                     )
                     .otherwise(move || {
                         mobile_tab_bar(
-                            tabs.iter()
+                            Route::TABS
+                                .iter()
                                 .map(|route| tab_item(route.label_str(), route.tab_icon()))
                                 .collect::<Vec<_>>(),
                             selected,
@@ -238,7 +228,7 @@ fn sidebar() -> impl IntoElement {
                             .pt_1()
                             .pb_1(),
                     )
-                    .children(Route::ALL.iter().copied().map(sidebar_row)),
+                    .children(Route::SIDEBAR.iter().cloned().map(sidebar_row)),
             ),
         )
 }
@@ -248,7 +238,9 @@ fn sidebar() -> impl IntoElement {
 /// carries the full pill (the default theme's `accent` and `secondary`
 /// are the same gray).
 fn sidebar_row(route: Route) -> AnyElement {
-    let selected = move || nav::current() == route;
+    // Settings is one row for every section.
+    let family = route.key_str();
+    let selected = move || nav::current().key_str() == family;
     let tint = move || {
         if selected() {
             theme().foreground
@@ -256,8 +248,9 @@ fn sidebar_row(route: Route) -> AnyElement {
             theme().muted_foreground
         }
     };
+    let target = route.clone();
     nsh_base::button()
-        .on_press(move || nav::open(route))
+        .on_press(move || nav::open(target.clone()))
         .accessibility_label(route.label_str())
         .selected(selected)
         .w_full()

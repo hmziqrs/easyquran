@@ -6,18 +6,14 @@ import { expect, open, test } from "nsh/test";
 test("the root mounts", async () => {
   const app = await open(".", { clock: {} });
   await app.waitFor("text:Home");
-  // The phone shell names the app in the system header only; Home's own
-  // line is what the root drew.
-  expect(app.texts()).toContain("Everything the boilerplate demonstrates, one page each.");
+  // Home is a stub until its area lands.
+  expect(app.texts()).toContain("Not built yet");
 });
 
-test("the shell navigates from Home", async () => {
+test("back on Home asks to exit", async () => {
   const app = await open(".", { clock: {} });
-  await app.press("id:page-forms");
-  await app.waitFor("text:Forms");
-  // Back pops the pushed page; back again on Home asks to exit.
+  await app.waitFor("text:Home");
   await app.back();
-  await app.back();
-  await app.waitFor("text:Exit nsh-starter?");
+  await app.waitFor("text:Exit EasyQuran?");
   await app.press("role:button[Cancel]");
 });

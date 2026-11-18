@@ -27,68 +27,30 @@ pub fn page_screen(route: Route) -> Screen {
     if route.is_tab() && !is_desktop() {
         screen = screen.header_back_visible(false).pop_on_swipe(false);
     }
-    // One system header per screen: the feature's own stack draws it.
-    if route.has_own_stack() && !is_desktop() {
-        screen = screen.header_visible(false);
-    }
-    // The Lists page's top is its view switcher, not a scroll view: it keeps
-    // the same clear header as every page, but starts below it and stops
-    // above the floating tab bar, since nothing scrolls under either.
-    let fixed = route == Route::Lists && !is_desktop();
-    // The gallery's appearance switch as a native header button (SF
-    // Symbol), beside the system's back button.
-    if route == Route::UiGallery && os() == nsh_core::platform::Os::Ios && !is_desktop() {
-        screen = screen
-            .header_right(
-                view().test_id("gallery-appearance").child(
-                    nsh_base::button()
-                        .on_press(crate::shell::toggle_appearance)
-                        .child(text("Appearance")),
-                ),
-            )
-            .header_right_symbol("circle.lefthalf.filled");
-    }
-    // The feed's reload as a native header button: UIKit draws the SF
-    // Symbol and a press on it presses this view's button.
-    if route == Route::Data && os() == nsh_core::platform::Os::Ios && !is_desktop() {
-        screen = screen
-            .header_right(
-                view().test_id("data-refresh").child(
-                    nsh_base::button()
-                        .on_press(crate::features::data::refresh_feed)
-                        .child(text("Refresh")),
-                ),
-            )
-            .header_right_symbol("arrow.clockwise");
-    }
     // Under the transparent iOS header, UIKit's soft edge: content fades
     // and blurs lightly as it slides under.
-    // The Forms stack's own pages carry theirs (`soft_edges::page_edges`).
-    let top_fade = os() == nsh_core::platform::Os::Ios && !is_desktop() && !route.has_own_stack();
+    let top_fade = os() == nsh_core::platform::Os::Ios && !is_desktop();
+    let detail = route.is_detail();
     // nav_page paints the platform's window color (macOS dark: #1e1e1e),
     // so the content area takes the theme's own background on every page;
     // wide windows center the content at a readable measure.
+    let content = route.page();
     screen.header(page_header(route)).child(
         view()
             .flex_1()
             .items_center()
-            .when(fixed, |page| {
-                // The screen's own top inset, which takes in its header.
-                page.pt_safe_area()
-                    .pb(move || px(crate::ui::layout::tab_bar_room() + safe_area().bottom.0))
-            })
             .bg(move || theme().background)
             .child(
                 view()
                     .flex_1()
                     .w_full()
                     .max_w(px(CONTENT_MAX))
-                    .child(route.page()),
+                    .child(content),
             )
             .child(when(move || top_fade, crate::shell::soft_edges::soft_edges))
             // ...and behind the floating tab bar, the bottom one.
             .child(when(
-                move || top_fade && !fixed && !route.is_detail(),
+                move || top_fade && !detail,
                 || {
                     crate::shell::soft_edges::soft_bottom_edge(|| {
                         crate::ui::layout::tab_bar_room() + safe_area().bottom.0

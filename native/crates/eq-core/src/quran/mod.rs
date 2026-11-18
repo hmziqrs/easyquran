@@ -1,0 +1,1 @@
+//! Quran data (PARITY B1-B6, C10): catalogue and id maps baked from web data, read-only SQLite access by DB id (never hashed, never modified), surah names, mushaf divisions, view rules, text marks, words. Text is passed verbatim.

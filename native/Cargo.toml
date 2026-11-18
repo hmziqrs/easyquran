@@ -1,12 +1,15 @@
 [package]
-name = "nsh-starter"
+name = "easyquran"
 version = "0.1.0"
 edition = "2024"
 publish = false
 
 [workspace]
+members = [".", "crates/eq-core"]
+resolver = "3"
 
 [dependencies]
+eq-core = { path = "crates/eq-core" }
 nsh-core = "0.5.1"
 nsh-base = "0.5.1"
 nsh-query = { git = "https://github.com/SuperNSH/query.git", rev = "16d439a3be7f9ff9555f061934fa932bb3c2831b" }

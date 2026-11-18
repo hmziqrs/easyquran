@@ -25,12 +25,10 @@ pub enum BackStep {
 
 /// The decision for a stack `depth` with `exit_armed` set.
 pub fn back_step(depth: usize, exit_armed: bool) -> BackStep {
-    if depth > 0 {
-        BackStep::PopPage
-    } else if exit_armed {
-        BackStep::Exit
-    } else {
-        BackStep::AskExit
+    match (depth, exit_armed) {
+        (1.., _) => BackStep::PopPage,
+        (0, true) => BackStep::Exit,
+        (0, false) => BackStep::AskExit,
     }
 }
 
@@ -97,7 +95,7 @@ pub fn exit_prompt_dialog() -> AnyElement {
                         .border_1()
                         .border_color(move || theme().border)
                         .child(
-                            text("Exit nsh-starter?")
+                            text("Exit EasyQuran?")
                                 .text_sm()
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(move || theme().popover_foreground),

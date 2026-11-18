@@ -1,6 +1,6 @@
 {
-  "name": "nsh-starter",
-  "id": "com.example.nshstarter",
+  "name": "EasyQuran",
+  "id": "fyi.easyquran.app",
   "version": "1.0.0",
   "build": 1,
   "icon": "assets/icon.png",
@@ -9,9 +9,13 @@
   "rust": ".",
   "root": "App",
   "capabilities": {
+    "network": { "hosts": ["easyquran.fyi", "localhost", "127.0.0.1"] },
+    "audio": true,
+    "notifications": true,
+    "openUrl": { "schemes": ["https", "mailto"] },
+    "fs": { "read": ["${dataDir}"], "write": ["${dataDir}"] },
     "clipboard": true,
     "picker": true,
-    "speech": true,
-    "webview": { "hosts": [] }
+    "speech": true
   }
 }
