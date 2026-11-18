@@ -107,6 +107,7 @@ pub fn verse_tools(
             route.clone(),
             script,
         ))
+        .child(crate::features::audio::verse_actions(surah, ayah))
         .child(route.map(|r| report_dialog(report_open, r.id(), format!("{surah}:{ayah}"))))
         .into_element()
 }

@@ -427,7 +427,10 @@ fn contact_row(
         (20.0, 16.0)
     };
     layout::pressable_card(format!("{title}: {value}"), move || {
-        let _ = open_url(href.clone());
+        let href = href.clone();
+        spawn(async move {
+            open_url(href).await;
+        });
     })
     .flex_row()
     .items_center()

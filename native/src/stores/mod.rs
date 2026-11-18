@@ -4,6 +4,7 @@
 //! writes as methods; screens never hold eq-core state directly.
 
 pub mod appearance;
+pub mod audio;
 pub mod auth;
 pub mod connectivity;
 pub mod consent;

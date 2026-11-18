@@ -71,6 +71,7 @@ pub fn install() {
     on_key("mod+z", move |_| undo::undo());
     on_key("mod+shift+z", move |_| undo::redo());
     on_key("ctrl+mod+s", move |_| chrome::toggle_sidebar());
+    crate::features::audio::install_hotkeys();
     back::install();
     lifecycle::watch();
     deep_link::open_pending();
@@ -88,6 +89,7 @@ pub fn shell() -> impl IntoElement {
         .child(back::exit_prompt_dialog())
         // App level, so a toast from any page or task reaches the host.
         .child(toast::toast_host())
+        .child(crate::features::audio::dock())
         .child(crate::features::downloads::download_bar())
         .child(crate::features::bookmarks::feedback_bar())
         .child(crate::features::settings::update_toast())

@@ -107,6 +107,9 @@ pub fn reader_bar(
                 .tabular_nums()
                 .text_color(tokens::muted_text),
         )
+        .child(crate::features::audio::surah_action(move || {
+            top.get().map(|(surah, _)| surah)
+        }))
         .child(mode_toggle(prefs, change_mode))
         .child(
             view()
