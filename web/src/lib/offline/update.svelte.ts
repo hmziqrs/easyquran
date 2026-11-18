@@ -22,6 +22,11 @@ const DISMISS_KEY = "easyquran.update.dismissed";
 // pending/timed out/pre-feature SW that never answers).
 const DISMISS_UNKNOWN = "*";
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60_000;
+// Registration attempts per hydrate (first + retries). A failed register() is
+// not latched (flaky first load on mobile must not leave the tab uncontrolled
+// until a reload), but a browser that truly cannot register (private mode,
+// blocked storage) must not be hammered on every focus/online event either.
+const MAX_REGISTRATION_ATTEMPTS = 4;
 const INTERACTION_EVENTS = [
   "pointerdown",
   "keydown",
@@ -51,7 +56,17 @@ class UpdateStore {
   #silentToken = 0;
   #interacted = false;
   #registration: ServiceWorkerRegistration | null = null;
-  #registrationResolved = false;
+  // A null result is never latched: #getRegistration retries until a
+  // registration lands or MAX_REGISTRATION_ATTEMPTS is spent.
+  #registrationPending: Promise<ServiceWorkerRegistration | null> | null = null;
+  #registrationAttempts = 0;
+  // Bumped by dispose(): a registration answer from a disposed hydrate is dropped.
+  #generation = 0;
+  // Registration-retry triggers (online + focus-return) while the no-SW
+  // fallback is engaged only because register() failed.
+  #retryCleanup: (() => void) | null = null;
+  // Detaches the fallback's own listeners when a retry hands ownership back to the SW.
+  #fallbackCleanup: (() => void) | null = null;
   #channel: BroadcastChannel | null = null;
   #cleanups: Array<() => void> = [];
   #lastUpdateCheckAt: number | null = null;
@@ -108,7 +123,10 @@ class UpdateStore {
         await updated.check().catch(() => {});
         return;
       }
-      const reg = await this.#getRegistration();
+      // Fallback engaged after a failed register(): an explicit check is a
+      // natural retry trigger; success hands ownership back to the SW path.
+      if (this.#fallbackMode) await this.#retryRegistration();
+      const reg = this.#fallbackMode ? null : await this.#getRegistration();
       if (!reg) {
         await updated.check().catch(() => {});
         return;
@@ -207,11 +225,64 @@ class UpdateStore {
   }
 
   async #wireServiceWorker(): Promise<void> {
+    const generation = this.#generation;
     const reg = await this.#getRegistration();
+    if (generation !== this.#generation) return;
     if (!reg) {
+      // register() failed (flaky network, private mode, ...): the fallback owns
+      // availability until a later retry lands a registration (I8).
       this.#wireVersionFallback();
+      this.#wireRegistrationRetry();
       return;
     }
+    await this.#wireRegistration(reg);
+  }
+
+  // Retry a failed registration on natural triggers (connectivity back,
+  // focus-return) — never on a timer — bounded by MAX_REGISTRATION_ATTEMPTS.
+  #wireRegistrationRetry(): void {
+    if (this.#retryCleanup) return;
+    const retry = (): void => {
+      void this.#retryRegistration();
+    };
+    const onVisibility = (): void => {
+      if (document.visibilityState === "visible") retry();
+    };
+    window.addEventListener("online", retry);
+    document.addEventListener("visibilitychange", onVisibility);
+    this.#retryCleanup = () => {
+      window.removeEventListener("online", retry);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }
+
+  #stopRegistrationRetry(): void {
+    this.#retryCleanup?.();
+    this.#retryCleanup = null;
+  }
+
+  // A late registration disengages the no-SW fallback and wires the SW path
+  // exactly as a first-try success would (same I1-I8 semantics from here on).
+  async #retryRegistration(): Promise<void> {
+    if (!this.#fallbackMode) return;
+    const generation = this.#generation;
+    const reg = await this.#getRegistration();
+    if (generation !== this.#generation || !this.#fallbackMode) return;
+    if (!reg) {
+      if (this.#registrationAttempts >= MAX_REGISTRATION_ATTEMPTS) this.#stopRegistrationRetry();
+      return;
+    }
+    this.#stopRegistrationRetry();
+    this.#fallbackCleanup?.();
+    this.#fallbackCleanup = null;
+    this.#versionFallbackWired = false;
+    this.#fallbackMode = false;
+    // Dismissal is left as-is: #wireRegistration's initial sync keeps the
+    // sessionStorage record exactly as a first-try success would (I3).
+    await this.#wireRegistration(reg);
+  }
+
+  async #wireRegistration(reg: ServiceWorkerRegistration): Promise<void> {
     // Initial sync: keep the dismissal read from sessionStorage (not a new
     // waiting transition this session). Later transitions reset it (I3).
     this.#syncWaiting(reg, true);
@@ -275,6 +346,8 @@ class UpdateStore {
     // interaction -> arm the same one-shot guard and reload directly. Guard
     // armed at hydrate -> never silent-reload again this session.
     const attemptSilent = (): void => {
+      // A registration retry may have handed ownership back to the SW meanwhile.
+      if (!this.#fallbackMode) return;
       if (!updated.current) return;
       if (this.#reloadArmed) return;
       if (this.#interacted) return;
@@ -291,7 +364,7 @@ class UpdateStore {
       .catch(() => {})
       .then(attemptSilent);
     document.addEventListener("visibilitychange", onVisibility);
-    this.#cleanups.push(() => document.removeEventListener("visibilitychange", onVisibility));
+    this.#fallbackCleanup = () => document.removeEventListener("visibilitychange", onVisibility);
   }
 
   #checkServiceWorkerUpdate(): Promise<void> {
@@ -420,11 +493,22 @@ class UpdateStore {
     }
   }
 
-  async #getRegistration(): Promise<ServiceWorkerRegistration | null> {
-    if (this.#registrationResolved) return this.#registration;
-    this.#registrationResolved = true;
-    this.#registration = await registerServiceWorker();
-    return this.#registration;
+  // Never latches a failed (null) registration: the next caller retries,
+  // up to MAX_REGISTRATION_ATTEMPTS per hydrate. Concurrent callers share one attempt.
+  #getRegistration(): Promise<ServiceWorkerRegistration | null> {
+    if (this.#registration) return Promise.resolve(this.#registration);
+    if (this.#registrationPending) return this.#registrationPending;
+    if (this.#registrationAttempts >= MAX_REGISTRATION_ATTEMPTS) return Promise.resolve(null);
+    this.#registrationAttempts += 1;
+    const generation = this.#generation;
+    const pending = registerServiceWorker().then((reg) => {
+      if (generation !== this.#generation) return null;
+      this.#registrationPending = null;
+      this.#registration = reg;
+      return reg;
+    });
+    this.#registrationPending = pending;
+    return pending;
   }
 
   #armReloadGuard(): void {
@@ -493,9 +577,14 @@ class UpdateStore {
     }
     for (const cleanup of this.#cleanups) cleanup();
     this.#cleanups = [];
+    this.#stopRegistrationRetry();
+    this.#fallbackCleanup?.();
+    this.#fallbackCleanup = null;
     this.#channel = null;
+    this.#generation += 1;
     this.#registration = null;
-    this.#registrationResolved = false;
+    this.#registrationPending = null;
+    this.#registrationAttempts = 0;
     this.#lastUpdateCheckAt = null;
     this.#updateCheckInFlight = null;
     this.#versionFallbackWired = false;

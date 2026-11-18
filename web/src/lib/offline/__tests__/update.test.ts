@@ -953,6 +953,35 @@ describe("UpdateStore.dispose", () => {
   });
 });
 
+describe("UpdateStore registration retry", () => {
+  it("retries a failed registration on `online` and hands ownership back to the SW", async () => {
+    const container = new FakeServiceWorkerContainer(new FakeWorker("app-1"));
+    setServiceWorker(container.toContainer());
+    registerSwMock.mockResolvedValue(null);
+    const store = createUpdate();
+    interact();
+    store.hydrate();
+    await flush();
+    expect(registerSwMock).toHaveBeenCalledTimes(1);
+    expect(store.available).toBe(false);
+
+    const reg = new FakeRegistration();
+    reg.active = new FakeWorker("app-1");
+    reg.waiting = new FakeWorker("app-2");
+    registerSwMock.mockResolvedValue(reg.toRegistration());
+    window.dispatchEvent(new Event("online"));
+    await flush(20);
+
+    expect(registerSwMock).toHaveBeenCalledTimes(2);
+    expect(store.waitingVersion).toBe("app-2");
+    expect(store.available).toBe(true);
+    // Fallback disengaged: dismissal is SW-keyed again, not the build key.
+    store.dismiss();
+    expect(sessionStorage.getItem(DISMISS_KEY)).toBe("v:app-2");
+    store.dispose();
+  });
+});
+
 describe("UpdateStore controllerchange", () => {
   it("resets dismissal on a new controller and evaluates the armed guard", async () => {
     const { container } = installHarness(new FakeWorker("app-1"), new FakeWorker("app-2"));
