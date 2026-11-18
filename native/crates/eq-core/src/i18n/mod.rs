@@ -30,6 +30,7 @@
 mod plural;
 mod prefs;
 mod relative_time;
+pub mod static_copy;
 mod table;
 #[cfg(test)]
 mod tests;

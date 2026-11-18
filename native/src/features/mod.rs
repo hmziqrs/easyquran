@@ -14,6 +14,7 @@ pub mod azkar;
 pub mod bookmarks;
 pub mod daily_ayah;
 pub mod downloads;
+pub mod error;
 pub mod home;
 pub mod index;
 pub mod marketing;
