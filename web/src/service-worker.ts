@@ -60,31 +60,48 @@ const resolveAny = resolve as unknown;
 // SAFETY: carried over from `resolveAny` above — same function value, only
 // re-branded to the string-pathname signature the precache lists need.
 const resolvePath = resolveAny as (pathname: string) => string;
-// Offline navigation fallback: the prerendered start surface (the manifest's
-// start_url). Kit 3 emits no `404.html` artifact — the server renders errors
-// dynamically with a 404 status plus `Vary: Accept`, so that spelling can
-// never serve as a precached shell (`shell.ok` is false, and a Vary'd entry
-// would miss every navigation match). `/surah` is precached unconditionally
-// below (install fails without it), so the fallback always resolves offline.
-const SHELL_ROUTE = resolvePath("surah");
+// Prerendered app shells. Each one is served offline ONLY at its own URL: a
+// SvelteKit 3 page hydrates the route baked into its HTML (node ids + params
+// in the inline start script), not the one in the address bar, so answering an
+// unrelated URL with a shell would render the wrong page under that URL. An
+// uncached URL gets offlineFallback() instead, which links back to these.
+// The landing (`/`, the manifest start_url) and the surah index are critical:
+// install fails without them. The /ar twins are best-effort.
+const SHELL_HOME = resolvePath("");
+const SHELL_SURAH = resolvePath("surah");
+const CRITICAL_SHELLS: readonly string[] = [SHELL_HOME, SHELL_SURAH];
+const OPTIONAL_SHELLS: readonly string[] = [resolvePath("ar"), resolvePath("ar/surah")];
+const SHELLS = new Set<string>([...CRITICAL_SHELLS, ...OPTIONAL_SHELLS]);
+// Kit 3's runtime public-env module. Every page's inline boot script runs
+// `import("./_app/env.js").then(() => import(start) ...)`, so without a cached
+// copy an offline page never hydrates. Served `no-cache` by server.ts (a
+// runtime value, not a build artifact) -> network-first with cache fallback.
+const ENV_MODULE = resolvePath("_app/env.js");
+const QURAN_DATA = resolvePath("quran-meta/quran-data.json");
 const NAV_TIMEOUT_MS = 3500;
 export const PAGES_MAX = 300;
 export const DATA_MAX = 400;
 export const DATA_BUDGET_BYTES = 32 * 1024 * 1024;
 const MAINTENANCE_CONCURRENCY = 6;
+// Install-time fetch fan-out. Unbounded Promise.all over ~900 files starved
+// mobile connections and one slow/failed file rejected the whole install.
+const PRECACHE_CONCURRENCY = 6;
+const PRECACHE_ATTEMPTS = 2;
 
 // Kit 3 removed `serviceWorker.files` — the precache filter kit 2 carried in
 // svelte.config.js lives here now: dotfiles (.DS_Store et al.) are refused by
-// this server and one failed install-time fetch kills SW install for every
-// client, while _headers/_redirects/robots.txt/og.png and the quran-meta/
+// this server, while _headers/_redirects/robots.txt/og.png and the quran-meta/
 // catalogue are not client precache material (quran-data.json is re-added
-// deliberately below).
+// deliberately below). `qurancom/` is the dev-only quran.com reference mirror
+// (13 MB, read only by the 404-in-production /design/qurancom specimen) and
+// `icons/oauth/` holds provider-upload artwork the app never renders.
 const PRECACHE_EXCLUDED_NAMES = new Set(["_headers", "_redirects", "robots.txt", "og.png"]);
+const PRECACHE_EXCLUDED_PREFIXES: readonly string[] = ["quran-meta/", "qurancom/", "icons/oauth/"];
 
 function isPrecacheExcluded(path: string): boolean {
   const rel = path.replace(/^\/+/, "");
   if (PRECACHE_EXCLUDED_NAMES.has(rel)) return true;
-  if (rel.startsWith("quran-meta/")) return true;
+  if (PRECACHE_EXCLUDED_PREFIXES.some((prefix) => rel.startsWith(prefix))) return true;
   return rel.split("/").some((segment) => segment.startsWith("."));
 }
 
@@ -98,15 +115,6 @@ function isPrecacheExcluded(path: string): boolean {
 const PRECACHE_FILES: string[] = [...immutable, ...assets]
   .filter((entry) => !isPrecacheExcluded(entry.path))
   .map((entry) => resolvePath(entry.path.replace(/^\/+/, "")));
-
-const PRECACHE = Array.from(
-  new Set([
-    ...PRECACHE_FILES,
-    resolvePath(""),
-    resolvePath("surah"),
-    resolvePath("quran-meta/quran-data.json"),
-  ]),
-);
 
 const IMMUTABLE = new Set(PRECACHE_FILES);
 
@@ -395,22 +403,132 @@ sw.addEventListener("install", (event) => {
   event.waitUntil(precache());
 });
 
+// Two tiers. CRITICAL (install rejects without it): the landing + surah-index
+// shells, every same-origin module/stylesheet their HTML references to boot
+// (modulepreload links, the inline start script's imports, env.js), and
+// quran-data.json. BEST-EFFORT: the rest of the manifest, fetched with bounded
+// concurrency; a failed file is skipped and filled later by the runtime
+// cache-first / SWR handlers. A failed install keeps what it wrote: a retry of
+// the same version reuses the hashed /_app/immutable/ entries, and any other
+// version's prune removes the cache if this version never activates.
 async function precache(): Promise<void> {
-  try {
-    const cache = await caches.open(APP_CACHE);
-    await Promise.all(
-      PRECACHE.map(async (url) => {
-        const res = await fetch(url, { cache: "no-cache" });
-        if (!res || !res.ok) {
-          throw new Error(`precache ${url} failed: ${res ? res.status : "no response"}`);
-        }
-        await cache.put(url, res);
-      }),
-    );
-  } catch (err) {
-    await caches.delete(APP_CACHE).catch(() => {});
-    throw err;
+  const cache = await caches.open(APP_CACHE);
+  const critical = new Set<string>([QURAN_DATA]);
+  for (const shell of CRITICAL_SHELLS) {
+    const html = await precacheShell(cache, shell);
+    for (const ref of bootReferences(html, shell)) critical.add(ref);
   }
+  await pool([...critical], PRECACHE_CONCURRENCY, (url) => precacheOne(cache, url));
+
+  const rest = [...PRECACHE_FILES, ...OPTIONAL_SHELLS].filter((url) => !critical.has(url));
+  let failed = 0;
+  await pool(rest, PRECACHE_CONCURRENCY, async (url) => {
+    try {
+      await precacheOne(cache, url);
+    } catch {
+      failed++;
+    }
+  });
+  if (failed > 0) console.warn(`[sw] precache: ${failed} optional file(s) deferred to runtime`);
+}
+
+async function precacheFetch(url: string): Promise<Response> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < PRECACHE_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(url, { cache: "no-cache", credentials: "same-origin" });
+      if (res.ok && res.type !== "opaqueredirect") return res;
+      lastError = new Error(`precache ${url} failed: ${res.status}`);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(`precache ${url} failed`);
+    }
+  }
+  throw lastError ?? new Error(`precache ${url} failed`);
+}
+
+const IMMUTABLE_DIR = resolvePath("_app/immutable/");
+
+async function precacheOne(cache: Cache, url: string): Promise<void> {
+  // Hashed build output never changes under one URL: keep a copy an earlier
+  // install attempt of this version wrote, or reuse a previous version's copy,
+  // instead of re-downloading every chunk on every update.
+  if (url.startsWith(IMMUTABLE_DIR)) {
+    if (await cache.match(url)) return;
+    const prior = await matchOtherAppCaches(url);
+    if (prior) {
+      await cache.put(url, prior);
+      return;
+    }
+  }
+  const res = await precacheFetch(url);
+  await cache.put(url, await storable(res));
+}
+
+// Returns the shell's HTML so its boot references can be promoted to critical.
+async function precacheShell(cache: Cache, url: string): Promise<string> {
+  const res = await precacheFetch(url);
+  let html = "";
+  try {
+    html = await res.clone().text();
+  } catch {}
+  await cache.put(url, await storable(res));
+  return html;
+}
+
+const BOOT_REF_PATTERN = /(?:href|src)="([^"]+)"|import\(\s*"([^"]+)"\s*\)/g;
+
+// Same-origin build files (and env.js) a shell's HTML loads to hydrate.
+function bootReferences(html: string, shellUrl: string): string[] {
+  const base = new URL(shellUrl, sw.location.origin);
+  const out: string[] = [];
+  for (const match of html.matchAll(BOOT_REF_PATTERN)) {
+    const raw = match[1] ?? match[2];
+    if (!raw) continue;
+    let resolved: URL;
+    try {
+      resolved = new URL(raw, base);
+    } catch {
+      continue;
+    }
+    if (resolved.origin !== sw.location.origin) continue;
+    const path = resolved.pathname;
+    if (path === ENV_MODULE || IMMUTABLE.has(path)) out.push(path);
+  }
+  return out;
+}
+
+// A cached entry must be usable for ANY later request to its URL:
+// - `redirected` responses cannot answer a navigation (the browser turns them
+//   into a network error), so the body is re-wrapped in a fresh Response;
+// - `Vary` (server.ts / hooks.server.ts append `Vary: Accept` to HTML that has
+//   a .md twin, `/` included) makes the Cache API compare the stored request's
+//   Accept with the lookup's, so a precache entry fetched with `*/*` never
+//   matched a `text/html` navigation. Precache entries are single-representation
+//   by construction, so the header is dropped.
+// Rebuilt bodies are already decoded by fetch(), so encoding/length go too.
+async function storable(res: Response): Promise<Response> {
+  if (!res.redirected && !res.headers.has("vary")) return res;
+  const headers = new Headers(res.headers);
+  headers.delete("vary");
+  headers.delete("content-encoding");
+  headers.delete("content-length");
+  return new Response(await res.blob(), {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+  });
+}
+
+// Older eq-app-* caches survive the I7 grace window precisely so tabs still on
+// the previous build can load its lazy chunks; this is the lookup that serves
+// them (cacheFirstApp) and the install-time reuse source (precacheOne).
+async function matchOtherAppCaches(url: string): Promise<Response | undefined> {
+  const names = (await caches.keys()).filter((k) => k.startsWith("eq-app-") && k !== APP_CACHE);
+  for (const name of names) {
+    const hit = await (await caches.open(name)).match(url, { ignoreVary: true });
+    if (hit) return hit;
+  }
+  return undefined;
 }
 
 sw.addEventListener("activate", (event) => {
@@ -586,6 +704,11 @@ export async function maybePruneAfterGrace(): Promise<void> {
   const deadline = await metaGet<number>(PRUNE_DEADLINE_KEY);
   if (deadline === undefined) return;
   if (Date.now() < deadline) return;
+  // A newer worker installing or waiting has its own eq-app-<next> cache, which
+  // pruneOldAppCaches() would see as "old" and delete mid-install, leaving it to
+  // activate with an empty shell. Keep the deadline; the next wake re-checks.
+  const reg = sw.registration;
+  if (reg && (reg.installing || reg.waiting)) return;
   const live = await sw.clients.matchAll({ includeUncontrolled: false });
   const acks = await metaScan<string>("ack:");
   const allAcked = live.every((c) => acks[c.id] === version);
@@ -627,6 +750,11 @@ sw.addEventListener("fetch", (event) => {
     return;
   }
 
+  if (url.origin === sw.location.origin && url.pathname === ENV_MODULE) {
+    event.respondWith(networkFirstApp(req, url.pathname));
+    return;
+  }
+
   if (req.mode === "navigate") {
     event.respondWith(handleNavigation(req));
     return;
@@ -647,9 +775,13 @@ sw.addEventListener("fetch", (event) => {
   }
 });
 
+// Build output and static files have exactly one representation per URL, so
+// lookups ignore Vary (precache keys carry no request headers; a page's
+// script/font/image request does). Misses fall back to older eq-app-* caches
+// (I7 grace: a tab on the previous build still loads its lazy chunks).
 async function cacheFirstApp(req: Request): Promise<Response> {
   const cache = await caches.open(APP_CACHE);
-  const hit = await cache.match(req);
+  const hit = await cache.match(req, { ignoreVary: true });
   if (hit) return hit;
   try {
     const res = await fetch(req);
@@ -658,8 +790,105 @@ async function cacheFirstApp(req: Request): Promise<Response> {
     }
     return res;
   } catch {
+    const prior = await matchOtherAppCaches(req.url).catch(() => undefined);
+    return prior ?? Response.error();
+  }
+}
+
+// Runtime (non-hashed) app module: fresh when the network answers within the
+// navigation budget, the cached copy otherwise, then one unbounded retry.
+async function networkFirstApp(req: Request, key: string): Promise<Response> {
+  const cache = await caches.open(APP_CACHE);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), NAV_TIMEOUT_MS);
+  try {
+    const res = await fetch(req, { signal: controller.signal });
+    if (res.ok && isCacheable(res)) {
+      await cache.put(key, await storable(res.clone())).catch(() => {});
+    }
+    return res;
+  } catch {
+    // timed out or offline: fall through to the cache
+  } finally {
+    clearTimeout(timeout);
+  }
+  const hit =
+    (await cache.match(key, { ignoreVary: true })) ??
+    (await matchOtherAppCaches(key).catch(() => undefined));
+  if (hit) return hit;
+  try {
+    return await fetch(req);
+  } catch {
     return Response.error();
   }
+}
+
+// Navigation lookups use header-less Requests: a navigation carries
+// `Accept: text/html,...`, and the Cache API compares that against the stored
+// request whenever the stored response has `Vary: Accept`. Every navigation
+// cache entry (precache shells, PAGES_CACHE) is stored under a header-less
+// Request too, so the two always agree, while a negotiated non-navigation
+// entry (e.g. markdown fetched under the same URL into the app cache by
+// swrApp) is never handed to a navigation.
+async function cachedShell(pathname: string): Promise<Response | undefined> {
+  if (!SHELLS.has(pathname)) return undefined;
+  const app = await caches.open(APP_CACHE);
+  const hit = await app.match(new Request(pathname));
+  if (hit) return hit;
+  // A shell from the previous build still boots: its chunks are in that
+  // build's eq-app-* cache, served by cacheFirstApp's fallback.
+  return matchOtherAppCaches(pathname);
+}
+
+async function cachedPage(key: string, pathname: string): Promise<Response | undefined> {
+  const pages = await caches.open(PAGES_CACHE);
+  // Exact key first, then the bare path: an offline reload carrying a query the
+  // page was never saved with (?source=pwa, utm_*) still finds the page.
+  const candidates = key === pathname ? [key] : [key, pathname];
+  for (const candidate of candidates) {
+    const hit = await pages.match(new Request(candidate));
+    if (!hit) continue;
+    if (isCacheable(hit)) return hit;
+    await pages.delete(new Request(candidate)).catch(() => {});
+  }
+  return undefined;
+}
+
+const OFFLINE_COPY = {
+  en: {
+    lang: "en",
+    dir: "ltr",
+    title: "You're offline",
+    body: "This page isn't saved on this device yet. Pages you've opened before still work offline.",
+    home: "Home",
+    surahs: "Surah list",
+    homeHref: SHELL_HOME,
+    surahsHref: SHELL_SURAH,
+  },
+  ar: {
+    lang: "ar",
+    dir: "rtl",
+    title: "أنت غير متصل",
+    body: "هذه الصفحة غير محفوظة على هذا الجهاز بعد. الصفحات التي فتحتها من قبل تعمل دون اتصال.",
+    home: "الرئيسية",
+    surahs: "قائمة السور",
+    homeHref: resolvePath("ar"),
+    surahsHref: resolvePath("ar/surah"),
+  },
+} as const;
+
+// Last resort for a navigation nothing cached can answer while the network is
+// unreachable. Never a prerendered shell (see SHELLS): it would hydrate the
+// wrong route under this URL. Self-contained (no app chunks), links to the
+// precached shells, and reloads itself when connectivity returns.
+export function offlineFallback(pathname: string): Response {
+  const arabic = pathname === "/ar" || pathname.startsWith("/ar/");
+  const copy = arabic ? OFFLINE_COPY.ar : OFFLINE_COPY.en;
+  const html = `<!doctype html><html lang="${copy.lang}" dir="${copy.dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>${copy.title}</title><style>body{font-family:system-ui,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;box-sizing:border-box}main{max-width:28rem;text-align:center}a{margin:0 .5rem}</style></head><body><main><h1>${copy.title}</h1><p>${copy.body}</p><p><a href="${copy.homeHref}">${copy.home}</a><a href="${copy.surahsHref}">${copy.surahs}</a></p></main><script>addEventListener("online",()=>location.reload())</script></body></html>`;
+  return new Response(html, {
+    status: 503,
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+  });
 }
 
 export async function handleNavigation(req: Request): Promise<Response> {
@@ -677,49 +906,42 @@ export async function handleNavigation(req: Request): Promise<Response> {
   const key = normalizeDataKey(req.url);
 
   if (network && network.ok && network.type !== "opaque" && isCacheable(network)) {
-    const pages = await caches.open(PAGES_CACHE);
-    await pages.put(new Request(key), network.clone()).catch(() => {});
+    await storePage(key, network);
     await touchRecency(req.url);
     return network;
   }
   if (network) return network;
 
-  const app = await caches.open(APP_CACHE);
-  const shellHit = await app.match(req);
-  if (shellHit) {
+  // Offline (or over the NAV_TIMEOUT_MS budget): this URL's own prerendered
+  // shell, then this URL's saved page. Never another URL's HTML.
+  const pathname = new URL(req.url).pathname;
+  const cached = (await cachedShell(pathname)) ?? (await cachedPage(key, pathname));
+  if (cached) {
     await touchRecency(req.url);
-    return shellHit;
+    return cached;
   }
 
-  const pages = await caches.open(PAGES_CACHE);
-  const pageHit = await pages.match(new Request(key));
-  if (pageHit) {
-    if (!isCacheable(pageHit)) {
-      await pages.delete(new Request(key)).catch(() => {});
-    } else {
-      await touchRecency(req.url);
-      return pageHit;
-    }
-  }
-
-  const fallback = await app.match(SHELL_ROUTE);
-  if (fallback) return fallback;
   // Every cache missed and the NAV_TIMEOUT_MS budget already killed one fetch.
-  // Resolving with Response.error() here makes Chrome report "The FetchEvent
-  // ... resulted in a network error response" for a request that would succeed
-  // given time (dev compiles a cold route in seconds). Retry once unbounded:
-  // an offline request rejects immediately, so offline behavior is unchanged.
+  // Retry once unbounded so a slow-but-online request (dev compiles a cold
+  // route in seconds) still succeeds; an offline request rejects immediately
+  // and gets the self-contained offline page instead of a browser error.
   try {
     const retry = await fetch(req);
     if (retry.ok && retry.type !== "opaque" && isCacheable(retry)) {
-      const pageCache = await caches.open(PAGES_CACHE);
-      await pageCache.put(new Request(key), retry.clone()).catch(() => {});
+      await storePage(key, retry);
       await touchRecency(req.url);
     }
     return retry;
   } catch {
-    return Response.error();
+    return offlineFallback(pathname);
   }
+}
+
+async function storePage(key: string, res: Response): Promise<void> {
+  try {
+    const pages = await caches.open(PAGES_CACHE);
+    await pages.put(new Request(key), await storable(res.clone()));
+  } catch {}
 }
 
 export async function handleData(req: Request): Promise<Response> {
