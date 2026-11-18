@@ -27,7 +27,7 @@ Nothing below is committed. Every value is read at build time (`option_env!`); a
 
 ### Social sign-in (`nsh-auth`)
 
-The provider token goes to the API's `POST /auth/{provider}/v1/token`. Each client id must also be an audience or app the API accepts (its env names in brackets).
+The provider token goes to the API's `POST /auth/{provider}/v1/token` (GitHub: the code goes to the broker, below). Each client id must also be an audience or app the API accepts (its env names in brackets).
 
 | Env (build time) | Platform | Provider console | Redirect to register |
 | --- | --- | --- | --- |
@@ -35,8 +35,12 @@ The provider token goes to the API's `POST /auth/{provider}/v1/token`. Each clie
 | `EQ_GOOGLE_IOS_CLIENT_ID` | iOS | OAuth client type "iOS", bundle id `fyi.easyquran.app` [`GOOGLE_MOBILE_CLIENT_IDS`] | none: Google's reversed client id scheme `com.googleusercontent.apps.<prefix>:/oauth2redirect` |
 | `EQ_GOOGLE_ANDROID_CLIENT_ID` | Android | OAuth client type "Android", package `fyi.easyquran.app` + signing SHA-1, "Custom URI scheme" enabled under Advanced settings [`GOOGLE_MOBILE_CLIENT_IDS`] | none: `fyi.easyquran.app:/oauth2redirect` |
 | `EQ_DISCORD_CLIENT_ID` | iOS, Android | the API's own Discord application [`DISCORD_CLIENT_ID`], with "Public Client" on so the PKCE exchange needs no secret | `fyi.easyquran.app:/oauth/discord` |
+| `EQ_APPLE_SERVICES_ID` | all | Apple Developer, a Services ID with Sign in with Apple on [`APPLE_CLIENT_ID`, or listed in `APPLE_MOBILE_CLIENT_IDS`] | Return URL `<relay base>/auth/apple/v1/native/relay` |
+| `EQ_FACEBOOK_APP_ID` | all | the API's Facebook app [`FACEBOOK_CLIENT_ID`], Facebook Login with PKCE | Valid OAuth Redirect URI `<relay base>/auth/facebook/v1/native/relay` |
+| `EQ_GITHUB_CLIENT_ID` | all | a GitHub OAuth app for the app [`GITHUB_NATIVE_CLIENT_ID` + `GITHUB_NATIVE_CLIENT_SECRET` on the API] | Authorization callback URL `<relay base>/auth/github/v1/native/relay` |
+| `EQ_OAUTH_RELAY_BASE` | all | the public API base the relays above are registered under; default `https://easyquran.fyi/api` | none |
 
-Not offered yet: Apple (iOS needs a native AuthenticationServices bridge; elsewhere Apple posts the code to an HTTPS URL), Facebook (HTTPS redirects only), GitHub (the code exchange needs the client secret), passkeys (no library). iOS offers no social sign-in until Apple is available (App Store rule, `contracts/devices.md` O31). The callback scheme `fyi.easyquran.app` is claimed in `nsh.json` `schemes`.
+Apple, Facebook and GitHub accept only HTTPS redirects, so they redirect to the API's relay, which answers `302` to the fixed `fyi.easyquran.app:/oauth/<provider>` link; the app takes it back through NSH's `open_auth_session` (desktop: the system browser and the claimed scheme). The app checks `state` itself. Apple's `form_post` carries the id token, which goes to `/auth/apple/v1/token`; Facebook's code is exchanged in the app (PKCE, no secret); GitHub's code and PKCE verifier go to the API's broker `POST /auth/github/v1/native/exchange`, which holds the secret. On desktop the scheme link only comes back where the scheme is registered: the packaged macOS app, the Linux runner (it writes the `.desktop` entry) and the Windows release runner (the Windows development host registers nothing). Not offered: passkeys (no library). iOS offers no social sign-in unless Apple is configured (App Store rule, `contracts/devices.md` O31). The callback scheme `fyi.easyquran.app` is claimed in `nsh.json` `schemes`.
 
 ### Firebase: push, analytics, crash reporting (`nsh-firebase`)
 

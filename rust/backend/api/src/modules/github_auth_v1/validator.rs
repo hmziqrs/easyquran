@@ -81,6 +81,29 @@ pub struct GitHubTokenRequest {
     pub access_token: String,
 }
 
+/// Native GitHub code broker: the app ran the authorize leg (PKCE S256) through the
+/// relay; the server exchanges the code with the secret it holds. `redirect_uri` must be
+/// on the configured allow-list (`GITHUB_NATIVE_REDIRECT_URIS`).
+#[derive(Deserialize, Validate)]
+#[serde(deny_unknown_fields)]
+pub struct GitHubNativeExchangeRequest {
+    #[validate(length(min = 1, max = 512))]
+    pub code: String,
+    /// RFC 7636: 43..=128 characters.
+    #[validate(length(min = 43, max = 128))]
+    pub code_verifier: String,
+    #[validate(length(min = 1, max = 2048))]
+    pub redirect_uri: String,
+}
+
+// No Debug: the code and verifier must never reach a log line.
+impl std::fmt::Debug for GitHubNativeExchangeRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GitHubNativeExchangeRequest")
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitHubUserInfo {
     pub id: i64,

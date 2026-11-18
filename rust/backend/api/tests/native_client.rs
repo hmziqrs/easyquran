@@ -30,8 +30,8 @@ use aws_lc_rs::{
 use base64::prelude::*;
 use ruxlog::db::sea_models::user::{self, NewUser, UserRole};
 use ruxlog::middlewares::{client_ip::resolve_client_ip, cors, native_session, static_csrf};
-use ruxlog::modules::auth_v1;
 use ruxlog::modules::device_v1::keys::proof_message;
+use ruxlog::modules::{apple_auth_v1, auth_v1, github_auth_v1};
 use ruxlog::router;
 use ruxlog::state::AppState;
 use ruxlog::utils::code_hash::hash_code;
@@ -67,6 +67,8 @@ fn native_app(state: AppState) -> Router {
     // rotation test does.
     router::router(state.clone())
         .nest("/auth/v1", auth_v1::routes())
+        .nest("/auth/apple/v1", apple_auth_v1::routes())
+        .nest("/auth/github/v1", github_auth_v1::routes())
         .layer(middleware::from_fn(resolve_client_ip))
         .layer(Extension(axum_client_ip::ClientIpSource::CfConnectingIp))
         .layer(middleware::from_fn(cors::origin_guard))
@@ -836,4 +838,73 @@ async fn native_sign_up_skips_turnstile_and_a_browser_does_not() {
     )
     .await;
     assert!(reply.status.is_success(), "{} {}", reply.status, reply.body);
+}
+
+/// Apple's `form_post` relay takes a cross-site POST (Origin appleid.apple.com, no
+/// CSRF token, no session) and answers only a 302 to the fixed app target.
+#[tokio::test]
+async fn apple_relay_accepts_apple_form_post_and_redirects_only_to_the_app() {
+    let (_state, app) = state_and_app().await;
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/auth/apple/v1/native/relay")
+        .header("cf-connecting-ip", "203.0.113.7")
+        .header(header::ORIGIN, "https://appleid.apple.com")
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from(
+            "code=c1&id_token=h.p.s&state=st&redirect_uri=https%3A%2F%2Fevil.test",
+        ))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::FOUND);
+    assert_eq!(
+        res.headers()[header::LOCATION],
+        "fyi.easyquran.app:/oauth/apple?code=c1&id_token=h.p.s&state=st"
+    );
+    assert!(
+        res.headers().get(header::SET_COOKIE).is_none(),
+        "the relay must not mint a session"
+    );
+
+    // The origin-guard exemption is that exact path and POST only.
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/auth/apple/v1/token")
+        .header("cf-connecting-ip", "203.0.113.7")
+        .header(header::ORIGIN, "https://appleid.apple.com")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from("{}"))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert!(res.status().is_client_error(), "{}", res.status());
+}
+
+/// The GitHub broker refuses a redirect_uri that is not on the allow-list before it
+/// contacts GitHub, and mints no session.
+#[tokio::test]
+async fn github_native_exchange_refuses_a_redirect_uri_off_the_allow_list() {
+    let (_state, app) = state_and_app().await;
+    let verifier = "v".repeat(43);
+    for redirect in [
+        "https://evil.test/api/auth/github/v1/native/relay",
+        "fyi.easyquran.app:/oauth/github",
+    ] {
+        let reply = call(
+            &app,
+            Method::POST,
+            "/auth/github/v1/native/exchange",
+            None,
+            None,
+            &[],
+            Some(json!({ "code": "c", "code_verifier": verifier, "redirect_uri": redirect })),
+        )
+        .await;
+        assert_eq!(
+            reply.status,
+            StatusCode::BAD_REQUEST,
+            "{redirect}: {}",
+            reply.body
+        );
+        assert!(reply.headers.get(header::SET_COOKIE).is_none());
+    }
 }

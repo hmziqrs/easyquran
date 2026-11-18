@@ -7,22 +7,27 @@
 //! `SignInStep::TotpRequired`). Provider tokens are held in memory for the
 //! one exchange and never stored.
 //!
-//! How the page comes back, per platform:
+//! How the page comes back:
 //!
-//! - Desktop (macOS, Linux, Windows): Google only (the matrix holds other
-//!   providers until their desktop rules are checked). The system browser
-//!   and a `127.0.0.1` loopback redirect (RFC 8252); `nsh-auth` has no
-//!   desktop launcher of its own, so the loopback listener stays here.
-//! - iOS, Android: NSH's `open_auth_session` (ASWebAuthenticationSession,
-//!   Custom Tabs) with a private-use scheme redirect.
+//! - Google on desktop (macOS, Linux, Windows): the system browser and a
+//!   `127.0.0.1` loopback redirect (RFC 8252); `nsh-auth` has no desktop
+//!   launcher of its own, so the loopback listener stays here.
+//! - Google and Discord on iOS, Android: NSH's `open_auth_session`
+//!   (ASWebAuthenticationSession, Custom Tabs) with a private-use scheme
+//!   redirect.
+//! - Apple, Facebook, GitHub on every platform: the provider redirects to
+//!   the API's HTTPS relay (`/auth/<p>/v1/native/relay`), which answers
+//!   `302` to the fixed `fyi.easyquran.app:/oauth/<p>`. `open_auth_session`
+//!   takes that link back (desktop: system browser + the scheme claimed in
+//!   `nsh.json`). Apple's `form_post` already carries the id token; Facebook
+//!   exchanges the code itself (PKCE, no secret); GitHub sends the code and
+//!   verifier to the API's broker (`/auth/github/v1/native/exchange`),
+//!   which holds the secret. State and PKCE never leave the app.
 //!
 //! A provider shows only when this build has its client id (`option_env!`,
 //! listed in `native/README.md`), as the web hides disabled providers.
-//! Blocked today (hidden): Apple (needs a native AuthenticationServices
-//! bridge on iOS or an HTTPS `form_post` relay elsewhere), Facebook (HTTPS
-//! redirects only), GitHub (the code exchange needs the client secret,
-//! i.e. a broker). On iOS, Sign in with Apple must sit next to any other
-//! social sign-in (O31), so iOS offers none until Apple lands.
+//! On iOS, Sign in with Apple must sit next to any other social sign-in
+//! (O31): without an Apple id, iOS offers none.
 
 use std::sync::Arc;
 
@@ -36,12 +41,30 @@ use nsh_auth::{
 };
 use nsh_core::element::{HttpRequest, create_root, fetch};
 use nsh_core::prelude::spawn;
+use sha2::{Digest, Sha256};
 
 /// The scheme of the app's OAuth redirects: the app id, which is also what
 /// Google's Android clients accept (`<package>:/oauth2redirect`). Claimed in
-/// `nsh.json` `schemes` so Android and desktop route it back.
-#[cfg_attr(not(any(target_os = "ios", target_os = "android")), allow(dead_code))]
+/// `nsh.json` `schemes` so Android and desktop route it back. The API's
+/// relays answer with exactly this scheme.
 const APP_SCHEME: &str = "fyi.easyquran.app";
+
+/// The public API the relays live on (`EQ_OAUTH_RELAY_BASE`, no trailing
+/// slash), registered with Apple, Facebook and GitHub. Production unless a
+/// build says otherwise: providers only redirect to registered HTTPS URLs.
+const RELAY_BASE: &str = match option_env!("EQ_OAUTH_RELAY_BASE") {
+    Some(base) => base,
+    None => "https://easyquran.fyi/api",
+};
+
+/// `https://…/auth/<provider>/v1/native/relay`.
+fn relay_url(provider: OAuthProvider) -> String {
+    format!(
+        "{}/auth/{}/v1/native/relay",
+        RELAY_BASE.trim().trim_end_matches('/'),
+        provider.as_str()
+    )
+}
 
 /// The web's provider order (`OAuthButtons`).
 const ORDER: [OAuthProvider; 5] = [
@@ -79,6 +102,22 @@ pub async fn sign_in(provider: OAuthProvider) -> Result<SignInStep, ()> {
     let setup = setup(provider).ok_or(())?;
     let store = crate::app::auth_store();
     let client = store.client().ok_or(())?;
+    // GitHub: the API's broker exchanges the code and signs in at once.
+    if provider == OAuthProvider::Github {
+        let code = github_code(&setup).await?;
+        let result = client
+            .oauth_native_exchange(
+                provider,
+                &Secret::from(code.code.as_str()),
+                &Secret::from(code.verifier.as_str()),
+                &code.redirect_uri,
+            )
+            .await;
+        return store
+            .complete_sign_in(result, eq_core::api::TransitionKind::OAuth)
+            .await
+            .map_err(|_| ());
+    }
     // Google and Apple id tokens must carry the API's one-time nonce.
     let nonce = match provider.has_token_nonce() {
         true => Some(
@@ -90,8 +129,12 @@ pub async fn sign_in(provider: OAuthProvider) -> Result<SignInStep, ()> {
         ),
         false => None,
     };
-    let session = run(&setup, nonce.as_deref()).await?;
-    let token = provider_token(provider, session)?;
+    let token = match provider {
+        OAuthProvider::Apple => ProviderToken::Apple {
+            identity_token: Secret::from(apple_id_token(&setup, nonce.as_deref()).await?.as_str()),
+        },
+        _ => provider_token(provider, run(&setup, nonce.as_deref()).await?)?,
+    };
     let result = client.oauth_token(provider, &token).await;
     store
         .complete_sign_in(result, eq_core::api::TransitionKind::OAuth)
@@ -110,6 +153,9 @@ enum Redirect {
     /// `<scheme>:<path>` through `open_auth_session`.
     #[cfg_attr(not(any(target_os = "ios", target_os = "android")), allow(dead_code))]
     Scheme { scheme: String, path: &'static str },
+    /// The API's HTTPS relay, which sends the browser on to
+    /// `fyi.easyquran.app:/oauth/<provider>` (through `open_auth_session`).
+    Relay(OAuthProvider),
 }
 
 /// One provider's build-time configuration on this platform.
@@ -130,8 +176,36 @@ fn setup(provider: OAuthProvider) -> Option<Setup> {
     match provider {
         OAuthProvider::Google => google(),
         OAuthProvider::Discord => discord(),
-        OAuthProvider::Apple | OAuthProvider::Facebook | OAuthProvider::Github => None,
+        OAuthProvider::Apple => relayed(
+            ProviderId::Apple,
+            provider,
+            option_env!("EQ_APPLE_SERVICES_ID"),
+        ),
+        OAuthProvider::Facebook => relayed(
+            ProviderId::Facebook,
+            provider,
+            option_env!("EQ_FACEBOOK_APP_ID"),
+        ),
+        OAuthProvider::Github => relayed(
+            ProviderId::Github,
+            provider,
+            option_env!("EQ_GITHUB_CLIENT_ID"),
+        ),
     }
+}
+
+/// A relayed provider: the same on every platform.
+fn relayed(
+    id: ProviderId,
+    provider: OAuthProvider,
+    client_id: Option<&'static str>,
+) -> Option<Setup> {
+    Some(Setup {
+        id,
+        client_id: env_id(client_id)?,
+        redirect: Redirect::Relay(provider),
+        installed_secret: None,
+    })
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
@@ -215,6 +289,7 @@ async fn run(setup: &Setup, api_nonce: Option<&str>) -> Result<Session, ()> {
             (uri, Some(listener))
         }
         Redirect::Scheme { scheme, path } => (format!("{scheme}:{path}"), None),
+        Redirect::Relay(provider) => (relay_url(*provider), None),
     };
     let mut config = AuthConfig::for_provider(setup.id)
         .client_id(setup.client_id)
@@ -243,6 +318,13 @@ async fn run(setup: &Setup, api_nonce: Option<&str>) -> Result<Session, ()> {
     let url = authorize_url(setup.id, &request.url, api_nonce)?;
     let callback = match (&setup.redirect, listener) {
         (Redirect::Scheme { scheme, .. }, _) => scheme_session(url, scheme).await?,
+        // `nsh-auth` checks the callback against the HTTPS redirect URI it
+        // sent: hand it the relay URL with the query the relay passed on.
+        (Redirect::Relay(provider), _) => {
+            let callback = scheme_session(url, APP_SCHEME).await?;
+            let query = relay_query(&callback, *provider)?;
+            format!("{redirect_uri}?{query}")
+        }
         (Redirect::Loopback, Some(listener)) => {
             loopback::wait(url, listener, &redirect_uri).await?
         }
@@ -281,13 +363,116 @@ fn authorize_url(id: ProviderId, url: &str, api_nonce: Option<&str>) -> Result<S
     Ok(parsed.to_string())
 }
 
-#[cfg_attr(not(any(target_os = "ios", target_os = "android")), allow(dead_code))]
 async fn scheme_session(url: String, scheme: &str) -> Result<String, ()> {
     use nsh_core::auth_session::{AuthSessionOutcome, AuthSessionRequest};
     match nsh_core::element::open_auth_session(AuthSessionRequest::new(url, scheme)).await {
         Ok(AuthSessionOutcome::Completed(callback)) => Ok(callback),
         _ => Err(()),
     }
+}
+
+/// The query of a relay's app link, when it is exactly
+/// `fyi.easyquran.app:/oauth/<provider>?…`.
+fn relay_query(callback: &str, provider: OAuthProvider) -> Result<String, ()> {
+    let parsed = url::Url::parse(callback).map_err(|_| ())?;
+    let path = format!("/oauth/{}", provider.as_str());
+    if parsed.scheme() != APP_SCHEME || parsed.path() != path {
+        return Err(());
+    }
+    Ok(parsed.query().unwrap_or_default().to_owned())
+}
+
+/// The relay's fields after the `state` check; a provider `error` (the
+/// user cancelled or the provider refused) ends the attempt.
+fn relay_fields(
+    callback: &str,
+    provider: OAuthProvider,
+    state: &str,
+) -> Result<std::collections::HashMap<String, String>, ()> {
+    let query = relay_query(callback, provider)?;
+    let fields: std::collections::HashMap<String, String> =
+        url::form_urlencoded::parse(query.as_bytes())
+            .into_owned()
+            .collect();
+    if fields.get("state").map(String::as_str) != Some(state) || fields.contains_key("error") {
+        return Err(());
+    }
+    Ok(fields)
+}
+
+/// 32 random bytes, base64url: a `state`, or a PKCE verifier (43 chars).
+fn random_token() -> Result<String, ()> {
+    use base64::Engine;
+    let mut bytes = [0_u8; 32];
+    getrandom::getrandom(&mut bytes).map_err(|_| ())?;
+    Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes))
+}
+
+/// PKCE `S256` challenge of `verifier`.
+fn pkce_challenge(verifier: &str) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))
+}
+
+/// Sign in with Apple on the web flow: `response_type=code id_token` with
+/// `form_post` to the relay; the id token (carrying the API's nonce) is all
+/// the API needs, so no code exchange (that needs Apple's secret JWT).
+async fn apple_id_token(setup: &Setup, api_nonce: Option<&str>) -> Result<String, ()> {
+    let state = random_token()?;
+    let mut url = url::Url::parse("https://appleid.apple.com/auth/authorize").map_err(|_| ())?;
+    {
+        let mut pairs = url.query_pairs_mut();
+        pairs
+            .append_pair("client_id", setup.client_id)
+            .append_pair("redirect_uri", &relay_url(OAuthProvider::Apple))
+            .append_pair("response_type", "code id_token")
+            .append_pair("response_mode", "form_post")
+            .append_pair("scope", "name email")
+            .append_pair("state", &state);
+        if let Some(nonce) = api_nonce {
+            pairs.append_pair("nonce", nonce);
+        }
+    }
+    let callback = scheme_session(url.to_string(), APP_SCHEME).await?;
+    let mut fields = relay_fields(&callback, OAuthProvider::Apple, &state)?;
+    fields
+        .remove("id_token")
+        .filter(|token| !token.is_empty())
+        .ok_or(())
+}
+
+/// What the GitHub broker takes. Held in memory for the one exchange.
+struct GithubCode {
+    code: String,
+    verifier: String,
+    redirect_uri: String,
+}
+
+/// GitHub's authorize leg with PKCE `S256` through the relay; the code
+/// goes to the API's broker, which holds the client secret.
+async fn github_code(setup: &Setup) -> Result<GithubCode, ()> {
+    let state = random_token()?;
+    let verifier = random_token()?;
+    let redirect_uri = relay_url(OAuthProvider::Github);
+    let mut url = url::Url::parse("https://github.com/login/oauth/authorize").map_err(|_| ())?;
+    url.query_pairs_mut()
+        .append_pair("client_id", setup.client_id)
+        .append_pair("redirect_uri", &redirect_uri)
+        .append_pair("scope", "read:user user:email")
+        .append_pair("state", &state)
+        .append_pair("code_challenge", &pkce_challenge(&verifier))
+        .append_pair("code_challenge_method", "S256");
+    let callback = scheme_session(url.to_string(), APP_SCHEME).await?;
+    let mut fields = relay_fields(&callback, OAuthProvider::Github, &state)?;
+    let code = fields
+        .remove("code")
+        .filter(|code| !code.is_empty())
+        .ok_or(())?;
+    Ok(GithubCode {
+        code,
+        verifier,
+        redirect_uri,
+    })
 }
 
 /// What `/auth/{provider}/v1/token` takes from the provider session.
@@ -487,6 +672,35 @@ mod loopback {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn relay_links_must_be_the_app_target_with_matching_state() {
+        let ok = "fyi.easyquran.app:/oauth/github?code=c&state=s1";
+        let fields = relay_fields(ok, OAuthProvider::Github, "s1").unwrap();
+        assert_eq!(fields.get("code").map(String::as_str), Some("c"));
+        for bad in [
+            "fyi.easyquran.app:/oauth/github?code=c&state=s2",
+            "fyi.easyquran.app:/oauth/github?code=c",
+            "fyi.easyquran.app:/oauth/apple?code=c&state=s1",
+            "evil:/oauth/github?code=c&state=s1",
+            "https://easyquran.fyi/oauth/github?code=c&state=s1",
+            "fyi.easyquran.app:/oauth/github?error=access_denied&state=s1",
+        ] {
+            assert!(
+                relay_fields(bad, OAuthProvider::Github, "s1").is_err(),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn pkce_challenge_matches_rfc_7636_vector() {
+        assert_eq!(
+            pkce_challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),
+            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+        );
+        assert_eq!(random_token().unwrap().len(), 43);
+    }
 
     #[test]
     fn google_url_carries_the_api_nonce_and_no_forced_consent() {

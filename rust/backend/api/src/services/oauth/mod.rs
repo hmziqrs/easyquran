@@ -1,4 +1,5 @@
 pub mod login;
+pub mod native_relay;
 pub mod redirect;
 pub mod state;
 

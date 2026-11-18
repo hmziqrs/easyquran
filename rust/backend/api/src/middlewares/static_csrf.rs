@@ -64,7 +64,11 @@ fn is_csrf_exempt(path: &str) -> bool {
             | "/auth/apple/v1/token/nonce"
             | "/auth/facebook/v1/token"
             | "/auth/github/v1/token"
+            | "/auth/github/v1/native/exchange"
             | "/auth/discord/v1/token"
+            // Apple's `form_post` is a cross-site POST with no session; the relay only
+            // reflects to a fixed app target (services/oauth/native_relay.rs).
+            | "/auth/apple/v1/native/relay"
             | "/csrf/v1/generate"
     ) {
         return true;
@@ -204,6 +208,9 @@ mod tests {
         assert!(is_csrf_exempt("/auth/facebook/v1/token"));
         assert!(is_csrf_exempt("/auth/github/v1/token"));
         assert!(is_csrf_exempt("/auth/discord/v1/token"));
+        assert!(is_csrf_exempt("/auth/github/v1/native/exchange"));
+        assert!(is_csrf_exempt("/auth/apple/v1/native/relay"));
+        assert!(!is_csrf_exempt("/auth/apple/v1/native/relay/x"));
         assert!(!is_csrf_exempt("/auth/google/v1/token-evil"));
         // Browser SPA code-exchange endpoints stay CSRF-gated.
         assert!(!is_csrf_exempt("/auth/apple/v1/exchange"));

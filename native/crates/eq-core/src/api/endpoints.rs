@@ -388,6 +388,29 @@ impl ApiClient {
         decode(reply.body, "token nonce")
     }
 
+    /// `POST /auth/github/v1/native/exchange`: the code broker. The API
+    /// exchanges `code` (PKCE `code_verifier`, the relay `redirect_uri`) with
+    /// the secret it holds and signs in as `oauth_token` does.
+    pub async fn oauth_native_exchange(
+        &self,
+        provider: OAuthProvider,
+        code: &Secret,
+        code_verifier: &Secret,
+        redirect_uri: &str,
+    ) -> Result<SignInOutcome, ApiError> {
+        let reply = self
+            .post(
+                &format!("/auth/{}/v1/native/exchange", provider.as_str()),
+                json!({
+                    "code": code.expose(),
+                    "code_verifier": code_verifier.expose(),
+                    "redirect_uri": redirect_uri,
+                }),
+            )
+            .await?;
+        self.sign_in_reply(reply).await
+    }
+
     /// `POST /auth/{provider}/v1/token`: sign in with a provider SDK token.
     pub async fn oauth_token(
         &self,

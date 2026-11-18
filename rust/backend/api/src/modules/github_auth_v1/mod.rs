@@ -25,6 +25,11 @@ pub fn routes() -> Router<AppState> {
         .route("/callback", get(controller::github_callback))
         .route("/exchange", post(controller::github_exchange))
         .route("/token", post(controller::github_token))
+        .route(
+            "/native/relay",
+            get(crate::services::oauth::native_relay::github_relay),
+        )
+        .route("/native/exchange", post(controller::github_native_exchange))
         .route("/user", get(controller::github_user_info))
         .merge(link)
         .layer(DefaultBodyLimit::max(config::body_limits::DEFAULT))

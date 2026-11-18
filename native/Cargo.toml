@@ -30,6 +30,11 @@ futures-channel = "0.3"
 nsh-firebase-core = { git = "https://github.com/SuperNSH/firebase.git", rev = "9bc030c02b871e2b219375f0c1612badc0d6f899" }
 nsh-firebase-analytics = { git = "https://github.com/SuperNSH/firebase.git", rev = "9bc030c02b871e2b219375f0c1612badc0d6f899" }
 nsh-firebase-messaging = { git = "https://github.com/SuperNSH/firebase.git", rev = "9bc030c02b871e2b219375f0c1612badc0d6f899" }
+# OAuth PKCE and state for the relayed providers (Apple, GitHub) on every
+# platform: already in the graph via eq-core.
+sha2 = "0.10"
+base64 = "0.22"
+getrandom = "0.2"
 # The owner's NSH capability crates (SuperNSH), pinned to their pushed heads.
 # Network status for the sync engine and the "Offline" line.
 nsh-connectivity = { git = "https://github.com/SuperNSH/connectivity.git", rev = "fe88dc47779d2973e4513dc802697f3ffbed8e44" }
@@ -42,12 +47,6 @@ nsh-deep-links = { git = "https://github.com/SuperNSH/deep-links.git", rev = "27
 # worker thread with its own current-thread runtime (`services::storage`).
 nsh-secure-storage = { git = "https://github.com/SuperNSH/secure-storage.git", rev = "1a0977ed45a167e4b51fb82f0d98eb993683db00" }
 tokio = { version = "1.54.1", default-features = false, features = ["rt"] }
-
-# Desktop Google sign-in (PKCE, loopback redirect): already in the graph via eq-core.
-[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
-sha2 = "0.10"
-base64 = "0.22"
-getrandom = "0.2"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 nsh-platform-ios = { version = "0.6.0", default-features = false }

@@ -167,7 +167,7 @@ struct WaiterGuard<'a>(&'a AtomicUsize);
 impl<'a> WaiterGuard<'a> {
     fn enter(waiting: &'a AtomicUsize) -> Option<Self> {
         waiting
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |count| {
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |count| {
                 (count < MAX_WAITERS).then_some(count + 1)
             })
             .ok()

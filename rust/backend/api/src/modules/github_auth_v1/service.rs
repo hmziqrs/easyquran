@@ -37,6 +37,44 @@ pub fn load_github_credentials() -> Result<GitHubCredentials, ErrorResponse> {
     })
 }
 
+/// The OAuth app the native broker exchanges codes for: `GITHUB_NATIVE_CLIENT_ID` +
+/// `GITHUB_NATIVE_CLIENT_SECRET` (a GitHub OAuth app allows one callback URL, so the
+/// native relay usually needs its own app), else the web app's credentials when
+/// neither is set. One without the other is a configuration error.
+pub fn load_github_native_credentials() -> Result<GitHubCredentials, ErrorResponse> {
+    let id = std::env::var("GITHUB_NATIVE_CLIENT_ID")
+        .ok()
+        .filter(|v| !v.trim().is_empty());
+    let secret = std::env::var("GITHUB_NATIVE_CLIENT_SECRET")
+        .ok()
+        .filter(|v| !v.trim().is_empty());
+    match (id, secret) {
+        (Some(client_id), Some(client_secret)) => Ok(GitHubCredentials {
+            client_id,
+            client_secret,
+        }),
+        (None, None) => load_github_credentials(),
+        _ => Err(
+            ErrorResponse::new(ErrorCode::ConfigurationError).with_message(
+                "GITHUB_NATIVE_CLIENT_ID and GITHUB_NATIVE_CLIENT_SECRET must be set together",
+            ),
+        ),
+    }
+}
+
+/// The native redirect URIs the broker accepts (exact strings):
+/// `GITHUB_NATIVE_REDIRECT_URIS` (comma-separated), else
+/// `{FRONTEND_URL origin}/api/auth/github/v1/native/relay`.
+pub fn github_native_redirect_uris() -> Vec<String> {
+    let raw = std::env::var("GITHUB_NATIVE_REDIRECT_URIS").ok();
+    let origin = crate::config::settings::frontend_origin().ok();
+    oauth::native_relay::redirect_allow_list(
+        raw.as_deref(),
+        origin.as_deref(),
+        "/auth/github/v1/native/relay",
+    )
+}
+
 pub type GithubClient =
     BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>;
 

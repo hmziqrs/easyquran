@@ -11,7 +11,7 @@
   "schemes": ["easyquran", "fyi.easyquran.app"],
   "capabilities": {
     "application": true,
-    "network": { "hosts": ["easyquran.fyi", "localhost", "127.0.0.1", "10.0.2.2", "oauth2.googleapis.com", "discord.com", "www.google-analytics.com"] },
+    "network": { "hosts": ["easyquran.fyi", "localhost", "127.0.0.1", "10.0.2.2", "oauth2.googleapis.com", "discord.com", "graph.facebook.com","www.google-analytics.com"] },
     "audio": true,
     "notifications": true,
     "openUrl": { "schemes": ["https", "mailto"] },

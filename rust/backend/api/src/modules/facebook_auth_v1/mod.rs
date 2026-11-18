@@ -16,6 +16,10 @@ pub fn routes() -> Router<AppState> {
         .route("/callback", get(controller::facebook_callback))
         .route("/exchange", post(controller::facebook_exchange))
         .route("/token", post(controller::facebook_token))
+        .route(
+            "/native/relay",
+            get(crate::services::oauth::native_relay::facebook_relay),
+        )
         .route("/user", get(controller::facebook_user_info))
         .layer(DefaultBodyLimit::max(config::body_limits::DEFAULT))
 }

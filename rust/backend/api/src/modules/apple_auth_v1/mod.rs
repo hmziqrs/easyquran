@@ -17,6 +17,10 @@ pub fn routes() -> Router<AppState> {
         .route("/exchange", post(controller::apple_exchange))
         .route("/token/nonce", post(controller::apple_token_nonce))
         .route("/token", post(controller::apple_token))
+        .route(
+            "/native/relay",
+            post(crate::services::oauth::native_relay::apple_relay),
+        )
         .route("/user", get(controller::apple_user_info))
         .layer(DefaultBodyLimit::max(config::body_limits::DEFAULT))
 }

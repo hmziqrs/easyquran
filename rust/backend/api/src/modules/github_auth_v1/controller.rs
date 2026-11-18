@@ -26,9 +26,13 @@ use crate::{
 };
 
 use super::{
-    service::{get_github_oauth_client, github_api_base, load_github_credentials},
+    service::{
+        get_github_oauth_client, github_api_base, github_native_redirect_uris, github_oauth_base,
+        load_github_credentials, load_github_native_credentials,
+    },
     validator::{
-        GitHubCallbackQuery, GitHubEmail, GitHubExchangeRequest, GitHubTokenRequest, GitHubUserInfo,
+        GitHubCallbackQuery, GitHubEmail, GitHubExchangeRequest, GitHubNativeExchangeRequest,
+        GitHubTokenRequest, GitHubUserInfo,
     },
 };
 
@@ -432,6 +436,128 @@ pub async fn github_token(
             "message": "Successfully authenticated with GitHub"
         })),
     ))
+}
+
+/// `POST /auth/github/v1/native/exchange`: the native code broker. Guarded like
+/// `/token` (CSRF-exempt, browser `Origin` refused, the nest's per-route rate limit);
+/// the code is exchanged with the server-held secret, then sign-in runs exactly as the
+/// other GitHub paths do (`finish_github_login`).
+#[debug_handler]
+#[instrument(skip_all, fields(user_id, result))]
+pub async fn github_native_exchange(
+    State(state): State<AppState>,
+    ClientIp(client_ip): ClientIp,
+    mut auth: AuthSession,
+    headers: HeaderMap,
+    ValidatedJson(payload): ValidatedJson<GitHubNativeExchangeRequest>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    info!("Processing GitHub native code exchange");
+
+    oauth::ensure_native_token_request(&headers)?;
+    if !oauth::native_relay::redirect_uri_allowed(
+        &payload.redirect_uri,
+        &github_native_redirect_uris(),
+    ) {
+        warn!("Rejecting GitHub native exchange for a redirect_uri off the allow-list");
+        tracing::Span::current().record("result", "redirect_not_allowed");
+        return Err(
+            ErrorResponse::new(ErrorCode::InvalidInput).with_message("redirect_uri is not allowed")
+        );
+    }
+
+    let credentials = load_github_native_credentials()?;
+    let access_token = exchange_github_native_code(
+        oauth::token_exchange_http_client()?,
+        &format!("{}/login/oauth/access_token", github_oauth_base()),
+        &credentials,
+        &payload,
+    )
+    .await?;
+    let user_info = fetch_github_user_info(&access_token).await?;
+    if user_info.id <= 0 || user_info.login.trim().is_empty() {
+        warn!("GitHub returned an invalid profile for a native exchange");
+        return Err(invalid_github_token());
+    }
+    let result =
+        finish_github_login(&state, &mut auth, user_info, &access_token, client_ip).await?;
+    let provider_profile = json!({
+        "name": &result.provider_name,
+        "email": &result.provider_email,
+        "picture": &result.provider_picture,
+    });
+    let user = result.user;
+
+    info!(user_id = user.id, "GitHub native exchange login successful");
+    tracing::Span::current().record("user_id", user.id);
+    tracing::Span::current().record("result", "success");
+
+    if let Some(body) = crate::services::pending_login::response(&auth).await? {
+        tracing::Span::current().record("result", "totp_required");
+        return Ok((StatusCode::OK, session_rotated_headers(false), Json(body)));
+    }
+
+    Ok((
+        StatusCode::OK,
+        session_rotated_headers(true),
+        Json(json!({
+            "success": true,
+            "user": user,
+            "providerProfile": provider_profile,
+            "message": "Successfully authenticated with GitHub"
+        })),
+    ))
+}
+
+/// GitHub's code-exchange reply: a token, or `error` with status 200.
+#[derive(Deserialize)]
+struct GitHubCodeExchangeReply {
+    #[serde(default)]
+    access_token: Option<String>,
+    #[serde(default)]
+    error: Option<String>,
+}
+
+/// Exchanges a native authorization code (with its PKCE verifier and the allow-listed
+/// redirect URI) for a user access token. The secret goes in the form body, never the
+/// URL; nothing here is logged.
+async fn exchange_github_native_code(
+    http_client: &reqwest::Client,
+    token_url: &str,
+    credentials: &super::service::GitHubCredentials,
+    request: &GitHubNativeExchangeRequest,
+) -> Result<String, ErrorResponse> {
+    let form = [
+        ("client_id", credentials.client_id.as_str()),
+        ("client_secret", credentials.client_secret.as_str()),
+        ("code", request.code.as_str()),
+        ("redirect_uri", request.redirect_uri.as_str()),
+        ("code_verifier", request.code_verifier.as_str()),
+    ];
+    let response = http_client
+        .post(token_url)
+        .header(reqwest::header::ACCEPT, "application/json")
+        .header(reqwest::header::USER_AGENT, GITHUB_USER_AGENT)
+        .form(&form)
+        .send()
+        .await
+        .map_err(|_| {
+            // The request carries the app secret and the code. Never include details.
+            error!("Failed to reach GitHub for a native code exchange");
+            ErrorResponse::new(ErrorCode::ExternalServiceError)
+                .with_message("Failed to exchange authorization code")
+        })?;
+    let reply: GitHubCodeExchangeReply = decode_github_api_response(response, &[]).await?;
+    match reply.access_token.filter(|t| !t.is_empty()) {
+        Some(token) => Ok(token),
+        None => {
+            warn!(
+                rejected = reply.error.is_some(),
+                "GitHub refused a native code exchange"
+            );
+            Err(ErrorResponse::new(ErrorCode::InvalidToken)
+                .with_message("GitHub authorization code is invalid or expired"))
+        }
+    }
 }
 
 #[debug_handler(state = AppState)]
@@ -1124,5 +1250,96 @@ mod tests {
             .unwrap();
 
         assert!(matches!(outcome, CallbackOutcome::AlreadyLinkedOtherUser));
+    }
+
+    fn native_request(redirect_uri: &str) -> GitHubNativeExchangeRequest {
+        GitHubNativeExchangeRequest {
+            code: "native-code".to_string(),
+            code_verifier: "v".repeat(43),
+            redirect_uri: redirect_uri.to_string(),
+        }
+    }
+
+    fn native_credentials() -> super::super::service::GitHubCredentials {
+        super::super::service::GitHubCredentials {
+            client_id: "native-app".to_string(),
+            client_secret: "native-secret".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn native_exchange_sends_code_verifier_and_secret_in_the_body() {
+        let server = MockServer::start().await;
+        let relay = "https://easyquran.fyi/api/auth/github/v1/native/relay";
+        Mock::given(method("POST"))
+            .and(path("/login/oauth/access_token"))
+            .and(header("accept", "application/json"))
+            .and(body_string_contains("client_id=native-app"))
+            .and(body_string_contains("client_secret=native-secret"))
+            .and(body_string_contains("code=native-code"))
+            .and(body_string_contains(format!("code_verifier={}", "v".repeat(43)).as_str()))
+            .and(body_string_contains(
+                "redirect_uri=https%3A%2F%2Feasyquran.fyi%2Fapi%2Fauth%2Fgithub%2Fv1%2Fnative%2Frelay",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "access_token": "gho_native",
+                "token_type": "bearer",
+                "scope": "read:user,user:email"
+            })))
+            .mount(&server)
+            .await;
+
+        let token = exchange_github_native_code(
+            &test_http_client(),
+            &format!("{}/login/oauth/access_token", server.uri()),
+            &native_credentials(),
+            &native_request(relay),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(token, "gho_native");
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1);
+        assert!(
+            requests[0].url.query().is_none(),
+            "secret must not enter URL"
+        );
+    }
+
+    #[tokio::test]
+    async fn native_exchange_refusal_is_invalid_token() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "error": "bad_verification_code",
+                "error_description": "The code passed is incorrect or expired."
+            })))
+            .mount(&server)
+            .await;
+
+        let error = exchange_github_native_code(
+            &test_http_client(),
+            &format!("{}/login/oauth/access_token", server.uri()),
+            &native_credentials(),
+            &native_request("https://easyquran.fyi/api/auth/github/v1/native/relay"),
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(error.code, ErrorCode::InvalidToken);
+    }
+
+    #[test]
+    fn native_exchange_request_bounds_the_verifier_and_refuses_unknown_fields() {
+        use validator::Validate;
+        let mut request = native_request("https://x.test/r");
+        assert!(request.validate().is_ok());
+        request.code_verifier = "v".repeat(42);
+        assert!(request.validate().is_err());
+        let unknown = serde_json::from_value::<GitHubNativeExchangeRequest>(json!({
+            "code": "c", "code_verifier": "v".repeat(43), "redirect_uri": "r", "client_secret": "x"
+        }));
+        assert!(unknown.is_err());
     }
 }

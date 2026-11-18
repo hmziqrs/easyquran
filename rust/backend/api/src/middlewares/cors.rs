@@ -10,6 +10,14 @@ pub async fn origin_guard(req: Request, next: Next) -> Result<Response, CorsErro
         None => return Ok(next.run(req).await),
         Some(header) => header,
     };
+    // Apple's `form_post` arrives from appleid.apple.com. The relay reads no session,
+    // writes nothing and only answers a 302 to a fixed app target, so a foreign origin
+    // gains nothing there (services/oauth/native_relay.rs). Exact path, POST only.
+    if req.method() == axum::http::Method::POST
+        && req.uri().path() == crate::services::oauth::native_relay::APPLE_RELAY_PATH
+    {
+        return Ok(next.run(req).await);
+    }
 
     let origin_str = origin_header.to_str().unwrap_or("<invalid>").to_string();
     tracing::Span::current().record("origin", &*origin_str);
