@@ -5,6 +5,7 @@
 
 pub mod appearance;
 pub mod auth;
+pub mod connectivity;
 pub mod consent;
 pub mod home;
 pub mod insights;

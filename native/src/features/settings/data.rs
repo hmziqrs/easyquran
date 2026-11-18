@@ -4,8 +4,9 @@
 //! with consent off).
 //!
 //! Export: the system save dialog on the desktops. Phones have no save
-//! dialog in NSH 0.5.1 and no share sheet, so the file goes to
-//! `${dataDir}/exports/` and a toast names it.
+//! dialog, so the file is written to `${dataDir}/exports/` and handed to
+//! the system share sheet (save to Files, send to another app); where no
+//! sheet shows, a toast names the file.
 
 use std::collections::HashSet;
 
@@ -22,6 +23,7 @@ use nsh_core::{
     file_dialog::{FileFilter, SaveDialog},
     picker::FilePickRequest,
     prelude::*,
+    share::ShareRequest,
 };
 
 use super::section_frame;
@@ -103,14 +105,23 @@ async fn save(bytes: Vec<u8>, name: String) {
     };
     let path = dir.join(&name);
     let shown = path.display().to_string();
+    let target = path.clone();
     let written = blocking(move || {
         std::fs::create_dir_all(&dir)?;
-        std::fs::write(&path, &bytes)
+        std::fs::write(&target, &bytes)
     })
     .await;
-    if matches!(written, Ok(Ok(()))) {
-        notify(shown);
+    if !matches!(written, Ok(Ok(()))) {
+        notify(tr(keys::SETTINGS_DATA_ERROR_READ));
+        return;
     }
+    if share_available().await {
+        match share(ShareRequest::new().title(name).file(path)).await {
+            Ok(_) => return,
+            Err(e) => log::info!("export: share failed ({})", e.message),
+        }
+    }
+    notify(shown);
 }
 
 /// `downloadExportFile`.

@@ -2,26 +2,32 @@
 //! platform `eq_core::kv::SecretStore` for the session value and device key
 //! (PARITY I1, I8; contracts/devices.md D3).
 //!
-//! NSH 0.5.1 has no secure storage of its own (no Keychain/Keystore API in
-//! `nsh-core`, `nsh-base` or the platform crates; the only "Keychain" name
-//! is a test-fake example in `nsh-core/src/host_channel.rs`). What each
-//! platform gets here:
+//! Secrets live in `nsh-secure-storage`, one item per key under the store
+//! name `fyi.easyquran.app.secrets`. What protects them, per the library's
+//! backends (`docs/platforms.md`, `src/options.rs`):
 //!
-//! | Platform | Where secrets live | `key_store` claimed |
+//! | Platform | Store | `key_store` claimed |
 //! | --- | --- | --- |
-//! | macOS | Keychain (`keyring`, apple-native) | `os_keystore` |
-//! | Windows | Credential Manager (`keyring`, windows-native) | `os_keystore` |
-//! | Linux | `secrets.json`, mode 0600, in the app data dir | `file` |
-//! | iOS | Keychain (`keyring`, apple-native) | `none`: a software key in the Keychain is not Secure Enclave hardware, and `react_native` only accepts `secure_hardware` or `none` |
-//! | Android | `secrets.json`, mode 0600, app-private data dir | `none`: no Keystore access without JNI/Java code |
+//! | iOS | Keychain, `firstUnlockThisDevice` | `os_keystore`: a Keychain item, not Secure Enclave wrapping (the library's `use_secure_enclave` is not built) |
+//! | Android | AES-256-GCM under an AndroidKeyStore key, ciphertext in `no_backup` | `os_keystore`: the library does not require or check StrongBox / TEE backing |
+//! | macOS | login Keychain (file keychain; the data protection keychain needs a signed bundle) | `os_keystore` |
+//! | Windows | Credential Manager | `os_keystore` |
+//! | Linux | Secret Service | `os_keystore` |
 //!
-//! A desktop whose keychain refuses (locked, denied) falls back to the file
-//! and claims `file`. No data dir and no keychain: memory only, `none`.
+//! When the library's store refuses at start (no Secret Service, locked
+//! keychain, ...), the secrets fall back to `secrets.json`, mode 0600, in
+//! the app data dir, claiming `file`; no data dir either: memory only,
+//! `none`. A later run with a working store moves the file into it.
 //!
-//! All secrets sit in one blob (one keychain item or one file), loaded once
-//! by [`PlatformSecrets::open`] (blocking: call it inside `blocking(..)`)
-//! and written in order by a writer thread, so no keychain or file call
-//! runs on the engine thread. Values never reach a log.
+//! First run after the move to the library: the old blob (the `keyring`
+//! item `fyi.easyquran.app`/`secrets` on Apple and Windows, or
+//! `secrets.json`) is read once, each entry written to the new store, and
+//! the old copy deleted once every entry landed.
+//!
+//! All secrets are loaded once by [`PlatformSecrets::open`] (blocking: call
+//! it inside `blocking(..)`) and written in order by a worker thread, so no
+//! keychain or file call runs on the engine thread. Values never reach a
+//! log.
 
 use std::{
     collections::BTreeMap,
@@ -55,51 +61,8 @@ impl KeyValue for NshKv {
     }
 }
 
-/// Where the blob is kept.
-trait SecretBackend: Send {
-    /// The blob, `None` when there is none yet.
-    fn load(&self) -> Result<Option<String>, String>;
-    /// Keeps `blob`; `None` removes it.
-    fn save(&self, blob: Option<&str>) -> Result<(), String>;
-}
-
-/// Keychain item `fyi.easyquran.app` / `secrets`.
-#[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
-struct KeyringBackend {
-    entry: keyring::Entry,
-}
-
-#[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
-impl KeyringBackend {
-    fn new() -> Result<Self, String> {
-        keyring::Entry::new("fyi.easyquran.app", "secrets")
-            .map(|entry| Self { entry })
-            .map_err(|e| e.to_string())
-    }
-}
-
-#[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
-impl SecretBackend for KeyringBackend {
-    fn load(&self) -> Result<Option<String>, String> {
-        match self.entry.get_password() {
-            Ok(blob) => Ok(Some(blob)),
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(e) => Err(e.to_string()),
-        }
-    }
-
-    fn save(&self, blob: Option<&str>) -> Result<(), String> {
-        match blob {
-            Some(blob) => self.entry.set_password(blob).map_err(|e| e.to_string()),
-            None => match self.entry.delete_credential() {
-                Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-                Err(e) => Err(e.to_string()),
-            },
-        }
-    }
-}
-
-/// `secrets.json` in the app data dir, owner read/write only.
+/// `secrets.json` in the app data dir, owner read/write only: the fallback
+/// store, and the old store migrated from.
 struct FileBackend {
     path: PathBuf,
 }
@@ -119,9 +82,8 @@ impl FileBackend {
     fn exposed(&self) -> bool {
         false
     }
-}
 
-impl SecretBackend for FileBackend {
+    /// The blob, `None` when there is none.
     fn load(&self) -> Result<Option<String>, String> {
         if !self.path.exists() {
             return Ok(None);
@@ -135,6 +97,7 @@ impl SecretBackend for FileBackend {
             .map_err(|e| e.to_string())
     }
 
+    /// Keeps `blob`; `None` removes it.
     fn save(&self, blob: Option<&str>) -> Result<(), String> {
         let Some(blob) = blob else {
             return match std::fs::remove_file(&self.path) {
@@ -149,6 +112,31 @@ impl SecretBackend for FileBackend {
         let tmp = self.path.with_extension("json.tmp");
         write_private(&tmp, blob.as_bytes()).map_err(|e| e.to_string())?;
         std::fs::rename(&tmp, &self.path).map_err(|e| e.to_string())
+    }
+
+    /// The entries, empty when there is no readable blob.
+    fn entries(&self) -> BTreeMap<String, String> {
+        match self.load() {
+            Ok(Some(blob)) => parse_blob(&blob),
+            Ok(None) => BTreeMap::new(),
+            Err(e) => {
+                log::warn!("secret file unreadable: {}", redact(&e));
+                BTreeMap::new()
+            }
+        }
+    }
+
+    fn persist(&self, cache: &BTreeMap<String, String>) {
+        let saved = if cache.is_empty() {
+            self.save(None)
+        } else {
+            serde_json::to_string(cache)
+                .map_err(|e| e.to_string())
+                .and_then(|blob| self.save(Some(&blob)))
+        };
+        if let Err(e) = saved {
+            log::warn!("secret file write failed: {}", redact(&e));
+        }
     }
 }
 
@@ -170,11 +158,27 @@ fn write_private(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
     std::fs::write(path, bytes)
 }
 
+/// The old one-blob format: a JSON object of key to value.
+fn parse_blob(blob: &str) -> BTreeMap<String, String> {
+    serde_json::from_str(blob).unwrap_or_default()
+}
+
+/// Error text from a backend, cut so a value can never ride along.
+fn redact(error: &str) -> String {
+    error.chars().take(120).collect()
+}
+
+/// A write for the worker.
+enum Command {
+    Set(String, String),
+    Remove(String),
+}
+
 /// The platform [`SecretStore`]: a cache in memory, persisted in order by
-/// a writer thread.
+/// a worker thread.
 pub struct PlatformSecrets {
     cache: Mutex<BTreeMap<String, String>>,
-    writer: Option<mpsc::Sender<Option<String>>>,
+    writer: Option<mpsc::Sender<Command>>,
     kind: KeyStoreKind,
 }
 
@@ -190,43 +194,33 @@ impl std::fmt::Debug for PlatformSecrets {
 
 impl PlatformSecrets {
     /// Opens this platform's store and loads every secret. Blocking (a
-    /// keychain or file read): call inside `blocking(..)`. `data_dir` is
-    /// `nsh_core::element::data_dir()`.
+    /// keychain or file read, waited for here): call inside `blocking(..)`.
+    /// `data_dir` is `nsh_core::element::data_dir()`.
     pub fn open(data_dir: Option<PathBuf>) -> Arc<Self> {
-        let file = data_dir.map(|dir| FileBackend {
-            path: dir.join("secrets.json"),
-        });
-        let (backend, kind): (Option<Box<dyn SecretBackend>>, KeyStoreKind) = choose(file);
-        let Some(backend) = backend else {
-            return Arc::new(Self::memory());
-        };
-        let cache = match backend.load() {
-            Ok(Some(blob)) => serde_json::from_str(&blob).unwrap_or_default(),
-            Ok(None) => BTreeMap::new(),
-            Err(e) => {
-                log::warn!("secret store unreadable, starting empty: {}", redact(&e));
-                BTreeMap::new()
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let (loaded_tx, loaded_rx) = mpsc::sync_channel(1);
+            let (tx, rx) = mpsc::channel::<Command>();
+            let spawned = std::thread::Builder::new()
+                .name("eq-secrets".into())
+                .spawn(move || worker::run(data_dir, &loaded_tx, &rx));
+            if spawned.is_err() {
+                return Arc::new(Self::memory());
             }
-        };
-        let (tx, rx) = mpsc::channel::<Option<String>>();
-        let spawned = std::thread::Builder::new()
-            .name("eq-secrets".into())
-            .spawn(move || {
-                while let Ok(mut blob) = rx.recv() {
-                    // Only the newest blob matters.
-                    while let Ok(newer) = rx.try_recv() {
-                        blob = newer;
-                    }
-                    if let Err(e) = backend.save(blob.as_deref()) {
-                        log::warn!("secret store write failed: {}", redact(&e));
-                    }
-                }
-            });
-        Arc::new(Self {
-            cache: Mutex::new(cache),
-            writer: spawned.ok().map(|_| tx),
-            kind,
-        })
+            let Ok((cache, kind, persists)) = loaded_rx.recv() else {
+                return Arc::new(Self::memory());
+            };
+            Arc::new(Self {
+                cache: Mutex::new(cache),
+                writer: persists.then_some(tx),
+                kind,
+            })
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = data_dir;
+            Arc::new(Self::memory())
+        }
     }
 
     /// A store that keeps nothing past this run and claims `none`.
@@ -238,65 +232,243 @@ impl PlatformSecrets {
         }
     }
 
-    fn persist(&self, cache: &BTreeMap<String, String>) -> Result<(), KvError> {
+    fn send(&self, command: Command) -> Result<(), KvError> {
         let Some(writer) = &self.writer else {
             return Ok(());
         };
-        let blob = if cache.is_empty() {
-            None
-        } else {
-            Some(serde_json::to_string(cache).map_err(|e| KvError::Write(e.to_string()))?)
-        };
         writer
-            .send(blob)
+            .send(command)
             .map_err(|_| KvError::Write("secret writer stopped".into()))
     }
 }
 
-/// Error text from a backend, cut so a value can never ride along.
-fn redact(error: &str) -> String {
-    error.chars().take(120).collect()
-}
+/// The worker thread: owns the library's store (its handle is not `Send`)
+/// on a runtime of its own, whose blocking pool runs the platform calls.
+#[cfg(not(target_arch = "wasm32"))]
+mod worker {
+    use std::{collections::BTreeMap, path::PathBuf, sync::mpsc};
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-fn choose(file: Option<FileBackend>) -> (Option<Box<dyn SecretBackend>>, KeyStoreKind) {
-    if let Ok(keyring) = KeyringBackend::new()
-        && keyring.load().is_ok()
-    {
-        return (Some(Box::new(keyring)), KeyStoreKind::OsKeystore);
-    }
-    match file {
-        Some(file) => (Some(Box::new(file)), KeyStoreKind::File),
-        None => (None, KeyStoreKind::None),
-    }
-}
+    use eq_core::kv::KeyStoreKind;
+    use nsh_secure_storage::{SecureStorage, SecureStorageOptions};
 
-#[cfg(target_os = "ios")]
-fn choose(_file: Option<FileBackend>) -> (Option<Box<dyn SecretBackend>>, KeyStoreKind) {
-    match KeyringBackend::new() {
-        Ok(keyring) => (Some(Box::new(keyring)), KeyStoreKind::None),
-        Err(_) => (None, KeyStoreKind::None),
-    }
-}
+    use super::{Command, FileBackend, parse_blob, redact};
 
-#[cfg(target_os = "android")]
-fn choose(file: Option<FileBackend>) -> (Option<Box<dyn SecretBackend>>, KeyStoreKind) {
-    match file {
-        Some(file) => (Some(Box::new(file)), KeyStoreKind::None),
-        None => (None, KeyStoreKind::None),
-    }
-}
+    /// The store name of every item.
+    const STORE: &str = "fyi.easyquran.app.secrets";
 
-#[cfg(not(any(
-    target_os = "macos",
-    target_os = "windows",
-    target_os = "ios",
-    target_os = "android"
-)))]
-fn choose(file: Option<FileBackend>) -> (Option<Box<dyn SecretBackend>>, KeyStoreKind) {
-    match file {
-        Some(file) => (Some(Box::new(file)), KeyStoreKind::File),
-        None => (None, KeyStoreKind::None),
+    /// What the open loaded: the entries, the kind, whether writes persist.
+    pub(super) type Loaded = (BTreeMap<String, String>, KeyStoreKind, bool);
+
+    enum Sink {
+        Library(SecureStorage),
+        File(FileBackend, BTreeMap<String, String>),
+    }
+
+    fn options() -> SecureStorageOptions {
+        let mut options = SecureStorageOptions::default();
+        let platform = &mut options.platform;
+        platform.ios.apple.account_name = STORE.to_owned();
+        // Background sync reads the session after the first unlock; never
+        // in a backup or on another device.
+        platform.ios.apple.accessibility =
+            nsh_secure_storage::KeychainAccessibility::FirstUnlockThisDevice;
+        platform.macos.apple.account_name = STORE.to_owned();
+        // The data protection keychain needs a signed bundle with an
+        // access group; the login keychain works for every build.
+        platform.macos.uses_data_protection_keychain = false;
+        platform.windows.account_name = STORE.to_owned();
+        platform.linux.account_name = STORE.to_owned();
+        options
+    }
+
+    pub(super) fn run(
+        data_dir: Option<PathBuf>,
+        loaded: &mpsc::SyncSender<Loaded>,
+        commands: &mpsc::Receiver<Command>,
+    ) {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build();
+        let Ok(runtime) = runtime else {
+            let _ = loaded.send((BTreeMap::new(), KeyStoreKind::None, false));
+            return;
+        };
+        runtime.block_on(async move {
+            let file = data_dir.map(|dir| FileBackend {
+                path: dir.join("secrets.json"),
+            });
+            let Some((mut sink, cache, kind)) = start(file).await else {
+                let _ = loaded.send((BTreeMap::new(), KeyStoreKind::None, false));
+                return;
+            };
+            if loaded.send((cache, kind, true)).is_err() {
+                return;
+            }
+            while let Ok(command) = commands.recv() {
+                apply(&mut sink, command).await;
+            }
+        });
+    }
+
+    /// Opens the library's store, migrating the old ones into it; the file
+    /// when the library refuses; `None` with neither.
+    async fn start(
+        file: Option<FileBackend>,
+    ) -> Option<(Sink, BTreeMap<String, String>, KeyStoreKind)> {
+        let store = SecureStorage::new(options());
+        match store.read_all(&Default::default()).await {
+            Ok(entries) => {
+                let mut cache: BTreeMap<String, String> = entries
+                    .into_iter()
+                    .map(|(k, v)| (k, v.as_str().to_owned()))
+                    .collect();
+                migrate_legacy(store, file.as_ref(), &mut cache).await;
+                Some((Sink::Library(store), cache, KeyStoreKind::OsKeystore))
+            }
+            Err(e) => {
+                log::warn!("secure storage unavailable ({}), using the file", e.code());
+                let file = file?;
+                let cache = file.entries();
+                Some((Sink::File(file, cache.clone()), cache, KeyStoreKind::File))
+            }
+        }
+    }
+
+    async fn apply(sink: &mut Sink, command: Command) {
+        match sink {
+            Sink::Library(store) => {
+                let done = match &command {
+                    Command::Set(key, value) => {
+                        store.write(key, Some(value), &Default::default()).await
+                    }
+                    Command::Remove(key) => store.delete(key, &Default::default()).await,
+                };
+                if let Err(e) = done {
+                    log::warn!("secret write failed: {}", e.code());
+                }
+            }
+            Sink::File(file, cache) => {
+                match command {
+                    Command::Set(key, value) => {
+                        cache.insert(key, value);
+                    }
+                    Command::Remove(key) => {
+                        cache.remove(&key);
+                    }
+                }
+                file.persist(cache);
+            }
+        }
+    }
+
+    /// Writes each `old` entry the store lacks into `store` and `cache`.
+    /// `true` when every one landed, so the old copy may go.
+    pub(super) async fn migrate(
+        store: SecureStorage,
+        old: BTreeMap<String, String>,
+        cache: &mut BTreeMap<String, String>,
+    ) -> bool {
+        let mut all = true;
+        for (key, value) in old {
+            if cache.contains_key(&key) {
+                continue;
+            }
+            match store.write(&key, Some(&value), &Default::default()).await {
+                Ok(()) => {
+                    cache.insert(key, value);
+                }
+                Err(e) => {
+                    log::warn!("secret migration write failed: {}", e.code());
+                    all = false;
+                }
+            }
+        }
+        all
+    }
+
+    /// The old stores: the `keyring` blob (Apple, Windows) and the file.
+    async fn migrate_legacy(
+        store: SecureStorage,
+        file: Option<&FileBackend>,
+        cache: &mut BTreeMap<String, String>,
+    ) {
+        legacy::migrate_keyring(store, cache).await;
+        let Some(file) = file else {
+            return;
+        };
+        let old = file.entries();
+        if old.is_empty() {
+            return;
+        }
+        if migrate(store, old, cache).await
+            && let Err(e) = file.save(None)
+        {
+            log::warn!("old secret file not removed: {}", redact(&e));
+        }
+    }
+
+    /// The `keyring` item `fyi.easyquran.app` / `secrets` of earlier
+    /// builds. On Apple it is a generic password the library reads by the
+    /// same service and account; on Windows a `keyring` credential.
+    mod legacy {
+        use std::collections::BTreeMap;
+
+        use nsh_secure_storage::SecureStorage;
+
+        #[cfg(target_vendor = "apple")]
+        pub(super) async fn migrate_keyring(
+            store: SecureStorage,
+            cache: &mut BTreeMap<String, String>,
+        ) {
+            let mut options = nsh_secure_storage::SecureStorageOptions::default();
+            options.platform.ios.apple.account_name = "fyi.easyquran.app".to_owned();
+            options.platform.macos.apple.account_name = "fyi.easyquran.app".to_owned();
+            options.platform.macos.uses_data_protection_keychain = false;
+            let old = SecureStorage::new(options);
+            let blob = match old.read("secrets", &Default::default()).await {
+                Ok(Some(blob)) => blob,
+                Ok(None) => return,
+                Err(e) => {
+                    log::warn!("old keychain item unreadable: {}", e.code());
+                    return;
+                }
+            };
+            let entries = super::parse_blob(&blob);
+            if super::migrate(store, entries, cache).await
+                && let Err(e) = old.delete("secrets", &Default::default()).await
+            {
+                log::warn!("old keychain item not removed: {}", e.code());
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        pub(super) async fn migrate_keyring(
+            store: SecureStorage,
+            cache: &mut BTreeMap<String, String>,
+        ) {
+            let Ok(entry) = keyring::Entry::new("fyi.easyquran.app", "secrets") else {
+                return;
+            };
+            let read = nsh_core::prelude::blocking(move || {
+                let blob = entry.get_password();
+                (entry, blob)
+            })
+            .await;
+            let Ok((entry, Ok(blob))) = read else {
+                return;
+            };
+            let entries = super::parse_blob(&blob);
+            if super::migrate(store, entries, cache).await {
+                let _ = nsh_core::prelude::blocking(move || entry.delete_credential()).await;
+            }
+        }
+
+        #[cfg(not(any(target_vendor = "apple", target_os = "windows")))]
+        pub(super) async fn migrate_keyring(
+            _store: SecureStorage,
+            _cache: &mut BTreeMap<String, String>,
+        ) {
+        }
     }
 }
 
@@ -311,7 +483,7 @@ impl SecretStore for PlatformSecrets {
             .lock()
             .map_err(|_| KvError::Write("secret cache poisoned".into()))?;
         cache.insert(key.to_owned(), value.to_owned());
-        self.persist(&cache)
+        self.send(Command::Set(key.to_owned(), value.to_owned()))
     }
 
     fn remove(&self, key: &str) {
@@ -319,7 +491,7 @@ impl SecretStore for PlatformSecrets {
             return;
         };
         if cache.remove(key).is_some() {
-            let _ = self.persist(&cache);
+            let _ = self.send(Command::Remove(key.to_owned()));
         }
     }
 
@@ -377,5 +549,32 @@ mod tests {
         let store = PlatformSecrets::memory();
         store.set("eq.session", "SESSION-VALUE").unwrap();
         assert!(!format!("{store:?}").contains("SESSION-VALUE"));
+    }
+
+    /// Migration copies the old blob's entries the new store lacks, never
+    /// overwrites a newer value, and reports success so the old copy goes.
+    #[test]
+    fn migration_moves_missing_entries_and_keeps_newer_ones() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let store = nsh_secure_storage::SecureStorage::memory();
+            store
+                .write("eq.session", Some("new"), &Default::default())
+                .await
+                .unwrap();
+            let mut cache = BTreeMap::from([("eq.session".to_owned(), "new".to_owned())]);
+            let old = parse_blob(r#"{"eq.session":"old","eq.device.key.7":"k"}"#);
+            assert!(worker::migrate(store, old, &mut cache).await);
+            assert_eq!(cache["eq.session"], "new");
+            assert_eq!(cache["eq.device.key.7"], "k");
+            let stored = store
+                .read("eq.device.key.7", &Default::default())
+                .await
+                .unwrap();
+            assert_eq!(stored.as_deref().map(String::as_str), Some("k"));
+        });
     }
 }

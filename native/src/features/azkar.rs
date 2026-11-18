@@ -30,7 +30,7 @@ use crate::{
     app::quran_store,
     features::{
         bookmarks::store,
-        reader::share::{range_link, range_share_text},
+        reader::share::{range_link, range_share_text, range_title, share_feedback, share_or_copy},
         yours::cards::{card_link, count_line, open_link, recite_button, target_bar, tile_copy},
     },
     shell::{
@@ -601,9 +601,17 @@ fn header_actions(
             .flat_map(|g| g.rows.iter().map(|r| (r.0, r.1.clone())))
             .collect();
         let link = range_link(ctx.as_ref(), first.surah, first.start, last.end);
-        set_clipboard(range_share_text(first.surah, &verses, &link, false, true));
-        note.set(Some(tr(keys::READER_COPIED)));
-        let _ = set_timeout(std::time::Duration::from_secs(4), move || note.set(None));
+        let title = range_title(first.surah, first.start, last.end);
+        let text = range_share_text(first.surah, &verses, &link, false, true);
+        spawn(async move {
+            let Some(message) = share_feedback(share_or_copy(title, text, link).await) else {
+                return;
+            };
+            note.set(Some(message));
+            drop(set_timeout(std::time::Duration::from_secs(4), move || {
+                note.set(None)
+            }));
+        });
     };
     view()
         .flex_row()

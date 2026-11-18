@@ -12,8 +12,9 @@ use nsh_platform_windows as platform;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn main() -> impl std::process::Termination {
     env_logger::init();
-    // The desktop's deep-link seam: `easyquran easyquran://data/item/3`
-    // opens that route once the shell is up.
+    // A link on the command line (`easyquran easyquran://al-fatiha`) opens
+    // once the shell is up; the platform's own delivery (nsh-deep-links)
+    // skips the same URL once.
     for arg in std::env::args().skip(1) {
         if arg.starts_with(easyquran::shell::deep_link::SCHEME) {
             easyquran::shell::deep_link::from_launch(arg);

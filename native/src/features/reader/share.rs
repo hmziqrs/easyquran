@@ -1,10 +1,12 @@
 //! Verse sharing (PARITY C9): web `reader-share.svelte.ts` (plain-text
 //! bodies and deep links), `share/range.ts` and `ShareDialog.svelte`.
 //!
-//! The platform has no share sheet in NSH 0.5.1, so a share takes the
-//! web's no-`navigator.share` path: the text goes to the clipboard and the
-//! row says "Copied". The verse-card image needs a canvas that encodes to
-//! an image; NSH 0.5.1 has none, so the dialog offers text only.
+//! Share (`shareVerse`, `shareRange`) shows the system's share sheet
+//! (`nsh_core` `share`) where the platform has one (iOS, Android, macOS);
+//! elsewhere (Windows, Linux) it takes the web's no-`navigator.share` path:
+//! the text goes to the clipboard. Copy stays a separate, clipboard-only
+//! action, as on the web. The verse-card image needs a canvas that encodes
+//! to an image; NSH has none, so the dialog offers text only.
 
 use eq_core::{
     i18n::keys,
@@ -17,7 +19,10 @@ use eq_core::{
     },
     routes::{HOSTS, TranslationRef, surah_ayah_path_for, surah_path_for},
 };
-use nsh_core::prelude::*;
+use nsh_core::{
+    prelude::*,
+    share::{ShareAction, ShareRequest},
+};
 
 use crate::{
     stores::locale::{t, t_args, tr},
@@ -129,6 +134,68 @@ pub fn range_share_text(
         parts.push(link.to_owned());
     }
     parts.join("\n\n")
+}
+
+/// `rangeTitle`: "Al-Baqarah 2:255–257".
+pub fn range_title(surah: u16, from: u16, to: u16) -> String {
+    format!("{} {surah}:{from}\u{2013}{to}", surah_name(surah))
+}
+
+/// How a share ended (web `ShareResult`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShareResult {
+    /// The share sheet sent it.
+    Shared,
+    /// No share sheet here: the text is on the clipboard.
+    Copied,
+    /// The sheet failed: the link is on the clipboard instead (FLOW-05).
+    LinkCopied,
+    /// The user closed the sheet.
+    Cancelled,
+}
+
+/// The share sheet with `title`, `text` and `link` where the platform has
+/// one, else `text` to the clipboard. A sheet that fails copies the link.
+pub async fn share_or_copy(title: String, text: String, link: String) -> ShareResult {
+    if !share_available().await {
+        set_clipboard(text);
+        return ShareResult::Copied;
+    }
+    let request = ShareRequest::new()
+        .title(title)
+        .text(text)
+        .url(link.clone());
+    match share(request).await {
+        Ok(outcome) if outcome.action == ShareAction::Dismissed => ShareResult::Cancelled,
+        Ok(_) => ShareResult::Shared,
+        Err(e) => {
+            log::info!("share failed: {}", e.code.as_deref().unwrap_or("none"));
+            set_clipboard(link);
+            ShareResult::LinkCopied
+        }
+    }
+}
+
+/// The feedback the web gives for a share's end: "Copied" for the
+/// clipboard path, the failure note when only the link was copied.
+pub fn share_feedback(result: ShareResult) -> Option<&'static str> {
+    match result {
+        ShareResult::Copied => Some(tr(keys::READER_COPIED)),
+        ShareResult::LinkCopied => Some(tr(keys::READER_SHARE_FAILED)),
+        ShareResult::Shared | ShareResult::Cancelled => None,
+    }
+}
+
+/// `shareVerse`: the sheet with the verse text, reference and link.
+pub fn share_verse(ctx: Option<&TranslationRef>, surah: u16, ayah: u16, text: &str) {
+    let link = verse_link(ctx, surah, ayah);
+    let body = verse_share_text(text, surah, ayah, &link);
+    let title = verse_ref(surah, ayah);
+    spawn(async move {
+        if let Some(message) = share_feedback(share_or_copy(title, body, link).await) {
+            notify(message);
+        }
+    });
 }
 
 /// `copyVerse`: text, reference, link to the clipboard.

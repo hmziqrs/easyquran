@@ -60,29 +60,26 @@ impl Platform {
     }
 }
 
-/// The `client` label for a platform. The backend accepts `web`,
-/// `react_native` and `gpui` only, so this NSH app registers as
-/// `react_native` on iOS/Android and `gpui` on desktop. A backend change
-/// adding an `nsh` client label is proposed (PARITY.md, "Proposed backend
-/// changes"); when it lands, only this function changes.
-pub fn client_label(platform: Platform) -> &'static str {
-    match platform {
-        Platform::Ios | Platform::Android => "react_native",
-        Platform::Macos | Platform::Windows | Platform::Linux => "gpui",
-    }
+/// The `client` label for a platform: `nsh` everywhere (the backend's
+/// `nsh` client spans ios/android/macos/windows/linux, contracts/devices.md).
+pub fn client_label(_platform: Platform) -> &'static str {
+    "nsh"
 }
 
 /// The `key_store` this install may claim for `kind` under its client
 /// label; `None` when the label does not accept it (the device then
-/// registers keyless). React Native: `secure_hardware` or `none`. GPUI:
-/// `os_keystore`, `file` or `none`.
+/// registers keyless). `nsh` accepts `secure_hardware`, `os_keystore`,
+/// `file` and `none` on every platform.
 pub fn key_store_label(platform: Platform, kind: KeyStoreKind) -> Option<KeyStoreKind> {
     let accepted = match client_label(platform) {
-        "react_native" => matches!(kind, KeyStoreKind::SecureHardware | KeyStoreKind::None),
-        _ => matches!(
+        "nsh" => matches!(
             kind,
-            KeyStoreKind::OsKeystore | KeyStoreKind::File | KeyStoreKind::None
+            KeyStoreKind::SecureHardware
+                | KeyStoreKind::OsKeystore
+                | KeyStoreKind::File
+                | KeyStoreKind::None
         ),
+        _ => false,
     };
     accepted.then_some(kind)
 }
@@ -170,6 +167,10 @@ pub fn check_registration_shape(p: &DeviceRegistration) -> Result<(), &'static s
         "web" => p.platform == "web",
         "react_native" => matches!(p.platform.as_str(), "ios" | "android"),
         "gpui" => matches!(p.platform.as_str(), "macos" | "windows" | "linux"),
+        "nsh" => matches!(
+            p.platform.as_str(),
+            "ios" | "android" | "macos" | "windows" | "linux"
+        ),
         _ => false,
     };
     if !platform_ok {
@@ -182,6 +183,10 @@ pub fn check_registration_shape(p: &DeviceRegistration) -> Result<(), &'static s
         "web" => matches!(p.key_store.as_str(), "browser" | "none"),
         "react_native" => matches!(p.key_store.as_str(), "secure_hardware" | "none"),
         "gpui" => matches!(p.key_store.as_str(), "os_keystore" | "file" | "none"),
+        "nsh" => matches!(
+            p.key_store.as_str(),
+            "secure_hardware" | "os_keystore" | "file" | "none"
+        ),
         _ => false,
     };
     if !store_ok {
@@ -221,18 +226,22 @@ mod tests {
 
     #[test]
     fn labels_follow_the_backend_enums() {
-        assert_eq!(client_label(Platform::Ios), "react_native");
-        assert_eq!(client_label(Platform::Android), "react_native");
-        for p in [Platform::Macos, Platform::Windows, Platform::Linux] {
-            assert_eq!(client_label(p), "gpui");
+        for p in [
+            Platform::Ios,
+            Platform::Android,
+            Platform::Macos,
+            Platform::Windows,
+            Platform::Linux,
+        ] {
+            assert_eq!(client_label(p), "nsh");
         }
         assert_eq!(
             key_store_label(Platform::Ios, KeyStoreKind::OsKeystore),
-            None
+            Some(KeyStoreKind::OsKeystore)
         );
         assert_eq!(
-            key_store_label(Platform::Linux, KeyStoreKind::SecureHardware),
-            None
+            key_store_label(Platform::Android, KeyStoreKind::SecureHardware),
+            Some(KeyStoreKind::SecureHardware)
         );
         assert_eq!(
             key_store_label(Platform::Macos, KeyStoreKind::File),

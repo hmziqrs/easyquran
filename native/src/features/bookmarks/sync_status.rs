@@ -18,11 +18,13 @@ use crate::{
     },
 };
 
-/// The status line's words, truth order (ACCT-03): error, pending, then
-/// the in-flight and never-synced windows; "Synced" only once a round
-/// landed. Connectivity is not observable here yet (see the slice
-/// report), so the offline line never shows.
-fn label(phase: Phase, pending: usize, synced_once: bool) -> String {
+/// The status line's words, truth order (ACCT-03): offline, error,
+/// pending, then the in-flight and never-synced windows; "Synced" only
+/// once a round landed.
+fn label(online: bool, phase: Phase, pending: usize, synced_once: bool) -> String {
+    if !online {
+        return tr(keys::READER_BOOKMARKS_OFFLINE).to_owned();
+    }
     if phase == Phase::Error {
         return tr(keys::READER_BOOKMARKS_SYNC_ERROR).to_owned();
     }
@@ -38,12 +40,12 @@ fn label(phase: Phase, pending: usize, synced_once: bool) -> String {
     tr(keys::READER_BOOKMARKS_SYNCED).to_owned()
 }
 
-/// Error: danger; anything not yet true: muted; synced: primary.
-fn dot(phase: Phase, pending: usize, synced_once: bool) -> AdaptiveColor {
+/// Error: danger; offline or anything not yet true: muted; synced: primary.
+fn dot(online: bool, phase: Phase, pending: usize, synced_once: bool) -> AdaptiveColor {
     if phase == Phase::Error {
         return tokens::danger();
     }
-    if pending > 0 || phase == Phase::Syncing || !synced_once {
+    if !online || pending > 0 || phase == Phase::Syncing || !synced_once {
         return tokens::muted_text();
     }
     theme().primary
@@ -55,7 +57,12 @@ pub(crate) fn sync_indicator(shelf: Signal<Shelf>) -> impl IntoElement {
     let parts = move || {
         let status = sync.status();
         let pending = shelf.with(|s| s.pending);
-        (status.phase, pending, status.last_sync_at.is_some())
+        (
+            crate::stores::connectivity::online(),
+            status.phase,
+            pending,
+            status.last_sync_at.is_some(),
+        )
     };
     let rejected = move || shelf.with(|s| s.rejected);
     let capped = move || shelf.with(|s| s.capped);
@@ -69,13 +76,13 @@ pub(crate) fn sync_indicator(shelf: Signal<Shelf>) -> impl IntoElement {
                 .items_center()
                 .gap_1p5()
                 .child(view().size(px(6.0)).rounded_full().bg(move || {
-                    let (p, n, s) = parts();
-                    dot(p, n, s)
+                    let (o, p, n, s) = parts();
+                    dot(o, p, n, s)
                 }))
                 .child(
                     text(move || {
-                        let (p, n, s) = parts();
-                        SharedString::from(label(p, n, s))
+                        let (o, p, n, s) = parts();
+                        SharedString::from(label(o, p, n, s))
                     })
                     .text_sm()
                     .text_color(tokens::muted_text),

@@ -411,7 +411,7 @@ fn keyed_registration_signs_a_fresh_nonce_and_adopts_the_server_id() {
     let retry: Value = serde_json::from_slice(&sent[4].body).unwrap();
     assert_ne!(first["device_id"], retry["device_id"], "409 mints a new id");
     assert_ne!(first["public_key"], retry["public_key"], "and a new key");
-    assert_eq!(retry["client"], "gpui");
+    assert_eq!(retry["client"], "nsh");
     assert_eq!(retry["key_store"], "file");
     let mut members: Vec<&String> = retry["public_key"].as_object().unwrap().keys().collect();
     members.sort();
@@ -464,7 +464,7 @@ fn ios_without_secure_hardware_registers_keyless() {
         Ok(RegisterOutcome::Registered { keyed: false, .. })
     ));
     let body: Value = serde_json::from_slice(&script.sent()[1].body).unwrap();
-    assert_eq!(body["client"], "react_native");
+    assert_eq!(body["client"], "nsh");
     assert_eq!(body["key_store"], "none");
     assert!(body.get("public_key").is_none() && body.get("nonce").is_none());
 }

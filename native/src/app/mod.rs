@@ -119,6 +119,7 @@ pub fn provide(services: Services) -> Stores {
     sync.open_at(data_dir.map(|d| d.join("sync")));
     sync.start();
     sync_stores::provide(sync);
+    crate::stores::connectivity::start(sync);
 
     wiring::connect(auth, sync, kv);
     crate::stores::settings::install();

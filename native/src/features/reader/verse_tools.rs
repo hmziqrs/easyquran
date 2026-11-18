@@ -75,8 +75,10 @@ pub fn verse_tools(
         let (route, body) = (route.clone(), body.clone());
         std::rc::Rc::new(move || share::copy_verse(route.as_ref(), surah, ayah, &body))
     };
-    // No share sheet on NSH: the web's fallback, the text to the clipboard.
-    let share_text = copy.clone();
+    let share_text: std::rc::Rc<dyn Fn()> = {
+        let (route, body) = (route.clone(), body.clone());
+        std::rc::Rc::new(move || share::share_verse(route.as_ref(), surah, ayah, &body))
+    };
     let script = untracked(|| prefs.script());
     view()
         .flex_row()
