@@ -37,18 +37,16 @@ pub fn desktop() -> bool {
     window().width >= if is_desktop() { px(700.0) } else { px(900.0) }
 }
 
-/// Flips the system's appearance between light and dark.
+/// Flips the appearance between light and dark, through the persisted
+/// appearance preference (`stores::appearance`).
 pub fn toggle_appearance() {
-    if dark() {
-        set_color_scheme(crate::Appearance::Light);
-    } else {
-        set_color_scheme(crate::Appearance::Dark);
-    }
+    crate::stores::appearance::AppearanceStore::get().toggle_mode();
 }
 
 /// The shell-wide wiring: shortcuts, the back order, the lifecycle watch
 /// and the launch deep link. Once, from the root's body.
 pub fn install() {
+    crate::stores::appearance::AppearanceStore::install();
     on_key("mod+k", move |_| palette::toggle());
     on_key("mod+z", move |_| undo::undo());
     on_key("mod+shift+z", move |_| undo::redo());
@@ -194,11 +192,11 @@ fn pushed() -> AnyElement {
 /// selected.
 fn sidebar() -> impl IntoElement {
     view()
-        .w(px(232.0))
+        .w(px(240.0))
         .flex_col()
-        .bg(move || theme().card)
-        .border_r_1()
-        .border_color(move || theme().border)
+        .bg(move || theme().sidebar)
+        .border_e(px(1.0))
+        .border_e_color(move || theme().sidebar_border)
         .child(
             view()
                 .h(px(chrome::TITLE_BAR))
@@ -214,18 +212,27 @@ fn sidebar() -> impl IntoElement {
                 )),
         )
         .child(
+            // The brand heads the column, on the rows' leading spine.
+            view()
+                .ps_4()
+                .pe_3()
+                .pb_3()
+                .child(crate::ui::brand::brand(false)),
+        )
+        .child(
             scroll().flex_1().child(
                 view()
                     .px_2()
                     .pb_4()
-                    .gap(px(1.0))
+                    .gap_0p5()
                     .child(
+                        // i18n: nav.pages
                         text("Pages")
-                            .text_size(px(11.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(move || theme().muted_foreground)
+                            .text_xs()
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(crate::ui::tokens::muted_text)
                             .px_2()
-                            .pt_1()
+                            .pt_2()
                             .pb_1(),
                     )
                     .children(Route::SIDEBAR.iter().cloned().map(sidebar_row)),
@@ -233,19 +240,18 @@ fn sidebar() -> impl IntoElement {
         )
 }
 
-/// A sidebar row: the route's icon and label, the selected fill while its
-/// page is on top. Hover is half the accent so exactly one row ever
-/// carries the full pill (the default theme's `accent` and `secondary`
-/// are the same gray).
+/// A sidebar row: the route's icon and label, the selected fill (the
+/// sidebar accent) and a medium label while its page is on top; hover is
+/// half that fill, so exactly one row ever carries the full one.
 fn sidebar_row(route: Route) -> AnyElement {
     // Settings is one row for every section.
     let family = route.key_str();
     let selected = move || nav::current().key_str() == family;
     let tint = move || {
         if selected() {
-            theme().foreground
+            theme().sidebar_foreground
         } else {
-            theme().muted_foreground
+            crate::ui::tokens::foreground_secondary()
         }
     };
     let target = route.clone();
@@ -254,19 +260,19 @@ fn sidebar_row(route: Route) -> AnyElement {
         .accessibility_label(route.label_str())
         .selected(selected)
         .w_full()
-        .h(px(30.0))
+        .min_h(px(32.0))
         .px_2()
         .flex_row()
         .items_center()
         .gap_2()
-        .rounded(px(6.0))
+        .rounded(crate::ui::tokens::radius_sm)
         .transition_colors()
-        .hover(|s| s.bg(move || theme().accent.opacity(0.5)))
-        .selected_style(|s| s.bg(move || theme().accent))
+        .hover(|s| s.bg(move || theme().sidebar_accent.opacity(0.6)))
+        .selected_style(|s| s.bg(move || theme().sidebar_accent))
         .focus(|s| {
             s.outline(px(2.0))
                 .outline_offset(px(-2.0))
-                .outline_color(move || theme().ring)
+                .outline_color(move || theme().sidebar_ring)
         })
         .child(
             view()
@@ -283,10 +289,10 @@ fn sidebar_row(route: Route) -> AnyElement {
                 .child(
                     text(route.label_str())
                         .flex_1()
-                        .text_size(px(13.0))
+                        .text_sm()
                         .font_weight(FontWeight::MEDIUM)
                         .number_of_lines(1)
-                        .text_color(move || theme().foreground),
+                        .text_color(tint),
                 ),
         )
         .into_element()

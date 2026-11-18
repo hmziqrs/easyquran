@@ -42,6 +42,8 @@ pub fn diagnostics_content() -> impl IntoElement {
                     "Diagnostics",
                     "Config, capabilities, tasks, events and the log.",
                 ))
+                // The Arabic text specimen (ui slice): scripts, ornaments, tajweed.
+                .child(crate::ui::specimen::arabic_specimen())
                 .child(app_card())
                 .child(config_card())
                 .child(capabilities_card())

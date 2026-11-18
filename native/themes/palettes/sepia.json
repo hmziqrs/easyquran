@@ -1,0 +1,17 @@
+{
+  "light": {
+    "primary": "oklch(0.54 0.23 352)",
+    "primary-hover": "oklch(0.5 0.23 352)",
+    "primary-foreground": "#ffffff",
+    "primary-soft": "oklch(0.95 0.045 352)",
+    "focus-ring": "oklch(0.54 0.23 352)"
+  },
+  "dark": {
+    "primary": "oklch(0.51 0.22 352)",
+    "primary-hover": "oklch(0.55 0.22 352)",
+    "primary-foreground": "#ffffff",
+    "primary-soft": "oklch(0.3 0.055 352)",
+    "focus-ring": "oklch(0.51 0.22 352)"
+  },
+  "swatch": { "light": "#c7007c", "dark": "#b90073" }
+}

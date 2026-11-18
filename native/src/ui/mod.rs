@@ -14,9 +14,12 @@
 //! - Popups paint their own background, border and shadow, and a backdrop
 //!   for phones.
 
+pub mod arabic;
 pub mod avatar;
+pub mod brand;
 pub mod button;
 pub mod carousel;
+pub mod chip;
 pub mod collapse;
 pub mod color;
 pub mod command;
@@ -40,6 +43,7 @@ pub mod resizable;
 pub mod scrollbar;
 pub mod select;
 pub mod sheet;
+pub mod specimen;
 pub mod tab_bar;
 pub mod table;
 pub mod tabs;

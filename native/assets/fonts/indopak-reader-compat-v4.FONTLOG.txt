@@ -1,0 +1,44 @@
+IndoPak Reader Compat, version 4.000
+2026-10-06
+
+Derived solely from SIL Lateef 4.400 SemiBold (South Asian Arabic design).
+Copyright (c) 1994-2025, SIL Global (https://www.sil.org/), with Reserved Font Names
+"Lateef" and "SIL"; neither appears in this derivative's primary font names.
+Original manufacturer/designer names and URLs remain author attribution.
+Licensed under SIL Open Font License 1.1; complete license accompanies font.
+Upstream revision/input checksums: scripts/fonts/indopak/upstream.json
+Versions 2 and 3 were derived from Noto Naskh Arabic 2.021 (see their own FONTLOG files).
+
+Why the new base: IndoPak mushafs, and Quran.com's IndoPak reader, use South Asian letterforms
+(lam, qaf, kaf, yeh, heh) and heavier strokes. Lateef draws that tradition under OFL; Noto
+Naskh is a Middle-Eastern design. No glyph, outline or layout table from any restricted font
+(including Quran.com's AlQuran IndoPak by QuranWBW) is used or traced.
+
+Modifications:
+- Retain the full original repertoire, GSUB/GPOS/GDEF and all standard Unicode mappings.
+- Add nine BMP private mappings onto Lateef's own dedicated Quranic glyphs.
+- Reuse genuine Lateef subscript alef (U+0656) and high ain (U+08D6) mark glyphs.
+- Compose zero-advance E004 inverted damma from Lateef U+0657, translated (239,-353),
+  for its standalone L bidi run in the sole immutable corpus occurrence, 17:7.
+- Compose five spacing pause glyphs (zain, sad, qaf, qif, waqfa) from Lateef U+0617,
+  U+08D5, U+08D7, U+08DE, U+08DF with 123-unit side bearings and GDEF base class; qif and
+  waqfa, drawn at baseline height in Lateef, are lifted to the shared pause lane (y >= 1000).
+- Compose E021 optional-ayah from Lateef U+08E2 at half scale, translated (-800,1390), in
+  separate horizontal and vertical ink lanes from following pause signs; GDEF mark class.
+- Map the U+FE8E alef-final presentation form to Lateef's own final alef glyph.
+- Redraw the 1-, 2- and 3-digit end-of-ayah enclosures as plain rings (Lateef's "Simplified A"
+  geometry, 110-unit stroke). Scale marker-only Extended Arabic-Indic medium/small digits
+  to 80%/75% about their individual centres, retaining advances and placement. This prevents
+  Urdu digits such as 14 and 85 touching the circular enclosure; ordinary digits stay intact.
+- Set usWeightClass 400 so the face is served as the regular weight.
+- Rename family, PostScript, full, unique, typographic, WWS and description records.
+- Package genuine TrueType TTF and WOFF2 without subsetting layout dependencies.
+
+Browser integration (web/src/routes/(application)/_reader/IndoPakAyah.svelte) serves the font
+with size-adjust 125%, lays every word out as one unbreakable box as Quran.com does, keeps
+pause signs with their word, stacks trailing pause/ruku signs above the ring, and keeps the
+final Arabic word with its number. Exact original text and DOM order remain. Cmap aliases do
+not change Unicode properties. The E004 correction is corpus/renderer scoped.
+
+No Quran data modified, normalized or included in build. Printed-edition provenance and
+qualified recitation review remain separate items.

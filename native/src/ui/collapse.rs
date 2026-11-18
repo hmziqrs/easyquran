@@ -60,34 +60,28 @@ pub fn accordion_of(
         .value(value)
         .multiple(multiple)
         .flex_col()
-        .gap_2()
         .on_change(move |next: &Vec<SharedString>| value.set(next.clone()))
         .children(entries.iter().map(|entry| {
             accordion_item()
                 .value(entry.id)
                 .flex_col()
-                .rounded(move || theme().radius)
-                .border_1()
+                .border_b_1()
                 .border_color(move || theme().border)
-                .bg(move || theme().card)
                 .child(
                     accordion_header().level(3).child(
                         accordion_trigger()
-                            .min_h(px(44.0))
-                            .px_4()
-                            .py_2()
+                            .min_h(move || px(if is_desktop() { 36.0 } else { 44.0 }))
+                            .py_2p5()
                             .flex_row()
                             .items_center()
                             .justify_between()
                             .transition_colors()
-                            .hover(|s| s.bg(move || theme().accent))
                             .active(|s| s.opacity(0.8))
                             .focus(|s| {
                                 s.outline(px(2.0))
                                     .outline_offset(px(-2.0))
                                     .outline_color(move || theme().ring)
                             })
-                            .expanded_style(|s| s.bg(move || theme().accent))
                             .child(
                                 text(entry.title)
                                     .text_sm()
@@ -107,7 +101,7 @@ pub fn accordion_of(
                         .keep_mounted(true)
                         .accessibility_label(entry.title)
                         .child(
-                            view().px_4().pb_3().child(
+                            view().pb_2p5().child(
                                 text(entry.content.clone())
                                     .text_sm()
                                     .text_color(move || theme().muted_foreground),

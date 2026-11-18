@@ -59,20 +59,21 @@ pub fn dialog_card(
             .child(
                 view()
                     .w_full()
-                    .max_w(px(340.0))
+                    .max_w(px(448.0))
                     .flex_col()
-                    .gap_3()
-                    .rounded_lg()
-                    .bg(move || theme().card)
+                    .gap_5()
+                    .rounded(crate::ui::tokens::radius_xl)
+                    .bg(move || theme().popover)
                     .border_1()
                     .border_color(move || theme().border)
-                    .p_4()
+                    .p_6()
                     .shadow_lg()
                     .child(
                         text(title.clone())
                             .text_base()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(move || theme().card_foreground),
+                            .font_weight(FontWeight::MEDIUM)
+                            .role(nsh_core::element::AccessibilityRole::Header)
+                            .text_color(move || theme().popover_foreground),
                     )
                     .child(body())
                     .child(actions()),

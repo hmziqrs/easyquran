@@ -66,6 +66,8 @@ pub fn page_screen(route: Route) -> Screen {
 /// is hidden. A page is born pushed or root, so the back button's
 /// presence is decided here.
 fn page_header(route: Route) -> impl IntoElement {
+    // The window controls sit on the physical left on macOS; past them
+    // the toolbar's leading spine is 12 points.
     let lead = move || {
         if chrome::sidebar_open() {
             px(12.0)
@@ -107,9 +109,10 @@ fn page_header(route: Route) -> impl IntoElement {
             text(route.title())
                 .flex_1()
                 .px_1()
-                .text_size(px(13.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .number_of_lines(1),
+                .text_sm()
+                .font_weight(FontWeight::MEDIUM)
+                .number_of_lines(1)
+                .text_color(move || theme().foreground),
         )
         .when(is_desktop(), |header| {
             header.child(native_icon_button(

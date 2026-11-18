@@ -24,22 +24,22 @@ pub fn sheet_of(
                 .w(px(320.0))
                 .max_w(px(320.0))
                 .h_full()
-                .bg(move || theme().card)
-                .text_color(move || theme().card_foreground)
+                .bg(move || theme().popover)
+                .text_color(move || theme().popover_foreground)
                 .shadow_lg();
             // The corners open toward the screen edge the panel slides
             // from; the radius is a constant of the sheet family.
             if side == Placement::Right {
-                s = s.rounded_l(px(12.0));
+                s = s.rounded_l(crate::ui::tokens::radius_xl());
             }
             if side == Placement::Left {
-                s = s.rounded_r(px(12.0));
+                s = s.rounded_r(crate::ui::tokens::radius_xl());
             }
             if side == Placement::Top {
-                s = s.rounded_b(px(12.0));
+                s = s.rounded_b(crate::ui::tokens::radius_xl());
             }
             if side == Placement::Bottom {
-                s = s.rounded_t(px(12.0));
+                s = s.rounded_t(crate::ui::tokens::radius_xl());
             }
             s
         })

@@ -26,8 +26,15 @@ fn main() -> impl std::process::Termination {
         allow(unused_variables)
     )]
     let (name, id, _) = easyquran::foundation::manifest_info();
+    // `cargo run` has no asset host (`nsh run` and packages do), so the
+    // crate's fonts would never register: hand them to the root from the
+    // source tree. Absent in a packaged build, where this adds nothing.
+    let mut root = platform::Root::of::<easyquran::App>();
+    for font in easyquran::ui::arabic::dev_font_files() {
+        root = root.font(font);
+    }
     platform::run_app(
-        platform::AppSource::Rust(platform::Root::of::<easyquran::App>()),
+        platform::AppSource::Rust(root),
         platform::AppOptions {
             title: name.to_string(),
             #[cfg(any(target_os = "linux", target_os = "windows"))]

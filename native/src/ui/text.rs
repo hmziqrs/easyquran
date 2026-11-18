@@ -1,5 +1,8 @@
 //! The app's text styles: one function per role of the type scale (12-20
-//! points around a 16-point body), so screens never set sizes directly.
+//! points around a 16-point body), so screens never set sizes directly,
+//! plus the web's §11 ramp ([`TextRole`]: display, h1-h3, body, caption,
+//! micro) for surfaces that mirror a web board. One Latin face, Onest
+//! (the theme's `font-sans`); JetBrains Mono for code only.
 
 use nsh_base::theme;
 use nsh_core::prelude::*;
@@ -91,4 +94,57 @@ pub fn page_intro(
         .gap_1()
         .child(page_heading(heading))
         .child(muted(summary))
+}
+
+/// A role of the web's §11 type ramp (`layout.css` `--text-*`): size,
+/// line height, weight and tracking move together.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextRole {
+    /// 76/1.06, 500, -0.04em: the landing headline.
+    DisplayXl,
+    /// 40/1.1, 500, -0.035em.
+    H1,
+    /// 26/1.2, 500, -0.03em.
+    H2,
+    /// 20/1.25, 500, -0.025em.
+    H3,
+    /// 20/1.55, 400: lead paragraphs.
+    BodyXl,
+    /// 17.5/1.6, 400.
+    BodyL,
+    /// 15/1.5, 400: the body.
+    Body,
+    /// 13.5/1.45, 400: captions, secondary lines.
+    Caption,
+    /// 13/1.4, 500: the smallest label.
+    Micro,
+}
+
+impl TextRole {
+    /// `(size, line height multiple, weight, tracking in em)`.
+    pub fn metrics(self) -> (f32, f32, FontWeight, f32) {
+        match self {
+            TextRole::DisplayXl => (76.0, 1.06, FontWeight::MEDIUM, -0.04),
+            TextRole::H1 => (40.0, 1.1, FontWeight::MEDIUM, -0.035),
+            TextRole::H2 => (26.0, 1.2, FontWeight::MEDIUM, -0.03),
+            TextRole::H3 => (20.0, 1.25, FontWeight::MEDIUM, -0.025),
+            TextRole::BodyXl => (20.0, 1.55, FontWeight::NORMAL, 0.0),
+            TextRole::BodyL => (17.5, 1.6, FontWeight::NORMAL, 0.0),
+            TextRole::Body => (15.0, 1.5, FontWeight::NORMAL, 0.0),
+            TextRole::Caption => (13.5, 1.45, FontWeight::NORMAL, 0.0),
+            TextRole::Micro => (13.0, 1.4, FontWeight::MEDIUM, 0.0),
+        }
+    }
+}
+
+/// `label` set in `role` of the ramp, in the foreground color (override
+/// with `.text_color(..)`).
+pub fn role(label: impl IntoReactive<SharedString>, role: TextRole) -> Text {
+    let (size, line, weight, tracking) = role.metrics();
+    text(label.into_reactive())
+        .text_size(px(size))
+        .line_height(nsh_core::LineHeight::Multiple(line))
+        .font_weight(weight)
+        .letter_spacing(px(size * tracking))
+        .text_color(move || theme().foreground)
 }

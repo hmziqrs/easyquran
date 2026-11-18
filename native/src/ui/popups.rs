@@ -12,11 +12,11 @@ use nsh_core::prelude::*;
 /// The app's popup surface, shared by its menus, popovers and hover
 /// cards: the popover tokens, one radius, one shadow.
 pub fn popup_surface(s: StyleRefinement) -> StyleRefinement {
-    s.min_w(px(192.0))
+    s.min_w(px(160.0))
         .p_1()
-        .rounded_lg()
+        .rounded(crate::ui::tokens::radius_md)
         .border_1()
-        .border_color(move || theme().border)
+        .border_color(crate::ui::tokens::border_strong)
         .bg(move || theme().popover)
         .shadow_lg()
 }
@@ -45,19 +45,14 @@ pub fn popup_trigger_frame(
         .flex_row()
         .items_center()
         .gap_2()
-        .rounded(move || theme().radius)
+        .rounded(crate::ui::tokens::radius_pill)
         .border_1()
-        .border_color(move || theme().input)
-        .bg(move || theme().background)
+        .border_color(move || theme().border)
+        .bg(crate::ui::tokens::surface)
         .transition_colors()
-        .hover(|s| s.bg(move || theme().accent))
-        .active(|s| s.bg(move || theme().accent))
-        .focus(|s| {
-            s.border_color(move || theme().ring)
-                .outline(px(2.0))
-                .outline_offset(px(2.0))
-                .outline_color(move || theme().ring)
-        })
+        .hover(|s| s.border_color(crate::ui::tokens::border_strong))
+        .active(|s| s.bg(crate::ui::tokens::surface_hover))
+        .focus(crate::ui::button::focus_ring)
         .child(
             text(summary)
                 .flex_1()
@@ -108,15 +103,11 @@ pub fn destructive_menu_entry(
         .py_1p5()
         .rounded_sm()
         .transition_colors()
-        .hover(|s| s.bg(move || theme().destructive))
-        .active(|s| s.bg(move || theme().destructive))
-        .focus(|s| s.bg(move || theme().destructive))
+        .hover(|s| s.bg(crate::ui::tokens::surface_hover))
+        .active(|s| s.bg(crate::ui::tokens::surface_hover))
+        .focus(|s| s.bg(crate::ui::tokens::surface_hover))
         .disabled_style(|s| s.opacity(0.5))
-        .child(
-            text(label)
-                .text_sm()
-                .text_color(crate::ui::tokens::destructive_foreground),
-        )
+        .child(text(label).text_sm().text_color(crate::ui::tokens::danger))
 }
 
 /// A checkable command: `checked` is the app's; the mark is the app's.
@@ -290,19 +281,17 @@ pub fn tooltip_of(hint: impl IntoReactive<SharedString>) -> nsh_base::TooltipEle
         .starting_class("opacity-0 scale-95")
         .ending_class("opacity-0 scale-95")
         .child(
+            // The web's tooltip chip is inverted: foreground fill.
             view()
-                .max_w(px(240.0))
+                .max_w(px(320.0))
                 .px_3()
                 .py_1p5()
-                .rounded_md()
-                .bg(move || theme().popover)
-                .border_1()
-                .border_color(move || theme().border)
-                .shadow_md()
+                .rounded(crate::ui::tokens::radius_md)
+                .bg(crate::ui::tokens::tooltip)
                 .child(
                     text(hint)
                         .text_xs()
-                        .text_color(move || theme().popover_foreground),
+                        .text_color(crate::ui::tokens::tooltip_foreground),
                 ),
         )
 }

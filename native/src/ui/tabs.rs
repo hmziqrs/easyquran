@@ -17,32 +17,28 @@ pub fn tab_bar(
     tabs()
         .flex_row()
         .self_start()
-        .gap_1()
-        .p_1()
-        .rounded(move || theme().radius)
-        .bg(move || theme().muted)
+        .gap_2()
         .indicator_style(|s| {
-            s.top(px(4.0))
-                .bottom(px(4.0))
-                .rounded_sm()
-                .bg(move || theme().background)
-                .shadow_sm()
+            s.top_0()
+                .bottom_0()
+                .rounded_full()
+                .bg(move || theme().primary)
         })
         .children(labels.iter().enumerate().map(move |(at, label)| {
             let is_selected = move || selected() == at;
             tab()
                 .selected(is_selected)
                 .on_press(move |_: &()| on_select(at))
-                .px_3()
-                .py_1p5()
-                .rounded_sm()
+                .min_h(move || px(if is_desktop() { 28.0 } else { 44.0 }))
+                .px_4()
+                .items_center()
+                .justify_center()
+                .rounded_full()
                 .transition_colors()
+                .hover(|s| s.bg(crate::ui::tokens::surface_hover))
+                .selected_style(|s| s.bg(AdaptiveColor::TRANSPARENT))
                 .active(|s| s.opacity(0.8))
-                .focus(|s| {
-                    s.outline(px(2.0))
-                        .outline_offset(px(1.0))
-                        .outline_color(move || theme().ring)
-                })
+                .focus(crate::ui::button::focus_ring)
                 .disabled_style(|s| s.opacity(0.5))
                 .child(
                     text(*label)
@@ -50,9 +46,9 @@ pub fn tab_bar(
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(move || {
                             if is_selected() {
-                                theme().foreground
+                                theme().primary_foreground
                             } else {
-                                theme().muted_foreground
+                                crate::ui::tokens::foreground_secondary()
                             }
                         }),
                 )

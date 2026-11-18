@@ -23,29 +23,52 @@ pub fn field(
         .child(control)
 }
 
-/// The input frame: min height by target type, the input border, the
-/// focus ring, the caret and placeholder from the theme.
+/// The input frame (`input.svelte`): a pill on the surface with a
+/// hairline, min height by target type (44 touch, 36 pointer), the focus
+/// ring, the caret and placeholder from the theme.
 fn frame(input: Input) -> Input {
     let touch = !is_desktop();
     input
         .min_h(move || px(if touch { 44.0 } else { 36.0 }))
-        .px_3()
+        .px_4()
         .py_2()
         .text_sm()
         .text_color(move || theme().foreground)
-        .rounded(move || theme().radius)
+        .rounded(crate::ui::tokens::radius_pill)
         .border_1()
-        .border_color(move || theme().input)
-        .bg(move || theme().background)
+        .border_color(move || theme().border)
+        .bg(crate::ui::tokens::surface)
         .transition_colors()
-        .focus(|s| {
-            s.border_color(move || theme().ring)
-                .outline(px(2.0))
-                .outline_offset(px(2.0))
-                .outline_color(move || theme().ring)
-        })
+        .focus(crate::ui::button::focus_ring)
+        .disabled_style(|s| s.opacity(0.5))
         .placeholder_color(move || color(theme().muted_foreground))
         .caret_color(move || color(theme().foreground))
+}
+
+/// The multi-line frame (`textarea.svelte`): a 10-point block, not a pill.
+fn block(input: Input) -> Input {
+    frame(input).px_3().rounded(crate::ui::tokens::radius_md)
+}
+
+/// Marks a field invalid while `invalid` holds (`aria-invalid`): the
+/// danger edge. Put the message next to the field ([`field_message`]).
+pub fn invalid_when(input: Input, invalid: impl Fn() -> bool + 'static) -> Input {
+    input.style_when(invalid, |s| s.border_color(crate::ui::tokens::danger))
+}
+
+/// The hint or validation message under a field: muted, or danger when
+/// it reports an error.
+pub fn field_message(
+    message: impl IntoReactive<SharedString>,
+    error: impl Fn() -> bool + 'static,
+) -> impl IntoElement {
+    text(message.into_reactive()).text_xs().text_color(move || {
+        if error() {
+            crate::ui::tokens::danger()
+        } else {
+            theme().muted_foreground
+        }
+    })
 }
 
 /// A single-line field bound to `value`; typing writes the signal.
@@ -73,7 +96,7 @@ pub fn password_field(value: Signal<String>, placeholder: impl Into<String>) -> 
 
 /// A multi-line field: it grows with its content from a 4-line floor.
 pub fn multiline_field(value: Signal<String>, placeholder: impl Into<String>) -> Input {
-    frame(
+    block(
         input()
             .value(move || value.get())
             .on_change(move |text: &str| value.set(text.to_owned()))
@@ -117,7 +140,7 @@ pub fn password_field_frame(placeholder: impl Into<String>) -> Input {
 /// The multi-line frame, four lines tall at the floor: bind a
 /// `BindField` over it as over [`text_field_frame`].
 pub fn multiline_field_frame(placeholder: impl Into<String>) -> Input {
-    frame(
+    block(
         input()
             .placeholder(placeholder.into())
             // 4 lines of 14pt text: the floor a note needs to read as one.
