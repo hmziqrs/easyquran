@@ -1,92 +1,80 @@
-//! The auth seam: one small trait so the real provider (Firebase Auth, in
-//! another project) replaces [`MockAuthProvider`] in one file. The mock is
-//! a fake local user: no network, no account, no credentials.
+//! The auth service: builds the one `eq_core::api::ApiClient` (session
+//! transport over [`super::transport::NshTransport`], secrets in
+//! [`super::storage::PlatformSecrets`]) and the `AuthMachine`, and says
+//! what this install is for device registration. Replaces the starter's
+//! mock provider. The app's auth store is `crate::stores::auth`.
 
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::{path::PathBuf, rc::Rc, sync::Arc};
 
-use nsh_core::element::SharedString;
+use eq_core::{
+    api::{ApiClient, ApiConfig, AuthMachine},
+    device::{DeviceEnv, FormFactor, Platform},
+    kv::{KeyValue, SecretStore},
+};
 
-use crate::foundation::error::AppError;
+use super::{
+    storage::{NshKv, PlatformSecrets, SharedSecrets},
+    transport::NshTransport,
+};
 
-/// A sign-in in flight, boxed so the trait stays object-safe.
-pub type AuthFut<'a> = Pin<Box<dyn Future<Output = Result<AuthUser, AppError>> + 'a>>;
-
-/// Who is signed in.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AuthUser {
-    /// The provider's id for the user (the mock's is always the same).
-    pub id: SharedString,
-    /// The email they signed in with.
-    pub email: SharedString,
-    /// What the app shows.
-    pub display_name: SharedString,
-}
-
-/// The app's identity provider.
-pub trait AuthProvider: Send + Sync {
-    /// The signed-in user, or `None`.
-    fn current_user(&self) -> Option<AuthUser>;
-
-    /// Signs in with `email` and `password`. The failure is an
-    /// [`AppError`] with code `"invalid"` (bad input) or the provider's
-    /// own; no provider here ever sees a real credential.
-    fn sign_in(&self, email: &str, password: &str) -> AuthFut<'_>;
-
-    /// Signs out. After it, [`AuthProvider::current_user`] is `None`.
-    fn sign_out(&self);
-}
-
-/// The local mock: any well-formed email and a non-empty password signs in
-/// a fake user, kept in memory only.
-#[derive(Debug, Default)]
-pub struct MockAuthProvider {
-    user: Mutex<Option<AuthUser>>,
-}
-
-impl MockAuthProvider {
-    /// The id every mock user gets.
-    const MOCK_ID: &'static str = "mock-user-1";
-
-    /// The display name the mock user gets.
-    const MOCK_NAME: &'static str = "Mock User";
-}
-
-impl AuthProvider for MockAuthProvider {
-    fn current_user(&self) -> Option<AuthUser> {
-        self.user.lock().expect("mock user").clone()
+/// The API this build talks to: `EQ_API_BASE` at build time when set,
+/// else the local API (`http://localhost:8888`) in debug builds and
+/// production (`https://easyquran.fyi/api`) in release builds.
+pub fn api_config() -> ApiConfig {
+    if let Some(base) = option_env!("EQ_API_BASE") {
+        return ApiConfig::new(base);
     }
-
-    fn sign_in(&self, email: &str, password: &str) -> AuthFut<'_> {
-        let email = email.trim().to_owned();
-        let password = password.to_owned();
-        Box::pin(async move {
-            if crate::foundation::validation::email_error(&email).is_some() {
-                return Err(AppError::new("invalid", "Enter a valid email address"));
-            }
-            if password.is_empty() {
-                return Err(AppError::new("invalid", "Enter a password"));
-            }
-            let user = AuthUser {
-                id: Self::MOCK_ID.into(),
-                email: email.into(),
-                display_name: Self::MOCK_NAME.into(),
-            };
-            *self.user.lock().expect("mock user") = Some(user.clone());
-            Ok(user)
-        })
+    if cfg!(debug_assertions) {
+        return ApiConfig::local();
     }
+    ApiConfig::production()
+}
 
-    fn sign_out(&self) {
-        *self.user.lock().expect("mock user") = None;
+/// What this install reports at device registration. `phone` stands for
+/// every mobile device until the shell reports tablets.
+pub fn device_env() -> DeviceEnv {
+    let platform = Platform::current().unwrap_or(Platform::Linux);
+    let form_factor = match platform {
+        Platform::Ios | Platform::Android => FormFactor::Phone,
+        Platform::Macos | Platform::Windows | Platform::Linux => FormFactor::Desktop,
+    };
+    DeviceEnv {
+        platform,
+        form_factor,
+        os_major: None,
+        app_version: Some(env!("CARGO_PKG_VERSION").to_owned()),
+        os_id: os_id(),
     }
 }
 
-/// The app's shared provider. Swapping the implementation means editing
-/// this file's `PROVIDER` line; call sites never change.
-pub fn provider() -> Arc<dyn AuthProvider> {
-    static PROVIDER: std::sync::LazyLock<Arc<dyn AuthProvider>> =
-        std::sync::LazyLock::new(|| Arc::new(MockAuthProvider::default()));
-    PROVIDER.clone()
+/// The machine id for the continuity hint: `/etc/machine-id` on Linux.
+/// Windows (`MachineGuid`, registry) and Android (`ANDROID_ID`, Java) need
+/// platform code this crate does not have yet, so they send no hint: the
+/// hint is optional and only helps reinstall recognition.
+fn os_id() -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        std::fs::read_to_string("/etc/machine-id")
+            .ok()
+            .filter(|id| !id.trim().is_empty())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+/// Opens the secret store. Blocking (keychain or file read): run it in
+/// `blocking(..)`, then hand the result to [`build`].
+pub fn open_secrets(data_dir: Option<PathBuf>) -> Arc<PlatformSecrets> {
+    PlatformSecrets::open(data_dir)
+}
+
+/// The client and state machine over `secrets`.
+pub fn build(secrets: Arc<PlatformSecrets>) -> (Rc<ApiClient>, Rc<AuthMachine>) {
+    let secrets: Rc<dyn SecretStore> = Rc::new(SharedSecrets(secrets));
+    let client = Rc::new(ApiClient::new(api_config(), Rc::new(NshTransport), secrets));
+    let kv: Rc<dyn KeyValue> = Rc::new(NshKv);
+    let machine = AuthMachine::new(client.clone(), kv);
+    (client, machine)
 }

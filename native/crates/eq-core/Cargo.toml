@@ -9,5 +9,13 @@ description = "EasyQuran native domain logic: no NSH dependency, cargo-testable 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+# Device key (contracts/devices.md D3): P-256 ECDSA, RFC 7638 thumbprint,
+# continuity hint HMAC, base64url, per-install ids.
+p256 = { version = "0.13", default-features = false, features = ["std", "ecdsa", "arithmetic"] }
+sha2 = "0.10"
+hmac = "0.12"
+base64 = "0.22"
+rand_core = { version = "0.6", features = ["getrandom"] }
+uuid = { version = "1", features = ["v4", "v7"] }
 # Shared sync merge rules (contracts/sync.md). Read-only: owned by rust/.
 eq-sync-core = { path = "../../../rust/crates/eq-sync-core" }
