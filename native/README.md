@@ -1,6 +1,6 @@
 # EasyQuran native
 
-The EasyQuran app for macOS, iOS and Android (Linux and Windows from the same crate), built on [Native Shell](https://nsh.dev) 0.5.1 in Rust mode. It is the native counterpart of `web/` and aims at 1:1 feature parity.
+The EasyQuran app for macOS, iOS and Android (Linux and Windows from the same crate), built on [Native Shell](https://nsh.dev) 0.6.0 in Rust mode. It is the native counterpart of `web/` and aims at 1:1 feature parity.
 
 - What must be built, and its state: [PARITY.md](PARITY.md)
 - Rules, layout and gates for anyone working here: [AGENTS.md](AGENTS.md)

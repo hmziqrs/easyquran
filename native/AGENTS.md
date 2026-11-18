@@ -1,6 +1,6 @@
 # native/AGENTS.md
 
-EasyQuran native app on Native Shell (NSH 0.5.1), Rust mode. One crate graph for macOS, iOS, Android (Linux/Windows from the same code). Counterpart of `web/` at 1:1 feature parity; the checklist is [PARITY.md](PARITY.md). The monorepo's root `AGENTS.MD` hard rules bind here too.
+EasyQuran native app on Native Shell (NSH 0.6.0), Rust mode. One crate graph for macOS, iOS, Android (Linux/Windows from the same code). Counterpart of `web/` at 1:1 feature parity; the checklist is [PARITY.md](PARITY.md). The monorepo's root `AGENTS.MD` hard rules bind here too.
 
 ## Before any work
 

@@ -10,10 +10,11 @@ resolver = "3"
 
 [dependencies]
 eq-core = { path = "crates/eq-core" }
-nsh-core = "0.5.1"
-nsh-base = "0.5.1"
+# `svg`: 0.6.0 made SVG images (every icon) an opt-in feature of nsh-core.
+nsh-core = { version = "0.6.0", features = ["svg"] }
+nsh-base = "0.6.0"
 # Update check (PARITY K4): `Config::check` over the manifest the app fetches.
-nsh-updater = "0.5.1"
+nsh-updater = "0.6.0"
 nsh-query = { git = "https://github.com/SuperNSH/query.git", rev = "16d439a3be7f9ff9555f061934fa932bb3c2831b" }
 nsh-form = { git = "https://github.com/SuperNSH/form.git", rev = "31dc0e16a648045598e0d96c4dafe3fc172a561a" }
 chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
@@ -29,20 +30,20 @@ base64 = "0.22"
 getrandom = "0.2"
 
 [target.'cfg(target_os = "ios")'.dependencies]
-nsh-platform-ios = { version = "0.5.1", default-features = false }
+nsh-platform-ios = { version = "0.6.0", default-features = false }
 objc2 = "0.6.5"
 objc2-ui-kit = { version = "0.3.2", default-features = false, features = ["std", "UIResponder", "UIView", "UIWindow", "UIScrollView", "UIGeometry"] }
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFCGTypes"] }
 block2 = "0.6"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-nsh-platform-linux = { version = "0.5.1", default-features = false }
+nsh-platform-linux = { version = "0.6.0", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-nsh-platform-macos = { version = "0.5.1", default-features = false }
+nsh-platform-macos = { version = "0.6.0", default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-nsh-platform-windows = { version = "0.5.1", default-features = false }
+nsh-platform-windows = { version = "0.6.0", default-features = false }
 
 # Secure storage for the session value and device key (contracts/devices.md D3):
 # Keychain on macOS/iOS, Credential Manager on Windows. Without a native
@@ -58,5 +59,17 @@ default-features = false
 features = ["windows-native"]
 
 [dev-dependencies]
-nsh-engine = "0.5.1"
-nsh-testing = { version = "0.5.1", default-features = false }
+nsh-engine = "0.6.0"
+nsh-testing = { version = "0.6.0", default-features = false }
+
+# TEMPORARY (U6): the NSH 0.6.0 commits of nsh-query (4a2e2b0) and nsh-form
+# (06053c3) are not pushed to GitHub yet, and cargo fetches a patched git
+# source anyway, so the revs above stay at the last pushed (0.5.1) commits and
+# this block builds from the owner's local 0.6 checkouts. Once pushed: set the
+# revs to 4a2e2b01ba986be3c961d42606ef2895d5472dd5 / 06053c367618e0feeec8cd3765636d552f987b9d,
+# delete this block, run `cargo update -p nsh-query -p nsh-form`.
+[patch."https://github.com/SuperNSH/query.git"]
+nsh-query = { path = "/Users/hmziq/fo/nsh-query/crates/nsh-query" }
+
+[patch."https://github.com/SuperNSH/form.git"]
+nsh-form = { path = "/Users/hmziq/fo/nsh-form/crates/nsh-form" }
