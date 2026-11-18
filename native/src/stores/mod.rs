@@ -4,3 +4,4 @@
 //! writes as methods; screens never hold eq-core state directly.
 
 pub mod auth;
+pub mod locale;

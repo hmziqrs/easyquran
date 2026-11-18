@@ -53,8 +53,12 @@ fn macos_components(components: &nsh_platform_macos::Components) {
 /// and bars, which know where their headers and tab bars sit.
 #[component]
 pub fn App() -> impl IntoElement {
+    // The UI locale before anything reads it; the root lays out in its
+    // direction (NSH's own surface direction follows the system language).
+    stores::locale::install();
     view()
         .flex_1()
+        .direction(stores::locale::layout_direction)
         .bg(move || theme().background)
         .text_color(move || theme().foreground)
         .child(app::root())
