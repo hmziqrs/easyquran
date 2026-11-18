@@ -1,0 +1,11 @@
+{
+  "name": "Remote screen",
+  "id": "com.example.nshstarter.remote",
+  "version": "1.0.0",
+  "build": 1,
+  "theme": "theme.json",
+  "capabilities": {
+    "network": { "hosts": ["dashboard.example.com"] },
+    "host": ["remote.*"]
+  }
+}

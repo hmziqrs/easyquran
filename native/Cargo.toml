@@ -1,0 +1,39 @@
+[package]
+name = "nsh-starter"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+nsh-core = "0.5.1"
+nsh-base = "0.5.1"
+nsh-query = { git = "https://github.com/SuperNSH/query.git", rev = "16d439a3be7f9ff9555f061934fa932bb3c2831b" }
+nsh-form = { git = "https://github.com/SuperNSH/form.git", rev = "31dc0e16a648045598e0d96c4dafe3fc172a561a" }
+chrono = { version = "0.4.45", default-features = false, features = ["std"] }
+log = "0.4"
+env_logger = "0.11"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rust-i18n = "4"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+nsh-platform-ios = { version = "0.5.1", default-features = false }
+objc2 = "0.6.5"
+objc2-ui-kit = { version = "0.3.2", default-features = false, features = ["std", "UIResponder", "UIView", "UIWindow", "UIScrollView", "UIGeometry"] }
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFCGTypes"] }
+block2 = "0.6"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+nsh-platform-linux = { version = "0.5.1", default-features = false }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+nsh-platform-macos = { version = "0.5.1", default-features = false }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+nsh-platform-windows = { version = "0.5.1", default-features = false }
+
+[dev-dependencies]
+nsh-engine = "0.5.1"
+nsh-testing = { version = "0.5.1", default-features = false }
