@@ -3,7 +3,7 @@
   "name": "EasyQuran — the Quran, made easy to read",
   "short_name": "EasyQuran",
   "description": "Read the Quran. Free, no ads, and fast — nothing in the way of the text.",
-  "start_url": "/surah",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0D1210",
