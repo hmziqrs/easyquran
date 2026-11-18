@@ -13,6 +13,7 @@ pub mod notes;
 pub mod pins;
 pub mod quran;
 pub mod reader;
+pub mod search;
 pub mod settings;
 pub mod sync;
 pub mod translations;

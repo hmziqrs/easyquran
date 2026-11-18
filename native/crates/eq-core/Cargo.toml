@@ -21,6 +21,8 @@ uuid = { version = "1", features = ["v4", "v7"] }
 rusqlite = { version = "0.41", features = ["bundled"] }
 # Unicode classes (\p{M}, \p{Cf}, \p{L}) for the IndoPak view rules (quran::view::indopak).
 regex = "1"
+# Latin search normalisation (NFD + mark strip, as the web's `normalize("NFD")`).
+unicode-normalization = "0.1"
 # Shared sync merge rules (contracts/sync.md). Read-only: owned by rust/.
 eq-sync-core = { path = "../../../rust/crates/eq-sync-core" }
 

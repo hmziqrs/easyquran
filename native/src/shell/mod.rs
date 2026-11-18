@@ -47,7 +47,15 @@ pub fn toggle_appearance() {
 /// and the launch deep link. Once, from the root's body.
 pub fn install() {
     crate::stores::appearance::AppearanceStore::install();
+    // Web hotkeys (`registerHotkey` consumers): `/` opens the palette, `` ` ``
+    // resumes the last read, `mod+,` opens settings. Bare keys skip text
+    // inputs (the keymap's default `When::Auto`).
     on_key("mod+k", move |_| palette::toggle());
+    on_key("/", move |_| palette::show(""));
+    on_key("`", move |_| palette::resume_last_read());
+    on_key("mod+,", move |_| {
+        nav::open(Route::Settings(routes::SettingsSection::Storage));
+    });
     on_key("mod+z", move |_| undo::undo());
     on_key("mod+shift+z", move |_| undo::redo());
     on_key("ctrl+mod+s", move |_| chrome::toggle_sidebar());
