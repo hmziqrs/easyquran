@@ -6,6 +6,8 @@
 pub mod appearance;
 pub mod auth;
 pub mod locale;
+pub mod notes;
+pub mod pins;
 pub mod quran;
 pub mod reader;
 pub mod sync;
