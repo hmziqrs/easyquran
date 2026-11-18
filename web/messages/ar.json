@@ -569,7 +569,6 @@
   "downloads_state_checking": "جارٍ التحقق…",
   "downloads_progress": "{pct}٪ · {loaded} من {total}",
   "downloads_quran_error": "توقّف التنزيل. أعد تحميل الصفحة للمحاولة مجددًا.",
-  "downloads_quran_idle": "افتح القارئ لبدء حفظ القرآن على هذا الجهاز.",
   "downloads_translations_heading": "الترجمات",
   "downloads_translations_empty": "لا توجد ترجمات محفوظة بعد. افتح ترجمة في القارئ لتُحفظ هنا.",
   "downloads_pack_heading": "الصفحات دون اتصال",

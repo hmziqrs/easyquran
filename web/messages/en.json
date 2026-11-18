@@ -569,7 +569,6 @@
   "downloads_state_checking": "Checking…",
   "downloads_progress": "{pct}% · {loaded} of {total}",
   "downloads_quran_error": "The download stopped. Reload the page to try again.",
-  "downloads_quran_idle": "Open the reader to start saving the Qur'an on this device.",
   "downloads_translations_heading": "Translations",
   "downloads_translations_empty": "No translations saved yet. Open one in the reader and it is kept here.",
   "downloads_pack_heading": "Offline pages",

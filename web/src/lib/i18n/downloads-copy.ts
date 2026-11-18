@@ -1,3 +1,5 @@
+import type { UiDirection, UiLocale } from "#lib/i18n/locales.js";
+import { uiDirection } from "#lib/i18n/locales.js";
 import {
   downloads_app_active,
   downloads_app_heading,
@@ -14,7 +16,6 @@ import {
   downloads_progress,
   downloads_quran_error,
   downloads_quran_heading,
-  downloads_quran_idle,
   downloads_quran_note,
   downloads_state_checking,
   downloads_state_downloading,
@@ -26,8 +27,6 @@ import {
   downloads_translations_empty,
   downloads_translations_heading,
 } from "#lib/i18n/m/downloads.js";
-import type { UiDirection, UiLocale } from "#lib/i18n/locales.js";
-import { uiDirection } from "#lib/i18n/locales.js";
 import { getLocale } from "#lib/paraglide/runtime.js";
 
 export type DownloadRowState = "queued" | "downloading" | "ready" | "missing" | "checking";
@@ -46,7 +45,6 @@ export interface DownloadsCopy {
   readonly states: Readonly<Record<DownloadRowState, string>>;
   readonly progress: (pct: number, loaded: string, total: string) => string;
   readonly quranError: string;
-  readonly quranIdle: string;
   readonly translationsHeading: string;
   readonly translationsEmpty: string;
   readonly packHeading: string;
@@ -86,7 +84,6 @@ export function getDownloadsCopy(locale: UiLocale = getLocale() as UiLocale): Do
     },
     progress: (pct, loaded, total) => downloads_progress({ pct, loaded, total }, options),
     quranError: noArgs(downloads_quran_error),
-    quranIdle: noArgs(downloads_quran_idle),
     translationsHeading: noArgs(downloads_translations_heading),
     translationsEmpty: noArgs(downloads_translations_empty),
     packHeading: noArgs(downloads_pack_heading),

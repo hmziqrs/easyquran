@@ -255,10 +255,11 @@
           <span class="text-caption tabular-nums text-muted">{overall}%</span>
         </div>
         {@render progressBar(overall, copy.overallLabel)}
-        {#if quran.status === "error"}
+        <!-- This route boots the offline engine itself (root layout, after first paint), so a
+             not-yet-started engine is just the rows' "Checking…" state. Only terminal states speak:
+             a failed download, or an engine that never became ready (report.phase "error"). -->
+        {#if quran.status === "error" || report.phase === "error"}
           <p class="text-caption text-danger" role="alert">{copy.quranError}</p>
-        {:else if quran.status === "idle" && report.phase === "boot" && !quranActive}
-          <p class="text-caption text-muted">{copy.quranIdle}</p>
         {/if}
       </div>
       {#each arabicRows as row (row.id)}

@@ -2,7 +2,7 @@
 //
 // Downloads page (/downloads): Quran database, offline pack and app-shell progress. Lazy: downloaded whole when the downloads route loads.
 //
-// 26 messages. Import this barrel, never
+// 25 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { downloads_app_active } from "#lib/paraglide/messages/downloads_app_active.js";
@@ -20,7 +20,6 @@ export { downloads_popup_show } from "#lib/paraglide/messages/downloads_popup_sh
 export { downloads_progress } from "#lib/paraglide/messages/downloads_progress.js";
 export { downloads_quran_error } from "#lib/paraglide/messages/downloads_quran_error.js";
 export { downloads_quran_heading } from "#lib/paraglide/messages/downloads_quran_heading.js";
-export { downloads_quran_idle } from "#lib/paraglide/messages/downloads_quran_idle.js";
 export { downloads_quran_note } from "#lib/paraglide/messages/downloads_quran_note.js";
 export { downloads_state_checking } from "#lib/paraglide/messages/downloads_state_checking.js";
 export { downloads_state_downloading } from "#lib/paraglide/messages/downloads_state_downloading.js";
