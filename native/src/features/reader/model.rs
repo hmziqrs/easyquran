@@ -303,10 +303,11 @@ pub fn link_to(link: &ReaderLink, scope: ReaderScope, ayah: Option<u16>) -> Read
     }
 }
 
-/// The translation ids the route stacks: the route's own first, then `?more=`.
-pub fn route_translations(link: &ReaderLink) -> Vec<String> {
+/// The translation ids the reader shows: the route's own first, then the
+/// stack's active ids (`?more=` seeds the stack on entry).
+pub fn route_translations(link: &ReaderLink, stacked: &[String]) -> Vec<String> {
     let mut ids: Vec<String> = link.target.translation.iter().map(|t| t.id()).collect();
-    for id in &link.more {
+    for id in stacked {
         if !ids.contains(id) {
             ids.push(id.clone());
         }

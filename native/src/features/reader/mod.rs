@@ -20,11 +20,16 @@
 //! `model::route_translations` (the lanes this route stacks).
 
 pub mod header;
+pub mod lanes;
 pub mod model;
 pub mod rows;
 pub mod session;
+pub mod share;
 pub mod status;
 pub mod tracker;
+pub mod translations;
+pub mod verse_tools;
+pub mod words;
 
 use std::rc::Rc;
 
@@ -47,7 +52,7 @@ use crate::{
         nav,
         routes::{ReaderLink, Route},
     },
-    stores::reader::ReaderStore,
+    stores::{reader::ReaderStore, translations::StackStore},
     ui::layout::{page_insets, skeleton_of},
 };
 
@@ -108,7 +113,18 @@ pub fn page(link: ReaderLink) -> impl IntoElement {
         prefs.set_current(n);
     }
     let route_translation = link.target.translation.as_ref().map(|t| t.id());
-    let translations = model::route_translations(&link);
+    let route_ref = stored(link.target.translation.clone());
+    let stack = StackStore::get();
+    // `?more=` seeds the stack (the layout's param sync): known ids only.
+    let known_more: Vec<String> = link
+        .more
+        .iter()
+        .filter(|id| eq_core::quran::catalogue::translation(id).is_some())
+        .cloned()
+        .collect();
+    if !known_more.is_empty() {
+        stack.set_ids(&known_more);
+    }
     let anchor_verse = match (scope, link.target.ayah) {
         (ReaderScope::Surah(n), Some(a)) => Some((n, a)),
         _ => None,
@@ -118,6 +134,8 @@ pub fn page(link: ReaderLink) -> impl IntoElement {
     let generation = stored(0_u64);
     let loaded = signal_with(None::<Rc<Loaded>>, SignalEquals::Never);
     let retry = signal(0_u32);
+    let lane_order = signal(Vec::<String>::new());
+    let last_read = stored(None::<(ArabicSource, u32)>);
     let top = signal(None::<(u16, u16)>);
     let jump = stored(anchor_verse);
     let built = stored(false);
@@ -140,11 +158,41 @@ pub fn page(link: ReaderLink) -> impl IntoElement {
     };
     let source_id = Rc::new(source_id);
 
-    // Read the scope; again on a script change or Retry.
+    // Read the scope; again on a script change, Retry, or a stack change
+    // (lanes only: the list stays up and its rows update in place).
+    let held_for_read = link.clone();
     effect(move || {
         let source: ArabicSource = prefs.script();
-        retry.get();
-        let translations = translations.clone();
+        let attempt = retry.get();
+        let translations = model::route_translations(&held_for_read, &stack.active_ids());
+        let lanes_only = built.get()
+            && last_read.replace(Some((source, attempt))) == Some((source, attempt))
+            && matches!(state.get_untracked(), Shape::Ready(..));
+        let order = translations.clone();
+        if lanes_only {
+            spawn(async move {
+                if let Ok(read) = quran.read_scope(scope, source, translations).await {
+                    let (lanes, failed_lanes) = lanes_of(
+                        read.translations
+                            .into_iter()
+                            .map(|l| (l.source_id, l.result.map(|(text, _)| text)))
+                            .collect(),
+                    );
+                    batch(|| {
+                        loaded.update(|l| {
+                            if let Some(l) = l {
+                                let mut next = (**l).clone();
+                                next.lanes = lanes;
+                                next.failed_lanes = failed_lanes;
+                                *l = Rc::new(next);
+                            }
+                        });
+                        lane_order.set(order);
+                    });
+                }
+            });
+            return;
+        }
         if built.get() {
             if let Some(v) = top.get_untracked() {
                 jump.replace(Some(v));
@@ -169,6 +217,7 @@ pub fn page(link: ReaderLink) -> impl IntoElement {
                         *g
                     });
                     batch(|| {
+                        lane_order.set(order);
                         loaded.set(Some(Rc::new(Loaded {
                             groups,
                             served,
@@ -341,7 +390,24 @@ pub fn page(link: ReaderLink) -> impl IntoElement {
                             let item = items.with(|v| v.get(at.index()).cloned());
                             // A face change can flip the weight: remake.
                             prefs.arabic_font();
-                            untracked(|| render_item(item, prefs))
+                            let failed = loaded.with(|l| {
+                                l.as_ref()
+                                    .map(|l| l.failed_lanes.clone())
+                                    .unwrap_or_default()
+                            });
+                            let order = lane_order.get();
+                            let route = route_ref.get();
+                            untracked(|| {
+                                render_item(
+                                    item,
+                                    prefs,
+                                    Row {
+                                        route,
+                                        failed,
+                                        order,
+                                    },
+                                )
+                            })
                         }))
                     },
                 )
@@ -375,7 +441,12 @@ pub fn page(link: ReaderLink) -> impl IntoElement {
             top,
             settings_open,
             change_mode,
-            None,
+            Some(translations::translation_button(
+                link,
+                top,
+                prefs,
+                replace_reader,
+            )),
         ))
         .child(dynamic(move || match notice.get() {
             Some(n) => status::banner(n).into_element(),
@@ -446,14 +517,25 @@ fn item_letters(item: &Item) -> Vec<(u16, u16, usize)> {
     }
 }
 
-fn render_item(item: Option<Item>, prefs: ReaderStore) -> AnyElement {
+/// What a verse row needs beyond its item: the route's translation (the
+/// tools' links and report), the lanes that failed, and the lane order.
+struct Row {
+    route: Option<eq_core::routes::TranslationRef>,
+    failed: Vec<String>,
+    order: Vec<String>,
+}
+
+fn render_item(item: Option<Item>, prefs: ReaderStore, row: Row) -> AnyElement {
     match item {
         None => view().into_element(),
         Some(Item::Header { surah, opener }) => {
             rows::surah_header(surah, opener.as_ref(), prefs).into_element()
         }
         Some(Item::Verse { verse, lanes }) => {
-            rows::verse_row(&verse, &lanes, prefs, None, Vec::new()).into_element()
+            let tools = verse_tools::verse_tools(&verse, row.route, prefs);
+            let mut extra = vec![lanes::stacked_lanes(&lanes, &row.failed, &row.order, prefs)];
+            extra.extend(words::verse_words(prefs.script()));
+            rows::verse_row(&verse, &[], prefs, Some(tools), extra).into_element()
         }
         Some(Item::Flow { verses, .. }) => rows::flow_row(&verses, prefs).into_element(),
     }

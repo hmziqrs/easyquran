@@ -69,6 +69,7 @@ pub fn shell() -> impl IntoElement {
         // App level, so a toast from any page or task reaches the host.
         .child(toast::toast_host())
         .child(crate::features::downloads::download_bar())
+        .child(crate::features::bookmarks::feedback_bar())
         .child(crate::features::settings::update_toast())
 }
 
