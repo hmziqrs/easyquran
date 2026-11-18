@@ -7,4 +7,5 @@ pub mod appearance;
 pub mod auth;
 pub mod locale;
 pub mod quran;
+pub mod reader;
 pub mod sync;
