@@ -994,6 +994,28 @@ impl IngressSettings {
     }
 }
 
+/// Default private-API handler budget. Cloudflare drops an origin that has not
+/// answered in 100 s (524) and the repo's Traefik labels set no response timeout,
+/// so 60 s answers first while still covering chained 15 s outbound calls (OAuth).
+pub const REQUEST_TIMEOUT_DEFAULT_SECS: u64 = 60;
+/// `REQUEST_TIMEOUT_SECS` is clamped here: below 5 s breaks Argon2 + outbound work,
+/// above 95 s the Cloudflare 100 s cap answers before the app does.
+const REQUEST_TIMEOUT_RANGE_SECS: (u64, u64) = (5, 95);
+
+static REQUEST_TIMEOUT: std::sync::OnceLock<std::time::Duration> = std::sync::OnceLock::new();
+
+/// Process-wide private-API request timeout, same shape as `admission()`: set by
+/// `Settings::from_env`; before that (tests) the env-derived default applies.
+pub fn request_timeout() -> std::time::Duration {
+    *REQUEST_TIMEOUT.get_or_init(request_timeout_from_env)
+}
+
+fn request_timeout_from_env() -> std::time::Duration {
+    let (min, max) = REQUEST_TIMEOUT_RANGE_SECS;
+    let secs = env_u64("REQUEST_TIMEOUT_SECS", REQUEST_TIMEOUT_DEFAULT_SECS).clamp(min, max);
+    std::time::Duration::from_secs(secs)
+}
+
 static INGRESS: std::sync::OnceLock<IngressSettings> = std::sync::OnceLock::new();
 
 /// Process-wide ingress settings, same shape as `web_auth()`: set once by
@@ -1144,6 +1166,7 @@ impl Settings {
         let _ = WEB_AUTH.set(web_auth);
         let _ = ADMISSION.set(AdmissionSettings::from_env());
         let _ = INGRESS.set(IngressSettings::from_env()?);
+        let _ = REQUEST_TIMEOUT.set(request_timeout_from_env());
         let _ = VERIFICATION_IDENTITY_KEY.set(verification_identity_key_from_env()?);
 
         Ok(Self {

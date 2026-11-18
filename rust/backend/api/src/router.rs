@@ -6,6 +6,7 @@ use axum::{
     Json, Router,
 };
 use tower_http::{
+    timeout::TimeoutLayer,
     trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
     LatencyUnit,
 };
@@ -173,10 +174,6 @@ pub fn router(state: AppState) -> Router<AppState> {
             mail_v1::routes().layer(rate_limit::rate_limit_layer(&state, 30, 60)),
         )
         .nest(
-            "/media/v1",
-            media_v1::routes().layer(rate_limit::rate_limit_layer(&state, 30, 60)),
-        )
-        .nest(
             "/feed/v1",
             feed_v1::routes().layer(rate_limit::rate_limit_layer(&state, 120, 60)),
         )
@@ -243,14 +240,6 @@ pub fn router(state: AppState) -> Router<AppState> {
         );
     }
 
-    #[cfg(feature = "seed-system")]
-    {
-        router = router.nest(
-            "/admin/seed/v1",
-            seed_v1::routes().layer(rate_limit::rate_limit_layer(&state, 20, 60)),
-        );
-    }
-
     router = router
         .nest(
             "/device/v1",
@@ -312,6 +301,38 @@ pub fn router(state: AppState) -> Router<AppState> {
 
         router = router.merge(
             SwaggerUi::new("/api/docs").url("/api/docs.json", crate::docs::ApiDoc::openapi()),
+        );
+    }
+
+    // `Router::layer` wraps only the routes present now, so every route above is
+    // bounded and the ones merged below are not. 504 (not 408): the client sent its
+    // request in time, and browsers may silently replay a 408. Inside
+    // with_observability, so metrics/trace see the 504 and every outer header layer
+    // in main.rs (private_no_store, security_headers) still stamps it.
+    router = router.layer(TimeoutLayer::with_status_code(
+        StatusCode::GATEWAY_TIMEOUT,
+        crate::config::settings::request_timeout(),
+    ));
+
+    // Unbounded: dropping these mid-flight would strand half-done storage work.
+    // media_v1 writes/deletes several R2 objects and runs the image optimizer, with
+    // cleanup only on the error path; erasure walks every subject media object; seed
+    // bulk-inserts by design.
+    router = router
+        .nest(
+            "/media/v1",
+            media_v1::routes().layer(rate_limit::rate_limit_layer(&state, 30, 60)),
+        )
+        .nest(
+            "/user/v1",
+            user_v1::erase_routes().layer(rate_limit::rate_limit_layer(&state, 60, 60)),
+        );
+
+    #[cfg(feature = "seed-system")]
+    {
+        router = router.nest(
+            "/admin/seed/v1",
+            seed_v1::routes().layer(rate_limit::rate_limit_layer(&state, 20, 60)),
         );
     }
 

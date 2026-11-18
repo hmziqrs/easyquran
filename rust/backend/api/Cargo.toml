@@ -57,7 +57,7 @@ serde_json = "1.0.130"
 tokio = { version = "1.45", features = ["full"] }
 serde = { version = "1.0.225", features = ["derive"] }
 # validator = { version = "0.16.1", features = ["derive"] }
-tower-http = { version = "0.6.2", features = ["trace", "compression-gzip", "cors", "limit", "fs"] }
+tower-http = { version = "0.6.2", features = ["trace", "compression-gzip", "cors", "limit", "fs", "timeout"] }
 tower-sessions = { version = "0.14", features = ["private"] }
 # MessagePack codec for the SqliteSessionStore's serialized session values.
 rmp-serde = "1.3"

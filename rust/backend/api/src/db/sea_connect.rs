@@ -46,7 +46,6 @@ fn connect_options(db_url: &str) -> ConnectOptions {
     opt
 }
 
-
 async fn configure_sqlite(conn: &DatabaseConnection) {
     for pragma in [
         "PRAGMA journal_mode=WAL",
