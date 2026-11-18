@@ -39,7 +39,8 @@ pub struct V1RegisterPayload {
     #[validate(length(min = 10, max = 10))]
     pub date_of_birth: String,
     /// Cloudflare Turnstile widget token; required only when the server has
-    /// `TURNSTILE_SECRET_KEY` configured (see services::turnstile).
+    /// `TURNSTILE_SECRET_KEY` configured (see services::turnstile). Native
+    /// clients never send it; the register handler skips the check for them.
     #[serde(default)]
     #[validate(length(max = 4096))]
     pub turnstile_token: Option<String>,

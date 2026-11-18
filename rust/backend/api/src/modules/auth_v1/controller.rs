@@ -2,7 +2,7 @@ use axum::{
     extract::{rejection::JsonRejection, FromRequest, Path, Request, State},
     http::{HeaderMap, HeaderName, HeaderValue, StatusCode},
     response::IntoResponse,
-    Json,
+    Extension, Json,
 };
 use axum_macros::debug_handler;
 
@@ -19,6 +19,7 @@ use crate::{
     db::sea_models::{email_verification, user, user_session},
     error::{ErrorCode, ErrorResponse},
     extractors::ValidatedJson,
+    middlewares::native_session::NativeClient,
     modules::auth_v1::validator::{
         V1LoginPayload, V1LoginTotpPayload, V1ReauthenticatePayload, V1RegisterPayload,
         V1TwoFADisablePayload, V1TwoFASetupPayload, V1TwoFAVerifyPayload,
@@ -541,19 +542,25 @@ pub async fn confirm_password_authentication(
 pub async fn register(
     State(state): State<AppState>,
     ClientIp(secure_ip): ClientIp,
+    native: Option<Extension<NativeClient>>,
     payload: ValidatedJson<V1RegisterPayload>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     let payload = payload.0;
 
     info!("User registration attempt");
 
-    // Turnstile gate (no-op unless TURNSTILE_SECRET_KEY is configured). Runs
-    // before user creation so bot traffic never reaches the DB or the mailer.
-    turnstile::verify_registration(
-        payload.turnstile_token.as_deref(),
-        Some(&secure_ip.to_string()),
-    )
-    .await?;
+    // Turnstile gate for browsers (no-op unless TURNSTILE_SECRET_KEY is
+    // configured). Runs before user creation so bot traffic never reaches the
+    // DB or the mailer. Native apps (x-eq-session, no Origin/Sec-Fetch) have no
+    // widget to solve, so they skip it; the per-IP route budget and the
+    // creation caps below still apply to them (devices.md D6).
+    if native.is_none() {
+        turnstile::verify_registration(
+            payload.turnstile_token.as_deref(),
+            Some(&secure_ip.to_string()),
+        )
+        .await?;
+    }
 
     let email = crate::utils::email::normalize_email(&payload.email);
 

@@ -6,7 +6,7 @@ use super::keys::{decode_exact, valid_hint, PublicJwk, RAW_SIGNATURE_BYTES};
 
 /// Closed enums. Clients send these exact strings; anything else is refused.
 pub const PLATFORMS: &[&str] = &["web", "ios", "android", "macos", "windows", "linux"];
-pub const CLIENTS: &[&str] = &["web", "react_native", "gpui"];
+pub const CLIENTS: &[&str] = &["web", "react_native", "gpui", "nsh"];
 /// Same values as `reading_sessions.device`.
 pub const FORM_FACTORS: &[&str] = &["phone", "tablet", "desktop"];
 pub const BROWSERS: &[&str] = &["chrome", "firefox", "safari", "edge", "other"];
@@ -167,6 +167,10 @@ pub fn check_registration_shape(p: &V1RegisterDevicePayload) -> Result<(), &'sta
         "web" => p.platform == "web",
         "react_native" => matches!(p.platform.as_str(), "ios" | "android"),
         "gpui" => matches!(p.platform.as_str(), "macos" | "windows" | "linux"),
+        "nsh" => matches!(
+            p.platform.as_str(),
+            "ios" | "android" | "macos" | "windows" | "linux"
+        ),
         _ => false,
     };
     if !platform_ok {
@@ -185,6 +189,10 @@ fn check_key_shape(p: &V1RegisterDevicePayload) -> Result<(), &'static str> {
         "web" => matches!(p.key_store.as_str(), "browser" | "none"),
         "react_native" => matches!(p.key_store.as_str(), "secure_hardware" | "none"),
         "gpui" => matches!(p.key_store.as_str(), "os_keystore" | "file" | "none"),
+        "nsh" => matches!(
+            p.key_store.as_str(),
+            "secure_hardware" | "os_keystore" | "file" | "none"
+        ),
         _ => false,
     };
     if !store_ok {
@@ -352,6 +360,22 @@ mod tests {
         assert!(check_registration_shape(&reg("react_native", "ios", Some("safari"))).is_err());
         assert!(check_registration_shape(&reg("gpui", "linux", None)).is_ok());
         assert!(check_registration_shape(&reg("gpui", "ios", None)).is_err());
+    }
+
+    #[test]
+    fn nsh_spans_mobile_and_desktop() {
+        for platform in ["ios", "android", "macos", "windows", "linux"] {
+            assert!(check_registration_shape(&reg("nsh", platform, None)).is_ok());
+        }
+        assert!(check_registration_shape(&reg("nsh", "web", None)).is_err());
+        assert!(check_registration_shape(&reg("nsh", "ios", Some("safari"))).is_err());
+        assert!(check_registration_shape(&keyed("nsh", "ios", "secure_hardware")).is_ok());
+        assert!(check_registration_shape(&keyed("nsh", "android", "secure_hardware")).is_ok());
+        assert!(check_registration_shape(&keyed("nsh", "macos", "os_keystore")).is_ok());
+        assert!(check_registration_shape(&keyed("nsh", "linux", "file")).is_ok());
+        assert!(check_registration_shape(&keyed("nsh", "ios", "browser")).is_err());
+        assert!(check_registration_shape(&keyed("nsh", "ios", "none")).is_err());
+        assert!(valid_client("nsh").is_ok());
     }
 
     #[test]

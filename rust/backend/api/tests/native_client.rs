@@ -764,3 +764,76 @@ async fn logout_ends_a_native_session_at_once() {
     .await;
     assert_eq!(after.status, StatusCode::UNAUTHORIZED);
 }
+
+/// Sign-up with Turnstile on: a native app has no widget, so it registers with
+/// no token; a browser with no token is still refused (devices.md D6). Only
+/// register reads Turnstile, so the env set here touches no other test.
+#[tokio::test]
+async fn native_sign_up_skips_turnstile_and_a_browser_does_not() {
+    let (state, app) = state_and_app().await;
+    std::env::set_var("TURNSTILE_SECRET_KEY", "test-turnstile-secret");
+    // Never reached: neither path below calls siteverify.
+    std::env::set_var("TURNSTILE_VERIFY_URL", "http://127.0.0.1:9/siteverify");
+    let sign_up = |email: &str| {
+        json!({
+            "name": "Signup",
+            "email": email,
+            "password": PASSWORD,
+            "date_of_birth": "1990-01-01",
+        })
+    };
+
+    let origin = state.allowed_origins.header_values()[0]
+        .to_str()
+        .unwrap()
+        .to_string();
+    let csrf = call(
+        &app,
+        Method::POST,
+        "/csrf/v1/generate",
+        None,
+        None,
+        &[("origin", &origin)],
+        None,
+    )
+    .await;
+    assert_eq!(csrf.status, StatusCode::OK, "{}", csrf.body);
+    let pair = header_str(&csrf, "set-cookie")
+        .split(';')
+        .next()
+        .unwrap()
+        .to_string();
+    let web_token = csrf.body["token"].as_str().unwrap().to_string();
+    let browser = call(
+        &app,
+        Method::POST,
+        "/auth/v1/register",
+        None,
+        Some(&pair),
+        &[("csrf-token", &web_token), ("origin", &origin)],
+        Some(sign_up("browser.signup@gmail.com")),
+    )
+    .await;
+    assert!(browser.status.is_client_error(), "{}", browser.status);
+    assert!(
+        browser
+            .body
+            .to_string()
+            .contains("Captcha verification required"),
+        "{}",
+        browser.body
+    );
+
+    let (token, native) = native_csrf(&app, "").await;
+    let reply = call(
+        &app,
+        Method::POST,
+        "/auth/v1/register",
+        Some(&native),
+        None,
+        &[("csrf-token", &token)],
+        Some(sign_up("native.signup@gmail.com")),
+    )
+    .await;
+    assert!(reply.status.is_success(), "{} {}", reply.status, reply.body);
+}

@@ -55,11 +55,13 @@ Vectors: `contracts/device-vectors.json`. Passed by `rust/backend/api/tests/devi
 
 ### Register
 
+`client` and `platform` pair up: `web` sends `web`; `react_native` sends `ios` or `android`; `gpui` sends `macos`, `windows` or `linux`; `nsh` (Native Shell) sends any of `ios`, `android`, `macos`, `windows` or `linux`. Only `web` sends `browser`.
+
 Fields added to `POST /device/v1/register`:
 
 | Field | Rule |
 | --- | --- |
-| `key_store` | Required. Web: `browser` or `none`. React Native: `secure_hardware` or `none`. GPUI: `os_keystore`, `file` or `none` |
+| `key_store` | Required. Web: `browser` or `none`. React Native: `secure_hardware` or `none`. GPUI: `os_keystore`, `file` or `none`. NSH: `secure_hardware` (iOS Keychain, Android Keystore), `os_keystore`, `file` (a 0600 file) or `none` |
 | `public_key` | Present exactly when `key_store` is not `none` |
 | `nonce`, `signature` | Both present with a key, both absent without one |
 | `continuity_hint` | Optional, only with a key |
@@ -114,12 +116,12 @@ Manual only (need a device): iOS and Android reinstall (server side: `rung_three
 
 ## Session transport (D6)
 
-Native clients (React Native, GPUI) have no cookie jar. They keep the session value in the D3 secure store and send it in `x-eq-session`. The server copies that value into the one `Cookie` it sees, so every session, CSRF, rotation and revocation rule is the same as on web.
+Native clients (React Native, GPUI, NSH) have no cookie jar. They keep the session value in the D3 secure store and send it in `x-eq-session`. The server copies that value into the one `Cookie` it sees, so every session, CSRF, rotation and revocation rule is the same as on web.
 
 ### Request and response
 
 - Base URL: the API root. In production the proxy serves the API under `/api` (prefix stripped), so the base URL ends in `/api`.
-- Request header `x-eq-session` is sent on every call. Empty means no session yet. Any `Cookie` header the client sends is replaced, never appended. Clients send `credentials: 'omit'` (React Native) or use no cookie store (GPUI).
+- Request header `x-eq-session` is sent on every call. Empty means no session yet. Any `Cookie` header the client sends is replaced, never appended. Clients send `credentials: 'omit'` (React Native) or use no cookie store (GPUI, NSH).
 - Response: the session value comes back in `x-eq-session` whenever the session cookie was set or rotated. Empty means the session was cleared. No response carries `Set-Cookie`. Keep the newest value after every response that has the header; keep the old one when the header is absent.
 - A value with characters outside base64, `+ / = - _ . %`, or longer than 4096 bytes is refused with 400.
 - A request with `x-eq-session` and either `Origin` or any `Sec-Fetch-*` header is refused with 403. The header is not in the CORS allow list and is not exposed to scripts.
@@ -138,9 +140,12 @@ Native clients (React Native, GPUI) have no cookie jar. They keep the session va
 
 ### Sign-in matrix
 
-| Method | iOS | Android | GPUI desktop | Check |
+NSH follows the iOS and Android columns on phones and the desktop column on macOS, Windows and Linux.
+
+| Method | iOS | Android | Desktop (GPUI, NSH) | Check |
 | --- | --- | --- | --- | --- |
 | Email and password | Native form on `/auth/v1/log_in` | Same | Same | Test: `native_client_full_flow_with_no_origin_and_no_cookie_jar` |
+| Email sign-up | Native form on `/auth/v1/register`, no `turnstile_token`. Native requests skip Turnstile; browsers still need it. The per-IP route budget and the creation caps (per IP and global, daily) still apply | Same | Same | Test: `native_sign_up_skips_turnstile_and_a_browser_does_not` |
 | Google | Provider SDK, then `POST /auth/google/v1/token` | Same | System browser with PKCE and a `127.0.0.1` loopback redirect, then `/token` | Test: `native_audience_tests` (audience list). Desktop: manual per O32 |
 | Other providers | Provider SDK, then `/auth/{provider}/v1/token` (Apple, Facebook, GitHub, Discord) | Same | Only after checking the provider's current desktop rules | Existing endpoints. Manual per O32 |
 | Sign in with Apple | Required next to other social sign-ins (O31) | Optional | Optional | Manual (O31) |
@@ -156,9 +161,9 @@ Env: `GOOGLE_MOBILE_CLIENT_IDS` and `GOOGLE_DESKTOP_CLIENT_IDS` are comma lists 
 | Android | FCM | Existing |
 | Web | FCM web push | Existing |
 | Windows, Linux | None. No FCM client | Local notifications only |
-| macOS (GPUI) | None at launch | Local notifications only |
+| macOS (GPUI, NSH) | None at launch | Local notifications only |
 
-A GPUI device registers without a push token. The register call accepts no `token` (covered by the device registry tests), so the client must not show push as available.
+A desktop device (GPUI, or NSH on macOS, Windows or Linux) registers without a push token. The register call accepts no `token` (covered by the device registry tests), so the client must not show push as available.
 
 ### Edge cases covered (D6)
 
@@ -168,9 +173,10 @@ A GPUI device registers without a push token. The register call accepts no `toke
 | Session rotation on a native client | `native_client_full_flow_with_no_origin_and_no_cookie_jar`: `x-eq-session` changes on sign-in, rotated header set, CSRF refetched, no `Set-Cookie` |
 | Browser tries to use `x-eq-session` | `a_browser_cannot_use_the_native_session_header` (Origin, Sec-Fetch-*), `cors_never_allows_the_native_session_header` |
 | Stale native cookie jar | `a_stale_cookie_never_overrides_the_native_session`. Native clients have no jar, so the server replaces any Cookie header with the header value |
-| Device with no push (GPUI) | `register_*` tests in `device_registry.rs` (register without a token). Client behaviour: manual |
+| Device with no push (GPUI, NSH desktop) | `register_*` tests in `device_registry.rs` (register without a token). Client behaviour: manual |
 | Many users behind one carrier IP | `ip_ceiling_is_at_least_ten_times_the_account_ceiling`. Device register and challenge are keyed on the account first (`authenticated_write_limits`) |
 | Sign-out, then old value | `logout_ends_a_native_session_at_once` |
+| One NSH client on phone and desktop | `nsh_spans_mobile_and_desktop`: every NSH platform accepted, `web` and a `browser` refused, store labels per the register table |
 | Device removed (revoke) | Full flow test: delete self, next call 401 |
 
 ### Conformance (every client)
@@ -187,8 +193,8 @@ A client is ready when it passes, from `contracts/`:
 1. iOS and Android: the app keeps `x-eq-session` in the Keychain or Keystore, and never writes it to logs or analytics.
 2. Native session across app kill and restart, on a device, after a real idle period.
 3. Lost rotation response on a device: the next call 401s and the client signs in again without losing dirty rows.
-4. React Native: no cookie store is used and `credentials` is `omit`.
-5. GPUI: no cookie store is used. Sign-in through the system browser with PKCE and a loopback redirect, for each provider whose desktop rules were checked.
+4. React Native: no cookie store is used and `credentials` is `omit`. NSH: no cookie store is used.
+5. GPUI and NSH desktop: no cookie store is used. Sign-in through the system browser with PKCE and a loopback redirect, for each provider whose desktop rules were checked.
 6. Passkey on iOS (Associated Domains) and on Android (Play App Signing hash).
 7. Sign in with Apple, next to the other social sign-in options (O31).
 8. APNs delivery of the alert block with the production APNs key (O34).
