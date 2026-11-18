@@ -222,7 +222,12 @@
 >
 <NotificationToast />
 <UpdateToast />
-<Toaster position="bottom-center" />
+<!-- Toasts stack above the audio dock and the download progress popup (both publish their height). -->
+<Toaster
+  position="bottom-center"
+  offset={{ bottom: "calc(24px + var(--eq-dock-h, 0px) + var(--eq-status-h, 0px))" }}
+  mobileOffset={{ bottom: "calc(16px + var(--eq-dock-h, 0px) + var(--eq-status-h, 0px))" }}
+/>
 <DownloadBar />
 <GlobalSearch />
 <AuthModalShell />

@@ -10,6 +10,8 @@ class QuranStore {
   detail = $state<string>("");
   error = $state<string | null>(null);
   download = $state<DownloadProgress | null>(null);
+  /** Bumps when a download starts after none was in flight: one id per download run (progress-popup dismissal keys on it). */
+  downloadRun = $state(0);
 
   setWorkerStatus(s: WorkerStatus, detail?: string): void {
     if (s === "ready") {
@@ -30,6 +32,7 @@ class QuranStore {
   }
 
   setDownload(p: DownloadProgress): void {
+    if (this.download === null) this.downloadRun += 1;
     this.download = p;
   }
 

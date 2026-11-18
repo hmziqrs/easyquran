@@ -15,7 +15,7 @@ const RANGE_SEGMENT = "(?:page|juz|hizb)";
 const SNIPPET_SEGMENT = SURAH_SEGMENT;
 // Scheme A: reader routes live at the site root (no `/app` marker). The
 // bounded app pages join the same mechanism (Q1 default): /ar/search,
-// /ar/settings, /ar/bookmarks and /ar/yours reroute onto their unprefixed
+// /ar/settings, /ar/downloads, /ar/bookmarks and /ar/yours reroute onto their unprefixed
 // twins. Numeric paths are NOT here — digits are owned by the hooks.server
 // numeric-alias 308, never a reroute.
 const READER_ROUTE_PATTERNS = [
@@ -39,7 +39,7 @@ const READER_ROUTE_PATTERNS = [
     `^/t/${CONTENT_LANGUAGE_SEGMENT}/${TRANSLATOR_SEGMENT}/${RANGE_SEGMENT}/${NUMBER}\\.md$`,
     "u",
   ),
-  new RegExp("^/(?:search|settings|bookmarks|yours)$", "u"),
+  new RegExp("^/(?:search|settings|downloads|bookmarks|yours)$", "u"),
   // The per-card detail joins the bounded app pages (3 segments under the
   // personal hub); the id segment is a device-local uuid, never a numeric alias.
   new RegExp("^/yours/cards/[^/]+$", "u"),

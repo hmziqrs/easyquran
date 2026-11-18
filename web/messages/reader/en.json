@@ -602,5 +602,12 @@
   "reader_word_failed": "Word meanings couldn't be loaded right now.",
   "reader_word_missing": "No entry for this word in {source}.",
   "reader_word_attribution": "Source: {attribution}",
-  "reader_word_licence": "Licence: {licence}"
+  "reader_word_licence": "Licence: {licence}",
+  "reader_download_hide": "Hide download progress",
+  "reader_download_details": "View details",
+  "reader_download_script_uthmani": "Uthmani",
+  "reader_download_script_simple_clean": "Simple-clean",
+  "reader_download_script_indopak": "IndoPak",
+  "reader_download_script_tajweed": "Tajweed",
+  "reader_download_script_translation": "Translation"
 }

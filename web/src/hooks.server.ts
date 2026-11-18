@@ -482,6 +482,7 @@ const EN_ONLY_MARKETING_AR_PATHS: ReadonlySet<string> = new Set(
 const PRODUCT_ROUTE_IDS: ReadonlySet<string> = new Set([
   "/(application)/search",
   "/(application)/settings",
+  "/(application)/downloads",
   "/(application)/bookmarks",
   "/(application)/yours",
   // Personal per-card detail — the /ar gate would 404 the 3-segment route

@@ -29,7 +29,7 @@ export type LocaleSuggestDismissReason = "escape" | "overlay" | "button" | "clos
 type ResolvedMap = Partial<Record<UiLocale, LocaleSuggestResolution>>;
 
 // Bounded app-chrome pages with `/ar` twins via the hooks.ts reroute (scheme A).
-const APP_CHROME_SEGMENTS = new Set(["search", "settings", "bookmarks", "yours"]);
+const APP_CHROME_SEGMENTS = new Set(["search", "settings", "downloads", "bookmarks", "yours"]);
 
 // Plan §3 row 5, scheme A: only the marketing home and the reader/app surfaces have
 // localized twins. Marketing subpages, auth, account, and content exports have no

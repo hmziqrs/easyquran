@@ -144,6 +144,11 @@
       "prefixes": ["settings"]
     },
     {
+      "id": "downloads",
+      "description": "Downloads page (/downloads): Quran database, offline pack and app-shell progress. Lazy: downloaded whole when the downloads route loads.",
+      "prefixes": ["downloads"]
+    },
+    {
       "id": "auth",
       "description": "Auth modal + /login /register routes. Lazy: ships only inside the lazy auth chunk + auth routes.",
       "prefixes": ["auth"]

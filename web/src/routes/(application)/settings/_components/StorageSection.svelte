@@ -16,6 +16,7 @@
   import { stackedTranslations } from "#lib/stores/stacked-translations.svelte.js";
   import { formatBytes } from "#lib/utils.js";
   import { cn } from "#lib/utils.js";
+  import { publicHref } from "#lib/i18n/public-href.js";
   import type { SettingsCopy } from "#lib/i18n/settings-copy.js";
   import type { UiLocale } from "#lib/i18n/locales.js";
   import UsageBar from "./UsageBar.svelte";
@@ -35,6 +36,7 @@
   const locale = getLocale() as UiLocale;
 
   const report = storageReport;
+  const downloadsHref = publicHref("/downloads");
 
   const phase = $derived(report.phase);
   const artifacts = $derived(report.artifacts);
@@ -208,6 +210,11 @@
 <div id={id} tabindex="-1" class="scroll-mt-24">
   <h2 class="text-[17px] font-medium tracking-[-0.02em] text-foreground">{heading}</h2>
   <p class="mt-1 max-w-[70ch] text-[14.5px] leading-relaxed text-foreground-secondary">{copy.intro}</p>
+  <a
+    href={downloadsHref}
+    class="mt-2 inline-flex rounded-sm text-caption font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+    >{copy.downloadsLink}</a
+  >
 
   {#if phase === "boot"}
     <p class="mt-4 text-caption text-muted" role="status">{copy.loading}</p>

@@ -38,6 +38,7 @@
   const SETTINGS_PATH = "/settings";
   const isNonReaderAppRoute = $derived(
     (page.route.id ?? "").endsWith("/settings") ||
+      (page.route.id ?? "").endsWith("/downloads") ||
       (page.route.id ?? "").endsWith("/search") ||
       (page.route.id ?? "").endsWith("/bookmarks") ||
       (page.route.id ?? "").endsWith("/yours") ||
@@ -73,7 +74,7 @@
     if (pathname === "/bookmarks" || pathname === "/yours") {
       return locale === "en" ? "/surah" : "/ar/surah";
     }
-    if (pathname === "/search" || pathname === "/settings") {
+    if (pathname === "/search" || pathname === "/settings" || pathname === "/downloads") {
       return locale === "en" ? pathname : `/ar${pathname}`;
     }
     if (pathname.startsWith("/azkar")) {

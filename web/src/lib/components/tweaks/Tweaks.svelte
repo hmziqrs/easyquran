@@ -5,7 +5,7 @@
   import { APPEARANCE_MODES, PALETTES, type PaletteId } from "#lib/config/site.js";
   import type { CustomSeeds } from "#lib/theme/derive.js";
   import { Notifications } from "#lib/components/notifications/index.js";
-  import { OfflinePack, OfflinePackBar } from "#lib/components/status/index.js";
+  import { OfflinePack } from "#lib/components/status/index.js";
   import { offline } from "#lib/offline/offline-store.svelte.js";
   import { cn } from "#lib/utils.js";
   import { uiDirection, type UiLocale } from "#lib/i18n/locales.js";
@@ -342,10 +342,6 @@
       </div>
       </div>
     </div>
-  {/if}
-
-  {#if showReaderTools && copy?.offlinePack}
-    <OfflinePackBar copy={copy.offlinePack} />
   {/if}
 
   <button

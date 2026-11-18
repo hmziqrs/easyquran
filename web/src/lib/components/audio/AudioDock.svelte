@@ -85,6 +85,15 @@
     audio.hydrate();
   });
 
+  // Published height so bottom-anchored overlays (download progress popup, toaster) stack above the dock.
+  let dockHeight = $state(0);
+  const docked = $derived(Boolean(queue && recording && item));
+  $effect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--eq-dock-h", `${docked ? dockHeight : 0}px`);
+    return () => root.style.removeProperty("--eq-dock-h");
+  });
+
   $effect(() => {
     let disposed = false;
     const handles: { unregister(): void }[] = [];
@@ -120,7 +129,7 @@
 </script>
 
 {#if queue && recording && item}
-  <section class="audio-dock" aria-label={copy.dockLabel} dir={copy.direction}>
+  <section class="audio-dock" aria-label={copy.dockLabel} dir={copy.direction} bind:offsetHeight={dockHeight}>
     <div class="audio-dock__bar">
       <Button
         variant="ghost"

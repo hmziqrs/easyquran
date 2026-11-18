@@ -2,7 +2,7 @@
 //
 // Reader shell, sidebar, search, sources, verse tools, offline and update notices, reader SEO.
 //
-// 545 messages. Import this barrel, never
+// 552 messages. Import this barrel, never
 // #lib/paraglide/messages.js — see documentation/quran-system.md (Part 2, Message chunking).
 
 export { reader_account } from "#lib/paraglide/messages/reader_account.js";
@@ -194,6 +194,13 @@ export { reader_dir_rtl } from "#lib/paraglide/messages/reader_dir_rtl.js";
 export { reader_disable } from "#lib/paraglide/messages/reader_disable.js";
 export { reader_dismiss_notification } from "#lib/paraglide/messages/reader_dismiss_notification.js";
 export { reader_dismiss_update } from "#lib/paraglide/messages/reader_dismiss_update.js";
+export { reader_download_details } from "#lib/paraglide/messages/reader_download_details.js";
+export { reader_download_hide } from "#lib/paraglide/messages/reader_download_hide.js";
+export { reader_download_script_indopak } from "#lib/paraglide/messages/reader_download_script_indopak.js";
+export { reader_download_script_simple_clean } from "#lib/paraglide/messages/reader_download_script_simple_clean.js";
+export { reader_download_script_tajweed } from "#lib/paraglide/messages/reader_download_script_tajweed.js";
+export { reader_download_script_translation } from "#lib/paraglide/messages/reader_download_script_translation.js";
+export { reader_download_script_uthmani } from "#lib/paraglide/messages/reader_download_script_uthmani.js";
 export { reader_downloading_offline_pack } from "#lib/paraglide/messages/reader_downloading_offline_pack.js";
 export { reader_downloading_quran } from "#lib/paraglide/messages/reader_downloading_quran.js";
 export { reader_enable } from "#lib/paraglide/messages/reader_enable.js";

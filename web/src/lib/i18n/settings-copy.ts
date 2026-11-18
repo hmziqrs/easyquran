@@ -112,6 +112,7 @@ import {
   settings_storage_clear_pages_done,
   settings_storage_clear_pages_unavailable,
   settings_storage_downloads_heading,
+  settings_storage_downloads_link,
   settings_storage_empty,
   settings_storage_error,
   settings_storage_estimate_note,
@@ -251,6 +252,8 @@ export interface SettingsCopy {
     readonly capNote: string;
     readonly retentionNote: string;
     readonly downloadsHeading: string;
+    /** Link to the /downloads progress screen. */
+    readonly downloadsLink: string;
     readonly lastUsed: (when: string) => string;
     readonly neverUsed: string;
     readonly inUse: string;
@@ -462,6 +465,7 @@ export function getSettingsCopy(locale: UiLocale = getLocale() as UiLocale): Set
       capNote: noArgs(settings_storage_cap_note),
       retentionNote: noArgs(settings_storage_retention_note),
       downloadsHeading: noArgs(settings_storage_downloads_heading),
+      downloadsLink: noArgs(settings_storage_downloads_link),
       lastUsed: (when) => settings_storage_last_used({ when }, options),
       neverUsed: noArgs(settings_storage_never_used),
       inUse: noArgs(settings_storage_in_use),

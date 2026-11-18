@@ -602,5 +602,12 @@
   "reader_word_failed": "تعذّر تحميل معاني الكلمات الآن.",
   "reader_word_missing": "لا يوجد إدخال لهذه الكلمة في {source}.",
   "reader_word_attribution": "المصدر: {attribution}",
-  "reader_word_licence": "الترخيص: {licence}"
+  "reader_word_licence": "الترخيص: {licence}",
+  "reader_download_hide": "إخفاء تقدّم التنزيل",
+  "reader_download_details": "عرض التفاصيل",
+  "reader_download_script_uthmani": "عثماني",
+  "reader_download_script_simple_clean": "مبسّط",
+  "reader_download_script_indopak": "إندوباكي",
+  "reader_download_script_tajweed": "تجويد",
+  "reader_download_script_translation": "ترجمة"
 }

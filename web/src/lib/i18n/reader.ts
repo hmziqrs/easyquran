@@ -37,6 +37,7 @@ const RESERVED_SURAH_SEGMENTS = new Set([
   // bounded product pages
   "search",
   "settings",
+  "downloads",
   "bookmarks",
   // static top-level routes (marketing, auth, account, ops) — they outrank the
   // dynamic [surah] route, and a canonical reader builder must never emit them

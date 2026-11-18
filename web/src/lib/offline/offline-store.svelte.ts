@@ -79,6 +79,7 @@ class OfflineStore {
   #quota = $state<number | null>(null);
   #activePack = $state.raw<PackMirror | null>(null);
   #busy = $state(false);
+  #run = $state(0);
   #hydrated = false;
   #reconcilePending = false;
   #generation = 0;
@@ -100,6 +101,10 @@ class OfflineStore {
   }
   get busy(): boolean {
     return this.#busy;
+  }
+  /** One id per pack download run (progress-popup dismissal keys on it). */
+  get run(): number {
+    return this.#run;
   }
   get pct(): number {
     return Math.round(this.#progress * 100);
@@ -225,6 +230,7 @@ class OfflineStore {
         return;
       }
 
+      this.#run += 1;
       this.#status = "downloading";
       this.#progress = 0;
       // Hashed name: the default cache mode is safe and avoids re-downloading bytes.
