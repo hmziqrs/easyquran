@@ -11,6 +11,7 @@ pub mod insights;
 pub mod locale;
 pub mod notes;
 pub mod pins;
+pub mod push;
 pub mod quran;
 pub mod reader;
 pub mod search;

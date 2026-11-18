@@ -357,8 +357,8 @@ fn credentials_view(
         .into_element()
 }
 
-/// `OAuthButtons.svelte`: the providers this platform can do (none on
-/// phones, Google on a desktop build with a client id); no passkey button.
+/// `OAuthButtons.svelte`: the providers this build has client ids for
+/// (`oauth::providers`); no passkey button.
 fn social_section() -> AnyElement {
     let providers = oauth::providers();
     if providers.is_empty() {

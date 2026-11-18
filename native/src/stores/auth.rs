@@ -62,6 +62,9 @@ pub struct AuthStore {
     deleted: Signal<Option<i32>>,
     machine: Stored<Option<Rc<AuthMachine>>>,
     registering: Stored<bool>,
+    /// A registration was asked for while one ran (a push token arrived):
+    /// run once more when it ends.
+    register_again: Stored<bool>,
     kv: Stored<Rc<dyn KeyValue>>,
     device: Stored<DeviceEnv>,
 }
@@ -89,6 +92,7 @@ impl AuthStore {
             deleted: signal(None),
             machine: stored(None),
             registering: stored(false),
+            register_again: stored(false),
             kv: stored(kv),
             device: stored(device),
         };
@@ -115,6 +119,7 @@ impl AuthStore {
         machine.on_transition(move |t: Transition| {
             if t.kind.is_sign_in() {
                 self.register_device(None);
+                crate::stores::push::on_signed_in();
             }
         });
         self.machine.with(|m| *m = Some(machine.clone()));
@@ -122,6 +127,7 @@ impl AuthStore {
         let _ = self.ready.try_set(true);
         if machine.user().is_some() {
             self.register_device(None);
+            crate::stores::push::on_signed_in();
         }
     }
 
@@ -182,9 +188,14 @@ impl AuthStore {
         }
     }
 
-    /// Signs out; `push_token` is deleted on the server first.
+    /// Signs out; `push_token` (default: this install's FCM token) is
+    /// deleted on the server first (devices.md "Sign-out on a shared
+    /// phone").
     pub async fn sign_out(self, push_token: Option<String>) -> Result<(), ApiError> {
-        self.require()?.log_out(push_token.as_deref()).await
+        let push_token = push_token.or_else(crate::stores::push::current_token);
+        let result = self.require()?.log_out(push_token.as_deref()).await;
+        crate::stores::push::forget();
+        result
     }
 
     /// Re-reads the account (after email verification, profile edits).
@@ -223,11 +234,14 @@ impl AuthStore {
     }
 
     /// Registers this device when due (sign-in, push token change). One at a
-    /// time; failures never block reading or sync.
+    /// time (a call during a run runs once more after it); failures never
+    /// block reading or sync. `None` sends this install's FCM token, if any.
     pub fn register_device(self, push_token: Option<String>) {
         if self.registering.get() {
+            self.register_again.with(|a| *a = true);
             return;
         }
+        let push_token = push_token.or_else(crate::stores::push::current_token);
         let Some(machine) = self.machine() else {
             return;
         };
@@ -254,6 +268,10 @@ impl AuthStore {
                 }
             }
             self.registering.with(|r| *r = false);
+            if self.register_again.get() {
+                self.register_again.with(|a| *a = false);
+                self.register_device(None);
+            }
         });
     }
 }

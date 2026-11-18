@@ -47,6 +47,18 @@ pub fn toggle_appearance() {
 /// and the launch deep link. Once, from the root's body.
 pub fn install() {
     crate::stores::appearance::AppearanceStore::install();
+    crate::services::monitoring::install();
+    // Screen views (consent-gated inside `analytics`): the web path of the
+    // page on top; native-only pages report their route family key.
+    effect(move || {
+        let route = nav::current();
+        untracked(|| {
+            let path = routes::link_for_route(&route)
+                .and_then(|link| eq_core::routes::link_path(&link))
+                .unwrap_or_else(|| format!("/{}", route.key_str()));
+            crate::services::analytics::screen_view(&path);
+        });
+    });
     // Web hotkeys (`registerHotkey` consumers): `/` opens the palette, `` ` ``
     // resumes the last read, `mod+,` opens settings. Bare keys skip text
     // inputs (the keymap's default `When::Auto`).

@@ -22,6 +22,14 @@ log = "0.4"
 env_logger = "0.11"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Social sign-in (PARITY I4): provider authorize URLs, PKCE, code exchange.
+nsh-auth = { git = "https://github.com/SuperNSH/auth.git", rev = "0c110208404512727e7e0bf9406fd319f754ff09" }
+url = "2"
+futures-channel = "0.3"
+# Push, analytics, crash reporting (PARITY M2, N2, N3).
+nsh-firebase-core = { git = "https://github.com/SuperNSH/firebase.git", rev = "9bc030c02b871e2b219375f0c1612badc0d6f899" }
+nsh-firebase-analytics = { git = "https://github.com/SuperNSH/firebase.git", rev = "9bc030c02b871e2b219375f0c1612badc0d6f899" }
+nsh-firebase-messaging = { git = "https://github.com/SuperNSH/firebase.git", rev = "9bc030c02b871e2b219375f0c1612badc0d6f899" }
 
 # Desktop Google sign-in (PKCE, loopback redirect): already in the graph via eq-core.
 [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]

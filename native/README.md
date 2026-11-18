@@ -21,6 +21,31 @@ nsh run --target android        # first adb device
 
 Quran databases are provisioned into `assets/quran/` out of band and are never committed.
 
+## Provisioning: sign-in, push, analytics
+
+Nothing below is committed. Every value is read at build time (`option_env!`); a missing value hides the feature, and the app builds and runs without any of them.
+
+### Social sign-in (`nsh-auth`)
+
+The provider token goes to the API's `POST /auth/{provider}/v1/token`. Each client id must also be an audience or app the API accepts (its env names in brackets).
+
+| Env (build time) | Platform | Provider console | Redirect to register |
+| --- | --- | --- | --- |
+| `EQ_GOOGLE_DESKTOP_CLIENT_ID` (+ `EQ_GOOGLE_DESKTOP_CLIENT_SECRET`, Google's non-secret installed-app secret) | macOS, Linux, Windows | Google Cloud, OAuth client type "Desktop app" [`GOOGLE_DESKTOP_CLIENT_IDS`] | none: `http://127.0.0.1:<port>` loopback, any port |
+| `EQ_GOOGLE_IOS_CLIENT_ID` | iOS | OAuth client type "iOS", bundle id `fyi.easyquran.app` [`GOOGLE_MOBILE_CLIENT_IDS`] | none: Google's reversed client id scheme `com.googleusercontent.apps.<prefix>:/oauth2redirect` |
+| `EQ_GOOGLE_ANDROID_CLIENT_ID` | Android | OAuth client type "Android", package `fyi.easyquran.app` + signing SHA-1, "Custom URI scheme" enabled under Advanced settings [`GOOGLE_MOBILE_CLIENT_IDS`] | none: `fyi.easyquran.app:/oauth2redirect` |
+| `EQ_DISCORD_CLIENT_ID` | iOS, Android | the API's own Discord application [`DISCORD_CLIENT_ID`], with "Public Client" on so the PKCE exchange needs no secret | `fyi.easyquran.app:/oauth/discord` |
+
+Not offered yet: Apple (iOS needs a native AuthenticationServices bridge; elsewhere Apple posts the code to an HTTPS URL), Facebook (HTTPS redirects only), GitHub (the code exchange needs the client secret), passkeys (no library). iOS offers no social sign-in until Apple is available (App Store rule, `contracts/devices.md` O31). The callback scheme `fyi.easyquran.app` is claimed in `nsh.json` `schemes`.
+
+### Firebase: push, analytics, crash reporting (`nsh-firebase`)
+
+- **Analytics and crash reports** use the GA4 Measurement Protocol (pure tier). Build with `EQ_GA_MEASUREMENT_ID` (the web stream's `G-…` id), `EQ_GA_API_SECRET` (GA4 Admin → Data streams → Measurement Protocol API secrets) and optionally `EQ_FIREBASE_PROJECT_ID`. Nothing is sent until the user turns analytics on in Settings; crash reports are the `exception` event, under the same consent.
+- **Push (FCM)** needs the library's native tier: the `firebase.*` handlers of `native/ios/NshFirebase` and `native/android` in the nsh-firebase repository, registered by an embedding host. An `nsh build` app has no host channel for them yet, so push is off and devices register without a token. When a host exists, its config files are provisioned out of band, never committed (both are gitignored):
+  - iOS: `GoogleService-Info.plist` added to the app bundle as a resource (`Bundle.main` → `FirebaseApp.configure(options:)`), the APNs key uploaded to the Firebase project, the Push Notifications capability on, `FirebaseAppDelegateProxyEnabled = false` in Info.plist.
+  - Android: `google-services.json` copied to the app's `assets/` (read at start by `NshFirebase.init`; no Gradle plugin), `POST_NOTIFICATIONS` in the manifest.
+- Desktop has no push (devices.md push matrix): reminders use local notifications.
+
 ## Gates
 
 ```sh
