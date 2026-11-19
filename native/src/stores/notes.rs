@@ -165,7 +165,7 @@ impl NotesBook {
                 })
             })
             .collect();
-        out.sort_by(|a, b| (a.surah, a.ayah).cmp(&(b.surah, b.ayah)));
+        out.sort_by_key(|a| (a.surah, a.ayah));
         out
     }
 

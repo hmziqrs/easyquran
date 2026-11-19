@@ -49,7 +49,7 @@ pub(crate) fn daily() -> Signal<Daily> {
     let out = signal(Daily::Loading);
     let store = quran_store();
     let date = utc_date_key(now_ms());
-    let _ = spawn(async move {
+    spawn(async move {
         let Some((global, surah, ayah)) = daily_verse(&date) else {
             let _ = out.try_set(Daily::Unavailable);
             return;

@@ -360,9 +360,9 @@ pub(crate) fn merge_bookmark_row(a: &Bookmark, b: &Bookmark) -> Bookmark {
     let merged = merge_bookmark(&ra, &rb);
     let winner = if merged == ra { a } else { b };
     let dirty = merged_dirty(
-        (a.dirty, &[a.stamp.clone()]),
-        (b.dirty, &[b.stamp.clone()]),
-        &[winner.stamp.clone()],
+        (a.dirty, std::slice::from_ref(&a.stamp)),
+        (b.dirty, std::slice::from_ref(&b.stamp)),
+        std::slice::from_ref(&winner.stamp),
     );
     Bookmark {
         dirty,
@@ -585,6 +585,8 @@ pub fn capped_count(store: &AppStore) -> usize {
 
 /// What a verse toggle did: the UI shows "Saved to …" or an Undo for the removal.
 #[derive(Debug, Clone, PartialEq)]
+// One per tap and consumed at once: boxing `Added` buys nothing.
+#[allow(clippy::large_enum_variant)]
 pub enum ToggleResult {
     Added {
         folder: BookmarkFolder,
@@ -1372,21 +1374,22 @@ pub(crate) fn apply_round(
         folders.values_mut().for_each(|f| f.dirty = true);
         marks.values_mut().for_each(|b| b.dirty = true);
     }
-    if !verdict.reset() && !meta.more {
-        if let Some(seen) = seen.take() {
-            // Past the floor the server no longer holds tombstones for what is gone.
-            for f in folders
-                .values_mut()
-                .filter(|f| !f.dirty && !seen.contains(&f.id))
-            {
-                f.deleted = true;
-            }
-            for b in marks
-                .values_mut()
-                .filter(|b| !b.dirty && !seen.contains(&b.id))
-            {
-                b.deleted = true;
-            }
+    if !verdict.reset()
+        && !meta.more
+        && let Some(seen) = seen.take()
+    {
+        // Past the floor the server no longer holds tombstones for what is gone.
+        for f in folders
+            .values_mut()
+            .filter(|f| !f.dirty && !seen.contains(&f.id))
+        {
+            f.deleted = true;
+        }
+        for b in marks
+            .values_mut()
+            .filter(|b| !b.dirty && !seen.contains(&b.id))
+        {
+            b.deleted = true;
         }
     }
     if let Some(seen) = seen {

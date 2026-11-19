@@ -57,7 +57,7 @@ fn filter_notes(entries: Vec<NoteEntry>, query: &str) -> Vec<NoteEntry> {
 /// `sortNotes`: mushaf order, or by last edit (undated count as oldest;
 /// the sort is stable, so ties keep mushaf order).
 fn sort_notes(mut entries: Vec<NoteEntry>, sort: NoteSort) -> Vec<NoteEntry> {
-    entries.sort_by(|a, b| (a.surah, a.ayah).cmp(&(b.surah, b.ayah)));
+    entries.sort_by_key(|a| (a.surah, a.ayah));
     match sort {
         NoteSort::Verse => {}
         NoteSort::Newest => entries.sort_by_key(|e| std::cmp::Reverse(e.updated_at.unwrap_or(0))),

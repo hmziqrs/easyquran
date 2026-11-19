@@ -185,7 +185,7 @@ pub fn undo_state() -> Signal<CardUndo> {
 
 fn schedule_expiry(generation: u64) {
     let state = undo_state();
-    let _ = set_timeout(UNDO_WINDOW, move || {
+    set_timeout(UNDO_WINDOW, move || {
         if state.with_untracked(|u| u.generation) == generation {
             state.set(CardUndo::default());
         }

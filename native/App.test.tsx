@@ -6,8 +6,8 @@ import { expect, open, test } from "nsh/test";
 test("the root mounts", async () => {
   const app = await open(".", { clock: {} });
   await app.waitFor("text:Home");
-  // Home is a stub until its area lands.
-  expect(app.texts()).toContain("Not built yet");
+  // Home's own cards, not a stub.
+  expect(app.texts()).toContain("Continue reading");
 });
 
 test("back on Home asks to exit", async () => {

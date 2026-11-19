@@ -284,9 +284,10 @@ pub enum ApiError {
     /// No response (offline, refused by the platform).
     #[error("network: {0}")]
     Net(#[from] NetError),
-    /// A non-2xx reply.
+    /// A non-2xx reply. Boxed: the decoded reply is large and every API
+    /// call returns this error (`clippy::result_large_err`).
     #[error("http {}: {}", .0.status, .0.code.as_deref().unwrap_or("-"))]
-    Http(HttpError),
+    Http(Box<HttpError>),
     /// A 2xx reply whose body is not the expected shape.
     #[error("unexpected response: {0}")]
     Decode(String),

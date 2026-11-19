@@ -410,7 +410,7 @@ pub(crate) fn reading_goals() -> impl IntoElement {
             let now = today();
             day.set(now.clone());
             let from = goals::add_days(&now, -(HISTORY_DAYS - 1));
-            let _ = spawn(async move {
+            spawn(async move {
                 let next = match insights::fetch_days(from, now).await {
                     Some(d) => Days::Loaded(d),
                     None => Days::Failed,

@@ -195,9 +195,11 @@ fn translation_rows(texts: &[(u16, u16, &str)]) -> RangeText {
 #[test]
 fn translation_ranking_and_highlights_point_into_verbatim_text() {
     let rows = translation_rows(&[
-        (1, 1, "In the name of God, the Merciful"),
+        // Substring match (web): "merciful" does not contain "mercy".
+        (1, 1, "In the name of God, the Lord of Mercy"),
         (1, 2, "Mercy, Mercy and mercy"),
-        (1, 3, "unmerciful things"),
+        (1, 3, "the merciless show no mercy"),
+        (1, 4, "the Merciful"),
     ]);
     let corpus = TranslationCorpus::build("en.test", &rows).unwrap();
     let page = corpus.search("MERCY", 20, 0);

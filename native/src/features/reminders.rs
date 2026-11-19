@@ -62,7 +62,7 @@ fn fire_at_next(generation: u64) {
     }
     let minutes = minutes_until_reminder(i64::from(s.reminder_minute), now_minute());
     let delay = std::time::Duration::from_secs(u64::try_from(minutes * 60).unwrap_or(60));
-    let _ = set_timeout(delay, move || {
+    set_timeout(delay, move || {
         if global::<Armed>().with_untracked(|a| a.generation) != generation {
             return;
         }
@@ -77,7 +77,7 @@ fn fire_at_next(generation: u64) {
                 tr(keys::SETTINGS_PRIVACY_REMINDERS),
                 tr(keys::SETTINGS_PRIVACY_REMINDERS_INTRO),
             );
-            let _ = spawn(async move {
+            spawn(async move {
                 let _ = show_notification(note).await;
             });
         }
@@ -107,7 +107,7 @@ pub fn start() {
                 arm(None);
                 return;
             };
-            let _ = spawn(async move {
+            spawn(async move {
                 if let Ok(found) = client.reminder_get(REMINDER_KIND).await {
                     arm(found);
                 }
@@ -223,7 +223,7 @@ pub fn goal_reminders() -> AnyElement {
                 return;
             }
             requested.set(true);
-            let _ = spawn(async move {
+            spawn(async move {
                 match client.reminder_get(REMINDER_KIND).await {
                     Ok(Some(s)) => apply(s),
                     Ok(None) => {}
@@ -266,7 +266,7 @@ pub fn goal_reminders() -> AnyElement {
             updated_at: None,
         };
         busy.set(true);
-        let _ = spawn(async move {
+        spawn(async move {
             match client.reminder_set(&schedule).await {
                 Ok(stored) => apply(stored),
                 Err(_) => problem.set(Some(keys::SETTINGS_PRIVACY_REMINDERS_ERROR)),
@@ -286,7 +286,7 @@ pub fn goal_reminders() -> AnyElement {
             return;
         }
         busy.set(true);
-        let _ = spawn(async move {
+        spawn(async move {
             let permission = request_notification_permission().await;
             busy.set(false);
             if permission != NotificationPermission::Granted {

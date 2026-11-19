@@ -193,10 +193,10 @@ pub fn page(link: ReaderLink) -> impl IntoElement {
             });
             return;
         }
-        if built.get() {
-            if let Some(v) = top.get_untracked() {
-                jump.replace(Some(v));
-            }
+        if built.get()
+            && let Some(v) = top.get_untracked()
+        {
+            jump.replace(Some(v));
         }
         state.set(Shape::Loading);
         spawn(async move {

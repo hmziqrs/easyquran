@@ -17,6 +17,14 @@ use crate::ui::tokens::{Palette, TajweedClass};
 
 /// Which card a developer asked for (`EQ_SPECIMEN=1..6`, debug builds):
 /// the specimen shows only that one, so a window-sized capture holds it.
+/// A specimen card: title, script, font and its eight ayahs.
+type SpecimenSet = (
+    &'static str,
+    QuranScript,
+    ArabicFont,
+    &'static [(u32, u32, &'static str); 8],
+);
+
 fn only_card() -> Option<usize> {
     if !cfg!(debug_assertions) {
         return None;
@@ -84,12 +92,7 @@ pub fn arabic_specimen() -> impl IntoElement {
                     )
                 })),
         );
-    let sets: [(
-        &'static str,
-        QuranScript,
-        ArabicFont,
-        &[(u32, u32, &'static str); 8],
-    ); 5] = [
+    let sets: [SpecimenSet; 5] = [
         (
             "Uthmani · KFGQPC Hafs",
             QuranScript::Uthmani,

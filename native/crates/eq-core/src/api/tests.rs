@@ -501,11 +501,11 @@ fn secrets_never_show_in_debug_or_display() {
     )
     .unwrap();
     let key = crate::device::DeviceKey::generate();
-    let error = ApiError::Http(crate::api::HttpError::decode(
+    let error = ApiError::Http(Box::new(crate::api::HttpError::decode(
         401,
         &json!({"type":"AUTH_001"}),
         None,
-    ));
+    )));
     let shown = [
         format!("{client:?}"),
         format!("{machine:?}"),

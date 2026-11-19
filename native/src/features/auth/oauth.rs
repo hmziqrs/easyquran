@@ -98,7 +98,7 @@ pub fn label(provider: OAuthProvider) -> &'static str {
 
 /// Runs `provider`'s sign-in to the end. `Err(())`: it failed or was
 /// cancelled (`lastErrorCode`; the buttons show `auth_oauth_error`).
-pub async fn sign_in(provider: OAuthProvider) -> Result<SignInStep, ()> {
+pub(crate) async fn sign_in(provider: OAuthProvider) -> Result<SignInStep, ()> {
     let setup = setup(provider).ok_or(())?;
     let store = crate::app::auth_store();
     let client = store.client().ok_or(())?;

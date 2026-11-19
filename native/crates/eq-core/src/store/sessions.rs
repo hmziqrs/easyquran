@@ -1533,18 +1533,19 @@ pub(crate) fn apply_round(
     if verdict.restored {
         by_id.values_mut().for_each(|t| t.dirty = true);
     }
-    if !verdict.reset() && !meta.more {
-        if let Some(seen) = seen.take() {
-            let missing: Vec<String> = by_id
-                .values()
-                .filter(|t| !t.dirty && !seen.contains(&t.id))
-                .map(|t| t.id.clone())
-                .collect();
-            for id in missing {
-                if let Some(mut thread) = by_id.remove(&id) {
-                    gone_locally(store, &mut thread)?;
-                    by_id.insert(id, thread);
-                }
+    if !verdict.reset()
+        && !meta.more
+        && let Some(seen) = seen.take()
+    {
+        let missing: Vec<String> = by_id
+            .values()
+            .filter(|t| !t.dirty && !seen.contains(&t.id))
+            .map(|t| t.id.clone())
+            .collect();
+        for id in missing {
+            if let Some(mut thread) = by_id.remove(&id) {
+                gone_locally(store, &mut thread)?;
+                by_id.insert(id, thread);
             }
         }
     }

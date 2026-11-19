@@ -121,7 +121,7 @@ pub(crate) fn reading_insights() -> impl IntoElement {
     effect(move || {
         let _ = auth.user().map(|u| u.id);
         untracked(move || {
-            let _ = spawn(async move {
+            spawn(async move {
                 let summary = insights::fetch_summary().await;
                 let _ = state.try_set(Load::Done(summary));
             });

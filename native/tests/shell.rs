@@ -2,11 +2,14 @@
 //! the palette on a manual clock, undo and redo, the two layouts and the
 //! lifecycle watch. Pure tables first, then the real engine.
 //!
-//! Pages are the feature stubs; the settings stub prints its section slug
-//! (`storage`), which is what these tests look for to tell a page apart
+//! Settings opens on its Storage section, whose description line
+//! ([`SETTINGS_MARK`]) is what these tests look for to tell the page apart
 //! from Home.
 
 use std::time::{Duration, SystemTime};
+
+/// The Storage section's description: on screen only while Settings is.
+const SETTINGS_MARK: &str = "text:Downloads and cached content on this device.";
 
 use easyquran::shell::{
     back::{BackStep, back_step},
@@ -142,7 +145,7 @@ fn open_settings(app: &mut Headless) {
     app.wait_until(
         "Settings opened and the palette closed",
         Duration::from_secs(5),
-        |screen| screen.count("text:Go to") == Ok(0) && screen.count("text:storage") >= Ok(1),
+        |screen| screen.count("text:Go to") == Ok(0) && screen.count(SETTINGS_MARK) >= Ok(1),
     )
     .unwrap();
 }
@@ -161,14 +164,14 @@ fn back_pops_a_page_then_asks_to_exit() {
     app.wait_until(
         "the palette closed over the intact page",
         Duration::from_secs(5),
-        |screen| screen.count("text:Go to") == Ok(0) && screen.count("text:storage") >= Ok(1),
+        |screen| screen.count("text:Go to") == Ok(0) && screen.count(SETTINGS_MARK) >= Ok(1),
     )
     .unwrap();
 
     // The next back pops the page.
     app.back().unwrap();
     app.wait_until("Settings popped", Duration::from_secs(5), |screen| {
-        screen.count("text:storage") == Ok(0)
+        screen.count(SETTINGS_MARK) == Ok(0)
     })
     .unwrap();
 
@@ -192,7 +195,7 @@ fn undo_and_redo_retrace_navigation() {
 
     app.press_key("mod+z").unwrap();
     app.wait_until("undo returned Home", Duration::from_secs(5), |screen| {
-        screen.count("text:storage") == Ok(0)
+        screen.count(SETTINGS_MARK) == Ok(0)
     })
     .unwrap();
 
@@ -200,7 +203,7 @@ fn undo_and_redo_retrace_navigation() {
     app.wait_until(
         "redo opened Settings again",
         Duration::from_secs(5),
-        |screen| screen.count("text:storage") >= Ok(1),
+        |screen| screen.count(SETTINGS_MARK) >= Ok(1),
     )
     .unwrap();
 }
@@ -215,7 +218,7 @@ fn the_desktop_width_takes_the_sidebar() {
 
     // A sidebar row opens its page into the pane.
     app.press("id:nav-settings").unwrap();
-    app.wait_for("text:storage").unwrap();
+    app.wait_for(SETTINGS_MARK).unwrap();
 
     let mut narrow = phone();
     narrow.wait_for("text:Home").unwrap();

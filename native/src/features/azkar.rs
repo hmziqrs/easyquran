@@ -659,7 +659,7 @@ pub fn zikr_page(slug: String, translation: Option<TranslationRef>) -> impl Into
         .map(|t| t.name.clone());
     let groups = signal(Load::Loading);
     let tid = translation_id.clone();
-    let _ = spawn(async move {
+    spawn(async move {
         let loaded = load_groups(sn, tid).await;
         let _ = groups.try_set(loaded);
     });

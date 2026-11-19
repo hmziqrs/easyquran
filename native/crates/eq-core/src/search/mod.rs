@@ -1,17 +1,17 @@
 //! Search (PARITY E1-E4): Arabic + translation normalisation, transliteration, ranking, highlights, go-to-verse parsing, palette sources, recents.
 //!
 //! Map of the web sources mirrored:
-//! - [`normalize`]: `quran/search/normalize.ts`
-//! - [`latin`]: `quran/search/normalize-latin.ts`
-//! - [`translit`]: `quran/search/translit.ts`, `palette/surah-aliases.ts`
-//! - [`alignment`]: `quran/search/alignment.ts`
-//! - [`corpus`]: `quran/search/corpus.ts`, `types.ts`
-//! - [`translation`]: `quran/search/translation-corpus.ts`, `ranking.ts`
-//! - [`highlights`]: `quran/search/highlights.ts`
-//! - [`nav`]: `search/nav/*`
-//! - [`suggest`]: `palette/scoring.ts`, `page/surah-suggest.ts`
-//! - [`palette`]: `search/palette/**`
-//! - [`recents`]: `stores/search-{recents,selection}.svelte.ts`,
+//! - [`normalize`] mirrors `quran/search/normalize.ts`
+//! - [`latin`] mirrors `quran/search/normalize-latin.ts`
+//! - [`translit`] mirrors `quran/search/translit.ts`, `palette/surah-aliases.ts`
+//! - [`alignment`] mirrors `quran/search/alignment.ts`
+//! - [`corpus`] mirrors `quran/search/corpus.ts`, `types.ts`
+//! - [`translation`] mirrors `quran/search/translation-corpus.ts`, `ranking.ts`
+//! - [`highlights`] mirrors `quran/search/highlights.ts`
+//! - [`nav`] mirrors `search/nav/*`
+//! - [`suggest`] mirrors `palette/scoring.ts`, `page/surah-suggest.ts`
+//! - [`palette`] mirrors `search/palette/**`
+//! - [`recents`] mirrors `stores/search-{recents,selection}.svelte.ts`,
 //!   `page/{selection,query-url}.ts`
 //!
 //! Normalisation runs on index copies and queries only: every hit carries

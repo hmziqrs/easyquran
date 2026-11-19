@@ -278,7 +278,7 @@ pub(crate) fn offer(
             action: Rc::new(action),
         });
     });
-    let _ = set_timeout(OFFER_FOR, move || {
+    set_timeout(OFFER_FOR, move || {
         if slot().with_untracked(|s| s.current.as_ref().is_some_and(|o| o.id == id)) {
             slot().update(|s| s.current = None);
         }

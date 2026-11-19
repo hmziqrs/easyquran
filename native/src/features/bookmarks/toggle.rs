@@ -1,5 +1,5 @@
 //! One-tap bookmarking for the reader (web `lib/bookmarks/feedback.svelte.ts`
-//! + `SaveToSheet.svelte`): a tap saves to the last-used folder and says
+//! and `SaveToSheet.svelte`): a tap saves to the last-used folder and says
 //! where ("Saved to Hifz · Change"); a second tap removes the verse from
 //! every folder with an Undo. "Change" opens the folder picker, where a
 //! verse may sit in many folders and a new folder also files it.

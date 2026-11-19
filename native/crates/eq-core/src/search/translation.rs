@@ -72,15 +72,13 @@ impl TranslationCorpus {
     /// from global index 1.
     pub fn build(source_id: &str, rows: &RangeText) -> Result<Self, TranslationCorpusError> {
         let mut units = Vec::with_capacity(rows.ayahs.len());
-        let mut expected = 1u32;
-        for row in &rows.ayahs {
+        for (expected, row) in (1u32..).zip(&rows.ayahs) {
             if row.global_index != expected {
                 return Err(TranslationCorpusError {
                     expected,
                     received: row.global_index,
                 });
             }
-            expected += 1;
             let map = normalize_latin_with_map(&row.text);
             units.push(Unit {
                 surah: row.surah,

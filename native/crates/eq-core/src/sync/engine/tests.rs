@@ -590,8 +590,11 @@ fn offline_edits_on_two_devices_converge() {
     let folder_a = bookmarks::create_folder(&mut a.store.borrow_mut(), "Hifz")
         .unwrap()
         .unwrap();
-    bookmarks::set_in_folder(&mut a.store.borrow_mut(), 2, 255, &folder_a.id, true, None).unwrap();
+    // Toggle before "Save to…": that remembers Hifz as the target folder
+    // (web `#rememberFolder`), and 1:1 must land in the default folder on
+    // both devices for the one-key rule below.
     bookmarks::toggle(&mut a.store.borrow_mut(), 1, 1, None).unwrap();
+    bookmarks::set_in_folder(&mut a.store.borrow_mut(), 2, 255, &folder_a.id, true, None).unwrap();
     b.clock.advance(5);
     bookmarks::toggle(&mut b.store.borrow_mut(), 1, 1, None).unwrap();
     bookmarks::toggle(&mut b.store.borrow_mut(), 18, 10, None).unwrap();
@@ -806,9 +809,26 @@ fn account_switch_isolation() {
     assert!(device.marks().is_empty());
     assert!(device.threads().is_empty());
     device.sync(&server);
-    for body in server.log.borrow().iter().map(|(_, b)| b) {
+    for (path, body) in server.log.borrow().iter() {
         assert_eq!(body["expectedUserId"], 2);
-        assert!(body["mutations"].as_array().unwrap().is_empty());
+        let mutations = body["mutations"].as_array().unwrap();
+        if path == preferences::SYNC_PATH {
+            // User 2's own first capture after the baseline pull (web
+            // `capture()`): the device's home layout and an empty goals
+            // document, stamped by dev-2. Nothing of user 1's.
+            for m in mutations {
+                assert!(
+                    m["key"] == preferences::LAYOUT_KEY || m["key"] == preferences::GOALS_KEY,
+                    "user 2 pushed {m}"
+                );
+                assert!(m["stamp"].as_str().unwrap().ends_with("-dev-2"));
+            }
+            continue;
+        }
+        assert!(
+            mutations.is_empty(),
+            "user 1's rows leaked to user 2: {mutations:?}"
+        );
     }
     assert!(
         !server

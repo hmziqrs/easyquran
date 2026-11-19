@@ -136,6 +136,12 @@ pub struct CursorThrottle {
     pending: Stored<Option<Spawned<()>>>,
 }
 
+impl Default for CursorThrottle {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CursorThrottle {
     pub fn new() -> Self {
         Self {

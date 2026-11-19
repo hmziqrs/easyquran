@@ -652,7 +652,9 @@ pub fn terms_page() -> impl IntoElement {
 
 /// A footer column: its heading, its spoken name and its links (web
 /// hrefs, opened through the route grammar).
-const FOOTER_COLUMNS: [(Key, Key, &[(Key, &str)]); 3] = [
+type FooterColumn = (Key, Key, &'static [(Key, &'static str)]);
+
+const FOOTER_COLUMNS: [FooterColumn; 3] = [
     (
         keys::FOOTER_PRODUCT_HEADING,
         keys::FOOTER_PRODUCT_LABEL,

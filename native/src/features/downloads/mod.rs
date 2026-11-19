@@ -142,7 +142,7 @@ fn translations_card() -> AnyElement {
                 (id, bytes)
             })
             .collect();
-        stored.sort_by(|a, b| b.1.cmp(&a.1));
+        stored.sort_by_key(|s| std::cmp::Reverse(s.1));
         let mut rows: Vec<AnyElement> = Vec::new();
         if let Some(id) = pending {
             rows.push(database_row(id));

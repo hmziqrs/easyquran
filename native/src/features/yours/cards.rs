@@ -1720,7 +1720,7 @@ pub(crate) fn card_page(id: String) -> impl IntoElement {
                 ButtonSize::Small,
                 false,
                 None,
-                || nav::pop(),
+                nav::pop,
             )))
             .child(undo_banner())
             .child(dynamic(move || {

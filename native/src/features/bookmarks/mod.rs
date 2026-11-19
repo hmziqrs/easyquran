@@ -274,7 +274,7 @@ pub fn page() -> impl IntoElement {
     let filter = signal(None::<String>);
     let selected = signal(BTreeSet::<String>::new());
     let window_over = signal(false);
-    let _ = set_timeout(FIRST_SYNC_SKELETON, move || {
+    set_timeout(FIRST_SYNC_SKELETON, move || {
         let _ = window_over.try_set(true);
     });
 

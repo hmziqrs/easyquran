@@ -82,7 +82,7 @@ fn downloads_rows(notice: Signal<Option<String>>, confirming_all: Signal<bool>) 
             (id, bytes)
         })
         .collect();
-    stored.sort_by(|a, b| b.1.cmp(&a.1));
+    stored.sort_by_key(|s| std::cmp::Reverse(s.1));
     let mut rows = vec![
         row_frame()
             .child(row_label(t(keys::SETTINGS_STORAGE_DOWNLOADS_HEADING)))

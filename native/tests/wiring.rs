@@ -246,6 +246,13 @@ fn stores_are_wired_through_the_session_transport() -> Result<(), String> {
     app.press("role:button[Sign in]")?;
     app.wait_for("text:phase:signed-in")?;
     app.run_for(Duration::from_secs(1))?;
+    // The store's sign-in and the round run on blocking threads: real
+    // time, not the manual clock, decides when the first POST goes.
+    app.wait_until(
+        "sign-in kicked a sync round",
+        Duration::from_secs(5),
+        |_| !sync_posts(0).is_empty(),
+    )?;
     assert_eq!(
         SECRETS.lock().unwrap().get(SESSION_KEY).map(String::as_str),
         Some(SESSION)
@@ -266,14 +273,20 @@ fn stores_are_wired_through_the_session_transport() -> Result<(), String> {
     // A bookmark written through the store is pushed (2 s edit flush).
     let before = sent().len();
     app.press("role:button[Bookmark]")?;
-    app.run_for(Duration::from_secs(3))?;
-    let pushed = sync_posts(before).into_iter().any(|r| {
-        path(&r) == "/bookmark/v1/sync"
-            && body(&r)["mutations"]
-                .as_array()
-                .is_some_and(|m| !m.is_empty())
-    });
-    assert!(pushed, "the bookmark reached the server");
+    // The write lands on a blocking thread (real time) before the 2 s
+    // timer is armed on the manual clock: wait for both, not a fixed step.
+    app.wait_until(
+        "the bookmark reached the server",
+        Duration::from_secs(10),
+        |_| {
+            sync_posts(before).into_iter().any(|r| {
+                path(&r) == "/bookmark/v1/sync"
+                    && body(&r)["mutations"]
+                        .as_array()
+                        .is_some_and(|m| !m.is_empty())
+            })
+        },
+    )?;
 
     // Sign out: the session value is gone.
     app.press("role:button[Sign out]")?;

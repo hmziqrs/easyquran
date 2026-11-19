@@ -36,6 +36,13 @@ fn KitRoot() -> impl IntoElement {
         .child(toast_host())
 }
 
+/// `run_for` needs a manual clock (NSH 0.6): every root starts on one.
+fn manual(root: Root) -> Headless {
+    let mut config = EngineConfig::new(root);
+    config.clock = Clock::manual(SystemTime::UNIX_EPOCH);
+    Headless::start(config).unwrap()
+}
+
 fn start(viewport: Option<Size<Points>>) -> Headless {
     let mut config = EngineConfig::new(Root::of::<KitRoot>());
     config.clock = Clock::manual(SystemTime::UNIX_EPOCH);
@@ -109,7 +116,7 @@ fn primary_text(app: &Headless) -> String {
 
 #[test]
 fn palette_and_mode_switch_the_resolved_tokens() -> Result<(), String> {
-    let mut app = Headless::start(EngineConfig::new(Root::of::<AppearanceRoot>())).unwrap();
+    let mut app = manual(Root::of::<AppearanceRoot>());
     app.wait_for("text:Sepia")?;
     app.press("role:button[Light]")?;
     app.run_for(Duration::from_millis(100))?;
@@ -152,7 +159,12 @@ fn ArabicRoot() -> impl IntoElement {
 fn arabic_text_mounts_verbatim() -> Result<(), String> {
     use easyquran::ui::arabic::{Digits, ornament_text};
     use easyquran::ui::specimen::{INDOPAK, UTHMANI, tajweed_rows};
-    let mut app = Headless::start(EngineConfig::new(Root::of::<ArabicRoot>())).unwrap();
+    // Tall enough for all three long ayahs: `texts()` reports only what
+    // is inside the viewport.
+    let mut config = EngineConfig::new(Root::of::<ArabicRoot>());
+    config.clock = Clock::manual(SystemTime::UNIX_EPOCH);
+    config.viewport = Size::new(Points(800.0), Points(4000.0));
+    let mut app = Headless::start(config).unwrap();
     app.run_for(Duration::from_millis(100))?;
     let texts: Vec<String> = app
         .screen()

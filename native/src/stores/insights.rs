@@ -223,9 +223,9 @@ fn schedule_flush() {
     let slot = global::<FlushGeneration>();
     let generation = slot.get_untracked().0 + 1;
     slot.set(FlushGeneration(generation));
-    let _ = set_timeout(FLUSH_DELAY, move || {
+    set_timeout(FLUSH_DELAY, move || {
         if global::<FlushGeneration>().get_untracked().0 == generation {
-            let _ = spawn(flush_now());
+            spawn(flush_now());
         }
     });
 }

@@ -451,10 +451,10 @@ pub fn link_for(link: &ReaderLink, id: &str, top: Option<(u16, u16)>) -> ReaderL
     let mut next = link.clone();
     next.target.translation = Some(TranslationRef::from_id(id));
     next.more = Vec::new();
-    if let (ReaderScope::Surah(n), Some((s, a))) = (link.target.scope, top) {
-        if s == n {
-            next.target.ayah = Some(a);
-        }
+    if let (ReaderScope::Surah(n), Some((s, a))) = (link.target.scope, top)
+        && s == n
+    {
+        next.target.ayah = Some(a);
     }
     next
 }

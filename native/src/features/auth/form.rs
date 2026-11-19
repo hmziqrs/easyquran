@@ -112,6 +112,12 @@ pub struct FormState {
     pub notice: Signal<Option<Msg>>,
 }
 
+impl Default for FormState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FormState {
     pub fn new() -> Self {
         Self {

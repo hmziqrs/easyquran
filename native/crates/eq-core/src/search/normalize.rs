@@ -127,7 +127,7 @@ fn is_ornament(c: char) -> bool {
 /// ornament.
 pub fn is_eligible_query(norm: &str) -> bool {
     let len = scalar_len(norm);
-    if len < 1 || len > MAX_QUERY_LEN {
+    if !(1..=MAX_QUERY_LEN).contains(&len) {
         return false;
     }
     len >= MIN_QUERY_LEN || norm.chars().any(is_ornament)

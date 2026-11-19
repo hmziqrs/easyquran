@@ -291,13 +291,13 @@ impl ApiClient {
             if error.is_csrf_refusal() {
                 self.clear_csrf();
                 if may_retry {
-                    return Err(ApiError::Http(error));
+                    return Err(ApiError::Http(Box::new(error)));
                 }
             }
             if error.is_session_lost() && sent_session {
                 self.session_lost();
             }
-            return Err(ApiError::Http(error));
+            return Err(ApiError::Http(Box::new(error)));
         }
 
         if rotated && path != CSRF_PATH {

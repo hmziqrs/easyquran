@@ -366,7 +366,7 @@ impl QuranMeta {
 
     /// `(surah, ayah)` at a global index (`verseKeyAtGlobal`).
     pub fn verse_at_global(&self, global: u32) -> Option<(u16, u16)> {
-        if global < 1 || global > AYAH_COUNT {
+        if !(1..=AYAH_COUNT).contains(&global) {
             return None;
         }
         let i = self
@@ -410,7 +410,7 @@ impl QuranMeta {
 
     fn range_index_containing(&self, kind: RangeKind, global: u32) -> Option<u16> {
         let family = self.starts.get(&kind)?;
-        if global < 1 || global > AYAH_COUNT {
+        if !(1..=AYAH_COUNT).contains(&global) {
             return None;
         }
         u16::try_from(family.partition_point(|&s| s <= global)).ok()
@@ -452,7 +452,7 @@ impl QuranMeta {
 
     /// Hizb `hizb` (1..=60) as one range: quarters 4h-3..4h (`hizbRange`).
     pub fn hizb_range(&self, hizb: u8) -> Option<RangeEntry> {
-        if hizb < 1 || hizb > HIZB_COUNT {
+        if !(1..=HIZB_COUNT).contains(&hizb) {
             return None;
         }
         let h = u16::from(hizb);

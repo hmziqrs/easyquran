@@ -171,7 +171,7 @@ pub fn sync_notices() -> impl IntoElement {
             );
         if plain_sign_out {
             show_note.set(true);
-            let _ = set_timeout(SIGN_OUT_NOTE, move || {
+            set_timeout(SIGN_OUT_NOTE, move || {
                 let _ = show_note.try_set(false);
             });
         }
