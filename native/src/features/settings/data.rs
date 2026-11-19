@@ -125,7 +125,7 @@ async fn save(bytes: Vec<u8>, name: String) {
 }
 
 /// `downloadExportFile`.
-fn export() {
+pub(crate) fn export() {
     let doc = document();
     let notes = notes_store().export();
     sync_store().run(

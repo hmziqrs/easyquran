@@ -25,6 +25,7 @@ use eq_core::i18n::{Key, keys};
 use nsh_core::{element::AnyElement, prelude::*};
 
 pub use app::{installed_version, latest_version, update_toast};
+pub(crate) use data::export as export_data;
 pub use privacy::goal_reminders;
 
 use crate::{

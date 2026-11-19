@@ -1,72 +1,38 @@
-//! Home (PARITY A3; web `(marketing)/+page.svelte`, `lib/home/LandingCards.svelte`,
-//! and the Yours widget column it shares, `layout.svelte.ts`,
-//! `reading-choice.svelte.ts`). Contract: `pub fn page() -> impl IntoElement`.
+//! Home (PARITY A3; web `(marketing)/+page.svelte`, `lib/home/LandingCards.svelte`).
+//! Contract: `pub fn page() -> impl IntoElement`.
 //!
 //! The landing hero (bismillah, iqra, the search pill that opens the
-//! palette, often-opened surahs), the first-run reading choice, the widget
-//! column in the stored layout's order (Customize: move, hide, show, the
-//! recents count), the surah index and the footer. The cards widget is the
-//! landing strip: the next card to recite, then up to four tiles.
+//! palette, often-opened surahs), the personal cards strip (hidden until
+//! the device has cards: up to four tiles and the way to Yours), the surah
+//! index and the footer. The widget column lives on Yours.
 
-use eq_core::{
-    home::next_zikr::next_zikr_card,
-    i18n::keys,
-    quran::{catalogue, meta::meta},
-    routes::ReaderScope,
-    store::home::{HomeWidget, RECENTS_COUNT_CHOICES},
-};
+use eq_core::{i18n::keys, quran::meta::meta, routes::ReaderScope};
 use nsh_base::theme;
 use nsh_core::prelude::*;
 
 use crate::{
     features::{
-        bookmarks::{follow_notes_owner, shelf},
-        daily_ayah::daily_widget,
+        bookmarks::follow_notes_owner,
         index::reader_route,
         marketing::footer,
-        yours::{
-            self,
-            cards::{card_grid, card_link, open_link, strip_more, tile_copy},
-            continue_threads::continue_threads,
-            goals::reading_goals,
-            history::thread_history,
-            insights::reading_insights,
-            notes::notes_preview,
-            reading_bookmark::reading_bookmark_card,
-        },
+        yours::cards::{card_grid, strip_more},
     },
     shell::{nav, palette, routes::Route},
     stores::{
-        home::{
-            self as home_store, HomeData, ReadingChoice, choose_reading, home_data, now_minute,
-            reading_choice, suggested_choice, translation_for_language,
-        },
+        home::{HomeData, home_data},
         locale::{t, t_args, tr},
     },
     ui::{
         arabic::{ArabicStyle, QuranScript, plain_ayah},
         brand::bismillah,
-        button::{ButtonSize, ButtonVariant, button_with, choice_button},
+        button::{ButtonSize, ButtonVariant, button_with},
         layout::{eyebrow, page_body, page_insets, pressable_card},
-        text::muted,
         tokens,
     },
 };
 
 const OFTEN_OPENED: [u16; 5] = [1, 18, 36, 55, 67];
 const STRIP_LIMIT: usize = 4;
-
-fn widget_title(id: &str) -> eq_core::i18n::Key {
-    match id {
-        "continue-reading" => keys::READER_INDEX_YOURS_CONTINUE,
-        "recents" => keys::READER_THREADS_HISTORY,
-        "notes" => keys::READER_WIDGET_NOTES_TITLE,
-        "most-read" => keys::READER_WIDGET_MOST_READ_TITLE,
-        "daily-ayah" => keys::READER_WIDGET_DAILY_AYAH_TITLE,
-        "cards" => keys::READER_CARDS_TITLE,
-        _ => keys::NAV_BOOKMARKS,
-    }
-}
 
 fn pill(label: impl IntoReactive<SharedString>, on_press: impl Fn() + 'static) -> impl IntoElement {
     button_with(
@@ -152,277 +118,45 @@ fn hero() -> impl IntoElement {
         )
 }
 
-// --- first-run reading choice ---------------------------------------------------
+// --- cards strip ---------------------------------------------------------------
 
-fn choice_options() -> Vec<(ReadingChoice, String)> {
-    let mut out = vec![(
-        ReadingChoice::Arabic,
-        tr(keys::READER_HOME_READ_IN_ARABIC).to_owned(),
-    )];
-    let mut push = |choice: ReadingChoice| {
-        let ReadingChoice::Translation(id) = &choice else {
-            return;
-        };
-        if out.iter().any(|(c, _)| *c == choice) {
-            return;
-        }
-        let language = catalogue::translation(id)
-            .map(|t| t.language.clone())
-            .unwrap_or_default();
-        let label = crate::features::bookmarks::fmt(
-            keys::READER_HOME_READ_IN_WITH,
-            &[("language", language.into())],
-        );
-        out.push((choice, label));
-    };
-    push(suggested_choice());
-    if let Some(en) = translation_for_language("en") {
-        push(ReadingChoice::Translation(en));
-    }
-    out
-}
-
-fn reading_choice_line() -> impl IntoElement {
-    let options = choice_options();
-    when(move || reading_choice().is_none() && options.len() > 1, {
-        let options = choice_options();
+/// `LandingCards`: hidden while the device has no cards; else the title,
+/// "{n} more →" (or "→") to Yours, and up to four tiles.
+fn cards_strip(data: Signal<HomeData>) -> impl IntoElement {
+    let count = computed(move || data.with(|d| d.cards.len()));
+    when(
+        move || count.get() > 0,
         move || {
+            let extra = move || count.get().saturating_sub(STRIP_LIMIT);
             view()
                 .w_full()
-                .flex_row()
-                .flex_wrap()
-                .items_center()
-                .gap_2()
-                .child(eyebrow(t(keys::READER_HOME_READ_IN)))
-                .children(options.iter().cloned().map(|(choice, label)| {
-                    pill(SharedString::from(label), move || {
-                        choose_reading(choice.clone())
-                    })
-                    .into_element()
-                }))
-                .into_element()
-        }
-    })
-}
-
-// --- widgets ---------------------------------------------------------------------
-
-fn edit_controls(id: &'static str, index: usize, last: usize) -> impl IntoElement {
-    view()
-        .flex_row()
-        .items_center()
-        .gap_1()
-        .child(button_with(
-            "↑",
-            ButtonVariant::Outline,
-            ButtonSize::Small,
-            index == 0,
-            Some(tr(keys::READER_HOME_MOVE_UP)),
-            move || {
-                home_store::move_widget(id, -1);
-            },
-        ))
-        .child(button_with(
-            "↓",
-            ButtonVariant::Outline,
-            ButtonSize::Small,
-            index == last,
-            Some(tr(keys::READER_HOME_MOVE_DOWN)),
-            move || {
-                home_store::move_widget(id, 1);
-            },
-        ))
-        .child(pill(t(keys::READER_HOME_HIDE), move || {
-            home_store::toggle_widget(id)
-        }))
-}
-
-fn section(
-    id: &'static str,
-    controls: Option<AnyElement>,
-    trailing: Option<AnyElement>,
-    content: AnyElement,
-) -> AnyElement {
-    view()
-        .w_full()
-        .flex_col()
-        .gap_2()
-        .child(
-            view()
-                .w_full()
-                .flex_row()
-                .items_center()
-                .justify_between()
-                .gap_3()
-                .child(eyebrow(t(widget_title(id))))
-                .child(
-                    view()
-                        .flex_row()
-                        .items_center()
-                        .gap_3()
-                        .child(trailing)
-                        .child(controls),
-                ),
-        )
-        .child(content)
-        .into_element()
-}
-
-/// The landing strip: next card, tiles, "{n} more on Yours".
-fn cards_strip(data: Signal<HomeData>) -> AnyElement {
-    dynamic(move || {
-        let cards = data.with(|d| d.cards.clone());
-        if cards.is_empty() {
-            return muted(t(keys::READER_CARDS_EMPTY)).into_element();
-        }
-        let extra = cards.len().saturating_sub(STRIP_LIMIT);
-        let next = next_zikr_card(&cards, "", "", now_minute()).and_then(|c| {
-            let link = card_link(c)?;
-            Some((tile_copy(c).title, link))
-        });
-        view()
-            .w_full()
-            .flex_col()
-            .gap_2()
-            .child(next.map(|(title, link)| {
-                button_with(
-                    t_args(keys::READER_ZIKR_NEXT, move || {
-                        vec![("title", title.clone().into())]
-                    }),
-                    ButtonVariant::Secondary,
-                    ButtonSize::Medium,
-                    false,
-                    None,
-                    move || open_link(link.clone()),
-                )
-            }))
-            .child(card_grid(data, STRIP_LIMIT, false))
-            .child(view().flex_row().child(pill(
-                move || {
-                    if extra > 0 {
-                        return SharedString::from(format!("{} →", strip_more(extra)()));
-                    }
-                    SharedString::from(format!("{} →", tr(keys::READER_CARDS_STRIP_TITLE)))
-                },
-                || nav::push(Route::Yours),
-            )))
-            .into_element()
-    })
-    .into_element()
-}
-
-fn widget_body(w: &HomeWidget, data: Signal<HomeData>, editing: bool) -> AnyElement {
-    match w.id.as_str() {
-        "continue-reading" => view()
-            .w_full()
-            .flex_col()
-            .gap_3()
-            .child(reading_bookmark_card())
-            .child(continue_threads())
-            .into_element(),
-        "recents" => {
-            let count = usize::try_from(w.count.unwrap_or(5)).unwrap_or(5);
-            view()
-                .w_full()
+                .max_w(px(720.0))
                 .flex_col()
                 .gap_2()
-                .child(editing.then(|| {
+                .pt_4()
+                .child(
                     view()
-                        .flex_row()
-                        .gap_1()
-                        .children(RECENTS_COUNT_CHOICES.map(|c| {
-                            choice_button(
-                                SharedString::from(c.to_string()),
-                                tr(keys::READER_THREADS_HISTORY),
-                                usize::try_from(c).ok() == Some(count),
-                                false,
-                                move || home_store::set_widget_count("recents", c),
-                            )
-                            .into_element()
-                        }))
-                }))
-                .child(thread_history(count))
-                .into_element()
-        }
-        "bookmarks" => yours::bookmarks_preview(shelf()).into_element(),
-        "notes" => notes_preview(|| nav::push(Route::Yours)).into_element(),
-        "most-read" => view()
-            .w_full()
-            .flex_col()
-            .gap_4()
-            .child(reading_insights())
-            .child(reading_goals())
-            .into_element(),
-        "daily-ayah" => daily_widget().into_element(),
-        _ => cards_strip(data),
-    }
-}
-
-fn widgets(data: Signal<HomeData>, editing: Signal<bool>) -> impl IntoElement {
-    dynamic(move || {
-        let layout = data.with(|d| d.layout.clone());
-        let editing_now = editing.get();
-        let last = layout.len().saturating_sub(1);
-        let sections: Vec<AnyElement> = layout
-            .iter()
-            .enumerate()
-            .filter(|(_, w)| w.visible)
-            .filter_map(|(index, w)| {
-                let id: &'static str = eq_core::store::home::HOME_WIDGETS
-                    .iter()
-                    .find(|s| s.0 == w.id)?
-                    .0;
-                let controls = editing_now.then(|| edit_controls(id, index, last).into_element());
-                // The previews that carry their own heading render bare.
-                let body = widget_body(w, data, editing_now);
-                Some(match id {
-                    "bookmarks" | "notes" => view()
                         .w_full()
-                        .flex_col()
-                        .gap_1()
-                        .child(controls.map(|c| view().flex_row().justify_end().child(c)))
-                        .child(body)
-                        .into_element(),
-                    _ => section(id, controls, None, body),
-                })
-            })
-            .collect();
-        let hidden: Vec<AnyElement> = if editing_now {
-            layout
-                .iter()
-                .filter(|w| !w.visible)
-                .filter_map(|w| {
-                    eq_core::store::home::HOME_WIDGETS
-                        .iter()
-                        .find(|s| s.0 == w.id)
-                        .map(|s| s.0)
-                })
-                .map(|id| {
-                    pill(
-                        SharedString::from(format!("{} +", tr(widget_title(id)))),
-                        move || home_store::toggle_widget(id),
-                    )
-                    .into_element()
-                })
-                .collect()
-        } else {
-            Vec::new()
-        };
-        view()
-            .w_full()
-            .flex_col()
-            .gap_6()
-            .child(editing_now.then(|| {
-                view()
-                    .w_full()
-                    .flex_col()
-                    .gap_2()
-                    .child(eyebrow(t(keys::READER_HOME_HIDDEN)))
-                    .child(view().flex_row().flex_wrap().gap_1p5().children(hidden))
-            }))
-            .children(sections)
-            .into_element()
-    })
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(eyebrow(t(keys::READER_CARDS_STRIP_TITLE)))
+                        .child(pill(
+                            move || {
+                                let n = extra();
+                                if n > 0 {
+                                    return SharedString::from(format!("{} →", strip_more(n)()));
+                                }
+                                SharedString::from("→")
+                            },
+                            || nav::push(Route::Yours),
+                        )),
+                )
+                .child(card_grid(data, STRIP_LIMIT, false))
+                .into_element()
+        },
+    )
 }
 
 // --- surah index ------------------------------------------------------------------
@@ -553,22 +287,16 @@ pub fn page() -> impl IntoElement {
     crate::features::downloads::dev_capture();
     follow_notes_owner();
     let data = home_data();
-    let editing = signal(false);
     scroll().flex_1().content_inset(page_insets(0.0)).child(
         page_body()
-            .child(hero())
-            .child(reading_choice_line())
-            .child(view().w_full().flex_row().justify_end().child(pill(
-                move || {
-                    t(if editing.get() {
-                        keys::READER_HOME_DONE
-                    } else {
-                        keys::READER_HOME_EDIT
-                    })()
-                },
-                move || editing.set(!editing.get_untracked()),
-            )))
-            .child(widgets(data, editing))
+            .child(
+                view()
+                    .w_full()
+                    .flex_col()
+                    .items_center()
+                    .child(hero())
+                    .child(cards_strip(data)),
+            )
             .child(surah_grid())
             .child(footer())
             .text_color(move || theme().foreground),

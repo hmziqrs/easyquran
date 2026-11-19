@@ -1,13 +1,12 @@
-//! "Yours" hub and card detail (PARITY G3 partial, G2, F2, F3). Contract:
+//! "Yours" hub and card detail (PARITY G3, G2, F2, F3). Contract:
 //! `pub fn page() -> impl IntoElement`,
 //! `pub fn card_page(id: String) -> impl IntoElement`.
 //!
 //! Mirrors `web/src/routes/(application)/yours/+page.svelte`: the title,
-//! the index links, Overview / Notes tabs. Overview: reading place,
-//! Continue, History, Bookmarks (first five), Notes (first five), then the
-//! goals, insights and cards sections the next slice fills. Notes: the
-//! full library. The web's widget layout editing (`homeLayout`) and the
-//! first-run reading choice are not here (see the slice report).
+//! the index links and Edit / Done, Overview / Notes tabs, the first-run
+//! reading choice, the hidden widgets while editing. Overview: the
+//! reading place, then the widget column in the stored layout's order
+//! (`widgets`). Notes: the full library.
 
 pub(crate) mod cards;
 pub(crate) mod continue_threads;
@@ -16,6 +15,7 @@ pub(crate) mod history;
 pub(crate) mod insights;
 pub(crate) mod notes;
 pub(crate) mod reading_bookmark;
+mod widgets;
 
 use eq_core::i18n::keys;
 use nsh_base::theme;
@@ -23,11 +23,14 @@ use nsh_core::prelude::*;
 
 use crate::{
     features::bookmarks::{
-        BOOKMARK_ICON, RowActions, Shelf, bookmark_row, feedback_bar, follow_notes_owner, shelf,
+        BOOKMARK_ICON, RowActions, Shelf, bookmark_row, feedback_bar, follow_notes_owner,
         sync_notices, write,
     },
     shell::{nav, routes::Route},
-    stores::locale::t,
+    stores::{
+        home::{HomeData, home_data},
+        locale::t,
+    },
     ui::{
         button::{ButtonSize, ButtonVariant, button_with},
         layout::{card, eyebrow, page_body, page_insets, skeleton_of},
@@ -35,30 +38,6 @@ use crate::{
         tokens,
     },
 };
-
-/// History shows this many rows until "Show more" (the web's default
-/// `recents` widget count).
-const HISTORY_LIMIT: usize = 5;
-
-/// Reading goals (G4): filled by the goals slice.
-pub fn goals_section() -> impl IntoElement {
-    goals::reading_goals()
-}
-
-/// Reading insights (G5): filled by the insights slice.
-pub fn insights_section() -> impl IntoElement {
-    view()
-        .w_full()
-        .flex_col()
-        .gap_2()
-        .child(section_head(t(keys::READER_WIDGET_MOST_READ_TITLE), None))
-        .child(insights::reading_insights())
-}
-
-/// Home cards (G6): filled by the cards slice.
-pub fn cards_section() -> impl IntoElement {
-    cards::cards_section(None)
-}
 
 fn section_head(
     title: impl IntoReactive<SharedString>,
@@ -81,9 +60,12 @@ fn remove_now(id: String) {
 
 fn move_none(_: String, _: String) {}
 
-/// The Bookmarks preview: the count, the empty state, the first five rows
-/// (folder pill, no move), "View all".
-pub(crate) fn bookmarks_preview(shelf: Signal<Shelf>) -> impl IntoElement {
+/// The Bookmarks preview: the count (and the widget's edit controls), the
+/// empty state, the first five rows (folder pill, no move), "View all".
+pub(crate) fn bookmarks_preview(
+    shelf: Signal<Shelf>,
+    controls: Option<AnyElement>,
+) -> impl IntoElement {
     let count = move || shelf.with(|s| s.bookmarks.len());
     let actions = RowActions {
         shelf,
@@ -101,9 +83,16 @@ pub(crate) fn bookmarks_preview(shelf: Signal<Shelf>) -> impl IntoElement {
         .child(section_head(
             t(keys::NAV_BOOKMARKS),
             Some(
-                text(move || SharedString::from(count().to_string()))
-                    .text_xs()
-                    .text_color(tokens::muted_text)
+                view()
+                    .flex_row()
+                    .items_center()
+                    .gap_3()
+                    .child(
+                        text(move || SharedString::from(count().to_string()))
+                            .text_xs()
+                            .text_color(tokens::muted_text),
+                    )
+                    .child(controls)
                     .into_element(),
             ),
         ))
@@ -222,38 +211,35 @@ fn view_tabs(notes_view: Signal<bool>) -> impl IntoElement {
         .child(tab(keys::READER_YOURS_TAB_NOTES, true))
 }
 
-fn overview(notes_view: Signal<bool>) -> impl IntoElement {
-    let shelf = shelf();
+fn edit_toggle(editing: Signal<bool>) -> impl IntoElement {
+    widgets::pill(
+        move || {
+            if editing.get() {
+                return t(keys::READER_HOME_DONE)();
+            }
+            t(keys::READER_HOME_EDIT)()
+        },
+        move || editing.set(!editing.get_untracked()),
+    )
+}
+
+fn overview(
+    data: Signal<HomeData>,
+    editing: Signal<bool>,
+    notes_view: Signal<bool>,
+) -> impl IntoElement {
     view()
         .w_full()
         .flex_col()
         .gap_6()
         .child(reading_bookmark::reading_bookmark_card())
-        .child(
-            view()
-                .w_full()
-                .flex_col()
-                .gap_2()
-                .child(section_head(t(keys::READER_INDEX_YOURS_CONTINUE), None))
-                .child(continue_threads::continue_threads()),
-        )
-        .child(
-            view()
-                .w_full()
-                .flex_col()
-                .gap_2()
-                .child(section_head(t(keys::READER_THREADS_HISTORY), None))
-                .child(history::thread_history(HISTORY_LIMIT)),
-        )
-        .child(bookmarks_preview(shelf))
-        .child(notes::notes_preview(move || notes_view.set(true)))
-        .child(insights_section())
-        .child(goals_section())
-        .child(cards_section())
+        .child(widgets::widget_column(data, editing, notes_view))
 }
 
 pub fn page() -> impl IntoElement {
     follow_notes_owner();
+    let data = home_data();
+    let editing = signal(false);
     let notes_view = signal(false);
     scroll().flex_1().content_inset(page_insets(0.0)).child(
         page_body()
@@ -267,11 +253,24 @@ pub fn page() -> impl IntoElement {
                     .justify_between()
                     .gap_3()
                     .child(page_heading(t(keys::READER_INDEX_YOURS_TITLE)))
-                    .child(index_links()),
+                    .child(
+                        view()
+                            .flex_row()
+                            .flex_wrap()
+                            .items_center()
+                            .gap_1p5()
+                            .child(index_links())
+                            .child(edit_toggle(editing)),
+                    ),
             )
             .child(view_tabs(notes_view))
+            .child(widgets::reading_choice_line())
+            .child(widgets::hidden_widgets(data, editing))
             .child(feedback_bar())
-            .child(when(notes_view, notes::notes_library).otherwise(move || overview(notes_view)))
+            .child(
+                when(notes_view, notes::notes_library)
+                    .otherwise(move || overview(data, editing, notes_view)),
+            )
             .text_color(move || theme().foreground),
     )
 }

@@ -138,6 +138,9 @@ pub struct SessionInfo {
     pub last_seen: Option<String>,
     #[serde(default)]
     pub created_at: Option<String>,
+    /// The registered device this session belongs to, if any.
+    #[serde(default)]
+    pub device_id: Option<String>,
 }
 
 /// `POST /user/v1/update`.

@@ -5,6 +5,7 @@
 
 use std::{future::Future, pin::Pin};
 
+pub mod account;
 pub mod auth_state;
 pub mod config;
 pub mod endpoints;
