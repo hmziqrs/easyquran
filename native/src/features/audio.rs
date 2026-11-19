@@ -106,8 +106,33 @@ pub fn dock() -> impl IntoElement {
         .right_0()
         .bottom(move || px(bottom_room()))
         .pointer_events(nsh_core::PointerEvents::BoxNone)
+        .on_layout(move |b: &Bounds<Points>| {
+            let h = b.size.height.0;
+            if dock_height_signal().get_untracked().0 != h {
+                dock_height_signal().set(DockHeight(h));
+            }
+        })
         .child(when(move || docked.get(), move || dock_body(store)))
         .into_element()
+}
+
+/// The dock's measured height (web `--eq-dock-h`).
+#[derive(Default, Clone, Copy, PartialEq)]
+struct DockHeight(f32);
+
+fn dock_height_signal() -> Signal<DockHeight> {
+    global::<DockHeight>()
+}
+
+/// How far above the window's bottom edge the dock reaches, 0 while it is
+/// hidden (tracked): the download bar and toasts stack above it, as the
+/// web's `--eq-dock-h` does.
+pub fn dock_top() -> f32 {
+    let h = dock_height_signal().get().0;
+    if h <= 0.0 {
+        return 0.0;
+    }
+    h + bottom_room()
 }
 
 /// `mod+shift+space` play/pause, `mod+shift+←/→` previous/next ayah (the

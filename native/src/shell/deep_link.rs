@@ -6,7 +6,8 @@
 //! Every link is parsed by `eq_core::routes::parse_url` and opened through
 //! [`route_from_url`] (which maps `parse_url`'s link with
 //! `route_from_link`, plus the native-only paths). A link of the app whose
-//! path names no screen opens in the browser, never an error screen (N4).
+//! path names no screen, or a reader / zikr target that does not exist,
+//! opens the not-found page (web `+error.svelte` 404).
 //! A desktop launch argument (`easyquran easyquran://surah/al-fatiha`) is
 //! read by `main` too, for `cargo run` and hosts that pass the URL on the
 //! command line; the same URL coming again through the platform is skipped
@@ -35,32 +36,13 @@ pub fn from_launch(url: impl Into<String>) {
     let _ = PENDING.set(url.into());
 }
 
-/// The public web page for an app link whose path names no screen:
-/// `easyquran://x/y` → `https://easyquran.fyi/x/y`; an `https` link of the
-/// app's hosts as it is. `None` for anything else.
-fn web_page(url: &str) -> Option<String> {
-    if let Some(rest) = url.strip_prefix(SCHEME) {
-        return Some(format!("https://{}/{rest}", HOSTS[0]));
-    }
-    let rest = url.strip_prefix("https://")?;
-    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
-    HOSTS
-        .iter()
-        .any(|host| rest[..end].eq_ignore_ascii_case(host))
-        .then(|| url.to_owned())
-}
-
-/// Opens `url`: the route it names, else (an app link with an unknown
-/// path) the page in the browser. `None` when no route opened.
+/// Opens `url`: the route it names; an app link whose path names no page
+/// (or a target that does not exist) opens the not-found page, as the web
+/// answers 404. `None` when the link is not the app's.
 pub fn open(url: &str) -> Option<Route> {
-    if let Some(route) = route_from_url(url) {
-        nav::open(route.clone());
-        return Some(route);
-    }
-    if let Some(page) = web_page(url) {
-        drop(open_url(page));
-    }
-    None
+    let route = route_from_url(url)?;
+    nav::open(route.clone());
+    Some(route)
 }
 
 /// Opens the launch argument, once, then listens for the platform's links

@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use eq_core::store::{
     AppStore, StoreError,
-    sessions::{self, EnterResult, ReaderTarget},
+    sessions::{self, EnterResult, ReaderTarget, ReadingThread},
 };
 use nsh_core::prelude::*;
 
@@ -180,7 +180,13 @@ impl CursorThrottle {
 pub struct Tracking {
     tracker: Stored<ReadTracker>,
     sync: SyncStore,
+    /// The current thread's id and source (web `sessions.current`), sent
+    /// with each read; refreshed at every window flush.
+    thread: Stored<ThreadIds>,
 }
+
+/// `(sessionId, sourceId)` of the reader's thread.
+type ThreadIds = (Option<String>, Option<String>);
 
 fn now_ms() -> f64 {
     nsh_core::time::unix_ms()
@@ -193,6 +199,7 @@ impl Tracking {
         let this = Self {
             tracker: stored(ReadTracker::new(now_ms())),
             sync,
+            thread: stored((None, None)),
         };
         set_interval(Duration::from_millis(WINDOW_FLUSH_MS), move || {
             if this.tracker.with(|t| t.pending_count()) > 0 {
@@ -207,7 +214,8 @@ impl Tracking {
             });
             if let Some((reads, events)) = flushed {
                 this.noted(reads);
-                emit_reads(&events);
+                let ids = this.thread.try_with(|t| t.clone()).unwrap_or_default();
+                emit_reads(&events, &ids);
             }
         });
         this
@@ -219,9 +227,30 @@ impl Tracking {
         }
     }
 
+    /// The thread the reader entered (`sessions.enter`).
+    pub fn set_thread(self, thread: &ReadingThread) {
+        self.thread
+            .replace((Some(thread.id.clone()), thread.source_id.clone()));
+    }
+
+    /// Emits the window with the current thread's ids ("Start over" may
+    /// have moved the reader to a new thread since it entered).
     fn flush_window(self) {
         let events = self.tracker.with(|t| t.flush_window(now_ms()));
-        emit_reads(&events);
+        if events.is_empty() {
+            return;
+        }
+        let thread = self.thread;
+        self.sync.run(
+            |s| sessions::current(s),
+            move |out| {
+                if let Ok(Some(current)) = out {
+                    thread.try_with(|t| *t = (Some(current.id), current.source_id));
+                }
+                let ids = thread.try_with(|t| t.clone()).unwrap_or_default();
+                emit_reads(&events, &ids);
+            },
+        );
     }
 
     pub fn interaction(self) {
@@ -248,15 +277,13 @@ impl Tracking {
 /// Where a window's reads go: the reading-insights queue
 /// (`readingAnalytics.emit`), which another slice owns; until it lands,
 /// the events are logged at debug level.
-pub fn emit_reads(events: &[ReadEvent]) {
-    // Thread and source ids are not threaded through the tracker yet; the
-    // queue accepts their absence (web sends both when it has them).
+pub fn emit_reads(events: &[ReadEvent], (session_id, source_id): &ThreadIds) {
     for e in events {
         crate::stores::insights::emit(crate::stores::insights::ReadInput {
-            session_id: None,
+            session_id: session_id.clone(),
             surah: e.surah,
             ayah: e.ayah,
-            source_id: None,
+            source_id: source_id.clone(),
             ms: e.ms,
         });
     }

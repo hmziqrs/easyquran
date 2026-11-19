@@ -59,11 +59,16 @@ fn deep_links_parse_into_routes() {
         Some(Route::YoursCard("c1".into()))
     );
     assert_eq!(
-        route_from_deep_link(&["azkar", "morning"]),
+        route_from_deep_link(&["azkar", "ayat-al-kursi"]),
         Some(Route::Zikr {
-            slug: "morning".into(),
+            slug: "ayat-al-kursi".into(),
             translation: None
         })
+    );
+    // An unknown zikr is the web's 404.
+    assert_eq!(
+        route_from_deep_link(&["azkar", "morning"]),
+        Some(Route::NotFound("/azkar/morning".into()))
     );
     assert_eq!(
         route_from_deep_link(&["diagnostics"]),

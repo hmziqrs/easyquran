@@ -98,6 +98,9 @@ pub enum Route {
     Privacy,
     Terms,
     Diagnostics,
+    /// A link of the app that names no page, or a reader / zikr target
+    /// that does not exist (web `+error.svelte` 404). Holds the path.
+    NotFound(String),
 }
 
 impl Route {
@@ -158,6 +161,7 @@ impl Route {
             Route::Settings(section) => format!("settings:{}", section.slug()),
             Route::Appeal(token) => format!("appeal:{token:?}"),
             Route::NewsletterConfirm { email, token } => format!("newsletter:{email}:{token}"),
+            Route::NotFound(path) => format!("not-found:{path}"),
             route => route.key_str().into(),
         }
     }
@@ -195,6 +199,7 @@ impl Route {
             Route::Privacy => "privacy",
             Route::Terms => "terms",
             Route::Diagnostics => "diagnostics",
+            Route::NotFound(_) => "not-found",
         }
     }
 
@@ -236,6 +241,7 @@ impl Route {
             Route::Privacy => "Privacy",
             Route::Terms => "Terms",
             Route::Diagnostics => "Diagnostics",
+            Route::NotFound(_) => "Not found",
         }
     }
 
@@ -409,6 +415,7 @@ impl Route {
             Route::Privacy => features::marketing::privacy_page().into_element(),
             Route::Terms => features::marketing::terms_page().into_element(),
             Route::Diagnostics => crate::foundation::diagnostics_content().into_element(),
+            Route::NotFound(path) => features::error::not_found_page(path).into_element(),
         }
     }
 }
@@ -427,19 +434,21 @@ pub fn route_from_deep_link(seg: &[&str]) -> Option<Route> {
 }
 
 /// The route an `easyquran://` deep link or `https://easyquran.fyi` share
-/// link names, query and fragment included (`?v=`, `#ayah-s-n`).
+/// link names, query and fragment included (`?v=`, `#ayah-s-n`). An app
+/// link whose path names no page is [`Route::NotFound`] (web 404); `None`
+/// only for links that are not the app's.
 pub fn route_from_url(url: &str) -> Option<Route> {
     if let Some(link) = eq_core::routes::parse_url(url) {
         return Some(route_from_link(link));
     }
-    let path = url.strip_prefix(eq_core::routes::SCHEME)?;
-    let path = path.split(['?', '#']).next().unwrap_or("");
-    native_only_route(
-        &path
-            .split('/')
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>(),
-    )
+    let path = app_path(url)?;
+    if url.starts_with(eq_core::routes::SCHEME) {
+        let seg: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+        if let Some(route) = native_only_route(&seg) {
+            return Some(route);
+        }
+    }
+    Some(Route::NotFound(path))
 }
 
 /// The web link a route names, for share links and the deep-link round
@@ -475,7 +484,9 @@ pub fn link_for_route(route: &Route) -> Option<eq_core::routes::Link> {
         Route::Contact => StaticPage::Contact,
         Route::Privacy => StaticPage::Privacy,
         Route::Terms => StaticPage::Terms,
-        Route::Settings(_) | Route::Totp | Route::Diagnostics => return None,
+        Route::Settings(_) | Route::Totp | Route::Diagnostics | Route::NotFound(_) => {
+            return None;
+        }
     };
     Some(Link::Page(page))
 }
@@ -485,8 +496,24 @@ pub fn link_for_route(route: &Route) -> Option<eq_core::routes::Link> {
 pub fn route_from_link(link: eq_core::routes::Link) -> Route {
     use eq_core::routes::{Link, StaticPage};
     match link {
-        Link::Reader(reader) => Route::Reader(reader),
-        Link::Zikr { slug, translation } => Route::Zikr { slug, translation },
+        Link::Reader(reader) => {
+            if !translation_known(reader.target.translation.as_ref()) {
+                return Route::NotFound(
+                    eq_core::routes::link_path(&Link::Reader(reader)).unwrap_or_default(),
+                );
+            }
+            Route::Reader(reader)
+        }
+        Link::Zikr { slug, translation } => {
+            let exists = eq_core::home::snippets::snippet_for_slug(&slug).is_some();
+            if !exists || !translation_known(translation.as_ref()) {
+                return Route::NotFound(
+                    eq_core::routes::link_path(&Link::Zikr { slug, translation })
+                        .unwrap_or_default(),
+                );
+            }
+            Route::Zikr { slug, translation }
+        }
         Link::Page(page) => match page {
             StaticPage::Home => Route::Home,
             StaticPage::SurahIndex => Route::SurahIndex,
@@ -517,6 +544,35 @@ pub fn route_from_link(link: eq_core::routes::Link) -> Route {
             StaticPage::Terms => Route::Terms,
         },
     }
+}
+
+/// Whether a route's translation (if any) is one the catalogue has: an
+/// unknown id is a 404 on the web.
+fn translation_known(translation: Option<&TranslationRef>) -> bool {
+    translation.is_none_or(|t| eq_core::quran::catalogue::translation(&t.id()).is_some())
+}
+
+/// The path of an app link (`easyquran://…` or an `https` link of the
+/// app's hosts), query and fragment dropped. `None` for other links.
+fn app_path(url: &str) -> Option<String> {
+    let rest = match url.strip_prefix(eq_core::routes::SCHEME) {
+        Some(rest) => rest,
+        None => {
+            let rest = url
+                .strip_prefix("https://")
+                .or_else(|| url.strip_prefix("http://"))?;
+            let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+            if !eq_core::routes::HOSTS
+                .iter()
+                .any(|h| rest[..end].eq_ignore_ascii_case(h))
+            {
+                return None;
+            }
+            &rest[end..]
+        }
+    };
+    let path = rest.split(['?', '#']).next().unwrap_or("");
+    Some(format!("/{}", path.trim_start_matches('/')))
 }
 
 /// Paths the native app has and the web does not.
@@ -564,6 +620,24 @@ mod tests {
             let link = link_for_route(&route).expect("web link");
             assert_eq!(route_from_link(link), route);
         }
+    }
+
+    #[test]
+    fn unknown_app_links_are_not_found() {
+        let nf = |url: &str| matches!(route_from_url(url), Some(Route::NotFound(_)));
+        assert!(nf("easyquran://no-such-page"));
+        assert!(nf("https://easyquran.fyi/115"));
+        assert!(nf("https://easyquran.fyi/al-fatihah/t/xx/nobody"));
+        assert!(nf("https://easyquran.fyi/azkar/no-such-zikr"));
+        assert_eq!(
+            route_from_url("easyquran://no-such-page"),
+            Some(Route::NotFound("/no-such-page".into()))
+        );
+        assert_eq!(route_from_url("https://example.com/1"), None);
+        assert_eq!(
+            route_from_url("easyquran://diagnostics"),
+            Some(Route::Diagnostics)
+        );
     }
 
     #[test]

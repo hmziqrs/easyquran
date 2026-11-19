@@ -1,26 +1,36 @@
 //! The verse tool strip (PARITY C9): web `VerseTools.svelte` and
 //! `ReportVerseDialog.svelte` + `report/payload.ts`. Copy, share, the
 //! range share dialog, and (where a translation is read) a correction
-//! report. Bookmark, pin, reading-bookmark and note come from the
-//! bookmarks feature through the seams below.
+//! report, pin, bookmark, "bookmark here" (the reading place) and note.
+//! Bookmark, reading place and note record the translation being read.
 
 use std::time::Duration;
 
-use eq_core::{api::types::ReportBody, i18n::keys, quran::view::VerseView, routes::TranslationRef};
+use eq_core::{
+    api::types::ReportBody, i18n::keys, quran::view::VerseView, routes::TranslationRef,
+    store::preferences,
+};
 use nsh_core::element::AnyElement;
 use nsh_core::prelude::*;
 
-use super::share;
+use super::{model::LaneText, share};
 use crate::{
+    features::bookmarks::{fmt, offer},
     stores::{
         locale::{t, t_args, tr},
+        pins::{PINS_MAX, PinToggle, PinnedLane, PinnedVerse, pins_store},
         reader::ReaderStore,
+        sync::Area,
     },
     ui::{
-        button::{ButtonSize, ButtonVariant, button_with, icon_svg_button},
+        button::{
+            ButtonSize, ButtonVariant, IconButtonSize, IconButtonVariant, button_with,
+            icon_button_with, icon_svg_button,
+        },
         dialog::dialog_card,
         field::{multiline_field, text_field},
         icons::lucide,
+        toast::notify,
         tokens,
     },
 };
@@ -42,32 +52,183 @@ const FLAG: &str = lucide!(
 /// `COPY_FEEDBACK_MS`.
 const COPY_FEEDBACK: Duration = Duration::from_millis(1500);
 
-fn bookmark_action(surah: u16, ayah: u16) -> Option<AnyElement> {
-    Some(crate::features::bookmarks::bookmark_toggle(surah, ayah).into_element())
+fn bookmark_action(surah: u16, ayah: u16, source_id: Option<String>) -> AnyElement {
+    crate::features::bookmarks::bookmark_toggle_in(surah, ayah, source_id).into_element()
 }
 
-fn note_action(surah: u16, ayah: u16) -> Option<AnyElement> {
-    Some(crate::features::bookmarks::note_editor(surah, ayah).into_element())
+fn note_action(surah: u16, ayah: u16, source_id: Option<String>) -> AnyElement {
+    crate::features::bookmarks::note_editor_in(surah, ayah, source_id).into_element()
 }
 
-// wired by lead after B1 merges (pins + "bookmark here" live with bookmarks)
-fn pin_action(_surah: u16, _ayah: u16) -> Option<AnyElement> {
-    None
+const PIN: &str = lucide!(
+    r#"<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>"#
+);
+const BOOK: &str = lucide!(
+    r#"<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/>"#
+);
+
+fn variant_for(on: bool) -> IconButtonVariant {
+    if on {
+        return IconButtonVariant::Primary;
+    }
+    IconButtonVariant::Ghost
 }
 
-// wired by lead after B1 merges
-fn reading_bookmark_action(_surah: u16, _ayah: u16) -> Option<AnyElement> {
-    None
+/// Pin / unpin (web `onPin`): keeps the row's main text and the lanes it
+/// shows, device-local, in pin order. A full set says so.
+fn pin_action(
+    key: String,
+    source_id: Option<String>,
+    text: std::rc::Rc<String>,
+    lanes: Vec<PinnedLane>,
+) -> AnyElement {
+    dynamic(move || {
+        let pinned = pins_store().has(&key);
+        let name = if pinned {
+            tr(keys::READER_UNPIN_VERSE)
+        } else {
+            tr(keys::READER_PIN_VERSE)
+        };
+        let (key, source_id, text, lanes) =
+            (key.clone(), source_id.clone(), text.clone(), lanes.clone());
+        untracked(move || {
+            icon_button_with(
+                PIN,
+                name,
+                variant_for(pinned),
+                IconButtonSize::Small,
+                move || {
+                    let result = pins_store().toggle(PinnedVerse {
+                        key: key.clone(),
+                        source_id: source_id.clone(),
+                        text: (*text).clone(),
+                        lanes: lanes.clone(),
+                    });
+                    if result == PinToggle::Full {
+                        notify(fmt(keys::READER_PINS_FULL, &[("max", PINS_MAX.into())]));
+                    }
+                },
+            )
+            .into_element()
+        })
+    })
+    .into_element()
+}
+
+/// The reading place, read once per preferences version and shared by
+/// every row (web `currentReadingBookmark()`).
+#[derive(Default, Clone)]
+struct Place {
+    version: Option<u64>,
+    loading: Option<u64>,
+    at: Option<(i64, i64)>,
+}
+
+fn place() -> Signal<Place> {
+    global::<Place>()
+}
+
+fn request_place(version: u64) {
+    let current =
+        place().with_untracked(|p| p.version == Some(version) || p.loading == Some(version));
+    if current {
+        return;
+    }
+    place().update(|p| p.loading = Some(version));
+    crate::features::bookmarks::store().run(
+        |s| preferences::reading_bookmark(s),
+        move |out| {
+            let Ok(next) = out else {
+                return;
+            };
+            place().update(|p| {
+                if p.loading == Some(version) {
+                    p.loading = None;
+                }
+                if p.version.is_none_or(|v| v <= version) {
+                    p.version = Some(version);
+                    p.at = next.map(|b| (b.surah, b.ayah));
+                }
+            });
+        },
+    );
+}
+
+/// "Bookmark here" (web `onSetReadingBookmark`): sets the reading place
+/// with the translation being read and offers Undo. Primary while this
+/// verse is the place.
+fn reading_bookmark_action(surah: u16, ayah: u16, source_id: Option<String>) -> AnyElement {
+    let sync = crate::features::bookmarks::store();
+    effect(move || {
+        let version = sync.version(Area::Preferences);
+        if sync.ready() {
+            untracked(|| request_place(version));
+        }
+    });
+    let (s, a) = (i64::from(surah), i64::from(ayah));
+    dynamic(move || {
+        let here = place().with(|p| p.at == Some((s, a)));
+        let name = if here {
+            tr(keys::READER_READING_BOOKMARK_HERE)
+        } else {
+            tr(keys::READER_READING_BOOKMARK_SET)
+        };
+        let source_id = source_id.clone();
+        untracked(move || {
+            icon_button_with(
+                BOOK,
+                name,
+                variant_for(here),
+                IconButtonSize::Small,
+                move || set_place(s, a, source_id.clone()),
+            )
+            .into_element()
+        })
+    })
+    .into_element()
+}
+
+fn set_place(surah: i64, ayah: i64, source_id: Option<String>) {
+    let sync = crate::features::bookmarks::store();
+    sync.write(
+        Area::Preferences,
+        move |st| preferences::set_reading_bookmark(st, surah, ayah, source_id),
+        move |out| match out {
+            Ok(previous) => offer(
+                tr(keys::READER_READING_BOOKMARK_SAVED),
+                tr(keys::READER_BOOKMARKS_UNDO),
+                move || {
+                    let previous = previous.clone();
+                    sync.write(
+                        Area::Preferences,
+                        move |st| preferences::restore_reading_bookmark(st, previous.as_ref()),
+                        |_| (),
+                    );
+                },
+            ),
+            Err(e) => log::warn!("reading bookmark write failed: {e}"),
+        },
+    );
 }
 
 /// The tool strip of one verse row. `route` is the translation being read
 /// (none on the Arabic reader).
 pub fn verse_tools(
     verse: &VerseView,
+    lanes: &[LaneText],
     route: Option<TranslationRef>,
     prefs: ReaderStore,
 ) -> AnyElement {
     let (surah, ayah) = (verse.surah, verse.ayah);
+    let source_id = route.as_ref().map(TranslationRef::id);
+    let pinned_lanes: Vec<PinnedLane> = lanes
+        .iter()
+        .map(|l| PinnedLane {
+            source_id: l.source_id.clone(),
+            name: l.name.clone(),
+            text: l.text.clone(),
+        })
+        .collect();
     let body = std::rc::Rc::new(verse.body.clone());
     let share_open = signal(false);
     let report_open = signal(false);
@@ -84,9 +245,14 @@ pub fn verse_tools(
         .flex_row()
         .items_center()
         .gap(px(2.0))
-        .child(pin_action(surah, ayah))
-        .child(bookmark_action(surah, ayah))
-        .child(reading_bookmark_action(surah, ayah))
+        .child(pin_action(
+            verse.key.clone(),
+            source_id.clone(),
+            body.clone(),
+            pinned_lanes,
+        ))
+        .child(bookmark_action(surah, ayah, source_id.clone()))
+        .child(reading_bookmark_action(surah, ayah, source_id.clone()))
         .child(shared_flash(COPY, tr(keys::READER_COPY), copy))
         .child(shared_flash(SHARE, tr(keys::READER_SHARE), share_text))
         .child(icon_svg_button(
@@ -99,7 +265,7 @@ pub fn verse_tools(
                 report_open.set(true);
             })
         }))
-        .child(note_action(surah, ayah))
+        .child(note_action(surah, ayah, source_id))
         .child(share::share_dialog(
             share_open,
             surah,

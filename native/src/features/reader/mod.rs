@@ -250,6 +250,8 @@ pub fn page(link: ReaderLink) -> impl IntoElement {
         }
     };
 
+    let tracking = Tracking::install(sync);
+
     // The tab's reading thread for this route (`trackReaderThread`).
     {
         let first = model::first_verse(&scope).unwrap_or((1, 1));
@@ -273,6 +275,7 @@ pub fn page(link: ReaderLink) -> impl IntoElement {
             let link = link.clone();
             session::enter(sync, target.clone(), came_from_reader, move |out| {
                 if let Some((result, offered)) = out {
+                    tracking.set_thread(&result.thread);
                     if result.resumed {
                         let place = (
                             u16::try_from(result.thread.surah).ok(),
@@ -325,8 +328,6 @@ pub fn page(link: ReaderLink) -> impl IntoElement {
             session::dismiss_offer(sync);
         });
     });
-
-    let tracking = Tracking::install(sync);
 
     let change_mode = move |mode: ReaderMode| {
         if let Some(v) = top.get_untracked() {
@@ -532,7 +533,7 @@ fn render_item(item: Option<Item>, prefs: ReaderStore, row: Row) -> AnyElement {
             rows::surah_header(surah, opener.as_ref(), prefs).into_element()
         }
         Some(Item::Verse { verse, lanes }) => {
-            let tools = verse_tools::verse_tools(&verse, row.route, prefs);
+            let tools = verse_tools::verse_tools(&verse, &lanes, row.route, prefs);
             let mut extra = vec![lanes::stacked_lanes(&lanes, &row.failed, &row.order, prefs)];
             extra.extend(words::verse_words(prefs.script()));
             rows::verse_row(&verse, &[], prefs, Some(tools), extra).into_element()

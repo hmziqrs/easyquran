@@ -111,7 +111,8 @@ pub fn download_bar() -> impl IntoElement {
         .absolute()
         .left_0()
         .right_0()
-        .bottom_0()
+        // Above the audio dock while it shows (web `--eq-dock-h`).
+        .bottom(move || px(crate::features::audio::dock_top()))
         .items_center()
         .px_3()
         .pb_safe_area_plus(px(12.0))
