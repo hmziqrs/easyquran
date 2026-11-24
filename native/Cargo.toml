@@ -11,58 +11,62 @@ resolver = "3"
 [dependencies]
 eq-core = { path = "crates/eq-core" }
 # `svg`: 0.6.0 made SVG images (every icon) an opt-in feature of nsh-core.
-nsh-core = { version = "0.6.0", features = ["svg"] }
-nsh-base = "0.6.0"
+nsh-core = { version = "0.6.1", features = ["svg"] }
+nsh-base = "0.6.1"
 # Update check (PARITY K4): `Config::check` over the manifest the app fetches.
-nsh-updater = "0.6.0"
-nsh-query = { git = "https://github.com/SuperNSH/query.git", rev = "4a2e2b01ba986be3c961d42606ef2895d5472dd5" }
-nsh-form = { git = "https://github.com/SuperNSH/form.git", rev = "06053c367618e0feeec8cd3765636d552f987b9d" }
+nsh-updater = "0.6.1"
+nsh-query = "0.1.0"
+nsh-form = "0.1.0"
 chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
 log = "0.4"
 env_logger = "0.11"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Social sign-in (PARITY I4): provider authorize URLs, PKCE, code exchange.
-nsh-auth = { git = "https://github.com/SuperNSH/auth.git", rev = "0c110208404512727e7e0bf9406fd319f754ff09" }
+nsh-auth = "0.1.0"
 url = "2"
 futures-channel = "0.3"
 # Push, analytics, crash reporting (PARITY M2, N2, N3).
-nsh-firebase-core = { git = "https://github.com/SuperNSH/firebase.git", rev = "9bc030c02b871e2b219375f0c1612badc0d6f899" }
-nsh-firebase-analytics = { git = "https://github.com/SuperNSH/firebase.git", rev = "9bc030c02b871e2b219375f0c1612badc0d6f899" }
-nsh-firebase-messaging = { git = "https://github.com/SuperNSH/firebase.git", rev = "9bc030c02b871e2b219375f0c1612badc0d6f899" }
+nsh-firebase-core = "0.1.0"
+nsh-firebase-analytics = "0.1.0"
+nsh-firebase-messaging = "0.1.0"
 # OAuth PKCE and state for the relayed providers (Apple, GitHub) on every
 # platform: already in the graph via eq-core.
 sha2 = "0.10"
 base64 = "0.22"
 getrandom = "0.2"
-# The owner's NSH capability crates (SuperNSH), pinned to their pushed heads.
+# SuperNSH capability crates from crates.io.
 # Network status for the sync engine and the "Offline" line.
-nsh-connectivity = { git = "https://github.com/SuperNSH/connectivity.git", rev = "fe88dc47779d2973e4513dc802697f3ffbed8e44" }
+nsh-connectivity = "0.0.1"
 # `easyquran://` links, Universal Links and App Links.
-nsh-deep-links = { git = "https://github.com/SuperNSH/deep-links.git", rev = "274d2693b86f7b9e254366635fa8a6a90b13967e" }
+nsh-deep-links = "0.1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # The session value and device key (contracts/devices.md D3): Keychain,
 # AndroidKeyStore, Credential Manager, Secret Service. Its store runs on a
 # worker thread with its own current-thread runtime (`services::storage`).
-nsh-secure-storage = { git = "https://github.com/SuperNSH/secure-storage.git", rev = "1a0977ed45a167e4b51fb82f0d98eb993683db00" }
+nsh-secure-storage = "0.1.0"
 tokio = { version = "1.54.1", default-features = false, features = ["rt"] }
 
-[target.'cfg(target_os = "ios")'.dependencies]
-nsh-platform-ios = { version = "0.6.0", default-features = false }
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 objc2 = "0.6.5"
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSBundle", "NSCalendar", "NSError", "NSProcessInfo", "NSString"] }
+block2 = "0.6"
+libc = "0.2"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+nsh-platform-ios = { version = "0.6.1", default-features = false }
 objc2-ui-kit = { version = "0.3.2", default-features = false, features = ["std", "UIResponder", "UIView", "UIWindow", "UIScrollView", "UIGeometry"] }
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFCGTypes"] }
-block2 = "0.6"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-nsh-platform-linux = { version = "0.6.0", default-features = false }
+nsh-platform-linux = { version = "0.6.1", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-nsh-platform-macos = { version = "0.6.0", default-features = false }
+nsh-platform-macos = { version = "0.6.1", default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-nsh-platform-windows = { version = "0.6.0", default-features = false }
+nsh-platform-windows = { version = "0.6.1", default-features = false }
 
 # Read once, then deleted: the secrets blob earlier Windows builds kept in
 # Credential Manager through keyring (`services::storage` migration). Apple's
@@ -73,5 +77,5 @@ default-features = false
 features = ["windows-native"]
 
 [dev-dependencies]
-nsh-engine = "0.6.0"
-nsh-testing = { version = "0.6.0", default-features = false }
+nsh-engine = "0.6.1"
+nsh-testing = { version = "0.6.1", default-features = false }

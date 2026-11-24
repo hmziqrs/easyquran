@@ -530,3 +530,56 @@ fn secrets_never_show_in_debug_or_display() {
         assert!(!shown.contains(secret), "{secret} leaked:\n{shown}");
     }
 }
+
+#[test]
+fn native_oauth_link_endpoints_send_session_and_csrf_and_decode_identities() {
+    let (script, secrets, client) = setup(KeyStoreKind::None);
+    secrets.set(SESSION_KEY, "sess-link").unwrap();
+    script.reply("/csrf/v1/generate", 200, &[], json!({ "token": "csrf-1" }));
+    let summary = json!({
+        "identities": [
+            { "provider": "google", "provider_user_id": "g-1", "created_at": "2026-11-24T00:00:00Z" }
+        ],
+        "has_password": true,
+        "passkey_count": 0,
+        "can_unlink_any": true,
+        "linkable_providers": ["github", "discord"]
+    });
+    script.reply("/auth/google/v1/token/link", 200, &[], summary.clone());
+    script.reply("/auth/github/v1/native/link", 200, &[], summary);
+
+    let google = block_on(client.oauth_token_link(
+        crate::api::types::OAuthProvider::Google,
+        &crate::api::types::ProviderToken::Google {
+            id_token: Secret::new("id-tok"),
+            access_token: None,
+        },
+    ))
+    .expect("google link");
+    assert_eq!(google.identities.len(), 1);
+    assert_eq!(google.identities[0].provider, "google");
+
+    let github = block_on(client.oauth_native_link(
+        crate::api::types::OAuthProvider::Github,
+        &Secret::new("code-1"),
+        &Secret::new("verifier-1"),
+        "https://easyquran.fyi/api/auth/github/v1/native/relay",
+    ))
+    .expect("github link");
+    assert_eq!(github.linkable_providers, vec!["github", "discord"]);
+
+    let sent = script.sent();
+    assert_eq!(sent.len(), 3);
+    for req in &sent[1..] {
+        assert!(
+            req.headers
+                .iter()
+                .any(|(k, v)| k.eq_ignore_ascii_case("x-eq-session") && v == "sess-link")
+        );
+        assert!(
+            req.headers
+                .iter()
+                .any(|(k, v)| k.eq_ignore_ascii_case("csrf-token") && v == "csrf-1")
+        );
+    }
+}

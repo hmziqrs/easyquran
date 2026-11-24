@@ -41,9 +41,22 @@ pub fn device_env() -> DeviceEnv {
     DeviceEnv {
         platform,
         form_factor,
-        os_major: None,
+        os_major: os_major(),
         app_version: Some(env!("CARGO_PKG_VERSION").to_owned()),
         os_id: os_id(),
+    }
+}
+
+/// The host OS major version where the platform exposes it natively.
+fn os_major() -> Option<i32> {
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        let version = objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion();
+        i32::try_from(version.majorVersion).ok().filter(|&v| v > 0)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    {
+        None
     }
 }
 

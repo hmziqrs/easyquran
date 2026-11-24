@@ -11,7 +11,8 @@ use tracing::{error, warn};
 use crate::error::{ErrorCode, ErrorResponse};
 
 pub use login::{
-    find_or_create_user_for_oauth, finish_oauth_login, generate_oauth_nonce, OAuthProvider,
+    ensure_native_link_ready, find_or_create_user_for_oauth, finish_native_link,
+    finish_oauth_login, generate_oauth_nonce, OAuthProvider,
 };
 pub use redirect::build_allowed_success_redirect;
 pub use state::{

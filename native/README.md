@@ -1,6 +1,6 @@
 # EasyQuran native
 
-The EasyQuran app for macOS, iOS and Android (Linux and Windows from the same crate), built on [Native Shell](https://nsh.dev) 0.6.0 in Rust mode. It is the native counterpart of `web/` and aims at 1:1 feature parity.
+The EasyQuran app for macOS, iOS and Android (Linux and Windows from the same crate), built on [Native Shell](https://nsh.dev) 0.6.1 in Rust mode with published SuperNSH crates from crates.io. It is the native counterpart of `web/` and aims at 1:1 feature parity.
 
 - What must be built, and its state: [PARITY.md](PARITY.md)
 - Rules, layout and gates for anyone working here: [AGENTS.md](AGENTS.md)
@@ -27,7 +27,7 @@ Nothing below is committed. Every value is read at build time (`option_env!`); a
 
 ### Social sign-in (`nsh-auth`)
 
-The provider token goes to the API's `POST /auth/{provider}/v1/token` (GitHub: the code goes to the broker, below). Each client id must also be an audience or app the API accepts (its env names in brackets).
+The provider token goes to the API's `POST /auth/{provider}/v1/token` for sign-in and `POST /auth/{provider}/v1/token/link` for fresh-auth account linking (GitHub: the code goes to `/auth/github/v1/native/exchange` or `/auth/github/v1/native/link`, below). Each client id must also be an audience or app the API accepts (its env names in brackets).
 
 | Env (build time) | Platform | Provider console | Redirect to register |
 | --- | --- | --- | --- |
@@ -48,7 +48,8 @@ Apple, Facebook and GitHub accept only HTTPS redirects, so they redirect to the 
 - **Push (FCM)** needs the library's native tier: the `firebase.*` handlers of `native/ios/NshFirebase` and `native/android` in the nsh-firebase repository, registered by an embedding host. An `nsh build` app has no host channel for them yet, so push is off and devices register without a token. When a host exists, its config files are provisioned out of band, never committed (both are gitignored):
   - iOS: `GoogleService-Info.plist` added to the app bundle as a resource (`Bundle.main` → `FirebaseApp.configure(options:)`), the APNs key uploaded to the Firebase project, the Push Notifications capability on, `FirebaseAppDelegateProxyEnabled = false` in Info.plist.
   - Android: `google-services.json` copied to the app's `assets/` (read at start by `NshFirebase.init`; no Gradle plugin), `POST_NOTIFICATIONS` in the manifest.
-- Desktop has no push (devices.md push matrix): reminders use local notifications.
+- Desktop has no push (devices.md push matrix): reminders use local notifications. Packaged macOS and iOS builds schedule daily local reminders via `UNCalendarNotificationTrigger`; other platforms fall back to the in-app reminder timer while running.
+- Universal Links / App Links (`links`) and Apple Handoff (`handoff`) are declared in `nsh.json`, and the shell publishes the current canonical `https://easyquran.fyi` path on route changes.
 
 ## Gates
 

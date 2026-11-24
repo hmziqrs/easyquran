@@ -18,6 +18,10 @@ pub fn routes() -> Router<AppState> {
     // belt-and-braces user check).
     let link = Router::<AppState>::new()
         .route("/link", axum::routing::post(controller::github_link))
+        .route(
+            "/native/link",
+            axum::routing::post(controller::github_native_link),
+        )
         .route_layer(middleware::from_fn(auth_guard::authenticated));
 
     Router::new()

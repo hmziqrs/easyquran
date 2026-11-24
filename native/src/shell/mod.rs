@@ -49,13 +49,18 @@ pub fn install() {
     crate::stores::appearance::AppearanceStore::install();
     crate::services::monitoring::install();
     // Screen views (consent-gated inside `analytics`): the web path of the
-    // page on top; native-only pages report their route family key.
+    // page on top; native-only pages report their route family key. Also
+    // publishes the canonical https URL for Handoff (`nsh.json` `"handoff": true`).
     effect(move || {
         let route = nav::current();
         untracked(|| {
-            let path = routes::link_for_route(&route)
-                .and_then(|link| eq_core::routes::link_path(&link))
-                .unwrap_or_else(|| format!("/{}", route.key_str()));
+            let web_path =
+                routes::link_for_route(&route).and_then(|link| eq_core::routes::link_path(&link));
+            if let Some(ref p) = web_path {
+                let url = format!("https://{}{p}", eq_core::routes::HOSTS[0]);
+                let _ = nsh_core::prelude::set_app_url(url);
+            }
+            let path = web_path.unwrap_or_else(|| format!("/{}", route.key_str()));
             crate::services::analytics::screen_view(&path);
         });
     });

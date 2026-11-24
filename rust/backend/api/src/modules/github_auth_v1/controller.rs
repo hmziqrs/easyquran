@@ -508,6 +508,55 @@ pub async fn github_native_exchange(
     ))
 }
 
+/// `POST /auth/github/v1/native/link`: exchanges a native PKCE code with the server-held
+/// secret and links GitHub to the signed-in native session (CSRF-protected, fresh auth
+/// required, browser `Origin` refused).
+#[debug_handler]
+#[instrument(skip_all, fields(user_id, result))]
+pub async fn github_native_link(
+    State(state): State<AppState>,
+    auth: AuthSession,
+    headers: HeaderMap,
+    ValidatedJson(payload): ValidatedJson<GitHubNativeExchangeRequest>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    info!("Processing GitHub native code account link");
+
+    oauth::ensure_native_link_ready(&state, &auth, &headers).await?;
+    if !oauth::native_relay::redirect_uri_allowed(
+        &payload.redirect_uri,
+        &github_native_redirect_uris(),
+    ) {
+        warn!("Rejecting GitHub native link for a redirect_uri off the allow-list");
+        tracing::Span::current().record("result", "redirect_not_allowed");
+        return Err(
+            ErrorResponse::new(ErrorCode::InvalidInput).with_message("redirect_uri is not allowed")
+        );
+    }
+
+    let credentials = load_github_native_credentials()?;
+    let access_token = exchange_github_native_code(
+        oauth::token_exchange_http_client()?,
+        &format!("{}/login/oauth/access_token", github_oauth_base()),
+        &credentials,
+        &payload,
+    )
+    .await?;
+    let user_info = fetch_github_user_info(&access_token).await?;
+    if user_info.id <= 0 || user_info.login.trim().is_empty() {
+        warn!("GitHub returned an invalid profile for a native link");
+        return Err(invalid_github_token());
+    }
+    let snapshot = oauth::finish_native_link(
+        &state,
+        &auth,
+        oauth::OAuthProvider::Github,
+        &user_info.id.to_string(),
+    )
+    .await?;
+    tracing::Span::current().record("result", "linked");
+    Ok((StatusCode::OK, Json(snapshot)))
+}
+
 /// GitHub's code-exchange reply: a token, or `error` with status 200.
 #[derive(Deserialize)]
 struct GitHubCodeExchangeReply {

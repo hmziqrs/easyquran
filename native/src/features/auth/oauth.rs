@@ -142,6 +142,81 @@ pub(crate) async fn sign_in(provider: OAuthProvider) -> Result<SignInStep, ()> {
         .map_err(|_| ())
 }
 
+/// Outcome of attempting to link an OAuth provider to the signed-in account.
+pub(crate) enum LinkError {
+    /// Browser flow cancelled or provider configuration absent.
+    Cancelled,
+    /// Fresh authentication required before linking (checked before opening
+    /// the browser and also enforced server-side).
+    FreshAuthRequired,
+    /// Backend API rejected the link (401, 409 already linked, etc.).
+    Api(eq_core::api::ApiError),
+}
+
+/// Runs `provider`'s OAuth flow and links the resulting identity to the
+/// signed-in account via `/auth/{provider}/v1/token/link` (or
+/// `/auth/github/v1/native/link` for GitHub).
+pub(crate) async fn link_account(
+    provider: OAuthProvider,
+) -> Result<eq_core::api::types::IdentitySummary, LinkError> {
+    let setup = setup(provider).ok_or(LinkError::Cancelled)?;
+    let client = crate::app::auth_store()
+        .client()
+        .ok_or(LinkError::Cancelled)?;
+    // Confirm fresh auth before opening the system browser so the user is not
+    // sent through an OAuth round trip only to be refused at the end.
+    match client.reauth_status().await {
+        Ok(status) if !status.ready => return Err(LinkError::FreshAuthRequired),
+        Err(err) => return Err(LinkError::Api(err)),
+        Ok(_) => {}
+    }
+    if provider == OAuthProvider::Github {
+        let code = github_code(&setup)
+            .await
+            .map_err(|_| LinkError::Cancelled)?;
+        return client
+            .oauth_native_link(
+                provider,
+                &Secret::from(code.code.as_str()),
+                &Secret::from(code.verifier.as_str()),
+                &code.redirect_uri,
+            )
+            .await
+            .map_err(LinkError::Api);
+    }
+    let nonce = match provider.has_token_nonce() {
+        true => Some(
+            client
+                .oauth_token_nonce(provider)
+                .await
+                .map_err(LinkError::Api)?
+                .provider_nonce,
+        ),
+        false => None,
+    };
+    let token = match provider {
+        OAuthProvider::Apple => ProviderToken::Apple {
+            identity_token: Secret::from(
+                apple_id_token(&setup, nonce.as_deref())
+                    .await
+                    .map_err(|_| LinkError::Cancelled)?
+                    .as_str(),
+            ),
+        },
+        _ => provider_token(
+            provider,
+            run(&setup, nonce.as_deref())
+                .await
+                .map_err(|_| LinkError::Cancelled)?,
+        )
+        .map_err(|_| LinkError::Cancelled)?,
+    };
+    client
+        .oauth_token_link(provider, &token)
+        .await
+        .map_err(LinkError::Api)
+}
+
 /// How the provider's redirect reaches the app.
 enum Redirect {
     /// `http://127.0.0.1:<port>`, a listener bound per attempt.

@@ -1,11 +1,11 @@
 //! Connected accounts (`ConnectedAccounts.svelte`, PARITY I4): the linked
-//! providers, unlink behind an inline confirm, and the last-method rule.
-//! Linking is not offered here (see the module docs of `account`).
+//! providers, linkable providers (via native OAuth link endpoints), unlink
+//! behind an inline confirm, and the last-method rule.
 
 use eq_core::{
     api::{
         account::{can_unlink_identity, identity_provider_label},
-        types::IdentitySummary,
+        types::{IdentitySummary, OAuthProvider},
     },
     i18n::keys,
     sync::clock::ms_from_iso,
@@ -16,7 +16,10 @@ use super::{go_sign_in, is_anonymous, needs_fresh_auth, section_heading, securit
 use crate::{
     app::auth_store,
     features::{
-        auth::form::{Msg, copy::GENERIC_TRY_AGAIN, error_line},
+        auth::{
+            form::{Msg, copy::GENERIC_TRY_AGAIN, error_line},
+            oauth::{self, LinkError},
+        },
         bookmarks::{fmt, medium_date},
     },
     stores::locale::t,
@@ -24,6 +27,7 @@ use crate::{
         button::{ButtonSize, ButtonVariant, button_with},
         layout::card,
         text::muted,
+        toast::notify,
         tokens,
     },
 };
@@ -62,6 +66,49 @@ impl Connected {
                 Err(err) if is_anonymous(&err) => go_sign_in(),
                 Err(_) => {
                     let _ = self.load_error.try_set(Some(Msg::Lit(GENERIC_TRY_AGAIN)));
+                }
+            }
+        });
+    }
+
+    fn link(self, provider: OAuthProvider) {
+        if self.pending.get_untracked().is_some() {
+            return;
+        }
+        let slug = provider.as_str().to_owned();
+        self.pending.set(Some(slug));
+        self.unlink_error.set(None);
+        spawn(async move {
+            let result = oauth::link_account(provider).await;
+            let _ = self.pending.try_set(None);
+            match result {
+                Ok(summary) => {
+                    self.sequence.with(|s| *s += 1);
+                    let _ = self.loading.try_set(false);
+                    let _ = self.load_error.try_set(None);
+                    let _ = self.summary.try_set(Some(summary));
+                    notify(fmt(
+                        keys::AUTH_CONNECTED_LINKED_BANNER,
+                        &[("provider", oauth::label(provider).into())],
+                    ));
+                }
+                Err(LinkError::Cancelled) => {}
+                Err(LinkError::FreshAuthRequired) => {
+                    let _ = self
+                        .unlink_error
+                        .try_set(Some(security::fresh_auth_required()));
+                }
+                Err(LinkError::Api(err)) if is_anonymous(&err) => go_sign_in(),
+                Err(LinkError::Api(err)) if needs_fresh_auth(&err) => {
+                    let _ = self
+                        .unlink_error
+                        .try_set(Some(security::fresh_auth_required()));
+                }
+                Err(LinkError::Api(err)) => {
+                    let message = err.http().and_then(|h| h.message.clone());
+                    let _ = self
+                        .unlink_error
+                        .try_set(Some(message.map_or(Msg::Lit(GENERIC_TRY_AGAIN), Msg::Text)));
                 }
             }
         });
@@ -200,6 +247,17 @@ fn identity_row(
         .into_element()
 }
 
+fn oauth_provider_from_str(name: &str) -> Option<OAuthProvider> {
+    match name {
+        "google" => Some(OAuthProvider::Google),
+        "apple" => Some(OAuthProvider::Apple),
+        "facebook" => Some(OAuthProvider::Facebook),
+        "github" => Some(OAuthProvider::Github),
+        "discord" => Some(OAuthProvider::Discord),
+        _ => None,
+    }
+}
+
 fn body(c: Connected) -> AnyElement {
     dynamic(move || {
         if c.load_error.with(Option::is_some) {
@@ -222,18 +280,58 @@ fn body(c: Connected) -> AnyElement {
         };
         let can_unlink = can_unlink_identity(&summary);
         let has_rows = !summary.identities.is_empty();
+        let configured = oauth::providers();
+        let linked_names: Vec<String> = summary
+            .identities
+            .iter()
+            .map(|i| i.provider.clone())
+            .collect();
+        let linkable: Vec<OAuthProvider> = summary
+            .linkable_providers
+            .iter()
+            .filter(|name| !linked_names.iter().any(|l| l == *name))
+            .filter_map(|name| oauth_provider_from_str(name))
+            .filter(|p| configured.contains(p))
+            .collect();
+        let busy = move || c.pending.with(Option::is_some);
         view()
             .w_full()
             .flex_col()
-            .gap_2()
-            .children(summary.identities.into_iter().filter_map(|i| {
-                identity_provider_label(&i.provider)?;
-                Some(identity_row(c, i.provider, i.created_at, can_unlink))
-            }))
-            .child((has_rows && !can_unlink).then(|| {
-                text(t(keys::AUTH_CONNECTED_LAST_METHOD_HINT))
-                    .text_xs()
-                    .text_color(tokens::muted_text)
+            .gap_3()
+            .child(
+                view()
+                    .w_full()
+                    .flex_col()
+                    .gap_2()
+                    .children(summary.identities.into_iter().filter_map(|i| {
+                        identity_provider_label(&i.provider)?;
+                        Some(identity_row(c, i.provider, i.created_at, can_unlink))
+                    }))
+                    .child((has_rows && !can_unlink).then(|| {
+                        text(t(keys::AUTH_CONNECTED_LAST_METHOD_HINT))
+                            .text_xs()
+                            .text_color(tokens::muted_text)
+                    })),
+            )
+            .child((!linkable.is_empty()).then(|| {
+                view()
+                    .flex_row()
+                    .flex_wrap()
+                    .gap_2()
+                    .children(linkable.into_iter().map(|provider| {
+                        let label = fmt(
+                            keys::AUTH_CONNECTED_LINK_PROVIDER,
+                            &[("provider", oauth::label(provider).into())],
+                        );
+                        button_with(
+                            SharedString::from(label),
+                            ButtonVariant::Secondary,
+                            ButtonSize::Small,
+                            busy,
+                            None,
+                            move || c.link(provider),
+                        )
+                    }))
             }))
             .into_element()
     })

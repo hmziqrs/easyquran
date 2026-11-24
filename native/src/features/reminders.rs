@@ -88,11 +88,41 @@ fn fire_at_next(generation: u64) {
 fn arm(schedule: Option<ReminderSchedule>) {
     let slot = global::<Armed>();
     let generation = slot.with_untracked(|a| a.generation) + 1;
+    let os_scheduled = match schedule.as_ref() {
+        Some(s) if s.enabled => {
+            let minute_of_day = s.reminder_minute.clamp(0, 1439);
+            let quiet = in_quiet_hours(
+                i64::from(minute_of_day),
+                s.quiet_start_minute.map(i64::from),
+                s.quiet_end_minute.map(i64::from),
+            );
+            if quiet {
+                crate::services::notifications::cancel_daily_reminder(NOTIFICATION_ID);
+                false
+            } else {
+                let hour = u8::try_from(minute_of_day / 60).unwrap_or(0);
+                let minute = u8::try_from(minute_of_day % 60).unwrap_or(0);
+                crate::services::notifications::schedule_daily_reminder(
+                    NOTIFICATION_ID,
+                    tr(keys::SETTINGS_PRIVACY_REMINDERS),
+                    tr(keys::SETTINGS_PRIVACY_REMINDERS_INTRO),
+                    hour,
+                    minute,
+                )
+            }
+        }
+        _ => {
+            crate::services::notifications::cancel_daily_reminder(NOTIFICATION_ID);
+            false
+        }
+    };
     slot.set(Armed {
         schedule,
         generation,
     });
-    fire_at_next(generation);
+    if !os_scheduled {
+        fire_at_next(generation);
+    }
 }
 
 /// Loads the account's schedule and keeps the in-app reminder timer for

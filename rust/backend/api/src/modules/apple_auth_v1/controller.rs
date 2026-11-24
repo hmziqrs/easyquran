@@ -254,6 +254,43 @@ pub async fn apple_token(
     ))
 }
 
+/// `POST /auth/apple/v1/token/link`: links Apple to the signed-in native session
+/// after fresh-auth confirmation. CSRF-protected (not on the token sign-in exempt list).
+#[debug_handler]
+#[instrument(skip(state, auth, payload, headers), fields(result))]
+pub async fn apple_token_link(
+    State(state): State<AppState>,
+    auth: AuthSession,
+    headers: HeaderMap,
+    ValidatedJson(payload): ValidatedJson<AppleTokenRequest>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    info!("Processing Apple native account link");
+
+    oauth::ensure_native_link_ready(&state, &auth, &headers).await?;
+
+    let audiences = load_apple_token_audiences()?;
+    let allowed_audiences: Vec<&str> = audiences.iter().map(String::as_str).collect();
+    let claims = verify_apple_id_token(&payload.identity_token, &allowed_audiences, None)
+        .await
+        .map_err(|e| {
+            warn!(error = ?e, "Apple native link identity_token verification failed");
+            tracing::Span::current().record("result", "invalid_token");
+            e
+        })?;
+    oauth::consume_native_token_nonce(oauth::NativeTokenProvider::Apple, claims.nonce.as_deref())?;
+
+    if claims.sub.trim().is_empty() {
+        warn!("Apple id_token carried an empty subject");
+        return Err(ErrorResponse::new(ErrorCode::InvalidToken)
+            .with_message("Invalid Apple identity token"));
+    }
+
+    let snapshot =
+        oauth::finish_native_link(&state, &auth, oauth::OAuthProvider::Apple, &claims.sub).await?;
+    tracing::Span::current().record("result", "linked");
+    Ok((StatusCode::OK, Json(snapshot)))
+}
+
 #[debug_handler(state = AppState)]
 pub async fn apple_user_info(auth: AuthSession) -> Result<impl IntoResponse, ErrorResponse> {
     match auth.user {

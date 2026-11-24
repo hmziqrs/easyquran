@@ -49,7 +49,7 @@ fn linkable_providers(configured: &[ProviderStatus], linked: &[&str]) -> Vec<Str
         .collect()
 }
 
-async fn identity_snapshot(
+pub(crate) async fn identity_snapshot(
     state: &AppState,
     user: &UserModel,
 ) -> Result<serde_json::Value, ErrorResponse> {

@@ -426,6 +426,44 @@ impl ApiClient {
         self.sign_in_reply(reply).await
     }
 
+    /// `POST /auth/{provider}/v1/token/link`: link a provider to the signed-in
+    /// account (fresh auth + CSRF required). Returns the updated identities.
+    pub async fn oauth_token_link(
+        &self,
+        provider: OAuthProvider,
+        token: &ProviderToken,
+    ) -> Result<IdentitySummary, ApiError> {
+        let reply = self
+            .post(
+                &format!("/auth/{}/v1/token/link", provider.as_str()),
+                token.body(),
+            )
+            .await?;
+        decode(reply.body, "identities")
+    }
+
+    /// `POST /auth/{provider}/v1/native/link`: exchange a native PKCE code and
+    /// link the provider to the signed-in account (fresh auth + CSRF required).
+    pub async fn oauth_native_link(
+        &self,
+        provider: OAuthProvider,
+        code: &Secret,
+        code_verifier: &Secret,
+        redirect_uri: &str,
+    ) -> Result<IdentitySummary, ApiError> {
+        let reply = self
+            .post(
+                &format!("/auth/{}/v1/native/link", provider.as_str()),
+                json!({
+                    "code": code.expose(),
+                    "code_verifier": code_verifier.expose(),
+                    "redirect_uri": redirect_uri,
+                }),
+            )
+            .await?;
+        decode(reply.body, "identities")
+    }
+
     // --- device/v1 -----------------------------------------------------------
 
     /// `POST /device/v1/challenge`.

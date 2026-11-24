@@ -25,6 +25,10 @@ regex = "1"
 unicode-normalization = "0.1"
 # Shared sync merge rules (contracts/sync.md). Read-only: owned by rust/.
 eq-sync-core = { path = "../../../rust/crates/eq-sync-core" }
+# Pure-Rust branded verse-card PNG rendering (PARITY C9, web `lib/share/verse-card.ts`).
+rustybuzz = "0.20"
+tiny-skia = "0.11"
+png = "0.17"
 
 [build-dependencies]
 # build.rs generators read JSON sources (web/messages/** for i18n).

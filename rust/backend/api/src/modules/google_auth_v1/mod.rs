@@ -9,6 +9,10 @@ use crate::{config, middlewares::auth_guard, AppState};
 pub fn routes() -> Router<AppState> {
     let link = Router::<AppState>::new()
         .route("/link", axum::routing::post(controller::google_link))
+        .route(
+            "/token/link",
+            axum::routing::post(controller::google_token_link),
+        )
         .route_layer(middleware::from_fn(auth_guard::authenticated));
 
     Router::new()

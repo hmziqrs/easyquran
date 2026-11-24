@@ -408,6 +408,33 @@ pub async fn discord_token(
     ))
 }
 
+/// `POST /auth/discord/v1/token/link`: links Discord to the signed-in native session
+/// (CSRF-protected, fresh auth required, browser `Origin` refused).
+#[debug_handler]
+#[instrument(skip(state, auth, payload, headers), fields(user_id, result))]
+pub async fn discord_token_link(
+    State(state): State<AppState>,
+    auth: AuthSession,
+    headers: HeaderMap,
+    ValidatedJson(payload): ValidatedJson<DiscordTokenRequest>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    info!("Processing Discord native token account link");
+
+    oauth::ensure_native_link_ready(&state, &auth, &headers).await?;
+
+    let credentials = load_discord_credentials()?;
+    let expected_user_id =
+        verify_discord_access_token(&payload.access_token, &credentials.client_id).await?;
+    let user_info = fetch_discord_user_info(&payload.access_token).await?;
+    let user_info = reconcile_discord_user_info(expected_user_id, user_info)?;
+
+    let snapshot =
+        oauth::finish_native_link(&state, &auth, oauth::OAuthProvider::Discord, &user_info.id)
+            .await?;
+    tracing::Span::current().record("result", "linked");
+    Ok((StatusCode::OK, Json(snapshot)))
+}
+
 #[debug_handler(state = AppState)]
 pub async fn discord_user_info(auth: AuthSession) -> Result<impl IntoResponse, ErrorResponse> {
     match auth.user {

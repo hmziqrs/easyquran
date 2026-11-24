@@ -17,6 +17,7 @@ pub mod reading;
 pub mod routes;
 pub mod search;
 pub mod settings;
+pub mod share;
 pub mod store;
 pub mod sync;
 

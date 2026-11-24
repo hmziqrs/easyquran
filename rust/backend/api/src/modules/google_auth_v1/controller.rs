@@ -491,6 +491,53 @@ pub async fn google_token(
     ))
 }
 
+/// `POST /auth/google/v1/token/link`: links Google to the signed-in native session
+/// (CSRF-protected, fresh auth required, browser `Origin` refused).
+#[debug_handler]
+#[instrument(skip(state, auth, payload, headers), fields(user_id, result))]
+pub async fn google_token_link(
+    State(state): State<AppState>,
+    auth: AuthSession,
+    headers: HeaderMap,
+    ValidatedJson(payload): ValidatedJson<GoogleTokenRequest>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    info!("Processing Google native token account link");
+
+    oauth::ensure_native_link_ready(&state, &auth, &headers).await?;
+
+    let client_id = std::env::var("GOOGLE_CLIENT_ID").map_err(|_| {
+        ErrorResponse::new(ErrorCode::InternalServerError)
+            .with_message("GOOGLE_CLIENT_ID not configured")
+    })?;
+    let mobile = std::env::var("GOOGLE_MOBILE_CLIENT_IDS").ok();
+    let desktop = std::env::var("GOOGLE_DESKTOP_CLIENT_IDS").ok();
+    let allowed_auds = native_audiences(&client_id, mobile.as_deref(), desktop.as_deref());
+    let allowed_auds: Vec<&str> = allowed_auds.iter().map(String::as_str).collect();
+
+    let claims = verify_google_id_token(&payload.id_token, &allowed_auds, None)
+        .await
+        .map_err(|e| {
+            warn!(error = ?e, "Google native link id_token verification failed");
+            tracing::Span::current().record("result", "invalid_token");
+            e
+        })?;
+    oauth::consume_native_token_nonce(oauth::NativeTokenProvider::Google, claims.nonce.as_deref())?;
+
+    let user_info = if let Some(access_token) = payload.access_token.as_deref() {
+        let provider_profile = fetch_google_user_info(access_token).await?;
+        reconcile_google_user_info(&claims, provider_profile)?
+    } else {
+        let token_profile = google_user_info_from_claims(&claims);
+        reconcile_google_user_info(&claims, token_profile)?
+    };
+
+    let snapshot =
+        oauth::finish_native_link(&state, &auth, oauth::OAuthProvider::Google, &user_info.id)
+            .await?;
+    tracing::Span::current().record("result", "linked");
+    Ok((StatusCode::OK, Json(snapshot)))
+}
+
 async fn finish_google_login(
     state: &AppState,
     auth: &mut AuthSession,

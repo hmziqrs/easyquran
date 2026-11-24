@@ -11,11 +11,6 @@
 //! Not offered on native:
 //! - Passkeys (I5): NSH exposes no platform passkey API, so the Passkeys
 //!   card is left out (the web shows "not supported" without WebAuthn).
-//! - Linking a provider (I4 link): `/auth/{provider}/v1/link` binds the
-//!   OAuth state to the browser's cookie session; a native session lives
-//!   in `x-eq-session`, which the system browser does not carry, so the
-//!   callback cannot find it. Unlink works. See the report's backend
-//!   proposal.
 
 mod connected;
 mod delete;

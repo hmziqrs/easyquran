@@ -212,6 +212,12 @@ mod tests {
         assert!(is_csrf_exempt("/auth/apple/v1/native/relay"));
         assert!(!is_csrf_exempt("/auth/apple/v1/native/relay/x"));
         assert!(!is_csrf_exempt("/auth/google/v1/token-evil"));
+        // Authenticated native link endpoints stay CSRF-gated.
+        assert!(!is_csrf_exempt("/auth/google/v1/token/link"));
+        assert!(!is_csrf_exempt("/auth/apple/v1/token/link"));
+        assert!(!is_csrf_exempt("/auth/facebook/v1/token/link"));
+        assert!(!is_csrf_exempt("/auth/discord/v1/token/link"));
+        assert!(!is_csrf_exempt("/auth/github/v1/native/link"));
         // Browser SPA code-exchange endpoints stay CSRF-gated.
         assert!(!is_csrf_exempt("/auth/apple/v1/exchange"));
         assert!(!is_csrf_exempt("/auth/facebook/v1/exchange"));

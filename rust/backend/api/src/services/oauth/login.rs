@@ -272,6 +272,46 @@ pub async fn link_identity_to_unchanged_user(
     Ok(outcome)
 }
 
+/// Pre-flight check for native OAuth account linking: native-only (no browser
+/// `Origin`), authenticated session, and an active fresh-auth grant so we never
+/// burn a one-time provider nonce or authorization code without fresh auth.
+pub async fn ensure_native_link_ready(
+    state: &AppState,
+    auth: &AuthSession,
+    headers: &axum::http::HeaderMap,
+) -> Result<(), ErrorResponse> {
+    super::ensure_native_token_request(headers)?;
+    auth.user_required()?;
+    if !crate::services::fresh_auth::available(auth, &state.sea_db).await? {
+        return Err(crate::services::fresh_auth::required());
+    }
+    Ok(())
+}
+
+/// Completes a native OAuth link after the provider token/code was verified:
+/// atomically consumes fresh auth, links the provider identity under the
+/// unchanged-user lock, and returns the updated `IdentitySummary` snapshot.
+pub async fn finish_native_link(
+    state: &AppState,
+    auth: &AuthSession,
+    provider: OAuthProvider,
+    provider_user_id: &str,
+) -> Result<serde_json::Value, ErrorResponse> {
+    let owner = auth.user_required()?;
+    crate::services::fresh_auth::consume(auth, &state.sea_db).await?;
+    let fresh_user = user::Entity::find_by_id_with_404(&state.sea_db, owner.id).await?;
+    let outcome =
+        link_identity_to_unchanged_user(&state.sea_db, &fresh_user, provider, provider_user_id)
+            .await?;
+    match outcome {
+        LinkOutcome::AlreadyLinkedOtherUser => Err(ErrorResponse::new(ErrorCode::DuplicateEntry)
+            .with_message("This account is already linked to another user")),
+        LinkOutcome::Linked | LinkOutcome::AlreadyLinkedSameUser => {
+            crate::modules::user_v1::controller::identity_snapshot(state, &fresh_user).await
+        }
+    }
+}
+
 /// Outcome of a provider web callback: a login session for the given user id, a successful link
 /// onto the already-authenticated account, or a link refused because the identity belongs to
 /// another user.
@@ -551,5 +591,29 @@ mod tests {
             .unwrap()
             .expect("identity link row exists");
         assert_eq!(identity.user_id, owner.id, "existing link must stay put");
+    }
+
+    #[tokio::test]
+    async fn link_identity_to_unchanged_user_rejects_stale_credential_state() {
+        let db = mem_db().await;
+        let confirmed = insert_user(&db, "unchanged@example.com").await;
+
+        let mut rotated: user::ActiveModel = confirmed.clone().into();
+        rotated.password = Set(Some("changed-password-hash".to_string()));
+        rotated.update(&db).await.unwrap();
+
+        let err =
+            link_identity_to_unchanged_user(&db, &confirmed, OAuthProvider::Apple, "apple-sub-1")
+                .await
+                .unwrap_err();
+
+        assert_eq!(err.code, crate::services::fresh_auth::required().code);
+        assert!(
+            user_oauth_identity::Entity::find_by_provider(&db, "apple", "apple-sub-1")
+                .await
+                .unwrap()
+                .is_none(),
+            "stale credential state must not write a link row"
+        );
     }
 }

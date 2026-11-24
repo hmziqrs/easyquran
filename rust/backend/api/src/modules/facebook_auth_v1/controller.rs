@@ -275,6 +275,37 @@ pub async fn facebook_token(
     ))
 }
 
+/// `POST /auth/facebook/v1/token/link`: links Facebook to the signed-in native session
+/// after fresh-auth confirmation. CSRF-protected (not on the token sign-in exempt list).
+#[debug_handler]
+#[instrument(skip(state, auth, payload, headers), fields(result))]
+pub async fn facebook_token_link(
+    State(state): State<AppState>,
+    auth: AuthSession,
+    headers: HeaderMap,
+    ValidatedJson(payload): ValidatedJson<FacebookTokenRequest>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    info!("Processing Facebook native account link");
+
+    oauth::ensure_native_link_ready(&state, &auth, &headers).await?;
+
+    let credentials = load_facebook_credentials()?;
+    let expected_user_id = verify_facebook_access_token(
+        &payload.access_token,
+        &credentials.client_id,
+        &credentials.client_secret,
+    )
+    .await?;
+    let user_info = fetch_facebook_user_info(&payload.access_token).await?;
+    let user_info = reconcile_facebook_user_info(&expected_user_id, user_info)?;
+
+    let snapshot =
+        oauth::finish_native_link(&state, &auth, oauth::OAuthProvider::Facebook, &user_info.id)
+            .await?;
+    tracing::Span::current().record("result", "linked");
+    Ok((StatusCode::OK, Json(snapshot)))
+}
+
 #[debug_handler(state = AppState)]
 pub async fn facebook_user_info(auth: AuthSession) -> Result<impl IntoResponse, ErrorResponse> {
     match auth.user {

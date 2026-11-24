@@ -1,12 +1,16 @@
 //! Verse sharing (PARITY C9): web `reader-share.svelte.ts` (plain-text
-//! bodies and deep links), `share/range.ts` and `ShareDialog.svelte`.
+//! bodies and deep links), `share/range.ts`, `share/verse-card.ts` and
+//! `ShareDialog.svelte`.
 //!
 //! Share (`shareVerse`, `shareRange`) shows the system's share sheet
 //! (`nsh_core` `share`) where the platform has one (iOS, Android, macOS);
 //! elsewhere (Windows, Linux) it takes the web's no-`navigator.share` path:
 //! the text goes to the clipboard. Copy stays a separate, clipboard-only
-//! action, as on the web. The verse-card image needs a canvas that encodes
-//! to an image; NSH has none, so the dialog offers text only.
+//! action, as on the web. Image format renders a 1080 px branded PNG via
+//! `eq_core::share::render_verse_card` and saves it (desktop save dialog) or
+//! shares the PNG file (mobile share sheet).
+
+use std::path::PathBuf;
 
 use eq_core::{
     i18n::keys,
@@ -18,13 +22,16 @@ use eq_core::{
         },
     },
     routes::{HOSTS, TranslationRef, surah_ayah_path_for, surah_path_for},
+    share::{CardInput, CardVerse, render_verse_card},
 };
 use nsh_core::{
+    file_dialog::{FileFilter, SaveDialog},
     prelude::*,
     share::{ShareAction, ShareRequest},
 };
 
 use crate::{
+    services::files,
     stores::locale::{t, t_args, tr},
     ui::{
         button::{ButtonSize, ButtonVariant, button_with},
@@ -35,6 +42,10 @@ use crate::{
         tokens,
     },
 };
+
+const HAFS_FONT: &[u8] = include_bytes!("../../../assets/fonts/uthmanic-hafs-v22.ttf");
+const INDOPAK_FONT: &[u8] = include_bytes!("../../../assets/fonts/indopak-reader-compat-v4.ttf");
+const LATIN_FONT: &[u8] = include_bytes!("../../../assets/fonts/Onest.ttf");
 
 /// Most ayahs one share may carry (`SHARE_SPAN_MAX`).
 pub const SHARE_SPAN_MAX: i64 = 50;
@@ -260,6 +271,90 @@ pub fn share_dialog(
     )
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShareFormat {
+    Text,
+    Image,
+}
+
+fn card_arabic_font(script: ArabicSource) -> &'static [u8] {
+    if script == ArabicSource::IndoPak {
+        return INDOPAK_FONT;
+    }
+    HAFS_FONT
+}
+
+async fn write_card_to_data_dir(file_name: String, bytes: Vec<u8>) -> Option<PathBuf> {
+    let dir = files::app_data_dir()
+        .unwrap_or_else(|| std::env::temp_dir().join("easyquran"))
+        .join("share");
+    blocking(move || {
+        std::fs::create_dir_all(&dir).ok()?;
+        let path = dir.join(file_name);
+        std::fs::write(&path, bytes).ok()?;
+        Some(path)
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
+/// Renders and saves/shares the verse card PNG (`onDownload` in `ShareDialog.svelte`).
+async fn save_or_share_card(
+    script: ArabicSource,
+    surah: u16,
+    from: u16,
+    to: u16,
+    input: CardInput,
+) {
+    let arabic_font = card_arabic_font(script);
+    let rendered = blocking(move || render_verse_card(&input, arabic_font, LATIN_FONT)).await;
+    let Ok(Ok(bytes)) = rendered else {
+        notify(tr(keys::READER_SHARE_IMAGE_FAILED));
+        return;
+    };
+    let file_name = format!("easyquran-{surah}-{from}-{to}.png");
+    let title = range_title(surah, from, to);
+
+    if is_desktop() {
+        let dialog = SaveDialog::new()
+            .file_name(file_name.clone())
+            .filter(FileFilter::new("PNG", ["png"]));
+        match pick_save_path(dialog).await {
+            Ok(Some(path)) => {
+                let ok = blocking(move || std::fs::write(path, bytes).is_ok())
+                    .await
+                    .unwrap_or(false);
+                notify(if ok {
+                    tr(keys::READER_SHARE_IMAGE_SAVED)
+                } else {
+                    tr(keys::READER_SHARE_IMAGE_FAILED)
+                });
+                return;
+            }
+            Ok(None) => return,
+            Err(_) => {
+                // Save dialog unavailable (e.g. headless): fall through to data dir / share sheet.
+            }
+        }
+    }
+
+    let Some(path) = write_card_to_data_dir(file_name, bytes).await else {
+        notify(tr(keys::READER_SHARE_IMAGE_FAILED));
+        return;
+    };
+    if share_available().await {
+        let request = ShareRequest::new().title(title).file(path);
+        match share(request).await {
+            Ok(outcome) if outcome.action == ShareAction::Dismissed => {}
+            Ok(_) => notify(tr(keys::READER_SHARE_IMAGE_SAVED)),
+            Err(_) => notify(tr(keys::READER_SHARE_IMAGE_FAILED)),
+        }
+        return;
+    }
+    notify(tr(keys::READER_SHARE_IMAGE_SAVED));
+}
+
 fn share_body(
     open: Signal<bool>,
     surah: u16,
@@ -270,6 +365,8 @@ fn share_body(
     let ayah_count = meta().surah(surah).map_or(0, |s| s.ayah_count);
     let from = signal(ayah.to_string());
     let to = signal(ayah.to_string());
+    let format = signal(ShareFormat::Text);
+    let busy = signal(false);
     let include_reference = signal(true);
     let include_link = signal(true);
     let verses = signal(None::<Vec<(u16, String)>>);
@@ -319,19 +416,50 @@ fn share_body(
             None => notify(tr(keys::READER_SHARE_UNAVAILABLE)),
         }
     };
-    let copy_text = move || {
-        let (Some(list), Some(l)) = (verses.get_untracked(), link()) else {
+    let copy_text = {
+        let link = link.clone();
+        move || {
+            let (Some(list), Some(l)) = (verses.get_untracked(), link()) else {
+                return;
+            };
+            set_clipboard(range_share_text(
+                surah,
+                &list,
+                &l,
+                include_reference.get_untracked(),
+                include_link.get_untracked(),
+            ));
+            notify(tr(keys::READER_COPIED));
+            open.set(false);
+        }
+    };
+    let download_image = move || {
+        if busy.get_untracked() {
+            return;
+        }
+        let (Some(list), Some((f, t_to)), Some(l)) = (verses.get_untracked(), bounds(), link())
+        else {
             return;
         };
-        set_clipboard(range_share_text(
-            surah,
-            &list,
-            &l,
-            include_reference.get_untracked(),
-            include_link.get_untracked(),
-        ));
-        notify(tr(keys::READER_COPIED));
-        open.set(false);
+        let card_verses: Vec<CardVerse> = list
+            .into_iter()
+            .map(|(n, text)| CardVerse {
+                text: plain(&text),
+                reference: verse_ref(surah, n),
+            })
+            .collect();
+        let input = CardInput {
+            verses: card_verses,
+            include_reference: include_reference.get_untracked(),
+            link: include_link.get_untracked().then_some(l),
+            brand: tr(keys::READER_SHARE_CARD_BRAND).to_owned(),
+            footer: tr(keys::READER_SHARE_CARD_FOOTER).to_owned(),
+        };
+        busy.set(true);
+        spawn(async move {
+            save_or_share_card(script, surah, f, t_to, input).await;
+            let _ = busy.try_set(false);
+        });
     };
     let field = |label, value: Signal<String>| {
         view()
@@ -343,6 +471,29 @@ fn share_body(
                     .text_color(tokens::foreground_secondary),
             )
             .child(numeric_field(value, ""))
+    };
+    let format_button = move |target: ShareFormat, label_key: eq_core::i18n::Key| {
+        dynamic(move || {
+            let active = format.get() == target;
+            let variant = if active {
+                ButtonVariant::Primary
+            } else {
+                ButtonVariant::Secondary
+            };
+            untracked(move || {
+                button_with(
+                    t(label_key),
+                    variant,
+                    ButtonSize::Small,
+                    false,
+                    None,
+                    move || {
+                        format.set(target);
+                    },
+                )
+                .into_element()
+            })
+        })
     };
     view()
         .gap_4()
@@ -376,6 +527,28 @@ fn share_body(
         .child(
             view()
                 .gap_2()
+                .child(
+                    text(t(keys::READER_SHARE_FORMAT))
+                        .text_xs()
+                        .text_color(tokens::foreground_secondary),
+                )
+                .child(
+                    view()
+                        .flex_row()
+                        .gap_2()
+                        .child(format_button(
+                            ShareFormat::Text,
+                            keys::READER_SHARE_FORMAT_TEXT,
+                        ))
+                        .child(format_button(
+                            ShareFormat::Image,
+                            keys::READER_SHARE_FORMAT_IMAGE,
+                        )),
+                ),
+        )
+        .child(
+            view()
+                .gap_2()
                 .child(checkbox_row(
                     tr(keys::READER_SHARE_INCLUDE_REFERENCE),
                     include_reference,
@@ -399,13 +572,35 @@ fn share_body(
                     None,
                     copy_link,
                 ))
-                .child(button_with(
-                    t(keys::READER_SHARE_COPY),
-                    ButtonVariant::Primary,
-                    ButtonSize::Small,
-                    move || verses.with(Option::is_none),
-                    None,
-                    copy_text,
+                .child(when(
+                    move || format.get() == ShareFormat::Text,
+                    move || {
+                        let copy_text = copy_text.clone();
+                        button_with(
+                            t(keys::READER_SHARE_COPY),
+                            ButtonVariant::Primary,
+                            ButtonSize::Small,
+                            move || verses.with(Option::is_none),
+                            None,
+                            copy_text,
+                        )
+                        .into_element()
+                    },
+                ))
+                .child(when(
+                    move || format.get() == ShareFormat::Image,
+                    move || {
+                        let download_image = download_image.clone();
+                        button_with(
+                            t(keys::READER_SHARE_DOWNLOAD),
+                            ButtonVariant::Primary,
+                            ButtonSize::Small,
+                            move || verses.with(Option::is_none) || busy.get(),
+                            None,
+                            download_image,
+                        )
+                        .into_element()
+                    },
                 )),
         )
         .into_element()
