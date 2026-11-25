@@ -169,7 +169,9 @@ pub enum ShareResult {
 /// one, else `text` to the clipboard. A sheet that fails copies the link.
 pub async fn share_or_copy(title: String, text: String, link: String) -> ShareResult {
     if !share_available().await {
-        set_clipboard(text);
+        // The answer only says whether the system took it; the copy happens
+        // whether or not it is awaited (so do the others here).
+        drop(set_clipboard(text));
         return ShareResult::Copied;
     }
     let request = ShareRequest::new()
@@ -181,7 +183,7 @@ pub async fn share_or_copy(title: String, text: String, link: String) -> ShareRe
         Ok(_) => ShareResult::Shared,
         Err(e) => {
             log::info!("share failed: {}", e.code.as_deref().unwrap_or("none"));
-            set_clipboard(link);
+            drop(set_clipboard(link));
             ShareResult::LinkCopied
         }
     }
@@ -211,12 +213,12 @@ pub fn share_verse(ctx: Option<&TranslationRef>, surah: u16, ayah: u16, text: &s
 
 /// `copyVerse`: text, reference, link to the clipboard.
 pub fn copy_verse(ctx: Option<&TranslationRef>, surah: u16, ayah: u16, text: &str) {
-    set_clipboard(verse_share_text(
+    drop(set_clipboard(verse_share_text(
         text,
         surah,
         ayah,
         &verse_link(ctx, surah, ayah),
-    ));
+    )));
 }
 
 fn problem_message(problem: RangeProblem) -> SharedString {
@@ -410,7 +412,7 @@ fn share_body(
         let link = link.clone();
         move || match link() {
             Some(l) => {
-                set_clipboard(l);
+                drop(set_clipboard(l));
                 notify(tr(keys::READER_COPIED));
             }
             None => notify(tr(keys::READER_SHARE_UNAVAILABLE)),
@@ -422,13 +424,13 @@ fn share_body(
             let (Some(list), Some(l)) = (verses.get_untracked(), link()) else {
                 return;
             };
-            set_clipboard(range_share_text(
+            drop(set_clipboard(range_share_text(
                 surah,
                 &list,
                 &l,
                 include_reference.get_untracked(),
                 include_link.get_untracked(),
-            ));
+            )));
             notify(tr(keys::READER_COPIED));
             open.set(false);
         }

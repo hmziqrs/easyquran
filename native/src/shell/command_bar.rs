@@ -972,9 +972,9 @@ mod macos {
         }
 
         /// The main window's close button and Cmd+W hide it instead: the
-        /// runner quits when its window closes (`keep_alive_on_close` is
-        /// not reachable from an app), and the menu bar item must outlive
-        /// it. The Dock icon and "Show easyquran" bring it back.
+        /// bridge and the app's state live in its content, and the menu bar
+        /// item must outlive it. The Dock icon (`chrome::show_on_reopen`)
+        /// and "Show easyquran" bring it back.
         fn patch_main(&self) {
             if self.ivars().borrow().main_patched {
                 return;

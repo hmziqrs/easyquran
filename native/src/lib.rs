@@ -2,7 +2,7 @@
 //! and `cargo run` mount. Owned by the shell area.
 
 use nsh_base::theme;
-use nsh_core::prelude::*;
+use nsh_core::{element::desktop::window as app_window, prelude::*};
 
 /// The product name (`SITE.name` in `web/src/lib/config/site.ts`): a
 /// brand, never translated.
@@ -46,18 +46,24 @@ fn macos_components(components: &nsh_platform_macos::Components) {
     shell::command_bar::register_macos(components);
 }
 
-/// The application's root: the surface's background and text color, the
-/// shell's assembly inside it. The safe area is left to the shell's pages
-/// and bars, which know where their headers and tab bars sit.
+/// The application's root: its one window (off the desktops `window()`
+/// shows its content in the app's one surface), the surface's background
+/// and text color, the shell's assembly inside it. The safe area is left to
+/// the shell's pages and bars, which know where their headers and tab bars
+/// sit. The window's size is the host's (`AppOptions::size`).
 #[component]
 pub fn App() -> impl IntoElement {
-    // The UI locale before anything reads it; the root lays out in its
-    // direction (NSH's own surface direction follows the system language).
+    // The UI locale before anything reads it; the window's content lays out
+    // in its direction (NSH's own surface direction follows the system
+    // language).
     stores::locale::install();
-    view()
-        .flex_1()
-        .direction(stores::locale::layout_direction)
-        .bg(move || theme().background)
-        .text_color(move || theme().foreground)
-        .child(app::root())
+    app_window().id("main").title(APP_NAME).content(|| {
+        // Inside the window: keystrokes and the title bar are its own.
+        view()
+            .flex_1()
+            .direction(stores::locale::layout_direction)
+            .bg(move || theme().background)
+            .text_color(move || theme().foreground)
+            .child(app::root())
+    })
 }

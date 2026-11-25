@@ -285,7 +285,7 @@ pub fn section() -> AnyElement {
                 false,
                 None,
                 move || {
-                    set_clipboard(store.css());
+                    drop(set_clipboard(store.css()));
                     copied.set(true);
                     notify(tr(keys::READER_COPIED));
                     set_timeout(std::time::Duration::from_millis(1600), move || {

@@ -78,6 +78,7 @@ pub fn install() {
     on_key("ctrl+mod+s", move |_| chrome::toggle_sidebar());
     crate::features::audio::install_hotkeys();
     back::install();
+    chrome::show_on_reopen();
     lifecycle::watch();
     deep_link::open_pending();
 }

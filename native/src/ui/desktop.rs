@@ -1,39 +1,39 @@
 //! Desktop window helpers (`nsh/desktop`): the title bar of the app's
-//! own, the main window's title and mode, and the application menu, so
-//! the shell draws its chrome from here (0.5.0's `WindowRef` model).
+//! own, a window's title and mode, and the application menu, so the shell
+//! draws its chrome from here. A window's handle is `current_window()`,
+//! read while rendering.
 
 use nsh_core::Points;
 use nsh_core::desktop::{TitleBarOptions, TitleBarStyle, WindowAttributes, WindowMode};
-use nsh_core::element::desktop::{MenuItem, main_window, set_application_menu, title_bar};
+use nsh_core::element::desktop::{MenuItem, WindowRef, set_application_menu, title_bar};
 
 /// Hide the system title bar: the app fills the window and draws its own
 /// bar in the area [`title_bar_inset`] reports. Desktops only.
-pub fn use_custom_title_bar() {
-    set_title_bar(TitleBarStyle::Hidden, None);
+pub fn use_custom_title_bar(window: &WindowRef) {
+    set_title_bar(window, TitleBarStyle::Hidden, None);
 }
 
-/// The main window's title bar: `style`, and the app's bar `height` the
+/// `window`'s title bar: `style`, and the app's bar `height` the
 /// window controls center in (`None`: the platform's). Desktops only.
-pub fn set_title_bar(style: TitleBarStyle, height: Option<Points>) {
+pub fn set_title_bar(window: &WindowRef, style: TitleBarStyle, height: Option<Points>) {
     // Both structs are non-exhaustive: start from their defaults.
     let mut bar = TitleBarOptions::default();
     bar.style = style;
     bar.height = height;
     let mut attributes = WindowAttributes::default();
     attributes.title_bar = Some(bar);
-    main_window().set(attributes);
+    window.set(attributes);
 }
 
-/// Sets the main window's title (title bar, Dock or taskbar, switcher).
-pub fn set_window_title(title: impl Into<String>) {
+/// Sets `window`'s title (title bar, Dock or taskbar, switcher).
+pub fn set_window_title(window: &WindowRef, title: impl Into<String>) {
     let mut attributes = WindowAttributes::default();
     attributes.title = Some(title.into());
-    main_window().set(attributes);
+    window.set(attributes);
 }
 
-/// Maximizes the main window, or restores it when it is maximized.
-pub fn toggle_maximize() {
-    let window = main_window();
+/// Maximizes `window`, or restores it when it is maximized.
+pub fn toggle_maximize(window: &WindowRef) {
     let maximized = window
         .state()
         .is_some_and(|state| state.mode == WindowMode::Maximized);

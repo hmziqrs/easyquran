@@ -1,6 +1,6 @@
 # EasyQuran native
 
-The EasyQuran app for macOS, iOS and Android (Linux and Windows from the same crate), built on [Native Shell](https://nsh.dev) 0.6.1 in Rust mode with published SuperNSH crates from crates.io. It is the native counterpart of `web/` and aims at 1:1 feature parity.
+The EasyQuran app for macOS, iOS and Android (Linux and Windows from the same crate), built on [Native Shell](https://nsh.dev) 0.7.1 in Rust mode with SuperNSH crates (vendored on 0.7.1 until their own releases, [vendor/README.md](vendor/README.md)). `nsh run` and `nsh package` need an `nsh` CLI of 0.7.1. It is the native counterpart of `web/` and aims at 1:1 feature parity.
 
 - What must be built, and its state: [PARITY.md](PARITY.md)
 - Rules, layout and gates for anyone working here: [AGENTS.md](AGENTS.md)

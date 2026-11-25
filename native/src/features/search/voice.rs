@@ -1,16 +1,14 @@
 //! Voice search (PARITY E5; `search/voice/recognition.ts`,
 //! `VoiceSearchButton.svelte`) on NSH's speech recognition
-//! (`recognize_speech`; the `speech` capability). Shown only where the
+//! (`nsh_extra::speech`; the `speech` capability). Shown only where the
 //! platform recognizes speech; the final transcript goes to the query as
 //! typed text would. Arabic UI listens as `ar-SA`, English as `en-US`.
 
 use std::{cell::RefCell, rc::Rc};
 
 use eq_core::i18n::{Locale, keys};
-use nsh_core::{
-    prelude::*,
-    speech::{SpeechError, SpeechEvent, SpeechRequest},
-};
+use nsh_core::prelude::*;
+use nsh_extra::speech::{self, SpeechError, SpeechEvent, SpeechRecognition, SpeechRequest};
 
 use crate::{
     stores::locale::{locale, t},
@@ -56,7 +54,7 @@ fn status_key(status: Status) -> Option<eq_core::i18n::Key> {
     }
 }
 
-type Session = Rc<RefCell<Option<nsh_core::element::SpeechRecognition>>>;
+type Session = Rc<RefCell<Option<SpeechRecognition>>>;
 
 fn start(
     status: Signal<Status>,
@@ -73,7 +71,7 @@ fn start(
     let mut request = SpeechRequest::default();
     request.lang = Some(voice_lang(locale()).to_owned());
     request.interim = false;
-    *session.borrow_mut() = Some(recognize_speech(request));
+    *session.borrow_mut() = Some(speech::recognize(request));
     status.set(Status::Listening);
     spawn(async move {
         loop {
@@ -118,7 +116,7 @@ fn start(
 pub(super) fn voice_button(on_transcript: impl Fn(String) + 'static) -> AnyElement {
     let available = signal(false);
     spawn(async move {
-        available.set(speech_available().await);
+        available.set(speech::available().await);
     });
     let status = signal(Status::Idle);
     let generation = signal(0u64);

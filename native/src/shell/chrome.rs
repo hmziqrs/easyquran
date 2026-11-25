@@ -7,7 +7,8 @@
 use nsh_core::{
     desktop::{MenuRole, TitleBarStyle},
     element::desktop::{
-        MenuItem, main_window, set_application_menu, title_bar as title_bar_insets,
+        MenuItem, current_window, on_reopen, quit, set_application_menu,
+        title_bar as title_bar_insets,
     },
     prelude::*,
 };
@@ -52,9 +53,11 @@ pub fn controls_inset() -> nsh_core::Points {
 /// the shell draws, and the application menu. Undone when the desktop
 /// shell goes (a window narrowed to the phone shell).
 pub fn install() {
+    let window = current_window();
     effect(move || {
-        set_title_bar(TitleBarStyle::Hidden, Some(px(TITLE_BAR)));
-        cleanup(|| set_title_bar(TitleBarStyle::Default, None));
+        set_title_bar(&window, TitleBarStyle::Hidden, Some(px(TITLE_BAR)));
+        let window = window.clone();
+        cleanup(move || set_title_bar(&window, TitleBarStyle::Default, None));
     });
     effect(move || {
         // Read so the menu (its appearance item's check mark) follows.
@@ -63,10 +66,21 @@ pub fn install() {
     });
 }
 
-/// Closes the window as the platform does (the exit ask's command on the
-/// desktops).
-pub fn close() {
-    main_window().close();
+/// Ends the app (the exit ask's command). Desktops only.
+pub fn exit() {
+    quit();
+}
+
+/// Brings the window back when the Dock or a second launch asks for the
+/// app: NSH shows nothing on its own, and on macOS the close button only
+/// hides the window (`shell::command_bar`). Call it while rendering in the
+/// window.
+pub fn show_on_reopen() {
+    let window = current_window();
+    on_reopen(move || {
+        window.show();
+        window.focus();
+    });
 }
 
 /// The application menu: the shell's commands, every route, the window.

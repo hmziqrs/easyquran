@@ -1,6 +1,6 @@
 # native/AGENTS.md
 
-EasyQuran native app on Native Shell (NSH 0.6.0), Rust mode. One crate graph for macOS, iOS, Android (Linux/Windows from the same code). Counterpart of `web/` at 1:1 feature parity; the checklist is [PARITY.md](PARITY.md). The monorepo's root `AGENTS.MD` hard rules bind here too.
+EasyQuran native app on Native Shell (NSH 0.7.1), Rust mode. One crate graph for macOS, iOS, Android (Linux/Windows from the same code). Counterpart of `web/` at 1:1 feature parity; the checklist is [PARITY.md](PARITY.md). The monorepo's root `AGENTS.MD` hard rules bind here too.
 
 ## Before any work
 
@@ -24,6 +24,8 @@ Load skills `caveman`, `nsh`, `nsh-design-guides`. Read the nsh skill's `referen
 native/
   Cargo.toml            workspace: app crate (root) + crates/eq-core
   nsh.json              app manifest, capabilities
+  nsh.lock              the nshm `nsh.json` `dependencies` pins (nsh-extra)
+  vendor/               SuperNSH crates on NSH 0.7.1 until their own releases (vendor/README.md); not edited here
   themes/theme.json     semantic tokens (palettes, light/dark)
   assets/               fonts, icons
   crates/eq-core/       pure Rust domain logic. No nsh-* dependency. cargo-testable without an engine
@@ -59,6 +61,7 @@ Domain logic goes in `crates/eq-core` (plain types, injected transport and stora
 ## Facts that bite
 
 - A component body runs once; pass closures/signals to setters for anything that changes.
+- The desktop app shows only what is inside `window()` (`src/lib.rs`), and `nsh.json` must grant `"windows"`; a window's handle is `current_window()`, read while rendering, and the app ends with `quit()`.
 - `Signal::update` needs `T: Clone` and always notifies.
 - `blocking`/`background` closures cannot capture signals: return a value, write it in `spawn`.
 - SQLite and file I/O are blocking: run through `blocking(..)`, never on the engine thread.

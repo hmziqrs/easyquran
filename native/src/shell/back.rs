@@ -135,9 +135,9 @@ pub fn exit_prompt_dialog() -> AnyElement {
 }
 
 /// The ask was confirmed: arm the platform's exit, close the prompt and,
-/// on the desktops, close the window as the same command.
+/// on the desktops, end the app as the same command.
 fn exit() {
     arm(true);
     prompt().set(PromptOpen(false));
-    chrome::close();
+    chrome::exit();
 }
