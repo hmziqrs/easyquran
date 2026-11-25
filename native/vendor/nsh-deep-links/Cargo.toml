@@ -1,0 +1,43 @@
+[package]
+name = "nsh-deep-links"
+description = "Universal Links on iOS and macOS and App Links on Android, routed to app screens: the verified-web-link layer over NSH core's URL schemes."
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/SuperNSH/deep-links"
+authors = ["hmziqrs"]
+publish = false
+# crates.io finds NSH modules by this keyword.
+keywords = ["nshm", "nsh", "deep-links"]
+
+[lib]
+name = "nsh_deep_links"
+path = "src/lib.rs"
+
+[dependencies]
+# 0.5.0 is the first crates.io release that ships `url_scheme` (docs/decisions.md #1); 0.6.0 is the pin.
+nsh-core = "0.7.1"
+tokio = { version = "1.54.1", default-features = false, features = ["macros", "sync", "time"] }
+serde_json = "1"
+url = "2.5"
+regex = { version = "1.11", default-features = false, features = ["std", "unicode-perl"] }
+
+# Apple: Universal Links arrive as an NSUserActivity on the app's (macOS) or scene's (iOS)
+# delegate, which this crate teaches `continueUserActivity` at runtime, on the main queue.
+[target.'cfg(target_vendor = "apple")'.dependencies]
+objc2 = "0.6.5"
+objc2-foundation = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "NSEnumerator",
+  "NSObject",
+  "NSSet",
+  "NSString",
+  "NSURL",
+  "NSUserActivity",
+] }
+dispatch2 = "0.3.1"
+
+# Android: the launch intent's App Link over JNI. ndk-context carries the VM and the activity.
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.22.4"
+ndk-context = "0.1.1"

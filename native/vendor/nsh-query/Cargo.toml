@@ -1,0 +1,21 @@
+[package]
+name = "nsh-query"
+description = "TanStack Query-style async state for Native Shell Rust apps, on the gpui-query core state machine"
+publish = false
+keywords = ["nsh", "query", "async", "cache", "state"]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/SuperNSH/query"
+authors = ["hmziqrs"]
+
+[features]
+persist = ["dep:serde", "dep:serde_json"]
+http-cache = ["dep:gpui-query-http"]
+
+[dependencies]
+gpui-query = { version = "0.3.1", default-features = false, features = ["core"] }
+nsh-core = "0.7.1"
+serde = { version = "1", optional = true }
+serde_json = { version = "1", optional = true }
+gpui-query-http = { version = "0.1", optional = true }

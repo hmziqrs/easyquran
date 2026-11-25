@@ -1,0 +1,23 @@
+[package]
+name = "nsh-form"
+description = "Typed forms for Native Shell Rust apps, on the GPUI-free state helpers of gpui-form"
+publish = false
+keywords = ["nsh", "forms", "validation", "state"]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/SuperNSH/form"
+authors = ["hmziqrs"]
+
+[features]
+phone = ["dep:phonenumber", "freeoxide-gpui-form-core/phone"]
+persist = ["dep:serde", "dep:serde_json"]
+
+[dependencies]
+freeoxide-gpui-form-core = "0.11"
+nsh-base = "0.7.1"
+nsh-core = "0.7.1"
+regex = "1.13.1"
+phonenumber = { version = "0.3", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
