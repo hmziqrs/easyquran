@@ -338,7 +338,9 @@ fn body(c: Connected) -> AnyElement {
     .into_element()
 }
 
-pub(super) fn connected_accounts() -> AnyElement {
+/// `refresh`: what else changes the sign-in methods (the passkeys, web
+/// `refreshKey`); the last-method rule is read again when it changes.
+pub(super) fn connected_accounts(refresh: impl Fn() -> Vec<String> + 'static) -> AnyElement {
     let c = Connected {
         summary: signal(None),
         loading: signal(true),
@@ -348,7 +350,11 @@ pub(super) fn connected_accounts() -> AnyElement {
         unlink_error: signal(None),
         sequence: stored(0),
     };
-    c.load();
+    let key = computed(refresh);
+    effect(move || {
+        key.with(|_| ());
+        untracked(|| c.load());
+    });
     view()
         .w_full()
         .flex_col()

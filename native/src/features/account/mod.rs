@@ -8,13 +8,13 @@
 //! views; profile; age declaration; devices and sessions; two-factor;
 //! security confirmation; connected accounts; delete account.
 //!
-//! Not offered on native:
-//! - Passkeys (I5): NSH exposes no platform passkey API, so the Passkeys
-//!   card is left out (the web shows "not supported" without WebAuthn).
+//! Passkeys (I5) work where the platform has them for the app
+//! (`services::passkeys`); elsewhere the card says so, as on web.
 
 mod connected;
 mod delete;
 mod devices;
+mod passkeys;
 mod profile;
 mod security;
 
@@ -95,6 +95,13 @@ pub(super) fn generic() -> Msg {
 /// A labeled form section heading (`h2 text-lg`).
 pub(super) fn section_heading(label: impl IntoReactive<SharedString>) -> nsh_core::element::Text {
     crate::features::downloads::rows::heading(label)
+}
+
+/// A card's heading inside a section (`h3 text-base font-medium`).
+pub(super) fn section_sub_heading(
+    label: impl IntoReactive<SharedString>,
+) -> nsh_core::element::Text {
+    text(label).text_base().font_weight(FontWeight::MEDIUM)
 }
 
 /// A button that starts at the column's leading edge (`self-start`).
@@ -216,6 +223,7 @@ fn header(logout: Signal<bool>) -> impl IntoElement {
 
 fn signed_in_view() -> AnyElement {
     let logout = signal(false);
+    let passkeys = passkeys::Passkeys::new();
     view()
         .w_full()
         .flex_col()
@@ -230,10 +238,11 @@ fn signed_in_view() -> AnyElement {
                 .flex_col()
                 .gap_4()
                 .child(section_heading(t(keys::ACCOUNT_SECURITY_HEADING)))
-                .child(security::two_factor()),
+                .child(security::two_factor())
+                .child(passkeys::passkeys_card(passkeys)),
         )
         .child(security::fresh_auth())
-        .child(connected::connected_accounts())
+        .child(connected::connected_accounts(move || passkeys.ids()))
         .child(delete::delete_account())
         .into_element()
 }

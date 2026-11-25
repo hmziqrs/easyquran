@@ -12,6 +12,7 @@ pub mod home;
 pub mod i18n;
 pub mod kv;
 pub mod net;
+pub mod passkey;
 pub mod quran;
 pub mod reading;
 pub mod routes;

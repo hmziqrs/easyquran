@@ -3,10 +3,9 @@
 //! `offline.ts`: download, budget, local lookup, clear). The queue and repeat
 //! drive live in `stores::audio`.
 //!
-//! Platform gaps (NSH 0.6.0): no Now Playing / remote-command (lock screen)
-//! API, and the iOS audio session is `ambient` (nsh-platform-apple
-//! `audio.rs` `session()`), so playback does not continue in the background.
-//! No keep-screen-awake API either (the web's Wake Lock during a repeat).
+//! What NSH 0.7.1 has no API for is the app's own: the lock screen and media
+//! keys, background playback (`services::media_session`) and the screen kept
+//! on during a repeat (`services::wake_lock`).
 
 use std::{
     cell::RefCell,

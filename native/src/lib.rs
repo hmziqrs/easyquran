@@ -27,6 +27,8 @@ fn native(registry: &mut Registry) {
     // DBs under assets/quran/), so nsh run serves them and nsh package
     // copies them.
     registry.assets(nsh_core::element::assets!());
+    // Before the launch, so the press that launched the app is heard.
+    services::push::install();
 }
 
 /// The iOS views the crate draws itself: UIKit's soft scroll edges under
@@ -57,6 +59,7 @@ pub fn App() -> impl IntoElement {
     // in its direction (NSH's own surface direction follows the system
     // language).
     stores::locale::install();
+    stores::push::listen();
     app_window().id("main").title(APP_NAME).content(|| {
         // Inside the window: keystrokes and the title bar are its own.
         view()

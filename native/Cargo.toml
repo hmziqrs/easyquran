@@ -12,13 +12,43 @@ members = ["crates/eq-core"]
 exclude = ["vendor"]
 resolver = "3"
 
+# What the recitation player needs of the packaged app (and of `nsh run`'s host):
+# background playback (`services::media_session`), and on Android the wake lock of
+# a repeat (`services::wake_lock`). Lists join those of nsh.json and the crates.
+[package.metadata.nsh.ios.infoPlist]
+UIBackgroundModes = ["audio"]
+
+[package.metadata.nsh.android]
+permissions = ["FOREGROUND_SERVICE", "FOREGROUND_SERVICE_MEDIA_PLAYBACK", "WAKE_LOCK"]
+application = ['<service android:name="fyi.easyquran.media.Playback" android:exported="false" android:foregroundServiceType="mediaPlayback"/>']
+libraries = ["android/playback/playback.jar"]
+
+# Firebase Cloud Messaging (PARITY M2, `services::push`). Off: the SDK is not in
+# the repository. `default = ["fcm"]` once the owner has provided it (`nsh` builds
+# this crate with its default features).
+[features]
+fcm = []
+
+[package.metadata.nsh.features.fcm.ios.infoPlist]
+FirebaseAppDelegateProxyEnabled = false
+FirebaseMessagingAutoInitEnabled = false
+
+[package.metadata.nsh.features.fcm.android]
+application = [
+  '<service android:name="fyi.easyquran.push.FcmService" android:exported="false"><intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT"/></intent-filter></service>',
+  '<meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false"/>',
+  '<meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="com.longbridge.nsh.notifications"/>',
+]
+libraries = ["src/services/push/android/fcm.jar"]
+
 [dependencies]
 eq-core = { path = "crates/eq-core" }
 # `svg`: SVG images (every icon) are an opt-in feature of nsh-core.
 nsh-core = { version = "0.7.1", features = ["svg"] }
 nsh-base = "0.7.1"
 # Voice search (PARITY E5): speech recognition moved here from nsh-core in 0.7.
-nsh-extra = { version = "0.7.1", features = ["speech"] }
+# Remote push (PARITY M2, `services::push`): APNs registration, deliveries, presses.
+nsh-extra = { version = "0.7.1", features = ["push", "speech"] }
 # Update check (PARITY K4): `Config::check` over the manifest the app fetches.
 nsh-updater = "0.7.1"
 # Dependencies with a `path` are SuperNSH crates vendored on NSH 0.7.1: drop the
@@ -60,23 +90,39 @@ tokio = { version = "1.54.1", default-features = false, features = ["rt"] }
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 objc2 = "0.6.5"
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSBundle", "NSCalendar", "NSError", "NSProcessInfo", "NSString"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSBundle", "NSCalendar", "NSData", "NSError", "NSProcessInfo", "NSString"] }
+# Passkeys (PARITY I5, `services::passkeys`), the version NSH uses on iOS.
+objc2-authentication-services = { version = "0.3.2", default-features = false, features = ["std", "ASAuthorization", "ASAuthorizationController", "ASAuthorizationCredential", "ASAuthorizationError", "ASAuthorizationPlatformPublicKeyCredentialAssertion", "ASAuthorizationPlatformPublicKeyCredentialAssertionRequest", "ASAuthorizationPlatformPublicKeyCredentialDescriptor", "ASAuthorizationPlatformPublicKeyCredentialProvider", "ASAuthorizationPlatformPublicKeyCredentialRegistration", "ASAuthorizationPlatformPublicKeyCredentialRegistrationRequest", "ASAuthorizationPublicKeyCredentialAssertion", "ASAuthorizationPublicKeyCredentialAssertionRequest", "ASAuthorizationPublicKeyCredentialConstants", "ASAuthorizationPublicKeyCredentialRegistration", "ASAuthorizationPublicKeyCredentialRegistrationRequest", "ASAuthorizationRequest", "ASPublicKeyCredential"] }
 block2 = "0.6"
 libc = "0.2"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 nsh-platform-ios = { version = "0.7.1", default-features = false }
-objc2-ui-kit = { version = "0.3.2", default-features = false, features = ["std", "UIResponder", "UIView", "UIWindow", "UIScrollView", "UIGeometry"] }
+objc2-ui-kit = { version = "0.3.2", default-features = false, features = ["std", "UIResponder", "UIView", "UIViewController", "UIWindow", "UIScrollView", "UIGeometry"] }
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFCGTypes"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 nsh-platform-linux = { version = "0.7.1", default-features = false }
+# MPRIS and the screen saver's inhibition, the version nsh-secure-storage uses.
+zbus = "5.19.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 nsh-platform-macos = { version = "0.7.1", default-features = false }
+# Presses of the notifications NSH did not show (`services::notifications`).
+nsh-platform-apple = "0.7.1"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 nsh-platform-windows = { version = "0.7.1", default-features = false }
+# Scheduled reminder toasts (`services::notifications`), the version NSH uses.
+windows = { version = "0.62", features = ["Foundation", "Media", "Media_Playback", "Data_Xml_Dom", "Globalization", "UI_Notifications", "Win32_Foundation", "Win32_Storage_Packaging_Appx", "Win32_System_Com", "Win32_System_Registry", "Win32_UI_Shell"] }
+
+# Calls into the app's Java (`services::notifications`), the versions NSH uses.
+[target.'cfg(target_os = "android")'.dependencies]
+# The media session and the repeat's wake lock (`services::media_session`,
+# `services::wake_lock`): its `with_env` and interface proxies.
+nsh-platform-android = { version = "0.7.1", default-features = false }
+jni = "0.21"
+ndk-context = "0.1"
 
 # Read once, then deleted: the secrets blob earlier Windows builds kept in
 # Credential Manager through keyring (`services::storage` migration). Apple's

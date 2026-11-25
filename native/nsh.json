@@ -14,6 +14,18 @@
     { "host": "www.easyquran.fyi" }
   ],
   "handoff": true,
+  "ios": {
+    "entitlements": {
+      "com.apple.developer.associated-domains": ["webcredentials:easyquran.fyi"]
+    }
+  },
+  "android": {
+    "libraries": ["android/reminders/reminders.jar"],
+    "permissions": ["RECEIVE_BOOT_COMPLETED"],
+    "application": [
+      "<receiver android:name=\"fyi.easyquran.reminders.ReminderReceiver\" android:exported=\"false\"><intent-filter><action android:name=\"android.intent.action.BOOT_COMPLETED\"/><action android:name=\"android.intent.action.MY_PACKAGE_REPLACED\"/><action android:name=\"android.intent.action.TIME_SET\"/><action android:name=\"android.intent.action.TIMEZONE_CHANGED\"/></intent-filter></receiver>"
+    ]
+  },
   "capabilities": {
     "windows": true,
     "application": true,
@@ -28,6 +40,6 @@
     "share": true
   },
   "dependencies": {
-    "nsh-extra": { "version": "^0.7.1", "features": ["speech"] }
+    "nsh-extra": { "version": "^0.7.1", "features": ["push", "speech"] }
   }
 }

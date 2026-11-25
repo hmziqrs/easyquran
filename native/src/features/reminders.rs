@@ -5,19 +5,19 @@
 //! one per account: on/off, a minute of the day in the device's zone, and
 //! optional quiet hours. Signed out the row says to sign in.
 //!
-//! Delivery: the web's reminder is a server push. This app has no push yet
-//! (contracts/devices.md Push matrix), and NSH 0.5.1 shows notifications
-//! now but cannot schedule one for later (`NotificationCommand` is
-//! `Permission | Show | Close | Listen | SetBadge`, nsh-core
-//! `src/notifications.rs:102`). So [`start`] keeps an in-app timer that
-//! shows the reminder at its minute while the app runs; a closed app gets
-//! none until NSH grows scheduled notifications or push lands.
+//! Delivery: the web's reminder is a server push. The server sends it to the
+//! account's most recently seen device with a push token, once a day, so an
+//! install that registered a token shows none of its own
+//! (`reminder_delivery`). Any other install tells the user itself: the system
+//! shows it, the app closed or not, where `services::notifications` can hand
+//! it over; elsewhere an in-app timer shows it while the app runs.
 
 use eq_core::{
-    api::types::ReminderSchedule,
+    api::{AuthPhase, types::ReminderSchedule},
     home::schedule::{
-        DEFAULT_REMINDER_MINUTE, REMINDER_KIND, clock_from_minutes, in_quiet_hours,
-        minutes_from_clock, minutes_until_reminder, reminder_problem,
+        DEFAULT_REMINDER_MINUTE, REMINDER_KIND, ReminderDelivery, clock_from_minutes,
+        in_quiet_hours, minutes_from_clock, minutes_until_reminder, reminder_delivery,
+        reminder_problem,
     },
     i18n::keys,
 };
@@ -31,9 +31,12 @@ use nsh_core::{
 use crate::{
     app::auth_store,
     features::downloads::rows::{caption, row_frame, row_label},
+    services::notifications::{self as local, DailyReminder},
+    shell::{nav, routes::Route},
     stores::{
         home::now_minute,
         locale::{t, t_args, tr},
+        push,
     },
     ui::{button::choice_button, field::field, select::select_field, tokens},
 };
@@ -57,10 +60,10 @@ fn fire_at_next(generation: u64) {
     let Some(s) = global::<Armed>().with_untracked(|a| a.schedule.clone()) else {
         return;
     };
-    if !s.enabled {
+    let ReminderDelivery::Local(minute) = delivery(&s) else {
         return;
-    }
-    let minutes = minutes_until_reminder(i64::from(s.reminder_minute), now_minute());
+    };
+    let minutes = minutes_until_reminder(i64::from(minute), now_minute());
     let delay = std::time::Duration::from_secs(u64::try_from(minutes * 60).unwrap_or(60));
     set_timeout(delay, move || {
         if global::<Armed>().with_untracked(|a| a.generation) != generation {
@@ -85,51 +88,65 @@ fn fire_at_next(generation: u64) {
     });
 }
 
+/// Who shows `schedule`'s reminder, as this install's push token stands.
+fn delivery(schedule: &ReminderSchedule) -> ReminderDelivery {
+    reminder_delivery(schedule, push::current_token().is_some())
+}
+
+fn daily(schedule: &ReminderSchedule, minute: u16) -> DailyReminder {
+    let minute_of = |m: Option<i32>| m.and_then(|m| u16::try_from(m).ok());
+    DailyReminder {
+        id: NOTIFICATION_ID,
+        title: tr(keys::SETTINGS_PRIVACY_REMINDERS).to_owned(),
+        body: tr(keys::SETTINGS_PRIVACY_REMINDERS_INTRO).to_owned(),
+        minute,
+        zone: schedule.time_zone.clone(),
+        quiet: minute_of(schedule.quiet_start_minute).zip(minute_of(schedule.quiet_end_minute)),
+    }
+}
+
 fn arm(schedule: Option<ReminderSchedule>) {
     let slot = global::<Armed>();
     let generation = slot.with_untracked(|a| a.generation) + 1;
-    let os_scheduled = match schedule.as_ref() {
-        Some(s) if s.enabled => {
-            let minute_of_day = s.reminder_minute.clamp(0, 1439);
-            let quiet = in_quiet_hours(
-                i64::from(minute_of_day),
-                s.quiet_start_minute.map(i64::from),
-                s.quiet_end_minute.map(i64::from),
-            );
-            if quiet {
-                crate::services::notifications::cancel_daily_reminder(NOTIFICATION_ID);
-                false
-            } else {
-                let hour = u8::try_from(minute_of_day / 60).unwrap_or(0);
-                let minute = u8::try_from(minute_of_day % 60).unwrap_or(0);
-                crate::services::notifications::schedule_daily_reminder(
-                    NOTIFICATION_ID,
-                    tr(keys::SETTINGS_PRIVACY_REMINDERS),
-                    tr(keys::SETTINGS_PRIVACY_REMINDERS_INTRO),
-                    hour,
-                    minute,
-                )
-            }
-        }
-        _ => {
-            crate::services::notifications::cancel_daily_reminder(NOTIFICATION_ID);
-            false
-        }
-    };
+    let wanted = schedule.as_ref().and_then(|s| match delivery(s) {
+        ReminderDelivery::Local(minute) => Some(daily(s, minute)),
+        ReminderDelivery::None | ReminderDelivery::Server => None,
+    });
     slot.set(Armed {
         schedule,
         generation,
     });
-    if !os_scheduled {
-        fire_at_next(generation);
+    match wanted {
+        Some(reminder) => {
+            if !local::schedule_daily_reminder(&reminder) {
+                fire_at_next(generation);
+            }
+        }
+        None => local::cancel_daily_reminder(NOTIFICATION_ID),
     }
 }
 
-/// Loads the account's schedule and keeps the in-app reminder timer for
-/// it. Call once from the root (the timer lives with the caller's owner).
+/// This install's push token came or went (`stores::push`): the server now
+/// shows the reminder here, or no longer does. With a token and no schedule
+/// loaded yet, the one the system keeps from the last run goes.
+pub fn push_token_changed() {
+    let schedule = global::<Armed>().with_untracked(|a| a.schedule.clone());
+    if schedule.is_some() || push::current_token().is_some() {
+        arm(schedule);
+    }
+}
+
+/// Loads the account's schedule, hands it to the system or the in-app timer,
+/// and opens the account page for a press (the web's `data.url`). Call once
+/// from the root (the timer lives with the caller's owner).
 pub fn start() {
+    local::listen_for_presses(|| nav::open(Route::Account));
     let auth = auth_store();
     effect(move || {
+        // Not known yet (boot): the system keeps the schedule of the last run.
+        if auth.phase() == AuthPhase::Unknown {
+            return;
+        }
         let signed_in = auth.user().is_some();
         let client = auth.client();
         untracked(move || {
@@ -138,12 +155,23 @@ pub fn start() {
                 return;
             };
             spawn(async move {
+                // Offline the system keeps the schedule of the last run too.
                 if let Ok(found) = client.reminder_get(REMINDER_KIND).await {
+                    register_app().await;
                     arm(found);
                 }
             });
         });
     });
+}
+
+/// Windows shows scheduled toasts of a registered app id only, and NSH
+/// registers it when the app first asks about notifications. This asks for
+/// the state alone: nothing prompts.
+async fn register_app() {
+    if cfg!(target_os = "windows") {
+        let _ = notification_permission().await;
+    }
 }
 
 fn hours() -> Vec<SelectItem> {

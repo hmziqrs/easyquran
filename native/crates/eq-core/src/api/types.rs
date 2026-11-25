@@ -191,15 +191,22 @@ pub struct IdentitySummary {
 }
 
 /// `POST /passkey/v1/{login,register}/begin`: the WebAuthn options for the
-/// platform authenticator and the handle to finish with.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+/// platform authenticator (`eq_core::passkey` reads them) and the handle to
+/// finish with.
+#[derive(Clone, PartialEq, Deserialize)]
 pub struct PasskeyChallenge {
     pub challenge: Value,
     pub state_handle: Secret,
 }
 
+impl std::fmt::Debug for PasskeyChallenge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PasskeyChallenge").finish_non_exhaustive()
+    }
+}
+
 /// One passkey of `POST /passkey/v1/list`.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Clone, PartialEq, Deserialize)]
 pub struct PasskeyView {
     pub id: Value,
     pub credential_id: String,
@@ -211,6 +218,15 @@ pub struct PasskeyView {
     pub created_at: Option<String>,
     #[serde(default)]
     pub last_used_at: Option<String>,
+}
+
+/// The credential id stays out of logs.
+impl std::fmt::Debug for PasskeyView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PasskeyView")
+            .field("device_type", &self.device_type)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Sign-in providers with a native token endpoint (`/auth/{p}/v1/token`).

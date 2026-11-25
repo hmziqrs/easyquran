@@ -8,7 +8,11 @@
 //! tracked getters on [`AudioStore`]; the running play (task, player) lives
 //! in a thread-local, cancelled as a whole by a generation bump.
 
-use std::{cell::RefCell, sync::OnceLock, time::Duration};
+use std::{
+    cell::RefCell,
+    sync::{Mutex, OnceLock, PoisonError},
+    time::{Duration, Instant},
+};
 
 use eq_core::audio::{
     catalogue::{self, AudioCatalogue, AudioRecording},
@@ -19,11 +23,18 @@ use eq_core::audio::{
     session::{SavedSession, load_session, save_session},
     url::{AyahRef, is_allowed_audio_url, resolve_ayah_audio},
 };
-use nsh_core::prelude::*;
+use eq_core::i18n::keys;
+use futures_channel::mpsc;
+use nsh_core::{platform::Lifecycle, prelude::*};
 
-use crate::services::{
-    audio::{self as player, Outcome, PlayObserver, SharedPlayer},
-    storage::NshKv,
+use crate::{
+    services::{
+        audio::{self as player, Outcome, PlayObserver, SharedPlayer},
+        media_session::{self, Command, Labels, Metadata, NowPlaying},
+        storage::NshKv,
+        wake_lock::WakeLock,
+    },
+    stores::locale::tr,
 };
 
 /// Debug builds only: a recording template to test the player with while
@@ -123,6 +134,11 @@ struct State {
     attempt: u32,
     panel_open: bool,
     repeat_request: Option<RepeatRequest>,
+    /// What the system's media controls show: the queue's ayah, as the web
+    /// sets it (a repeat leaves it as it was).
+    metadata: Option<Metadata>,
+    /// A repeat holds the screen on.
+    awake: bool,
 }
 
 impl Default for State {
@@ -136,6 +152,8 @@ impl Default for State {
             attempt: 0,
             panel_open: false,
             repeat_request: None,
+            metadata: None,
+            awake: false,
         }
     }
 }
@@ -166,6 +184,21 @@ struct Runtime {
     player: Option<SharedPlayer>,
     start_sec: f64,
     hydrated: bool,
+    /// The media controls are wired: they follow the player.
+    wired: bool,
+    /// What they show, and since when.
+    shown: Option<(NowPlaying, Instant)>,
+    wake: Option<WakeLock>,
+}
+
+/// Where the system's commands go, from any thread: the dock's latest mount.
+static COMMANDS: Mutex<Option<mpsc::UnboundedSender<Command>>> = Mutex::new(None);
+
+fn send_command(command: Command) {
+    let commands = COMMANDS.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(commands) = commands.as_ref() {
+        let _ = commands.unbounded_send(command);
+    }
 }
 
 thread_local! {
@@ -184,6 +217,105 @@ fn status_now() -> AudioStatus {
     state().with_untracked(|s| s.status)
 }
 
+/// The web's `#wireMediaSession`, at the first play.
+fn wire_media_session() {
+    if RT.with(|rt| std::mem::replace(&mut rt.borrow_mut().wired, true)) {
+        return;
+    }
+    let labels = Labels {
+        channel: tr(keys::AUDIO_DOCK_LABEL).to_owned(),
+        play: tr(keys::AUDIO_PLAY).to_owned(),
+        pause: tr(keys::AUDIO_PAUSE).to_owned(),
+        previous: tr(keys::AUDIO_PREVIOUS).to_owned(),
+        next: tr(keys::AUDIO_NEXT).to_owned(),
+    };
+    media_session::install(Box::new(send_command), &labels);
+}
+
+/// The web's `#updateMediaSession`: what the queue's ayah is called.
+fn set_metadata(recording: &AudioRecording, item: AyahRef) {
+    let artist = catalogue().reciter_by_id(&recording.reciter_id);
+    let metadata = Metadata {
+        title: format!("{}:{}", item.surah, item.ayah),
+        artist: artist.map(|r| r.name.clone()).unwrap_or_default(),
+        album: recording.label.clone(),
+    };
+    state().update(|s| s.metadata = Some(metadata));
+}
+
+/// What the system shows now, if anything (tracked). A run without
+/// metadata is named after the app, as the browser names one after its page.
+fn now_playing() -> Option<NowPlaying> {
+    let p = progress().get();
+    state().with(|s| {
+        if s.status == AudioStatus::Idle {
+            return None;
+        }
+        Some(NowPlaying {
+            metadata: s.metadata.clone().unwrap_or_else(|| Metadata {
+                title: crate::APP_NAME.to_owned(),
+                ..Metadata::default()
+            }),
+            playing: matches!(s.status, AudioStatus::Playing | AudioStatus::Loading),
+            position: p.position,
+            duration: p.duration,
+            rate: s.rate,
+        })
+    })
+}
+
+/// How far the position may be from where the system has it by itself.
+const POSITION_DRIFT_SEC: f64 = 1.0;
+
+/// Whether the system, shown `last`, would by now show `now` by itself.
+fn still_shown(last: &NowPlaying, since: Instant, now: &NowPlaying) -> bool {
+    let ran = if last.playing {
+        since.elapsed().as_secs_f64() * f64::from(last.rate)
+    } else {
+        0.0
+    };
+    let expected = NowPlaying {
+        position: now.position,
+        ..last.clone()
+    };
+    expected == *now && (last.position + ran - now.position).abs() < POSITION_DRIFT_SEC
+}
+
+/// Brings the system's media controls in line with the player.
+fn sync_media_session(now: Option<NowPlaying>) {
+    let changed = RT.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        if !rt.wired {
+            return false;
+        }
+        let same = match (&rt.shown, &now) {
+            (Some((last, since)), Some(now)) => still_shown(last, *since, now),
+            (None, None) => true,
+            _ => false,
+        };
+        if same {
+            return false;
+        }
+        rt.shown = now.clone().map(|now| (now, Instant::now()));
+        true
+    });
+    if changed {
+        media_session::update(now.as_ref());
+    }
+}
+
+/// Holds the screen on, or lets it go (the web's `holdScreenAwake`).
+fn sync_wake_lock(held: bool) {
+    let released = RT.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        if held == rt.wake.is_some() {
+            return None;
+        }
+        std::mem::replace(&mut rt.wake, held.then(WakeLock::acquire))
+    });
+    drop(released);
+}
+
 /// Stops the active run (queue or repeat) and frees its player.
 fn cancel() {
     let (task, player) = RT.with(|rt| {
@@ -196,6 +328,14 @@ fn cancel() {
     }
     if let Some(task) = task {
         task.cancel();
+    }
+    release_wake_lock();
+}
+
+/// The web's `#releaseWakeLock`.
+fn release_wake_lock() {
+    if state().with_untracked(|s| s.awake) {
+        state().update(|s| s.awake = false);
     }
 }
 
@@ -295,6 +435,7 @@ async fn play_item(
         if !playable(&resolved.url) {
             return Err(LoadError);
         }
+        wire_media_session();
         set_status(AudioStatus::Loading);
         let local = player::local_file(&resolved.url).await;
         if !live(generation) {
@@ -355,6 +496,7 @@ async fn drive(generation: u64) {
             surah: item.surah,
             ayah: item.ayah,
         };
+        set_metadata(&recording, at);
         match play_item(generation, &recording, at).await {
             Ok(Outcome::Ended) => {}
             Ok(_) => return,
@@ -414,6 +556,9 @@ async fn drive_repeat(generation: u64, recording: AudioRecording, mut run: Repea
     }
 }
 
+/// The seconds of the web's `seekbackward` and `seekforward`.
+const SEEK_STEP_SEC: f64 = 10.0;
+
 /// The player store handle (app-wide; no context needed).
 #[derive(Clone, Copy)]
 pub struct AudioStore;
@@ -427,13 +572,39 @@ impl AudioStore {
     /// Once, from the dock's body.
     pub fn install(self) {
         let owner = Owner::current();
+        let (commands, mut requests) = mpsc::unbounded();
         RT.with(|rt| rt.borrow_mut().owner = Some(owner));
+        *COMMANDS.lock().unwrap_or_else(PoisonError::into_inner) = Some(commands);
+        spawn(async move {
+            while let Ok(command) = requests.recv().await {
+                self.run_command(command);
+            }
+        });
+        effect(move || sync_media_session(now_playing()));
+        // The browser drops its lock while the page is hidden, and the web
+        // takes it again when it shows.
+        effect(move || {
+            sync_wake_lock(state().with(|s| s.awake) && lifecycle() != Lifecycle::Background);
+        });
         if dev_template().is_some() {
             log::info!(
                 "audio: dev recording on, data dir {:?}",
                 crate::services::files::app_data_dir()
             );
             self.dev_autoplay();
+        }
+    }
+
+    /// A command of the system's media controls: the dock's own actions.
+    fn run_command(self, command: Command) {
+        match command {
+            Command::Play => self.play(),
+            Command::Pause => self.pause(),
+            Command::Toggle => self.toggle(),
+            Command::Previous => self.prev(),
+            Command::Next => self.next(),
+            Command::SeekBackward => self.seek_by(-SEEK_STEP_SEC),
+            Command::SeekForward => self.seek_by(SEEK_STEP_SEC),
         }
     }
 
@@ -658,6 +829,10 @@ impl AudioStore {
         shared.borrow().seek(Duration::from_secs_f64(at));
     }
 
+    fn seek_by(self, sec: f64) {
+        self.seek(progress().with_untracked(|p| p.position) + sec);
+    }
+
     pub fn set_rate(self, value: f64) {
         let rate = nearest_rate(value);
         state().update(|s| s.rate = rate);
@@ -720,10 +895,12 @@ impl AudioStore {
         state().update(|s| s.recording_id = Some(recording.id.clone()));
         let run = RepeatRun::new(plan_steps(&plan), plan.delay_ms);
         start(move |generation| {
+            state().update(|s| s.awake = true);
             Box::pin(async move {
                 drive_repeat(generation, recording, run).await;
                 if live(generation) {
                     state().update(|s| s.repeat_step = None);
+                    release_wake_lock();
                 }
                 finish(generation);
             })

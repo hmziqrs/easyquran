@@ -10,6 +10,8 @@
 
 use serde_json::Value;
 
+use crate::api::types::ReminderSchedule;
+
 pub const MINUTES_PER_DAY: i64 = 24 * 60;
 /// A slot is due inside an inclusive ±30-minute window around its time.
 const DUE_WINDOW_MIN: i64 = 30;
@@ -187,6 +189,37 @@ pub fn reminder_problem(
     in_quiet_hours(reminder_minute, quiet_start, quiet_end).then_some(ReminderProblem::InsideQuiet)
 }
 
+/// Who shows a schedule's daily reminder on this install.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReminderDelivery {
+    /// Off, or held by its own quiet hours.
+    None,
+    /// The server's push (`services/reminders.rs`: the account's most
+    /// recently seen device with a push token, once a day).
+    Server,
+    /// This install, at this minute of the day in the schedule's zone.
+    Local(u16),
+}
+
+/// The server pushes the reminder to one of the account's devices with a
+/// push token. An install that registered one is among them, so its own
+/// notification yields: the user is told once.
+pub fn reminder_delivery(schedule: &ReminderSchedule, push_token: bool) -> ReminderDelivery {
+    let minute = schedule.reminder_minute.clamp(0, 1439);
+    let quiet = in_quiet_hours(
+        i64::from(minute),
+        schedule.quiet_start_minute.map(i64::from),
+        schedule.quiet_end_minute.map(i64::from),
+    );
+    if !schedule.enabled || quiet {
+        return ReminderDelivery::None;
+    }
+    if push_token {
+        return ReminderDelivery::Server;
+    }
+    ReminderDelivery::Local(u16::try_from(minute).unwrap_or(0))
+}
+
 /// Minutes from `now_minute` to the reminder's next occurrence (1..=1440:
 /// a reminder due this very minute fires tomorrow).
 pub fn minutes_until_reminder(reminder_minute: i64, now_minute: i64) -> i64 {
@@ -222,6 +255,26 @@ mod tests {
             })
         );
         assert_eq!(slot_state_for(&[], 0), None);
+    }
+
+    #[test]
+    fn a_registered_push_token_leaves_the_reminder_to_the_server() {
+        let mut s = ReminderSchedule {
+            kind: REMINDER_KIND.into(),
+            enabled: true,
+            time_zone: "UTC".into(),
+            reminder_minute: 1200,
+            quiet_start_minute: None,
+            quiet_end_minute: None,
+            updated_at: None,
+        };
+        assert_eq!(reminder_delivery(&s, false), ReminderDelivery::Local(1200));
+        assert_eq!(reminder_delivery(&s, true), ReminderDelivery::Server);
+        s.quiet_start_minute = Some(1100);
+        s.quiet_end_minute = Some(1300);
+        assert_eq!(reminder_delivery(&s, false), ReminderDelivery::None);
+        s.enabled = false;
+        assert_eq!(reminder_delivery(&s, true), ReminderDelivery::None);
     }
 
     #[test]

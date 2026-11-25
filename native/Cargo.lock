@@ -1225,9 +1225,11 @@ dependencies = [
  "eq-core",
  "futures-channel",
  "getrandom 0.2.17",
+ "jni 0.21.1",
  "keyring",
  "libc",
  "log",
+ "ndk-context",
  "nsh-auth",
  "nsh-base",
  "nsh-connectivity",
@@ -1239,6 +1241,8 @@ dependencies = [
  "nsh-firebase-core",
  "nsh-firebase-messaging",
  "nsh-form",
+ "nsh-platform-android",
+ "nsh-platform-apple",
  "nsh-platform-ios",
  "nsh-platform-linux",
  "nsh-platform-macos",
@@ -1248,6 +1252,7 @@ dependencies = [
  "nsh-testing",
  "nsh-updater",
  "objc2",
+ "objc2-authentication-services",
  "objc2-core-foundation",
  "objc2-foundation",
  "objc2-ui-kit",
@@ -1256,6 +1261,8 @@ dependencies = [
  "sha2 0.10.9",
  "tokio",
  "url",
+ "windows",
+ "zbus",
 ]
 
 [[package]]
@@ -3991,6 +3998,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee6d6f7dab884a28adaec1012eb3889257a49cc145724e35f93ece2d209f8b25"
 dependencies = [
+ "bitflags 2.13.2",
  "block2",
  "objc2",
  "objc2-app-kit",

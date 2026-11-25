@@ -122,7 +122,7 @@ struct TwoFactor {
 
 /// The shared refusals of the 2FA calls, in the web's order; `None` when
 /// the call's own rule decides.
-fn common_failure(err: &ApiError) -> Option<Msg> {
+pub(super) fn common_failure(err: &ApiError) -> Option<Msg> {
     if err.status() == 0 && matches!(err, ApiError::Net(_)) {
         return Some(Msg::Lit(form::copy::NETWORK_ERROR));
     }

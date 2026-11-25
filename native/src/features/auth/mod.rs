@@ -9,15 +9,16 @@
 //! `lib/auth/components/{SignInForm,RegisterForm,OAuthButtons,BannedNotice}`
 //! and the flows in `lib/auth/flows.svelte.ts`.
 //!
+//! Passkeys (I5) show where the platform has them (`services::passkeys`),
+//! as `OAuthButtons` shows the button only with WebAuthn.
+//!
 //! Not offered on native, with the web's own rule for each:
-//! - Passkeys (I5): `OAuthButtons` shows the passkey button only when
-//!   WebAuthn is supported; NSH 0.5.1 exposes no platform passkey API
-//!   (no ASAuthorization / Credential Manager / WebAuthn binding).
 //! - Turnstile (I14): the widget is a Cloudflare web script; native sends
 //!   no `turnstile_token` (see the report's backend proposal).
 
 pub mod form;
 pub mod oauth;
+pub mod passkey;
 
 use eq_core::{
     api::{
@@ -358,13 +359,27 @@ fn credentials_view(
 }
 
 /// `OAuthButtons.svelte`: the providers this build has client ids for
-/// (`oauth::providers`); no passkey button.
+/// (`oauth::providers`) and the passkey button where passkeys work.
 fn social_section() -> AnyElement {
     let providers = oauth::providers();
+    let passkeys = signal(false);
+    spawn(async move {
+        let _ = passkeys.try_set(crate::services::passkeys::available().await);
+    });
     if providers.is_empty() {
-        return view().into_element();
+        return when(
+            move || passkeys.get(),
+            move || social_buttons(Vec::new(), passkeys),
+        )
+        .into_element();
     }
+    social_buttons(providers, passkeys)
+}
+
+fn social_buttons(providers: Vec<OAuthProvider>, passkeys: Signal<bool>) -> AnyElement {
+    // One attempt at a time, whichever button it came from.
     let pending = signal(false);
+    let passkey_pending = signal(false);
     let error = signal(None::<Msg>);
     let begin = move |provider: OAuthProvider| {
         if pending.get_untracked() {
@@ -379,6 +394,26 @@ fn social_section() -> AnyElement {
                 Ok(SignInStep::Done(user)) => after_sign_in(user.is_verified),
                 Ok(SignInStep::TotpRequired) => replace_top(Route::Totp),
                 Err(()) => error.set(Some(Msg::Key(keys::AUTH_OAUTH_ERROR))),
+            }
+        });
+    };
+    let passkey_sign_in = move || {
+        if pending.get_untracked() {
+            return;
+        }
+        pending.set(true);
+        passkey_pending.set(true);
+        error.set(None);
+        spawn(async move {
+            let outcome = passkey::sign_in().await;
+            let _ = pending.try_set(false);
+            let _ = passkey_pending.try_set(false);
+            match outcome {
+                Ok(SignInStep::Done(user)) => after_sign_in(user.is_verified),
+                Ok(SignInStep::TotpRequired) => replace_top(Route::Totp),
+                Err(failure) => {
+                    let _ = error.try_set(failure.message());
+                }
             }
         });
     };
@@ -407,6 +442,26 @@ fn social_section() -> AnyElement {
                 move || begin(provider),
             )
         }))
+        .child(when(
+            move || passkeys.get(),
+            move || {
+                let label = t(keys::AUTH_CONTINUE_WITH_PASSKEY);
+                let please_wait = t(keys::AUTH_PLEASE_WAIT);
+                button_with(
+                    move || {
+                        if passkey_pending.get() {
+                            return please_wait();
+                        }
+                        label()
+                    },
+                    ButtonVariant::Outline,
+                    ButtonSize::Large,
+                    move || pending.get(),
+                    None,
+                    passkey_sign_in,
+                )
+            },
+        ))
         .into_element()
 }
 
