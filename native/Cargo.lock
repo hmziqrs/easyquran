@@ -3388,6 +3388,7 @@ dependencies = [
 [[package]]
 name = "nsh-auth"
 version = "0.1.0"
+source = "git+https://github.com/SuperNSH/auth?rev=35b126510cfb660988748ad6ae7aa87876375d40#35b126510cfb660988748ad6ae7aa87876375d40"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.2.17",
@@ -3430,6 +3431,7 @@ dependencies = [
 [[package]]
 name = "nsh-connectivity"
 version = "0.0.1"
+source = "git+https://github.com/SuperNSH/connectivity?rev=4bcb275e1834eb399ad9bc61902fd2c58cd893db#4bcb275e1834eb399ad9bc61902fd2c58cd893db"
 dependencies = [
  "block2",
  "dispatch2",
@@ -3495,6 +3497,7 @@ dependencies = [
 [[package]]
 name = "nsh-deep-links"
 version = "0.1.0"
+source = "git+https://github.com/SuperNSH/deep-links?rev=2eb743f597e783c28da16e28cac806bfaaa5acb6#2eb743f597e783c28da16e28cac806bfaaa5acb6"
 dependencies = [
  "dispatch2",
  "jni 0.22.4",
@@ -3560,6 +3563,7 @@ dependencies = [
 [[package]]
 name = "nsh-firebase-analytics"
 version = "0.1.0"
+source = "git+https://github.com/SuperNSH/firebase?rev=d10f2f96101e5232c62726134874c8c7c820e31b#d10f2f96101e5232c62726134874c8c7c820e31b"
 dependencies = [
  "nsh-core",
  "nsh-firebase-core",
@@ -3569,6 +3573,7 @@ dependencies = [
 [[package]]
 name = "nsh-firebase-core"
 version = "0.1.0"
+source = "git+https://github.com/SuperNSH/firebase?rev=d10f2f96101e5232c62726134874c8c7c820e31b#d10f2f96101e5232c62726134874c8c7c820e31b"
 dependencies = [
  "nsh-core",
  "serde_json",
@@ -3577,6 +3582,7 @@ dependencies = [
 [[package]]
 name = "nsh-firebase-messaging"
 version = "0.1.0"
+source = "git+https://github.com/SuperNSH/firebase?rev=d10f2f96101e5232c62726134874c8c7c820e31b#d10f2f96101e5232c62726134874c8c7c820e31b"
 dependencies = [
  "nsh-firebase-core",
  "serde_json",
@@ -3585,6 +3591,7 @@ dependencies = [
 [[package]]
 name = "nsh-form"
 version = "0.1.0"
+source = "git+https://github.com/SuperNSH/form?rev=1cbbc6d4e9eb7fb33378052f5f458b7c12e62e75#1cbbc6d4e9eb7fb33378052f5f458b7c12e62e75"
 dependencies = [
  "freeoxide-gpui-form-core",
  "nsh-base",
@@ -3800,6 +3807,7 @@ dependencies = [
 [[package]]
 name = "nsh-query"
 version = "0.1.0"
+source = "git+https://github.com/SuperNSH/query?rev=c0969444a24f9afaf17ed64a509319ab76668944#c0969444a24f9afaf17ed64a509319ab76668944"
 dependencies = [
  "gpui-query",
  "nsh-core",
@@ -3808,6 +3816,7 @@ dependencies = [
 [[package]]
 name = "nsh-secure-storage"
 version = "0.1.0"
+source = "git+https://github.com/SuperNSH/secure-storage?rev=6f12f42342c6d5f7f3c6c03c9fb72dadd72c5b88#6f12f42342c6d5f7f3c6c03c9fb72dadd72c5b88"
 dependencies = [
  "aes-gcm",
  "base64 0.23.1",

@@ -25,7 +25,6 @@ native/
   Cargo.toml            workspace: app crate (root) + crates/eq-core
   nsh.json              app manifest, capabilities
   nsh.lock              the nshm `nsh.json` `dependencies` pins (nsh-extra)
-  vendor/               SuperNSH crates on NSH 0.7.1 until their own releases (vendor/README.md); not edited here
   themes/theme.json     semantic tokens (palettes, light/dark)
   assets/               fonts, icons
   crates/eq-core/       pure Rust domain logic. No nsh-* dependency. cargo-testable without an engine

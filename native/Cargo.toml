@@ -5,11 +5,7 @@ edition = "2024"
 publish = false
 
 [workspace]
-# The app crate (this manifest) is a member already: naming "." here would
-# make every path under it one, whatever `exclude` says.
-members = ["crates/eq-core"]
-# Third-party sources: not members, so the gates neither lint nor test them.
-exclude = ["vendor"]
+members = [".", "crates/eq-core"]
 resolver = "3"
 
 # What the recitation player needs of the packaged app (and of `nsh run`'s host):
@@ -51,25 +47,24 @@ nsh-base = "0.7.1"
 nsh-extra = { version = "0.7.1", features = ["push", "speech"] }
 # Update check (PARITY K4): `Config::check` over the manifest the app fetches.
 nsh-updater = "0.7.1"
-# Dependencies with a `path` are SuperNSH crates vendored on NSH 0.7.1: drop the
-# `path` once their own 0.7 releases are out (vendor/README.md). Paths, not
-# `[patch.crates-io]`: `nsh` builds the app from its own generated workspace,
-# which takes path dependencies over and never sees this manifest's patches.
-nsh-query = { version = "0.1.0", path = "vendor/nsh-query" }
-nsh-form = { version = "0.1.0", path = "vendor/nsh-form" }
+# SuperNSH crates come from their repositories, pinned by commit, until their
+# NSH 0.7 releases are on crates.io. Not `nsh add`: 0.7.1 wants the crate at the
+# repository's root, and these are workspaces.
+nsh-query = { git = "https://github.com/SuperNSH/query", rev = "c0969444a24f9afaf17ed64a509319ab76668944" }
+nsh-form = { git = "https://github.com/SuperNSH/form", rev = "1cbbc6d4e9eb7fb33378052f5f458b7c12e62e75" }
 chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
 log = "0.4"
 env_logger = "0.11"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Social sign-in (PARITY I4): provider authorize URLs, PKCE, code exchange.
-nsh-auth = { version = "0.1.0", path = "vendor/nsh-auth" }
+nsh-auth = { git = "https://github.com/SuperNSH/auth", rev = "35b126510cfb660988748ad6ae7aa87876375d40" }
 url = "2"
 futures-channel = "0.3"
 # Push, analytics, crash reporting (PARITY M2, N2, N3).
-nsh-firebase-core = { version = "0.1.0", path = "vendor/nsh-firebase-core" }
-nsh-firebase-analytics = { version = "0.1.0", path = "vendor/nsh-firebase-analytics" }
-nsh-firebase-messaging = { version = "0.1.0", path = "vendor/nsh-firebase-messaging" }
+nsh-firebase-core = { git = "https://github.com/SuperNSH/firebase", rev = "d10f2f96101e5232c62726134874c8c7c820e31b" }
+nsh-firebase-analytics = { git = "https://github.com/SuperNSH/firebase", rev = "d10f2f96101e5232c62726134874c8c7c820e31b" }
+nsh-firebase-messaging = { git = "https://github.com/SuperNSH/firebase", rev = "d10f2f96101e5232c62726134874c8c7c820e31b" }
 # OAuth PKCE and state for the relayed providers (Apple, GitHub) on every
 # platform: already in the graph via eq-core.
 sha2 = "0.10"
@@ -77,15 +72,15 @@ base64 = "0.22"
 getrandom = "0.2"
 # SuperNSH capability crates.
 # Network status for the sync engine and the "Offline" line.
-nsh-connectivity = { version = "0.0.1", path = "vendor/nsh-connectivity" }
+nsh-connectivity = { git = "https://github.com/SuperNSH/connectivity", rev = "4bcb275e1834eb399ad9bc61902fd2c58cd893db" }
 # `easyquran://` links, Universal Links and App Links.
-nsh-deep-links = { version = "0.1.0", path = "vendor/nsh-deep-links" }
+nsh-deep-links = { git = "https://github.com/SuperNSH/deep-links", rev = "2eb743f597e783c28da16e28cac806bfaaa5acb6" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # The session value and device key (contracts/devices.md D3): Keychain,
 # AndroidKeyStore, Credential Manager, Secret Service. Its store runs on a
 # worker thread with its own current-thread runtime (`services::storage`).
-nsh-secure-storage = { version = "0.1.0", path = "vendor/nsh-secure-storage" }
+nsh-secure-storage = { git = "https://github.com/SuperNSH/secure-storage", rev = "6f12f42342c6d5f7f3c6c03c9fb72dadd72c5b88" }
 tokio = { version = "1.54.1", default-features = false, features = ["rt"] }
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
